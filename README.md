@@ -8,9 +8,13 @@ A local-first markdown knowledge base in the spirit of Obsidian — built with
 ## Features
 
 - **Vault** — open any folder as a vault; all notes stay plain markdown on disk
-- **Editor** — CodeMirror 6 with markdown syntax styling, `[[wikilink]]` autocomplete,
-  Ctrl+Click navigation, tags, auto-save
-- **Reading view** — rendered preview with clickable links and interactive task checkboxes (Ctrl+E to toggle)
+- **Live preview** — Obsidian-style WYSIWYG editing: markdown renders in place,
+  syntax reveals itself only where your cursor is (Ctrl+Shift+E for raw source mode)
+- **Editor** — CodeMirror 6 with `[[wikilink]]` autocomplete, click navigation,
+  tags, interactive checkboxes, frontmatter properties, auto-save
+- **Reading view** — rendered preview with clickable links and task checkboxes (Ctrl+E to toggle)
+- **File watching** — edits made outside Geode (other editors, sync tools) appear live
+- **Outline** — heading tree for the active note (right sidebar tab)
 - **Backlinks** — linked mentions, outgoing links and tags for the active note
 - **Graph view** — force-directed graph of every note and link (Ctrl+G)
 - **Full-text search** — instant search across the vault, `#tag` search mode
@@ -18,7 +22,9 @@ A local-first markdown knowledge base in the spirit of Obsidian — built with
 - **File explorer** — tree view, create/rename/delete, context menus, inline rename
 - **Tabs**, dark/light **themes**, settings, persistent workspace
 - **Plugins** — a real plugin API (commands, events, vault access, status bar);
-  ships with Word Count, Daily Notes and Random Note built-ins. See [docs/PLUGINS.md](docs/PLUGINS.md).
+  ships with Word Count, Daily Notes and Random Note built-ins, and loads
+  **external plugins from `<vault>/.geode/plugins/*.js`** — no rebuild needed.
+  See [docs/PLUGINS.md](docs/PLUGINS.md).
 
 ## Keyboard shortcuts
 

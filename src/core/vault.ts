@@ -121,6 +121,22 @@ export class Vault {
     return this.getFiles().some((f) => f.path === path);
   }
 
+  folderExists(path: string): boolean {
+    const t = this.tree.get();
+    if (!t || !path) return false;
+    let found = false;
+    const walk = (n: VaultNode) => {
+      if (found || n.kind !== "folder") return;
+      if (n.path === path) {
+        found = true;
+        return;
+      }
+      n.children.forEach(walk);
+    };
+    walk(t);
+    return found;
+  }
+
   async load(): Promise<void> {
     const tree = await this.adapter.listTree();
     sortChildren(tree);
@@ -151,10 +167,13 @@ export class Vault {
       if (path.toLowerCase().endsWith(".md") && this.fileExists(path)) {
         this.events.emit("file:external-modified", { path });
         this.events.emit("file:modified", { path }); // reuse reindex pipeline
-      } else if (!this.fileExists(path)) {
-        this.events.emit("file:deleted", { path });
-      } else {
+      } else if (this.fileExists(path)) {
         this.events.emit("file:created", { path });
+      } else if (!this.folderExists(path)) {
+        // neither file nor folder in the refreshed tree -> truly deleted.
+        // (Windows watchers report parent FOLDER paths on child changes —
+        // an existing folder must never be classified as a deleted file.)
+        this.events.emit("file:deleted", { path });
       }
     }
     this.events.emit("vault:external-changed", { paths });

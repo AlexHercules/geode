@@ -131,6 +131,13 @@ export function EditorPane({ tab }: { tab: TabState }) {
       void app.vault.read(path).then(
         (text) => {
           if (path !== loadedPathRef.current) return;
+          // re-check with a FRESH ref read: keystrokes may have arrived during
+          // the async read — never revert them with stale disk content
+          const s2 = saveRef.current;
+          if (s2.dirty || s2.timer !== null) {
+            console.warn(`[editor] external reload of "${path}" skipped: local edits arrived during read`);
+            return;
+          }
           if (text === textRef.current) return; // our own write echoed back
           const view = viewRef.current;
           if (view) {
@@ -155,6 +162,30 @@ export function EditorPane({ tab }: { tab: TabState }) {
       );
     });
   }, [app]);
+
+  /* ---------- outline navigation (geode:scroll-to-heading) ---------- */
+
+  useEffect(() => {
+    const onJump = (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string; from: number }>).detail;
+      if (!detail || detail.path !== loadedPathRef.current) return;
+      if (tab.mode === "preview") {
+        app.workspace.setTabMode(tab.id, "live"); // editor mounts, user re-clicks
+        return;
+      }
+      const view = viewRef.current;
+      if (!view) return;
+      // clamp: metadata offsets may lag local edits
+      const pos = Math.min(Math.max(0, detail.from ?? 0), view.state.doc.length);
+      view.dispatch({
+        selection: { anchor: pos },
+        effects: EditorView.scrollIntoView(pos, { y: "start" }),
+      });
+      view.focus();
+    };
+    window.addEventListener("geode:scroll-to-heading", onJump);
+    return () => window.removeEventListener("geode:scroll-to-heading", onJump);
+  }, [app, tab.id, tab.mode]);
 
   /* ---------- load file content (filePath can change in-place) ---------- */
 

@@ -79,11 +79,14 @@ export function OutlinePanel() {
     // to scroll to the heading offset. The editor feature subscribes to this
     // CustomEvent; no cross-feature import needed.
     app.workspace.openFile(activePath);
-    window.dispatchEvent(
-      new CustomEvent("geode:scroll-to-heading", {
-        detail: { path: activePath, from },
-      }),
-    );
+    // rAF: if openFile just (re)mounted the editor, let it mount before jumping
+    requestAnimationFrame(() => {
+      window.dispatchEvent(
+        new CustomEvent("geode:scroll-to-heading", {
+          detail: { path: activePath, from },
+        }),
+      );
+    });
   };
 
   return (
