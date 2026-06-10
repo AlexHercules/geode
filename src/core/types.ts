@@ -128,9 +128,33 @@ export type RightPanelKind = "backlinks" | "outline";
 export type ModalKind = "palette" | "switcher" | "settings" | null;
 export type ThemeKind = "dark" | "light";
 
-export interface WorkspaceState {
+/** Pane tree (split panes). "row" = children side by side, "column" = stacked. */
+export type SplitDirection = "row" | "column";
+
+export interface PaneLeaf {
+  kind: "leaf";
+  id: string;
   tabs: TabState[];
   activeTabId: string | null;
+}
+
+export interface PaneSplit {
+  kind: "split";
+  id: string;
+  direction: SplitDirection;
+  /** always >= 2 children once normalized */
+  children: PaneNode[];
+  /** flex fractions, same length as children, each in (0,1), summing to ~1 */
+  sizes: number[];
+}
+
+export type PaneNode = PaneLeaf | PaneSplit;
+
+export interface WorkspaceState {
+  /** pane tree; always contains at least one leaf */
+  root: PaneNode;
+  /** id of the focused PaneLeaf — tab-level ops target this pane */
+  activePaneId: string;
   leftPanel: LeftPanelKind;
   rightPanel: RightPanelKind;
   leftSidebarOpen: boolean;

@@ -4,6 +4,7 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
 import type { FileNode } from "@core/types";
+import { allTabs } from "@core/workspace";
 import { fuzzyMatch, toSegments } from "./fuzzy";
 import "./palette.css";
 
@@ -31,7 +32,7 @@ export function QuickSwitcher() {
     if (!q) {
       // open tab files first (in tab order), then the rest
       const openPaths: string[] = [];
-      for (const tab of ws.tabs) {
+      for (const tab of allTabs(ws.root)) {
         if (tab.viewType === "markdown" && tab.filePath && !openPaths.includes(tab.filePath)) {
           openPaths.push(tab.filePath);
         }
@@ -65,7 +66,7 @@ export function QuickSwitcher() {
     if (!exact) out.unshift({ kind: "create", name: q });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.vault, query, ws.tabs]);
+  }, [app.vault, query, ws.root]);
 
   const sel = rows.length === 0 ? -1 : Math.min(selected, rows.length - 1);
 

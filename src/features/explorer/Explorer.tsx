@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath } from "@core/vault";
 import { useStore } from "@core/store";
+import { findActiveTab } from "@core/workspace";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import "./explorer.css";
@@ -157,7 +158,7 @@ export function Explorer() {
   const tree = useStore(app.vault.tree);
   const ws = useStore(app.workspace.state);
   const activeFile = useMemo(() => {
-    const tab = ws.tabs.find((t) => t.id === ws.activeTabId);
+    const tab = findActiveTab(ws);
     return tab?.viewType === "markdown" ? tab.filePath : null;
   }, [ws]);
 

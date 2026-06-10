@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
+import type { PaneLeaf, PaneNode } from "@core/types";
 import { Icon } from "./icons";
 import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
@@ -102,6 +103,30 @@ export function App() {
           if (tab) workspace.closeTab(tab.id);
         },
       }),
+      commands.register({
+        id: "app:split-right",
+        name: "Split pane right",
+        hotkey: "Ctrl+\\",
+        callback: () => void workspace.splitActivePane("row"),
+      }),
+      commands.register({
+        id: "app:split-down",
+        name: "Split pane down",
+        hotkey: "Ctrl+Shift+\\",
+        callback: () => void workspace.splitActivePane("column"),
+      }),
+      commands.register({
+        id: "app:focus-next-pane",
+        name: "Focus next pane",
+        hotkey: "Ctrl+Alt+ArrowRight",
+        callback: () => workspace.focusAdjacentPane(1),
+      }),
+      commands.register({
+        id: "app:focus-previous-pane",
+        name: "Focus previous pane",
+        hotkey: "Ctrl+Alt+ArrowLeft",
+        callback: () => workspace.focusAdjacentPane(-1),
+      }),
     ];
     if (isTauri()) {
       disposers.push(
@@ -156,11 +181,6 @@ export function App() {
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
   }, [app]);
-
-  const activeTab = useMemo(
-    () => ws.tabs.find((t) => t.id === ws.activeTabId) ?? null,
-    [ws.tabs, ws.activeTabId],
-  );
 
   /* ---- no vault yet (desktop only) ---- */
   if (!tree) {
@@ -223,20 +243,9 @@ export function App() {
           </aside>
         )}
 
-        {/* main area */}
+        {/* main area: recursive pane tree */}
         <main className="main">
-          <TabBar />
-          <div className="main-content">
-            {activeTab ? (
-              activeTab.viewType === "graph" ? (
-                <GraphView />
-              ) : (
-                <EditorPane key={activeTab.id} tab={activeTab} />
-              )
-            ) : (
-              <EmptyState />
-            )}
-          </div>
+          <PaneTree node={ws.root} />
         </main>
 
         {/* right sidebar */}
@@ -339,17 +348,68 @@ function RibbonButton(props: { icon: string; title: string; active?: boolean; on
   );
 }
 
-function TabBar() {
+/** Recursive renderer for the workspace pane tree. */
+function PaneTree({ node }: { node: PaneNode }) {
+  if (node.kind === "leaf") return <PaneLeafView leaf={node} />;
+  return (
+    <div
+      className={`pane-split pane-split-${node.direction}`}
+      data-testid={`pane-split-${node.id}`}
+    >
+      {node.children.map((child, i) => (
+        <div
+          key={child.id}
+          className="pane-split-child"
+          style={{ flexGrow: node.sizes[i] ?? 1, flexBasis: 0 }}
+        >
+          <PaneTree node={child} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
   const ws = useStore(app.workspace.state);
+  const isActive = ws.activePaneId === leaf.id;
+  const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId) ?? null;
+
   return (
-    <div className="tab-bar" role="tablist" data-testid="tab-bar">
-      {ws.tabs.map((tab) => (
+    <section
+      className={`pane${isActive ? " is-active" : ""}`}
+      data-testid={`pane-${leaf.id}`}
+      data-active={isActive || undefined}
+      onMouseDownCapture={() => {
+        if (!isActive) app.workspace.setActivePane(leaf.id);
+      }}
+    >
+      <TabBar leaf={leaf} />
+      <div className="main-content">
+        {activeTab ? (
+          activeTab.viewType === "graph" ? (
+            <GraphView />
+          ) : (
+            <EditorPane key={activeTab.id} tab={activeTab} />
+          )
+        ) : (
+          <EmptyState />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function TabBar({ leaf }: { leaf: PaneLeaf }) {
+  const app = useApp();
+  return (
+    <div className="tab-bar" role="tablist" data-testid={`tab-bar-${leaf.id}`}>
+      {leaf.tabs.map((tab) => (
         <div
           key={tab.id}
           role="tab"
-          aria-selected={tab.id === ws.activeTabId}
-          className={`tab${tab.id === ws.activeTabId ? " is-active" : ""}`}
+          aria-selected={tab.id === leaf.activeTabId}
+          className={`tab${tab.id === leaf.activeTabId ? " is-active" : ""}`}
           onClick={() => app.workspace.setActiveTab(tab.id)}
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
           title={tab.filePath ?? tab.title}

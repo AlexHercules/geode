@@ -3,6 +3,7 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
 import type { BacklinkEntry, LinkRef } from "@core/types";
+import { findActiveTab } from "@core/workspace";
 import "./backlinks.css";
 
 type OutgoingEntry = { link: LinkRef; resolvedPath: string | null };
@@ -65,7 +66,7 @@ export function BacklinksPanel() {
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
 
-  const activeTab = ws.tabs.find((t) => t.id === ws.activeTabId) ?? null;
+  const activeTab = findActiveTab(ws);
   const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});

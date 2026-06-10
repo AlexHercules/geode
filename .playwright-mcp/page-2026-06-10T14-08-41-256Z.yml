@@ -1,0 +1,190 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic "Demo Vault" [ref=e34]
+          - generic [ref=e35]:
+            - button "New note" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+            - button "New folder" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "Expand all" [ref=e43] [cursor=pointer]:
+              - img [ref=e44]
+        - tree [ref=e46]:
+          - generic "Daily Notes" [ref=e47] [cursor=pointer]:
+            - img [ref=e49]
+            - img [ref=e52]
+            - generic [ref=e54]: Daily Notes
+          - generic "Projects" [ref=e55] [cursor=pointer]:
+            - img [ref=e57]
+            - img [ref=e60]
+            - generic [ref=e62]: Projects
+          - generic "Getting Started.md" [ref=e63] [cursor=pointer]:
+            - generic [ref=e64]: Getting Started
+          - generic "Graph View.md" [ref=e65] [cursor=pointer]:
+            - generic [ref=e66]: Graph View
+          - generic "Markdown Syntax.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Markdown Syntax
+          - generic "Welcome.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Welcome
+          - generic "Wiki Links.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Wiki Links
+    - main [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e77]:
+          - tablist [ref=e78]:
+            - tab "Welcome Close Welcome" [ref=e79] [cursor=pointer]:
+              - generic [ref=e80]: Welcome
+              - button "Close Welcome" [ref=e81]:
+                - img [ref=e82]
+            - tab "Graph view Close Graph view" [ref=e85] [cursor=pointer]:
+              - img [ref=e86]
+              - generic [ref=e92]: Graph view
+              - button "Close Graph view" [ref=e93]:
+                - img [ref=e94]
+            - tab "Testing Geode Close Testing Geode" [ref=e97] [cursor=pointer]:
+              - generic [ref=e98]: Testing Geode
+              - button "Close Testing Geode" [ref=e99]:
+                - img [ref=e100]
+            - tab "Graph View Close Graph View" [ref=e103] [cursor=pointer]:
+              - generic [ref=e104]: Graph View
+              - button "Close Graph View" [ref=e105]:
+                - img [ref=e106]
+            - tab "Markdown Syntax Close Markdown Syntax" [selected] [ref=e109] [cursor=pointer]:
+              - generic [ref=e110]: Markdown Syntax
+              - button "Close Markdown Syntax" [ref=e111]:
+                - img [ref=e112]
+            - button "New note" [ref=e115] [cursor=pointer]:
+              - img [ref=e116]
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - generic "Markdown Syntax.md" [ref=e120]: Markdown Syntax
+              - group "View mode" [ref=e121]:
+                - button "Live preview" [pressed] [ref=e122] [cursor=pointer]:
+                  - img [ref=e123]
+                - button "Source mode" [ref=e126] [cursor=pointer]:
+                  - img [ref=e127]
+                - button "Reading view" [ref=e130] [cursor=pointer]:
+                  - img [ref=e131]
+            - textbox [ref=e137]:
+              - generic [ref=e138]: "# Markdown Syntax"
+              - generic [ref=e140]: Emphasis
+              - generic [ref=e141]:
+                - text: bold
+                - text: ","
+                - text: italic
+                - text: ","
+                - text: strikethrough
+                - text: ","
+                - text: inline code
+              - generic [ref=e143]: Lists
+              - generic [ref=e144]:
+                - generic [ref=e145]: •
+                - text: bullet
+              - generic [ref=e146]:
+                - checkbox "Mark task complete" [ref=e147] [cursor=pointer]
+                - text: task to do
+              - generic [ref=e148]:
+                - checkbox "Mark task incomplete" [checked] [ref=e149] [cursor=pointer]
+                - text: task done
+              - generic [ref=e151]: Quote
+              - generic [ref=e152]: Knowledge is a network, not a hierarchy.
+              - generic [ref=e154]: Code
+              - generic [ref=e155]: "```ts"
+              - generic [ref=e156]: const geode = "💎";
+              - generic [ref=e157]: "```"
+              - generic [ref=e159]:
+                - text: See also
+                - generic [ref=e161] [cursor=pointer]: Getting Started
+                - text: .
+              - generic [ref=e163]: "#guide #markdown"
+        - generic [ref=e166]:
+          - tablist [ref=e167]:
+            - tab "Markdown Syntax Close Markdown Syntax" [selected] [ref=e168] [cursor=pointer]:
+              - generic [ref=e169]: Markdown Syntax
+              - button "Close Markdown Syntax" [ref=e170]:
+                - img [ref=e171]
+            - button "New note" [ref=e174] [cursor=pointer]:
+              - img [ref=e175]
+          - generic [ref=e177]:
+            - generic [ref=e178]:
+              - generic "Markdown Syntax.md" [ref=e179]: Markdown Syntax
+              - group "View mode" [ref=e180]:
+                - button "Live preview" [pressed] [ref=e181] [cursor=pointer]:
+                  - img [ref=e182]
+                - button "Source mode" [ref=e185] [cursor=pointer]:
+                  - img [ref=e186]
+                - button "Reading view" [ref=e189] [cursor=pointer]:
+                  - img [ref=e190]
+            - textbox [active] [ref=e196]:
+              - generic [ref=e197]: "# Markdown Syntax"
+              - generic [ref=e199]: Emphasis
+              - generic [ref=e200]:
+                - text: bold
+                - text: ","
+                - text: italic
+                - text: ","
+                - text: strikethrough
+                - text: ","
+                - text: inline code
+              - generic [ref=e202]: Lists
+              - generic [ref=e203]:
+                - generic [ref=e204]: •
+                - text: bullet
+              - generic [ref=e205]:
+                - checkbox "Mark task complete" [ref=e206] [cursor=pointer]
+                - text: task to do
+              - generic [ref=e207]:
+                - checkbox "Mark task incomplete" [checked] [ref=e208] [cursor=pointer]
+                - text: task done
+              - generic [ref=e210]: Quote
+              - generic [ref=e211]: Knowledge is a network, not a hierarchy.
+              - generic [ref=e213]: Code
+              - generic [ref=e214]: "```ts"
+              - generic [ref=e215]: const geode = "💎";
+              - generic [ref=e216]: "```"
+              - generic [ref=e218]:
+                - text: See also
+                - generic [ref=e220] [cursor=pointer]: Getting Started
+                - text: .
+              - generic [ref=e222]: "#guide #markdown"
+    - complementary [ref=e224]:
+      - tablist "Right panel" [ref=e226]:
+        - tab "Backlinks" [ref=e227] [cursor=pointer]:
+          - img [ref=e228]
+        - tab "Outline" [selected] [ref=e231] [cursor=pointer]:
+          - img [ref=e232]
+      - generic [ref=e234]:
+        - generic [ref=e235]:
+          - generic [ref=e236]: Outline
+          - generic [ref=e237]: "5"
+        - tree "Document outline" [ref=e238]:
+          - treeitem "Collapse section Markdown Syntax" [expanded] [ref=e239]:
+            - button "Collapse section" [ref=e240] [cursor=pointer]:
+              - img [ref=e241]
+            - button "Markdown Syntax" [ref=e243] [cursor=pointer]
+          - treeitem "Emphasis" [ref=e244]:
+            - button "Emphasis" [ref=e246] [cursor=pointer]
+          - treeitem "Lists" [ref=e247]:
+            - button "Lists" [ref=e249] [cursor=pointer]
+          - treeitem "Quote" [ref=e250]:
+            - button "Quote" [ref=e252] [cursor=pointer]
+          - treeitem "Code" [ref=e253]:
+            - button "Code" [ref=e255] [cursor=pointer]
+  - contentinfo [ref=e256]:
+    - generic [ref=e257]: Demo Vault
+    - generic [ref=e258]: 48 words · 277 chars
