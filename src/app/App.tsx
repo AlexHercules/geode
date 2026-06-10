@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
-import type { PaneLeaf, PaneNode } from "@core/types";
+import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
+import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import { Icon } from "./icons";
 import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
@@ -16,11 +17,56 @@ import { isTauri } from "@core/vault";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
 
+/* ---------------- tab drag & drop plumbing ---------------- */
+
+/** MIME type used to mark tab drags so foreign drags (files, text) are ignored. */
+const TAB_MIME = "application/geode-tab";
+
+type DropZone = "left" | "right" | "top" | "bottom" | "center";
+
+interface TabDragState {
+  draggingTabId: string | null;
+  setDraggingTabId: (id: string | null) => void;
+}
+
+const TabDragContext = createContext<TabDragState>({
+  draggingTabId: null,
+  setDraggingTabId: () => {},
+});
+
+function isTabDrag(e: React.DragEvent): boolean {
+  return e.dataTransfer.types.includes(TAB_MIME);
+}
+
+/** Map a pointer position inside an element to one of the 5 drop zones (25% edge bands). */
+function zoneFromEvent(e: React.DragEvent<HTMLElement>): DropZone {
+  const r = e.currentTarget.getBoundingClientRect();
+  const x = (e.clientX - r.left) / Math.max(r.width, 1);
+  const y = (e.clientY - r.top) / Math.max(r.height, 1);
+  if (x < 0.25) return "left";
+  if (x > 0.75) return "right";
+  if (y < 0.25) return "top";
+  if (y > 0.75) return "bottom";
+  return "center";
+}
+
 export function App() {
   const app = useApp();
   const ws = useStore(app.workspace.state);
   const tree = useStore(app.vault.tree);
   const statusItems = useStore(app.plugins.statusBarItems);
+
+  /* tab drag state shared by every TabBar / pane drop overlay */
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const tabDrag = useMemo<TabDragState>(() => ({ draggingTabId, setDraggingTabId }), [draggingTabId]);
+
+  /* if the dragged tab vanishes mid-drag (e.g. its file was deleted), dragend never
+     fires on the removed element — clear the state so the drop overlay unmounts */
+  useEffect(() => {
+    if (draggingTabId !== null && findTabLeaf(ws.root, draggingTabId) === null) {
+      setDraggingTabId(null);
+    }
+  }, [draggingTabId, ws.root]);
 
   /* ---- register core commands once ---- */
   useEffect(() => {
@@ -245,7 +291,9 @@ export function App() {
 
         {/* main area: recursive pane tree */}
         <main className="main">
-          <PaneTree node={ws.root} />
+          <TabDragContext.Provider value={tabDrag}>
+            <PaneTree node={ws.root} />
+          </TabDragContext.Provider>
         </main>
 
         {/* right sidebar */}
@@ -314,17 +362,24 @@ function SidebarResizer({ side }: { side: "left" | "right" }) {
     const startX = e.clientX;
     const startW = side === "left" ? app.workspace.state.get().leftWidth : app.workspace.state.get().rightWidth;
     const onMove = (ev: MouseEvent) => {
+      if (ev.buttons === 0) {
+        // mouseup happened outside the window — treat as drag end
+        cleanup();
+        return;
+      }
       const dx = ev.clientX - startX;
       app.workspace.setSidebarWidth(side, side === "left" ? startW + dx : startW - dx);
     };
-    const onUp = () => {
+    const cleanup = () => {
       window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("mouseup", cleanup);
+      window.removeEventListener("blur", cleanup);
       document.body.style.cursor = "";
     };
     document.body.style.cursor = "col-resize";
     window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    window.addEventListener("mouseup", cleanup);
+    window.addEventListener("blur", cleanup);
   };
   return (
     <div
@@ -351,27 +406,96 @@ function RibbonButton(props: { icon: string; title: string; active?: boolean; on
 /** Recursive renderer for the workspace pane tree. */
 function PaneTree({ node }: { node: PaneNode }) {
   if (node.kind === "leaf") return <PaneLeafView leaf={node} />;
+  return <PaneSplitView split={node} />;
+}
+
+function PaneSplitView({ split }: { split: PaneSplit }) {
+  const containerRef = useRef<HTMLDivElement>(null);
   return (
     <div
-      className={`pane-split pane-split-${node.direction}`}
-      data-testid={`pane-split-${node.id}`}
+      ref={containerRef}
+      className={`pane-split pane-split-${split.direction}`}
+      data-testid={`pane-split-${split.id}`}
     >
-      {node.children.map((child, i) => (
-        <div
-          key={child.id}
-          className="pane-split-child"
-          style={{ flexGrow: node.sizes[i] ?? 1, flexBasis: 0 }}
-        >
-          <PaneTree node={child} />
-        </div>
+      {split.children.map((child, i) => (
+        <Fragment key={child.id}>
+          {i > 0 && <PaneResizer split={split} index={i - 1} containerRef={containerRef} />}
+          <div
+            className="pane-split-child"
+            style={{ flexGrow: split.sizes[i] ?? 1, flexBasis: 0 }}
+          >
+            <PaneTree node={child} />
+          </div>
+        </Fragment>
       ))}
     </div>
+  );
+}
+
+/** Drag handle between two adjacent children of a split. `index` is the gap index (0..n-2). */
+function PaneResizer({
+  split,
+  index,
+  containerRef,
+}: {
+  split: PaneSplit;
+  index: number;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const app = useApp();
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const total = split.direction === "row" ? rect.width : rect.height;
+    if (total <= 0) return;
+    const start = split.direction === "row" ? e.clientX : e.clientY;
+    const startSizes = [...split.sizes];
+    const sizeAt = (i: number) => startSizes[i] ?? 1;
+    const onMove = (ev: MouseEvent) => {
+      if (ev.buttons === 0) {
+        // mouseup happened outside the window — treat as drag end
+        cleanup();
+        return;
+      }
+      const cur = split.direction === "row" ? ev.clientX : ev.clientY;
+      const raw = (cur - start) / total;
+      // clamp so both adjacent children stay >= MIN_PANE_FRACTION and their sum is
+      // unchanged — untouched siblings are never squeezed
+      const min = MIN_PANE_FRACTION - sizeAt(index);
+      const max = sizeAt(index + 1) - MIN_PANE_FRACTION;
+      const delta = Math.min(Math.max(raw, min), max);
+      const sizes = [...startSizes];
+      sizes[index] = sizeAt(index) + delta;
+      sizes[index + 1] = sizeAt(index + 1) - delta;
+      app.workspace.setSplitSizes(split.id, sizes);
+    };
+    const cleanup = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", cleanup);
+      window.removeEventListener("blur", cleanup);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = split.direction === "row" ? "col-resize" : "row-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", cleanup);
+    window.addEventListener("blur", cleanup);
+  };
+  return (
+    <div
+      className={`pane-resizer pane-resizer-${split.direction}`}
+      data-testid={`pane-resizer-${split.id}-${index}`}
+      onMouseDown={onMouseDown}
+    />
   );
 }
 
 function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
   const ws = useStore(app.workspace.state);
+  const { draggingTabId, setDraggingTabId } = useContext(TabDragContext);
+  const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const isActive = ws.activePaneId === leaf.id;
   const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId) ?? null;
 
@@ -395,6 +519,45 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
         ) : (
           <EmptyState />
         )}
+        {/* five-zone drop overlay, mounted only while a tab drag is in flight so it
+            sits above the editor and owns the dragover/drop events */}
+        {draggingTabId !== null && (
+          <div
+            className="pane-drop-overlay"
+            data-testid="pane-drop-overlay"
+            onDragOver={(e) => {
+              if (!isTabDrag(e)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              const zone = zoneFromEvent(e);
+              setDropZone((prev) => (prev === zone ? prev : zone));
+            }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+              setDropZone(null);
+            }}
+            onDrop={(e) => {
+              if (!isTabDrag(e)) return;
+              e.preventDefault();
+              e.stopPropagation();
+              const tabId = e.dataTransfer.getData(TAB_MIME);
+              const zone = zoneFromEvent(e);
+              setDropZone(null);
+              setDraggingTabId(null);
+              if (!tabId) return;
+              if (zone === "center") {
+                // dropping a tab onto its own pane's center is a no-op (would
+                // otherwise silently reorder it to the end)
+                if (findTabLeaf(ws.root, tabId)?.id === leaf.id) return;
+                app.workspace.moveTab(tabId, leaf.id);
+              } else {
+                app.workspace.moveTabToEdge(tabId, leaf.id, zone);
+              }
+            }}
+          >
+            {dropZone && <div className={`pane-drop-zone pane-drop-zone-${dropZone}`} />}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -402,14 +565,62 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
 
 function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
+  const { setDraggingTabId } = useContext(TabDragContext);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+
+  /** Insert index from the pointer x relative to each tab's midpoint. */
+  const indexFromEvent = (e: React.DragEvent<HTMLElement>): number => {
+    const tabEls = Array.from(e.currentTarget.querySelectorAll<HTMLElement>(":scope > .tab"));
+    for (let i = 0; i < tabEls.length; i++) {
+      const r = tabEls[i]!.getBoundingClientRect();
+      if (e.clientX < r.left + r.width / 2) return i;
+    }
+    return tabEls.length;
+  };
+
   return (
-    <div className="tab-bar" role="tablist" data-testid={`tab-bar-${leaf.id}`}>
-      {leaf.tabs.map((tab) => (
+    <div
+      className="tab-bar"
+      role="tablist"
+      data-testid={`tab-bar-${leaf.id}`}
+      onDragOver={(e) => {
+        if (!isTabDrag(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        const idx = indexFromEvent(e);
+        setDropIndex((prev) => (prev === idx ? prev : idx));
+      }}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDropIndex(null);
+      }}
+      onDrop={(e) => {
+        if (!isTabDrag(e)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const tabId = e.dataTransfer.getData(TAB_MIME);
+        const idx = indexFromEvent(e);
+        setDropIndex(null);
+        setDraggingTabId(null);
+        if (tabId) app.workspace.moveTab(tabId, leaf.id, idx);
+      }}
+    >
+      {leaf.tabs.map((tab, i) => (
         <div
           key={tab.id}
           role="tab"
           aria-selected={tab.id === leaf.activeTabId}
-          className={`tab${tab.id === leaf.activeTabId ? " is-active" : ""}`}
+          className={`tab${tab.id === leaf.activeTabId ? " is-active" : ""}${
+            dropIndex === i ? " tab-drop-before" : ""
+          }${dropIndex === leaf.tabs.length && i === leaf.tabs.length - 1 ? " tab-drop-after" : ""}`}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(TAB_MIME, tab.id);
+            e.dataTransfer.effectAllowed = "move";
+            // defer so the DOM is not mutated inside dragstart (Chromium cancels the drag)
+            window.setTimeout(() => setDraggingTabId(tab.id), 0);
+          }}
+          onDragEnd={() => setDraggingTabId(null)}
           onClick={() => app.workspace.setActiveTab(tab.id)}
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
           title={tab.filePath ?? tab.title}

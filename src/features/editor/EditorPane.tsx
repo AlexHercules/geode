@@ -16,6 +16,8 @@ interface SaveState {
   path: string | null;
   dirty: boolean;
   timer: number | null;
+  /** true while a vault.modify is in flight — reloads must treat this as dirty */
+  saving: boolean;
 }
 
 /**
@@ -37,7 +39,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const viewRef = useRef<EditorView | null>(null);
   /** latest document text for the loaded file */
   const textRef = useRef("");
-  const saveRef = useRef<SaveState>({ path: null, dirty: false, timer: null });
+  const saveRef = useRef<SaveState>({ path: null, dirty: false, timer: null, saving: false });
   /** ref mirror of loadedPath so event handlers can compare outside render */
   const loadedPathRef = useRef<string | null>(null);
   /** true while we replace the doc from disk — suppresses the dirty/save cycle */
@@ -61,10 +63,22 @@ export function EditorPane({ tab }: { tab: TabState }) {
       s.dirty = false;
       // never resurrect a file that was deleted while the edit was pending
       if (!app.vault.fileExists(s.path)) return Promise.resolve();
+      // read s.path at call time (NOT an earlier closure capture): the
+      // file:renamed handler retargets it, so late flushes hit the live path
       const path = s.path;
-      return app.vault.modify(path, textRef.current).catch((err) => {
-        console.error(`[editor] failed to save ${path}`, err);
-      });
+      const written = textRef.current;
+      s.saving = true;
+      return app.vault
+        .modify(path, written)
+        .catch((err) => {
+          console.error(`[editor] failed to save ${path}`, err);
+          // write failed and the user hasn't typed since (no newer pending
+          // content) — restore dirty so the next flush/auto-save retries
+          if (textRef.current === written) s.dirty = true;
+        })
+        .finally(() => {
+          s.saving = false;
+        });
     }
     return Promise.resolve();
   }, [app]);
@@ -117,15 +131,30 @@ export function EditorPane({ tab }: { tab: TabState }) {
     };
   }, [app, setLoadedPath]);
 
-  /* ---------- external changes (file watcher) ---------- */
+  /* ---------- reload from disk (file watcher + cross-pane same-file sync) ---------- */
 
-  useEffect(() => {
-    return app.events.on("file:external-modified", ({ path }) => {
+  /**
+   * Re-read `path` and replace the doc, but ONLY while this instance is clean
+   * (no unsaved edits, no pending save timer). Shared by two triggers:
+   * - "file:external-modified": the file changed on disk outside the app;
+   * - "file:modified": another editor instance of the SAME file (split pane)
+   *   saved through the vault — sync this instance up.
+   * Our own saves also emit "file:modified", but then doc === disk content and
+   * the equality check below makes it a no-op, so there is no reload loop.
+   * `source` controls warning noise: own-save echoes routinely race fresh
+   * keystrokes, so only genuinely external skips are worth logging.
+   */
+  const reloadFromDisk = useCallback(
+    (path: string, source: "external" | "modified") => {
       if (path !== loadedPathRef.current) return;
       const s = saveRef.current;
-      if (s.dirty || s.timer !== null) {
+      // an in-flight write (saving) counts as dirty: a slow disk read finishing
+      // after the write must not roll the document back
+      if (s.dirty || s.timer !== null || s.saving) {
         // local edits pending — last writer wins, our save will overwrite
-        console.warn(`[editor] external change to "${path}" ignored: unsaved local edits`);
+        if (source === "external") {
+          console.warn(`[editor] external change to "${path}" ignored: unsaved local edits`);
+        }
         return;
       }
       void app.vault.read(path).then(
@@ -134,11 +163,13 @@ export function EditorPane({ tab }: { tab: TabState }) {
           // re-check with a FRESH ref read: keystrokes may have arrived during
           // the async read — never revert them with stale disk content
           const s2 = saveRef.current;
-          if (s2.dirty || s2.timer !== null) {
-            console.warn(`[editor] external reload of "${path}" skipped: local edits arrived during read`);
+          if (s2.dirty || s2.timer !== null || s2.saving) {
+            if (source === "external") {
+              console.warn(`[editor] external reload of "${path}" skipped: local edits arrived during read`);
+            }
             return;
           }
-          if (text === textRef.current) return; // our own write echoed back
+          if (text === textRef.current) return; // already in sync (e.g. our own write echoed back)
           const view = viewRef.current;
           if (view) {
             const head = Math.min(view.state.selection.main.head, text.length);
@@ -157,11 +188,27 @@ export function EditorPane({ tab }: { tab: TabState }) {
           setPreviewBump((b) => b + 1); // reading view re-renders from textRef
         },
         (err: unknown) => {
-          console.error(`[editor] failed to reload externally modified "${path}"`, err);
+          console.error(`[editor] failed to reload "${path}" from disk`, err);
         },
       );
-    });
-  }, [app]);
+    },
+    [app],
+  );
+
+  useEffect(() => {
+    const offExternal = app.events.on("file:external-modified", ({ path }) =>
+      reloadFromDisk(path, "external"),
+    );
+    // NOTE: external changes emit BOTH events (vault re-uses the reindex
+    // pipeline); the second reload no-ops via the content equality check.
+    const offModified = app.events.on("file:modified", ({ path }) =>
+      reloadFromDisk(path, "modified"),
+    );
+    return () => {
+      offExternal();
+      offModified();
+    };
+  }, [app, reloadFromDisk]);
 
   /* ---------- outline navigation (geode:scroll-to-heading) ---------- */
 
@@ -169,6 +216,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
     const onJump = (e: Event) => {
       const detail = (e as CustomEvent<{ path: string; from: number }>).detail;
       if (!detail || detail.path !== loadedPathRef.current) return;
+      // split panes can host the same file in several instances — only the
+      // active pane's ACTIVE tab may jump (and steal focus/flip view mode)
+      if (app.workspace.getActiveTab()?.id !== tab.id) return;
       if (tab.mode === "preview") {
         app.workspace.setTabMode(tab.id, "live"); // editor mounts, user re-clicks
         return;
@@ -200,7 +250,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     void flushSave();
     setLoadedPath(null);
     setLoadError(null);
-    saveRef.current = { path, dirty: false, timer: null };
+    saveRef.current = { path, dirty: false, timer: null, saving: false };
     if (!path) return;
     let cancelled = false;
     void app.vault.read(path).then(

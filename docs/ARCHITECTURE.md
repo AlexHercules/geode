@@ -67,7 +67,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 2 additions (current)
+## Round 3 additions (current)
+
+- **Pane tree** replaces the flat tab list. `WorkspaceState.root: PaneNode` + `activePaneId`;
+  `PaneNode = PaneLeaf { id, tabs, activeTabId } | PaneSplit { id, direction: "row"|"column", children, sizes }`.
+  Persisted v1 states (flat `tabs`) migrate automatically to a single leaf.
+- Tab-level Workspace methods (`openFile`, `closeTab`, `setActiveTab`, `setTabMode`, the toggles)
+  keep their signatures and target the **active pane**; `openFile` additionally accepts `{ paneId }`.
+- New pane methods: `setActivePane(id)`, `splitActivePane(direction)` (duplicates the active tab,
+  Obsidian-style), `moveTab(tabId, targetPaneId, index?)`, `moveTabToEdge(tabId, targetPaneId, edge)`,
+  `setSplitSizes(splitId, sizes)`, `focusAdjacentPane(±1)`, `getActivePane()`, `getPanes()`.
+- Pure helpers exported from `@core/workspace`: `flattenLeaves`, `findLeaf`, `findTabLeaf`,
+  `allTabs(root)`, `findActiveTab(state)` — features derive "the active tab" via `findActiveTab`,
+  never by scanning a tabs array.
+- Tree invariants (enforced by `normalize`): empty leaves collapse (except a lone root leaf),
+  single-child splits unwrap, same-direction nested splits merge, `sizes` stay normalized with
+  a 0.12 minimum fraction.
+- Commands: `app:split-right` (Ctrl+\), `app:split-down` (Ctrl+Shift+\),
+  `app:focus-next-pane` / `app:focus-previous-pane` (Ctrl+Alt+←/→).
+- The same file may be open in several panes at once; editors reconcile via `file:modified`
+  (reload only when not dirty and content actually differs — same rule as external changes).
+
+## Round 2 additions
 
 - `ViewMode` is now `"live" | "source" | "preview"` ("live" = Obsidian-style live preview, the default; old persisted "edit" migrates to "live"). `workspace.toggleActiveTabMode()` toggles live↔preview (Ctrl+E); `workspace.toggleActiveSourceMode()` toggles live↔source (Ctrl+Shift+E).
 - Right sidebar is tabbed: `WorkspaceState.rightPanel: "backlinks" | "outline"`, switched via `workspace.setRightPanel()`. New component contract: `features/outline/OutlinePanel.tsx` exports `OutlinePanel` (no props).

@@ -132,6 +132,8 @@ export class MetadataIndex {
   private byPath = new Map<string, NoteMetadata>();
   /** lowercase basename (no ext) -> set of full paths */
   private nameToPaths = new Map<string, Set<string>>();
+  /** lowercase full path -> canonical path (O(1) exact-path link resolution) */
+  private lowerPathToPath = new Map<string, string>();
 
   constructor(
     private vault: Vault,
@@ -157,18 +159,24 @@ export class MetadataIndex {
   /* ---------- indexing ---------- */
 
   async rebuildAll(): Promise<void> {
+    const t0 = performance.now();
     this.byPath.clear();
     this.nameToPaths.clear();
     await this.indexFiles(this.vault.getMarkdownFiles());
     this.rebuildNameMap();
+    perfMark("metadataIndexMs", performance.now() - t0);
+    perfMark("metadataFiles", this.byPath.size);
     this.bump();
   }
 
   /** Parse a list of files with a small worker pool (bounded concurrency). */
   private async indexFiles(files: FileNode[], concurrency = 8): Promise<void> {
-    const queue = [...files];
+    let next = 0; // index cursor — Array.shift() would be O(n²) on 10k files
     const worker = async () => {
-      for (let f = queue.shift(); f; f = queue.shift()) {
+      for (;;) {
+        const i = next++;
+        if (i >= files.length) return;
+        const f = files[i];
         try {
           const content = await this.vault.read(f.path);
           this.byPath.set(f.path, parseNote(f.path, content));
@@ -223,6 +231,8 @@ export class MetadataIndex {
 
   private rebuildNameMap() {
     this.nameToPaths.clear();
+    this.lowerPathToPath.clear();
+    for (const path of this.byPath.keys()) this.lowerPathToPath.set(path.toLowerCase(), path);
     const add = (name: string, path: string) => {
       const key = name.toLowerCase();
       if (!key) return;
@@ -263,7 +273,7 @@ export class MetadataIndex {
     if (!clean) return null;
     const asPath = clean.includes("/") ? clean + ".md" : null;
     if (asPath) {
-      const exact = [...this.byPath.keys()].find((p) => p.toLowerCase() === asPath.toLowerCase());
+      const exact = this.lowerPathToPath.get(asPath.toLowerCase());
       if (exact) return exact;
     }
     const candidates = this.nameToPaths.get(clean.split("/").pop()!.toLowerCase());
@@ -317,6 +327,7 @@ export class MetadataIndex {
 
   /** Global graph including unresolved (phantom) nodes. */
   getGraph(): GraphData {
+    const t0 = performance.now();
     const nodes = new Map<string, GraphNode>();
     const edges: GraphEdge[] = [];
     const edgeSeen = new Set<string>();
@@ -342,8 +353,15 @@ export class MetadataIndex {
       nodes.get(e.source)!.degree++;
       nodes.get(e.target)!.degree++;
     }
+    perfMark("graphBuildMs", performance.now() - t0);
     return { nodes: [...nodes.values()], edges };
   }
+}
+
+/** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
+function perfMark(key: string, value: number): void {
+  const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
+  g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
 }
 
 function makeSnippet(content: string, from: number, to: number, radius = 60): string {

@@ -12,6 +12,19 @@ type Row =
   | { kind: "create"; name: string }
   | { kind: "file"; file: FileNode; indices: number[] };
 
+/**
+ * Hard cap on rendered rows. Fuzzy-scoring 10k files takes ~3ms, but
+ * rendering 10k result rows takes 400–800ms per keystroke — the list is
+ * keyboard-driven, so anything beyond the top results is never reached.
+ */
+const MAX_RESULTS = 100;
+
+/** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
+function perfMark(key: string, value: number): void {
+  const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
+  g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
+}
+
 function folderOf(path: string): string {
   const i = path.lastIndexOf("/");
   return i >= 0 ? path.slice(0, i) : "";
@@ -19,18 +32,33 @@ function folderOf(path: string): string {
 
 export function QuickSwitcher() {
   const app = useApp();
-  useStore(app.vault.tree);
+  const tree = useStore(app.vault.tree);
   const ws = useStore(app.workspace.state);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // flattening the vault tree is O(files) — do it once per tree change,
+  // not on every keystroke
+  const files = useMemo(
+    () => app.vault.getMarkdownFiles(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.vault, tree],
+  );
+
   const rows = useMemo<Row[]>(() => {
-    const files = app.vault.getMarkdownFiles();
+    const t0 = performance.now();
+    try {
+      return computeRows();
+    } finally {
+      perfMark("switcherFilterMs", performance.now() - t0);
+    }
+
+    function computeRows(): Row[] {
     const q = query.trim();
 
     if (!q) {
-      // open tab files first (in tab order), then the rest
+      // open tab files first (in tab order), then the rest (capped)
       const openPaths: string[] = [];
       for (const tab of allTabs(ws.root)) {
         if (tab.viewType === "markdown" && tab.filePath && !openPaths.includes(tab.filePath)) {
@@ -41,14 +69,21 @@ export function QuickSwitcher() {
       const open = openPaths
         .map((p) => files.find((f) => f.path === p))
         .filter((f): f is FileNode => f !== undefined);
-      const rest = files.filter((f) => !openSet.has(f.path));
-      return [...open, ...rest].map((file) => ({ kind: "file" as const, file, indices: [] }));
+      const out: Row[] = open.map((file) => ({ kind: "file" as const, file, indices: [] }));
+      for (const f of files) {
+        if (out.length >= MAX_RESULTS) break;
+        if (!openSet.has(f.path)) out.push({ kind: "file", file: f, indices: [] });
+      }
+      return out;
     }
 
     const matched: Array<{ file: FileNode; score: number; indices: number[] }> = [];
+    let exact = false;
+    const qLower = q.toLowerCase();
     for (const file of files) {
       const byName = fuzzyMatch(q, file.basename);
       const byPath = fuzzyMatch(q, file.path);
+      if (byName && file.basename.toLowerCase() === qLower) exact = true;
       if (!byName && !byPath) continue;
       // basename matches outrank path-only matches
       const nameScore = byName ? byName.score + 200 : -Infinity;
@@ -60,13 +95,14 @@ export function QuickSwitcher() {
       });
     }
     matched.sort((a, b) => b.score - a.score);
+    if (matched.length > MAX_RESULTS) matched.length = MAX_RESULTS;
 
     const out: Row[] = matched.map(({ file, indices }) => ({ kind: "file", file, indices }));
-    const exact = files.some((f) => f.basename.toLowerCase() === q.toLowerCase());
     if (!exact) out.unshift({ kind: "create", name: q });
     return out;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.vault, query, ws.root]);
+  }, [files, query, ws.root]);
 
   const sel = rows.length === 0 ? -1 : Math.min(selected, rows.length - 1);
 

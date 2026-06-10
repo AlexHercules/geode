@@ -9,6 +9,13 @@ import "./explorer.css";
 
 const EXPANDED_KEY = "geode.explorer.expanded";
 
+/** must match `.explorer-item { height }` in explorer.css */
+const ROW_HEIGHT = 26;
+/** virtualize only past this row count — small vaults keep the full DOM */
+const VIRTUAL_THRESHOLD = 200;
+/** extra rows rendered above/below the viewport */
+const OVERSCAN = 10;
+
 interface Row {
   node: VaultNode;
   depth: number;
@@ -174,6 +181,35 @@ export function Explorer() {
   const allFolders = useMemo(() => (tree ? collectFolderPaths(tree) : []), [tree]);
   const anyExpanded = expanded.size > 0;
 
+  /* ---- virtualization (large vaults only) ---- */
+  const virtual = rows.length > VIRTUAL_THRESHOLD;
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
+
+  useEffect(() => {
+    const el = treeRef.current;
+    if (!el) return;
+    setViewportH(el.clientHeight);
+    const ro = new ResizeObserver(() => setViewportH(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  /* row count shrank (collapse-all / big delete): the remembered scrollTop can exceed
+     the new total height — clamp both the state and the container's real scrollTop */
+  useEffect(() => {
+    const el = treeRef.current;
+    if (!el) return;
+    const maxTop = Math.max(0, rows.length * ROW_HEIGHT - viewportH);
+    if (el.scrollTop > maxTop) el.scrollTop = maxTop;
+    setScrollTop((prev) => Math.min(prev, maxTop));
+  }, [rows.length, viewportH]);
+
+  /* non-virtual mode doesn't track scroll — re-sync state when virtualization kicks back in */
+  useEffect(() => {
+    if (virtual && treeRef.current) setScrollTop(treeRef.current.scrollTop);
+  }, [virtual]);
+
   /* persist expanded folders */
   useEffect(() => {
     try {
@@ -183,12 +219,30 @@ export function Explorer() {
     }
   }, [expanded]);
 
-  /* keep selection visible */
+  /* keep selection visible — only when `selected` itself changes, not on every tree
+     refresh (new file / rename / external watcher), which would yank the viewport back */
+  const lastScrolledSelected = useRef<string | null>(null);
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || lastScrolledSelected.current === selected) return;
     const el = treeRef.current?.querySelector(`[data-path="${CSS.escape(selected)}"]`);
-    el?.scrollIntoView({ block: "nearest" });
-  }, [selected]);
+    if (el) {
+      lastScrolledSelected.current = selected;
+      el.scrollIntoView({ block: "nearest" });
+      return;
+    }
+    // virtualized: the selected row may not be in the DOM — scroll by index
+    if (!virtual || !treeRef.current) return;
+    const idx = rows.findIndex((r) => r.node.path === selected);
+    if (idx === -1) return; // not in rows yet (tree refresh pending) — retry on next rows change
+    lastScrolledSelected.current = selected;
+    const container = treeRef.current;
+    const top = idx * ROW_HEIGHT;
+    if (top < container.scrollTop) container.scrollTop = top;
+    else if (top + ROW_HEIGHT > container.scrollTop + container.clientHeight) {
+      container.scrollTop = top + ROW_HEIGHT - container.clientHeight;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, rows, virtual]);
 
   /* close context menu on click-elsewhere / Escape */
   useEffect(() => {
@@ -472,6 +526,7 @@ export function Explorer() {
         tabIndex={0}
         role="tree"
         onKeyDown={onTreeKeyDown}
+        onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
       >
         {tree === null ? (
           <div className="explorer-empty">No vault open</div>
@@ -482,6 +537,35 @@ export function Explorer() {
               Create your first note
             </button>
           </div>
+        ) : virtual ? (
+          (() => {
+            // clamp against stale scrollTop (e.g. collapse-all while scrolled deep)
+            const maxTop = Math.max(0, rows.length * ROW_HEIGHT - viewportH);
+            const top = Math.min(scrollTop, maxTop);
+            let start = Math.max(0, Math.floor(top / ROW_HEIGHT) - OVERSCAN);
+            let end = Math.min(
+              rows.length,
+              Math.ceil((top + viewportH) / ROW_HEIGHT) + OVERSCAN,
+            );
+            // pin the renaming row: unmounting RenameInput mid-edit loses the user's input
+            if (renaming) {
+              const renamingIdx = rows.findIndex((r) => r.node.path === renaming);
+              if (renamingIdx !== -1) {
+                start = Math.min(start, renamingIdx);
+                end = Math.max(end, renamingIdx + 1);
+              }
+            }
+            return (
+              <div
+                style={{
+                  paddingTop: start * ROW_HEIGHT,
+                  paddingBottom: (rows.length - end) * ROW_HEIGHT,
+                }}
+              >
+                {rows.slice(start, end).map(renderRow)}
+              </div>
+            );
+          })()
         ) : (
           rows.map(renderRow)
         )}

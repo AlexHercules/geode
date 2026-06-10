@@ -21,6 +21,18 @@ interface FileResult {
 
 const MAX_LINES_PER_FILE = 5;
 const CONTEXT_RADIUS = 36;
+/**
+ * Cap on rendered file blocks. Scanning 10k notes takes ~50ms; rendering
+ * ~10k result blocks took 2.3s. We still scan and rank everything, then
+ * render only the top files and report the full totals.
+ */
+const MAX_FILE_RESULTS = 200;
+
+/** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
+function perfMark(key: string, value: number): void {
+  const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
+  g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
+}
 
 /** Trim a long line to a window around the first occurrence of `lowerQuery`. */
 function contextSlice(line: string, lowerQuery: string): string {
@@ -58,6 +70,10 @@ export function SearchPanel() {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [results, setResults] = useState<FileResult[]>([]);
+  /** files matched beyond MAX_FILE_RESULTS (scanned + counted, not rendered) */
+  const [hiddenFiles, setHiddenFiles] = useState(0);
+  /** total match count across ALL files (rendered + hidden) */
+  const [grandTotal, setGrandTotal] = useState(0);
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -86,6 +102,8 @@ export function SearchPanel() {
   useEffect(() => {
     if (!trimmed || tagMode) {
       setResults([]);
+      setHiddenFiles(0);
+      setGrandTotal(0);
       setSearching(false);
       return;
     }
@@ -94,6 +112,7 @@ export function SearchPanel() {
     const lower = trimmed.toLowerCase();
 
     void (async () => {
+      const t0 = performance.now();
       const files = app.vault.getMarkdownFiles();
       const out: FileResult[] = [];
       for (const f of files) {
@@ -131,7 +150,11 @@ export function SearchPanel() {
           a.basename.localeCompare(b.basename),
       );
       if (!cancelled) {
-        setResults(out);
+        perfMark("searchScanMs", performance.now() - t0);
+        const total = out.reduce((n, r) => n + Math.max(r.total, r.nameMatch ? 1 : 0), 0);
+        setGrandTotal(total);
+        setHiddenFiles(Math.max(0, out.length - MAX_FILE_RESULTS));
+        setResults(out.length > MAX_FILE_RESULTS ? out.slice(0, MAX_FILE_RESULTS) : out);
         setSearching(false);
       }
     })();
@@ -140,7 +163,8 @@ export function SearchPanel() {
     };
   }, [app.vault, trimmed, tagMode, rev]);
 
-  const totalMatches = results.reduce((n, r) => n + Math.max(r.total, r.nameMatch ? 1 : 0), 0);
+  const totalMatches = grandTotal;
+  const totalFiles = results.length + hiddenFiles;
 
   const clear = () => {
     setQuery("");
@@ -210,8 +234,9 @@ export function SearchPanel() {
     body = (
       <>
         <div className="search-meta">
-          {totalMatches} {totalMatches === 1 ? "result" : "results"} in {results.length}{" "}
-          {results.length === 1 ? "note" : "notes"}
+          {totalMatches} {totalMatches === 1 ? "result" : "results"} in {totalFiles}{" "}
+          {totalFiles === 1 ? "note" : "notes"}
+          {hiddenFiles > 0 && ` · showing top ${results.length}`}
         </div>
         {results.map((r) => (
           <div className="search-file" key={r.path} data-testid="search-result">

@@ -378,13 +378,112 @@ Hub notes like [[Welcome]] grow bigger as more notes link to them.
 `,
 };
 
+/* ---- synthetic bench vault (?bench=N) ---- */
+
+/** Deterministic LCG PRNG (numerical recipes constants) — reproducible seeds. */
+function makeLcg(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
+
+const BENCH_WORDS = (
+  "knowledge graph note vault markdown editor link tag heading index search " +
+  "performance cache render tree pane split workspace plugin command palette " +
+  "outline backlink preview syntax daily project roadmap system design memory " +
+  "latency throughput benchmark profile optimize virtual scroll lazy debounce"
+).split(" ");
+
+const BENCH_TAGS = [
+  "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+  "iota", "kappa", "research", "draft", "review", "archive", "daily", "project",
+];
+
+/** Read `?bench=N` from the page URL (browser dev only). */
+function benchCountFromUrl(): number {
+  if (typeof location === "undefined") return 0;
+  const m = /[?&]bench=(\d+)/.exec(location.search);
+  const n = m ? parseInt(m[1], 10) : 0;
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 200_000) : 0;
+}
+
+/**
+ * Generate `count` synthetic notes, 100 per folder, each 0.5–3KB with
+ * 2–6 wikilinks to random other notes, 2–4 headings and 1–3 tags.
+ * Fully deterministic for a given `count` (LCG seeded with 42).
+ */
+export function makeBenchSeed(count: number): Record<string, string> {
+  const rnd = makeLcg(42);
+  const int = (lo: number, hi: number) => lo + Math.floor(rnd() * (hi - lo + 1));
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(rnd() * arr.length)];
+
+  const titles: string[] = new Array(count);
+  for (let i = 0; i < count; i++) {
+    titles[i] = `Note ${String(i).padStart(5, "0")} ${BENCH_WORDS[i % BENCH_WORDS.length]}`;
+  }
+
+  const sentence = (words: number): string => {
+    const out: string[] = [];
+    for (let w = 0; w < words; w++) out.push(pick(BENCH_WORDS));
+    return out.join(" ");
+  };
+
+  const files: Record<string, string> = {};
+  for (let i = 0; i < count; i++) {
+    const folder = `Folder ${String(Math.floor(i / 100)).padStart(3, "0")}`;
+    const targetBytes = int(512, 3072);
+    const nHeadings = int(2, 4);
+    const nLinks = int(2, 6);
+    const nTags = int(1, 3);
+
+    const parts: string[] = [`# ${titles[i]}\n`];
+    const tagLine: string[] = [];
+    for (let t = 0; t < nTags; t++) tagLine.push(`#${pick(BENCH_TAGS)}`);
+    parts.push(`${tagLine.join(" ")}\n`);
+
+    // distribute links across sections
+    let linksLeft = nLinks;
+    for (let h = 1; h < nHeadings; h++) {
+      parts.push(`\n## ${sentence(3)}\n`);
+      parts.push(`\n${sentence(int(8, 20))}.\n`);
+      const linksHere = h === nHeadings - 1 ? linksLeft : int(0, linksLeft);
+      for (let l = 0; l < linksHere; l++) {
+        let j = int(0, count - 1);
+        if (j === i) j = (j + 1) % count;
+        parts.push(`- see [[${titles[j]}]] for ${sentence(2)}\n`);
+      }
+      linksLeft -= linksHere;
+    }
+    let body = parts.join("");
+    while (body.length < targetBytes) {
+      body += `\n${sentence(int(10, 24))}.\n`;
+    }
+    files[`${folder}/${titles[i]}.md`] = body;
+  }
+  return files;
+}
+
 export class MemoryVaultAdapter implements VaultAdapter {
   readonly kind = "memory" as const;
   private files = new Map<string, string>();
   private folders = new Set<string>();
 
-  constructor(seed: Record<string, string> = DEMO_FILES) {
-    for (const [path, content] of Object.entries(seed)) {
+  constructor(seed?: Record<string, string>) {
+    let actual = seed;
+    if (actual === undefined) {
+      const bench = benchCountFromUrl();
+      if (bench > 0) {
+        const t0 = performance.now();
+        actual = makeBenchSeed(bench);
+        const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
+        g.__geodePerf = { ...g.__geodePerf, benchCount: bench, benchSeedMs: performance.now() - t0 };
+      } else {
+        actual = DEMO_FILES;
+      }
+    }
+    for (const [path, content] of Object.entries(actual)) {
       this.files.set(path, content);
       let parent = parentPath(path);
       while (parent) {

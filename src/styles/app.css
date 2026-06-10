@@ -281,6 +281,54 @@ textarea:focus {
   border-top: 1px solid var(--border);
 }
 
+/* drag handle between adjacent split children */
+.pane-resizer {
+  position: relative;
+  flex-shrink: 0;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.pane-resizer-row {
+  width: 5px;
+  cursor: col-resize;
+}
+
+.pane-resizer-column {
+  height: 5px;
+  cursor: row-resize;
+}
+
+/* 1px divider line centered inside the 5px grab area */
+.pane-resizer::after {
+  content: "";
+  position: absolute;
+  background: var(--border);
+}
+
+.pane-resizer-row::after {
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.pane-resizer-column::after {
+  top: 2px;
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+.pane-resizer:hover {
+  background: var(--accent-muted);
+}
+
+.pane-resizer:hover::after {
+  background: var(--accent);
+}
+
 .pane {
   flex: 1;
   display: flex;
@@ -295,11 +343,59 @@ textarea:focus {
 }
 
 .main-content {
+  position: relative; /* anchors the tab-drop overlay */
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* five-zone drop overlay shown while a tab drag is in flight */
+.pane-drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+}
+
+.pane-drop-zone {
+  position: absolute;
+  background: var(--accent-muted);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.pane-drop-zone-left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 25%;
+}
+
+.pane-drop-zone-right {
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 25%;
+}
+
+.pane-drop-zone-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 25%;
+}
+
+.pane-drop-zone-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 25%;
+}
+
+.pane-drop-zone-center {
+  inset: 0;
 }
 
 /* ============ tab bar ============ */
@@ -315,6 +411,7 @@ textarea:focus {
 }
 
 .tab {
+  position: relative; /* anchors the drop-insert indicator */
   display: flex;
   align-items: center;
   gap: 6px;
@@ -325,6 +422,27 @@ textarea:focus {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+}
+
+/* insert-position indicator while dragging a tab over the bar */
+.tab.tab-drop-before::before,
+.tab.tab-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.tab.tab-drop-before::before {
+  left: -2px;
+}
+
+.tab.tab-drop-after::after {
+  right: -2px;
 }
 
 .tab:hover {

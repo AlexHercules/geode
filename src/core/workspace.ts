@@ -23,8 +23,17 @@ const newPaneId = () => `pane-${++paneCounter}-${Math.random().toString(36).slic
 
 const MIN_SIDEBAR_W = 170;
 const MAX_SIDEBAR_W = 560;
+
+/** synthetic ?bench=N vault sessions are ephemeral — same check as MemoryVaultAdapter */
+function isBenchSession(): boolean {
+  try {
+    return typeof location !== "undefined" && /[?&]bench=\d/.test(location.search);
+  } catch {
+    return false;
+  }
+}
 /** a split child can't be dragged below this fraction of its parent */
-const MIN_PANE_FRACTION = 0.12;
+export const MIN_PANE_FRACTION = 0.12;
 
 /* ================= pane tree helpers (pure, exported for UI/features) ================= */
 
@@ -121,8 +130,7 @@ function normalizeInner(node: PaneNode): PaneNode | null {
   });
   if (kept.length === 0) return null;
   if (kept.length === 1) return kept[0];
-  const total = sizes.reduce((a, b) => a + b, 0) || 1;
-  return { ...node, children: kept, sizes: sizes.map((s) => s / total) };
+  return { ...node, children: kept, sizes: normalizeSizes(sizes) };
 }
 
 /* ================= defaults ================= */
@@ -315,7 +323,8 @@ export class Workspace {
   splitActivePane(direction: SplitDirection): string | null {
     const source = this.getActivePane();
     const srcTab = source?.tabs.find((t) => t.id === source.activeTabId);
-    if (!source || !srcTab) return null;
+    // graph view is a global singleton tab — duplicating it would break openGraph
+    if (!source || !srcTab || srcTab.viewType === "graph") return null;
     const dup: TabState = { ...srcTab, id: newTabId() };
     const fresh = makeLeaf([dup], dup.id);
     this.update((s) => {
@@ -338,9 +347,13 @@ export class Workspace {
       const tab = sourceLeaf.tabs.find((t) => t.id === tabId)!;
 
       if (sourceLeaf.id === targetLeaf.id) {
-        // reorder within the same pane
+        // reorder within the same pane — callers compute `index` against the
+        // ORIGINAL tab list (the dragged tab is still in the DOM), so shift
+        // left when the source slot precedes the insertion point
+        const srcIdx = sourceLeaf.tabs.findIndex((t) => t.id === tabId);
         const others = sourceLeaf.tabs.filter((t) => t.id !== tabId);
-        const at = clampIndex(index, others.length);
+        let at = clampIndex(index, sourceLeaf.tabs.length);
+        if (srcIdx < at) at -= 1;
         const tabs = [...others.slice(0, at), tab, ...others.slice(at)];
         const root = mapLeaf(s.root, sourceLeaf.id, (l) => ({ ...l, tabs, activeTabId: tabId }));
         return { ...s, root, activePaneId: sourceLeaf.id };
@@ -404,11 +417,7 @@ export class Workspace {
     this.update((s) => {
       const root = mapSplit(s.root, splitId, (split) => {
         if (sizes.length !== split.children.length) return split;
-        const clamped = sizes.map((v) =>
-          Number.isFinite(v) ? Math.max(MIN_PANE_FRACTION, v) : 1 / sizes.length,
-        );
-        const total = clamped.reduce((a, b) => a + b, 0);
-        return { ...split, sizes: clamped.map((v) => v / total) };
+        return { ...split, sizes: normalizeSizes(sizes) };
       });
       return root === s.root ? s : { ...s, root };
     });
@@ -566,6 +575,7 @@ export class Workspace {
   }
 
   private persist() {
+    if (isBenchSession()) return; // bench vaults must not leak tabs into the real workspace
     try {
       const s = this.state.get();
       localStorage.setItem(
@@ -578,6 +588,7 @@ export class Workspace {
   }
 
   private restore() {
+    if (isBenchSession()) return;
     try {
       const raw = localStorage.getItem(PERSIST_KEY);
       if (!raw) return;
@@ -652,6 +663,30 @@ function mapSplit(node: PaneNode, splitId: string, fn: (s: PaneSplit) => PaneSpl
   return changed ? { ...node, children } : node;
 }
 
+/**
+ * Renormalize split sizes so they sum to 1 while every child stays at or above
+ * MIN_PANE_FRACTION. Violators are pinned to the floor and the remainder is
+ * distributed proportionally among the rest (iterating in case that creates
+ * new violators). Falls back to equal sizes when the floor is unsatisfiable.
+ */
+function normalizeSizes(sizes: number[]): number[] {
+  const n = sizes.length;
+  if (n === 0) return [];
+  if (n * MIN_PANE_FRACTION >= 1) return sizes.map(() => 1 / n);
+  let vals = sizes.map((v) => (Number.isFinite(v) && v > 0 ? v : 1 / n));
+  const total = vals.reduce((a, b) => a + b, 0) || 1;
+  vals = vals.map((v) => v / total);
+  for (let pass = 0; pass < n; pass++) {
+    const low = vals.map((v) => v < MIN_PANE_FRACTION);
+    if (!low.some(Boolean)) break;
+    if (low.every(Boolean)) return vals.map(() => 1 / n);
+    const pinned = low.filter(Boolean).length * MIN_PANE_FRACTION;
+    const freeSum = vals.reduce((a, v, i) => (low[i] ? a : a + v), 0);
+    vals = vals.map((v, i) => (low[i] ? MIN_PANE_FRACTION : (v * (1 - pinned)) / freeSum));
+  }
+  return vals;
+}
+
 function clampIndex(index: number | undefined, len: number): number {
   if (index === undefined || !Number.isFinite(index)) return len;
   return Math.max(0, Math.min(len, Math.floor(index)));
@@ -675,11 +710,21 @@ function sanitizeTab(raw: unknown): TabState | null {
   return { id: t.id, viewType: t.viewType, filePath: t.filePath, mode, title: t.title };
 }
 
-function sanitizeNode(raw: unknown, seenTabIds: Set<string>): PaneNode | null {
+function sanitizeNode(
+  raw: unknown,
+  seenTabIds: Set<string>,
+  seenPaneIds: Set<string>,
+): PaneNode | null {
   if (typeof raw !== "object" || raw === null) return null;
   const n = raw as Record<string, unknown>;
+  // duplicate pane ids would corrupt every id-targeted tree operation
+  const paneId = (id: unknown): string => {
+    const candidate = typeof id === "string" && !seenPaneIds.has(id) ? id : newPaneId();
+    seenPaneIds.add(candidate);
+    return candidate;
+  };
   if (n.kind === "leaf") {
-    if (typeof n.id !== "string" || !Array.isArray(n.tabs)) return null;
+    if (!Array.isArray(n.tabs)) return null;
     const tabs: TabState[] = [];
     for (const t of n.tabs) {
       const tab = sanitizeTab(t);
@@ -691,14 +736,14 @@ function sanitizeNode(raw: unknown, seenTabIds: Set<string>): PaneNode | null {
     const activeTabId = tabs.some((t) => t.id === n.activeTabId)
       ? (n.activeTabId as string)
       : tabs[0]?.id ?? null;
-    return { kind: "leaf", id: n.id, tabs, activeTabId };
+    return { kind: "leaf", id: paneId(n.id), tabs, activeTabId };
   }
   if (n.kind === "split") {
-    if (typeof n.id !== "string" || !Array.isArray(n.children)) return null;
+    if (!Array.isArray(n.children)) return null;
     if (n.direction !== "row" && n.direction !== "column") return null;
     const children: PaneNode[] = [];
     for (const c of n.children) {
-      const node = sanitizeNode(c, seenTabIds);
+      const node = sanitizeNode(c, seenTabIds, seenPaneIds);
       if (node) children.push(node);
     }
     if (children.length === 0) return null;
@@ -708,13 +753,12 @@ function sanitizeNode(raw: unknown, seenTabIds: Set<string>): PaneNode | null {
       const v = rawSizes[i];
       return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 1 / children.length;
     });
-    const total = sizes.reduce((a, b) => a + b, 0);
     return {
       kind: "split",
-      id: n.id,
+      id: paneId(n.id),
       direction: n.direction,
       children,
-      sizes: sizes.map((v) => v / total),
+      sizes: normalizeSizes(sizes),
     };
   }
   return null;
@@ -728,7 +772,7 @@ function sanitizeState(saved: unknown): WorkspaceState {
 
   let root: PaneNode | null = null;
   if (s.root) {
-    root = sanitizeNode(s.root, new Set());
+    root = sanitizeNode(s.root, new Set(), new Set());
     if (root) root = normalize(root);
   } else if (Array.isArray(s.tabs)) {
     // v1 migration: flat tab list becomes a single leaf

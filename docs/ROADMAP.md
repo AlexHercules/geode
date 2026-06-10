@@ -46,3 +46,7 @@ vault/文件树/CM6 编辑器（wikilink 补全+跳转）/阅读视图/反链/�
 - 图谱最大化窗口下居中偏移（R3 P1）
 - 自身写入回声触发 watcher（幂等无害，R3 P2）
 - 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口，可并入 R3）
+- **同文件双 pane 同时为脏**时整缓冲 last-writer-wins，先存一侧的键入会被覆盖（R3 评审确认，
+  非脏侧已实时同步；根治需共享 EditorState/文档模型，列 R4）
+- 重命名打开中的文件会重建 CodeMirror 视图，undo 历史/光标/滚动丢失（R3 评审确认，列 R4）
+- 图谱 10k 节点 ~12fps（基准结论：需 settle 后按需渲染/抽样/WebGL，见 docs/PERFORMANCE.md）

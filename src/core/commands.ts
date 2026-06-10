@@ -48,6 +48,25 @@ export class CommandRegistry {
   }
 }
 
+/**
+ * Punctuation hotkeys must also match by physical key (KeyboardEvent.code):
+ * with Shift held, e.key becomes the shifted character ("\" -> "|"), so
+ * "Ctrl+Shift+\" would otherwise never fire.
+ */
+const PUNCT_CODES: Record<string, string> = {
+  "\\": "Backslash",
+  "/": "Slash",
+  ",": "Comma",
+  ".": "Period",
+  ";": "Semicolon",
+  "'": "Quote",
+  "[": "BracketLeft",
+  "]": "BracketRight",
+  "`": "Backquote",
+  "-": "Minus",
+  "=": "Equal",
+};
+
 export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean {
   const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
   const key = parts[parts.length - 1];
@@ -56,5 +75,6 @@ export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean {
   const wantShift = mods.has("shift");
   const wantAlt = mods.has("alt");
   if (e.ctrlKey !== wantCtrl || e.shiftKey !== wantShift || e.altKey !== wantAlt) return false;
-  return e.key.toLowerCase() === key;
+  if (e.key.toLowerCase() === key) return true;
+  return PUNCT_CODES[key] !== undefined && e.code === PUNCT_CODES[key];
 }
