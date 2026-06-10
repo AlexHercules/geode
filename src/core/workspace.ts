@@ -1,0 +1,233 @@
+import type { LeftPanelKind, ModalKind, TabState, ThemeKind, ViewMode, WorkspaceState } from "./types";
+import { EventBus } from "./events";
+import { Store } from "./store";
+import { basename, stripExtension } from "./vault";
+
+const PERSIST_KEY = "geode.workspace.v1";
+let tabCounter = 0;
+const newTabId = () => `tab-${++tabCounter}-${Math.random().toString(36).slice(2, 7)}`;
+
+const DEFAULT_STATE: WorkspaceState = {
+  tabs: [],
+  activeTabId: null,
+  leftPanel: "explorer",
+  leftSidebarOpen: true,
+  rightSidebarOpen: true,
+  modal: null,
+  theme: "dark",
+  fontSize: 16,
+};
+
+/**
+ * Workspace — open tabs, sidebars, modals, theme. Persisted to localStorage.
+ * All mutations go through methods so persistence + events stay consistent.
+ */
+export class Workspace {
+  readonly state = new Store<WorkspaceState>(DEFAULT_STATE);
+
+  constructor(private events: EventBus) {
+    this.restore();
+    // when a file is deleted/renamed, fix tabs that point at it
+    events.on("file:deleted", ({ path }) => this.handleDeleted(path));
+    events.on("file:renamed", ({ oldPath, newPath }) => this.handleRenamed(oldPath, newPath));
+  }
+
+  /* ---------- selectors ---------- */
+
+  getActiveTab(): TabState | null {
+    const s = this.state.get();
+    return s.tabs.find((t) => t.id === s.activeTabId) ?? null;
+  }
+
+  getActiveFile(): string | null {
+    const tab = this.getActiveTab();
+    return tab?.viewType === "markdown" ? tab.filePath : null;
+  }
+
+  /* ---------- tab management ---------- */
+
+  /** Open a file. Reuses an existing tab for the same file unless newTab. */
+  openFile(path: string, opts: { newTab?: boolean } = {}) {
+    this.update((s) => {
+      const existing = s.tabs.find((t) => t.viewType === "markdown" && t.filePath === path);
+      if (existing && !opts.newTab) {
+        return { ...s, activeTabId: existing.id, modal: null };
+      }
+      const active = s.tabs.find((t) => t.id === s.activeTabId);
+      // replace the active markdown tab's content (Obsidian default behaviour)
+      if (active && active.viewType === "markdown" && !opts.newTab) {
+        const tabs = s.tabs.map((t) =>
+          t.id === active.id ? { ...t, filePath: path, title: stripExtension(basename(path)) } : t,
+        );
+        return { ...s, tabs, modal: null };
+      }
+      const tab: TabState = {
+        id: newTabId(),
+        viewType: "markdown",
+        filePath: path,
+        mode: "edit",
+        title: stripExtension(basename(path)),
+      };
+      return { ...s, tabs: [...s.tabs, tab], activeTabId: tab.id, modal: null };
+    });
+    this.emitActiveFile();
+  }
+
+  openGraph() {
+    this.update((s) => {
+      const existing = s.tabs.find((t) => t.viewType === "graph");
+      if (existing) return { ...s, activeTabId: existing.id, modal: null };
+      const tab: TabState = {
+        id: newTabId(),
+        viewType: "graph",
+        filePath: null,
+        mode: "preview",
+        title: "Graph view",
+      };
+      return { ...s, tabs: [...s.tabs, tab], activeTabId: tab.id, modal: null };
+    });
+    this.emitActiveFile();
+  }
+
+  closeTab(id: string) {
+    this.update((s) => {
+      const idx = s.tabs.findIndex((t) => t.id === id);
+      if (idx === -1) return s;
+      const tabs = s.tabs.filter((t) => t.id !== id);
+      let activeTabId = s.activeTabId;
+      if (s.activeTabId === id) {
+        activeTabId = tabs[Math.min(idx, tabs.length - 1)]?.id ?? null;
+      }
+      return { ...s, tabs, activeTabId };
+    });
+    this.emitActiveFile();
+  }
+
+  setActiveTab(id: string) {
+    this.update((s) => ({ ...s, activeTabId: id }));
+    this.emitActiveFile();
+  }
+
+  setTabMode(id: string, mode: ViewMode) {
+    this.update((s) => ({
+      ...s,
+      tabs: s.tabs.map((t) => (t.id === id ? { ...t, mode } : t)),
+    }));
+  }
+
+  toggleActiveTabMode() {
+    const tab = this.getActiveTab();
+    if (tab?.viewType === "markdown") {
+      this.setTabMode(tab.id, tab.mode === "edit" ? "preview" : "edit");
+    }
+  }
+
+  /* ---------- panels / modals / theme ---------- */
+
+  setLeftPanel(panel: LeftPanelKind) {
+    this.update((s) => ({ ...s, leftPanel: panel, leftSidebarOpen: true }));
+  }
+
+  toggleLeftSidebar() {
+    this.update((s) => ({ ...s, leftSidebarOpen: !s.leftSidebarOpen }));
+  }
+
+  toggleRightSidebar() {
+    this.update((s) => ({ ...s, rightSidebarOpen: !s.rightSidebarOpen }));
+  }
+
+  openModal(modal: Exclude<ModalKind, null>) {
+    this.update((s) => ({ ...s, modal }));
+  }
+
+  closeModal() {
+    this.update((s) => ({ ...s, modal: null }));
+  }
+
+  setTheme(theme: ThemeKind) {
+    this.update((s) => ({ ...s, theme }));
+    document.documentElement.dataset.theme = theme;
+    this.events.emit("theme:changed", { theme });
+  }
+
+  toggleTheme() {
+    this.setTheme(this.state.get().theme === "dark" ? "light" : "dark");
+  }
+
+  setFontSize(px: number) {
+    const clamped = Math.max(11, Math.min(28, Math.round(px)));
+    this.update((s) => ({ ...s, fontSize: clamped }));
+    document.documentElement.style.setProperty("--editor-font-size", `${clamped}px`);
+  }
+
+  /** apply theme/font side effects on startup */
+  applyDocumentEffects() {
+    const s = this.state.get();
+    document.documentElement.dataset.theme = s.theme;
+    document.documentElement.style.setProperty("--editor-font-size", `${s.fontSize}px`);
+  }
+
+  /* ---------- internals ---------- */
+
+  private handleDeleted(path: string) {
+    this.update((s) => {
+      const tabs = s.tabs.filter(
+        (t) => !(t.viewType === "markdown" && t.filePath && (t.filePath === path || t.filePath.startsWith(path + "/"))),
+      );
+      const activeTabId = tabs.some((t) => t.id === s.activeTabId)
+        ? s.activeTabId
+        : tabs[tabs.length - 1]?.id ?? null;
+      return { ...s, tabs, activeTabId };
+    });
+    this.emitActiveFile();
+  }
+
+  private handleRenamed(oldPath: string, newPath: string) {
+    this.update((s) => ({
+      ...s,
+      tabs: s.tabs.map((t) => {
+        if (t.viewType !== "markdown" || !t.filePath) return t;
+        if (t.filePath === oldPath) {
+          return { ...t, filePath: newPath, title: stripExtension(basename(newPath)) };
+        }
+        if (t.filePath.startsWith(oldPath + "/")) {
+          const p = newPath + t.filePath.slice(oldPath.length);
+          return { ...t, filePath: p, title: stripExtension(basename(p)) };
+        }
+        return t;
+      }),
+    }));
+  }
+
+  private emitActiveFile() {
+    this.events.emit("active-file:changed", { path: this.getActiveFile() });
+  }
+
+  private update(fn: (s: WorkspaceState) => WorkspaceState) {
+    this.state.update(fn);
+    this.persist();
+  }
+
+  private persist() {
+    try {
+      const s = this.state.get();
+      localStorage.setItem(
+        PERSIST_KEY,
+        JSON.stringify({ ...s, modal: null }),
+      );
+    } catch {
+      /* storage unavailable — fine */
+    }
+  }
+
+  private restore() {
+    try {
+      const raw = localStorage.getItem(PERSIST_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as Partial<WorkspaceState>;
+      this.state.set({ ...DEFAULT_STATE, ...saved, modal: null });
+    } catch {
+      /* corrupted state — start fresh */
+    }
+  }
+}
