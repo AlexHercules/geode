@@ -1,1 +1,3 @@
 [      60ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:1420/node_modules/.vite/deps/chunk-TSRML2OT.js?v=8996e906:21608
+[  168290ms] [ERROR] Warning: You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before. Instead, call root.render() on the existing root instead if you want to update it. @ http://localhost:1420/node_modules/.vite/deps/chunk-TSRML2OT.js?v=8996e906:520
+[  168419ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://localhost:1420/node_modules/.vite/deps/chunk-TSRML2OT.js?v=8996e906:21608

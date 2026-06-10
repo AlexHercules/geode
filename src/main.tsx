@@ -111,7 +111,15 @@ async function bootstrap() {
   if (adapter.kind === "memory") {
     await vault.load();
   } else {
-    const last = localStorage.getItem(LAST_VAULT_KEY);
+    // CLI takes precedence: `geode.exe <folder>` opens that folder as the vault
+    let initial: string | null = null;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      initial = (await invoke<string | null>("initial_vault")) ?? null;
+    } catch {
+      /* command unavailable — fall through to last-vault restore */
+    }
+    const last = initial ?? localStorage.getItem(LAST_VAULT_KEY);
     if (last) {
       adapter.setVaultPath(last);
       try {

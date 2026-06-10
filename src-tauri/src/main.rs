@@ -78,6 +78,19 @@ fn read_dir_recursive(abs: &Path, rel: &str) -> CmdResult<Vec<Node>> {
     Ok(children)
 }
 
+/// Vault folder passed on the command line (`geode.exe <folder>`), if any.
+#[tauri::command]
+fn initial_vault() -> Option<String> {
+    std::env::args()
+        .nth(1)
+        .filter(|p| Path::new(p).is_dir())
+        .map(|p| {
+            fs::canonicalize(&p)
+                .map(|c| c.to_string_lossy().trim_start_matches(r"\\?\").to_string())
+                .unwrap_or(p)
+        })
+}
+
 #[tauri::command]
 fn vault_list(vault: String) -> CmdResult<Node> {
     let root = Path::new(&vault);
@@ -148,6 +161,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            initial_vault,
             vault_list,
             vault_read,
             vault_write,
