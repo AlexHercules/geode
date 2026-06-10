@@ -7,13 +7,17 @@ Stack: **Tauri 2 (Rust shell) + React 18 + TypeScript (strict) + Vite + CodeMirr
 
 ```
 src/core/      pure TS, NO React components (only hooks in store.ts). Never imports features/app.
-src/app/       shell: App.tsx layout, AppContext, icons. Imports core + feature entry components.
+               (May import @codemirror/* — the shared document model lives here.)
+src/app/       shell: App.tsx layout, AppContext, icons. Imports core + feature entry components
+               + compat (bootstrap wiring only).
 src/features/  one folder per feature. Imports core + app/AppContext + app/icons ONLY.
-               NEVER import from another feature folder.
+               NEVER import from another feature folder. NEVER import compat.
 src/plugins/   built-in plugins (GeodePlugin[]). Imports core only.
+src/compat/    Obsidian plugin compatibility layer (R4+). Imports core ONLY.
+               Self-contained: own CSS, own DOM helpers. Never imported by features.
 ```
 
-Path aliases: `@core/*`, `@features/*`, `@app/*` (see tsconfig).
+Path aliases: `@core/*`, `@features/*`, `@app/*`, `@compat/*` (see tsconfig).
 
 ## Core API (read these files before coding)
 
@@ -67,7 +71,141 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 3 additions (current)
+## Round 4 additions (current) — Obsidian compat T0+T1 + shared document model
+
+### Shared document model — `core/documents.ts`
+
+One `DocumentHandle` per open file replaces per-EditorPane text/dirty/save state.
+Fixes (R3 debt): double-dirty last-writer-wins across panes; rename rebuilding the
+CM view (undo/cursor/scroll loss). Also the foundation for the compat `Editor` shim.
+
+```ts
+class DocumentManager {
+  constructor(vault: Vault, events: EventBus);
+  /** Load (or share) the document for a vault path. Refcounted: pair with release(). */
+  acquire(path: string): Promise<DocumentHandle>;
+  /** The live handle for a path, if any (sync). */
+  get(path: string): DocumentHandle | null;
+  /** Editor panes report the focused CM view (active markdown tab). */
+  setActiveView(view: EditorView | null, path: string | null): void;
+  /** The focused editor view — consumed by the compat Editor shim. */
+  getActiveView(): { view: EditorView; path: string } | null;
+  /** Flush every dirty document (main.tsx registers this as a workspace flusher). */
+  flushAll(): Promise<void>;
+}
+class DocumentHandle {
+  readonly path: string;          // live — retargeted in place on rename
+  readonly dirty: boolean;
+  getText(): string;
+  /** Build a per-view EditorState seeded with the shared doc + sync glue. */
+  createViewState(extensions: Extension[]): EditorState;
+  /** Attach a view created from createViewState(); returns a disposer. */
+  attachView(view: EditorView): () => void;
+  /** Programmatic full replace (external reload / plugin writes). Does NOT mark dirty. */
+  setText(text: string): void;
+  flush(): Promise<void>;
+  release(): void;
+}
+```
+
+Behavior contract (the data-safety rules move from EditorPane into the handle):
+- ONE dirty flag + ONE debounced auto-save (600ms) per file, no matter how many panes.
+- All attached views stay byte-identical at all times; undo in any view never desyncs.
+- Save failure restores `dirty` unless newer content is pending (retry on next flush).
+- `file:renamed` retargets `path` in place — attached views are NOT rebuilt.
+- `file:deleted` cancels pending saves; a deleted file is never resurrected.
+- `file:external-modified` / `file:modified` → reload only when clean (in-flight save
+  counts as dirty; re-check after the async read; content-equality no-op).
+- EditorPane keeps per-view mode/selection/scroll; acquires on mount, releases on unmount.
+
+### Vault adapter additions (Obsidian plugin discovery + config IO)
+
+```ts
+interface ObsidianPluginSource {
+  dir: string;                    // folder name under .obsidian/plugins
+  manifestJson: string;
+  mainJs: string;
+  stylesCss: string | null;
+  dataJson: string | null;
+}
+// VaultAdapter:
+listObsidianPlugins(): Promise<ObsidianPluginSource[]>;
+/** Read a file under <vault>/.obsidian/ (e.g. "community-plugins.json",
+    "plugins/<id>/data.json"). Returns null when missing. */
+readConfig(relPath: string): Promise<string | null>;
+/** Write under <vault>/.obsidian/, creating parent dirs. */
+writeConfig(relPath: string, content: string): Promise<void>;
+```
+
+Rust commands (serde camelCase): `vault_obsidian_plugins(vault) -> Vec<ObsidianPluginSource>`,
+`vault_read_config(vault, path) -> Option<String>`, `vault_write_config(vault, path, content)`.
+Both config commands safe_join under `<vault>/.obsidian` only. Memory adapter: configs in an
+in-session Map; `listObsidianPlugins()` returns `window.__geodeObsidianPlugins ?? []` (E2E injection).
+
+### PluginManager extensions
+
+```ts
+type PluginSource = "builtin" | "external" | "obsidian";
+register(plugin, source?, opts?: {
+  enabled?: boolean;                          // overrides the localStorage enabled-set
+  persistEnabled?: (enabled: boolean) => void; // replaces localStorage persistence for this record
+}): Promise<void>;
+unregister(id: string): void;                 // teardown without persisting enabled:false
+// Element-based UI contributions (App shell hosts the elements):
+addStatusBarElement(id: string, el: HTMLElement): () => void;
+readonly statusBarElements: Store<ReadonlyArray<{ id: string; el: HTMLElement }>>;
+addRibbonElement(id: string, el: HTMLElement): () => void;   // el carries its own click handler
+readonly ribbonItems: Store<ReadonlyArray<{ id: string; el: HTMLElement }>>;
+// Plugin settings sections (SettingsModal renders mount/unmount into a host div):
+interface PluginSettingsSection { id: string; pluginId: string; name: string;
+  mount(container: HTMLElement): void; unmount(): void; }
+addSettingsSection(s: PluginSettingsSection): () => void;
+readonly settingsSections: Store<ReadonlyArray<PluginSettingsSection>>;
+```
+
+### Command availability
+
+`Command.available?: () => boolean` — palette hides and hotkeys skip commands whose
+`available()` returns false (used by compat editorCallback variants).
+
+### Compat layer — `src/compat/obsidian/`
+
+`loadObsidianPlugins(app: Omit<AppHandle, "ui">, vault: Vault): Promise<void>` (from `@compat/obsidian/loader`)
+is idempotent like `loadExternal`: unloads previously loaded obsidian records first.
+Calibrated signatures live in `.calibration/API-REFERENCE.md` (regenerate per
+docs/OBSIDIAN-COMPAT.md); implement EXACTLY against it, never from memory.
+Internal layout is the implementor's choice within `src/compat/`; fixed points:
+- `index.ts` exports the full `require("obsidian")` module surface.
+- `loader.ts`: discover → validate manifest (missing id/name/version rejects; other gaps warn;
+  minAppVersion > apiVersion warns, never blocks) → evaluate main.js as CommonJS
+  (`exports.default ?? module.exports`, must be a constructor) → `new Ctor(appShim, manifest)`
+  → wrap as a GeodePlugin record `register(wrapper, "obsidian", { enabled, persistEnabled })`.
+  Enabled state mirrors `.obsidian/community-plugins.json` (flat id array; preserve unknown ids
+  on write). styles.css injected per plugin on enable, removed on disable.
+- require map: `obsidian` → shim; `@codemirror/state|view|language|commands|search|autocomplete`,
+  `@lezer/highlight` → the HOST instances (instanceof must work); anything else throws a clear
+  error which the loader records as that plugin's failure reason (shown in settings).
+- `dom.ts`: global prototype augmentation (createEl & friends) applied idempotently before any
+  plugin code runs. Only compat may USE these helpers even though types are global.
+- TFile/TFolder identity: ONE canonical instance per path, registry synced from vault events;
+  rename mutates the instance and fires per-descendant rename(oldPath). Shim exports the real
+  constructors (plugins use `instanceof TFile`).
+- `apiVersion = "1.5.0"`; `requireApiVersion` does a semver compare against it.
+- Suite-driven minimal `Editor` subset (T1.5) over `documents.getActiveView()`:
+  getValue/setValue/getSelection/somethingSelected/replaceSelection/getCursor/setCursor/
+  setSelection/replaceRange/getLine/lineCount/lastLine/getRange/posToOffset/offsetToPos/
+  focus/hasFocus. editorCallback/editorCheckCallback map to Command.available.
+- Out-of-tier APIs (registerView, MarkdownRenderer, moment, …) are warn-stubs: console.warn
+  once + recorded in the loader's gap report, never a crash. Browser fixture: `?obsfixture=1`
+  makes the loader register the built-in test plugin from `compat/obsidian/fixture.ts`.
+
+### Bootstrap wiring (main.tsx / App.tsx)
+
+`DocumentManager` is created in bootstrap and exposed as `app.documents` (AppHandle + GeodeApp);
+its `flushAll` is registered as a workspace flusher. After `plugins.loadExternal(vault)` the shell
+calls `loadObsidianPlugins(app, vault)`; the reload-plugins command re-runs both.
+
+## Round 3 additions
 
 - **Pane tree** replaces the flat tab list. `WorkspaceState.root: PaneNode` + `activePaneId`;
   `PaneNode = PaneLeaf { id, tabs, activeTabId } | PaneSplit { id, direction: "row"|"column", children, sizes }`.

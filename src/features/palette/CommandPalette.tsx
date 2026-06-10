@@ -19,7 +19,8 @@ export function CommandPalette() {
   const listRef = useRef<HTMLDivElement | null>(null);
 
   const rows = useMemo<Row[]>(() => {
-    const all = app.commands.list();
+    // context-gated commands (available() === false) are hidden, like Obsidian
+    const all = app.commands.list().filter((cmd) => cmd.available?.() !== false);
     const q = query.trim();
     if (!q) return all.map((cmd) => ({ cmd, match: { score: 0, indices: [] } }));
     return all

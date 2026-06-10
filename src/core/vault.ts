@@ -8,6 +8,16 @@ import { Store } from "./store";
  *  - MemoryVaultAdapter: in-memory demo vault (browser dev / E2E tests)
  * All paths are vault-relative, forward slashes.
  */
+/** One installed Obsidian community plugin found under `<vault>/.obsidian/plugins/`. */
+export interface ObsidianPluginSource {
+  /** folder name under .obsidian/plugins (should equal the manifest id) */
+  dir: string;
+  manifestJson: string;
+  mainJs: string;
+  stylesCss: string | null;
+  dataJson: string | null;
+}
+
 export interface VaultAdapter {
   readonly kind: "tauri" | "memory";
   /** show folder picker; returns absolute path or null if cancelled */
@@ -29,6 +39,15 @@ export interface VaultAdapter {
   startWatch(onChange: (paths: string[]) => void): Promise<void>;
   /** List external plugin files at <vault>/.geode/plugins/*.js (name + source). */
   listPluginFiles(): Promise<Array<{ name: string; content: string }>>;
+  /** List installed Obsidian plugins under `<vault>/.obsidian/plugins/` (R4 compat). */
+  listObsidianPlugins(): Promise<ObsidianPluginSource[]>;
+  /**
+   * Read a file under `<vault>/.obsidian/` (e.g. "community-plugins.json",
+   * "plugins/<id>/data.json"). Returns null when the file does not exist.
+   */
+  readConfig(relPath: string): Promise<string | null>;
+  /** Write a file under `<vault>/.obsidian/`, creating parent directories. */
+  writeConfig(relPath: string, content: string): Promise<void>;
 }
 
 /* ---------------- helpers ---------------- */
@@ -511,6 +530,23 @@ export class MemoryVaultAdapter implements VaultAdapter {
     return [];
   }
 
+  /** Browser E2E injects fixtures via `window.__geodeObsidianPlugins` before load. */
+  async listObsidianPlugins(): Promise<ObsidianPluginSource[]> {
+    const g = globalThis as unknown as { __geodeObsidianPlugins?: ObsidianPluginSource[] };
+    return Array.isArray(g.__geodeObsidianPlugins) ? g.__geodeObsidianPlugins : [];
+  }
+
+  /** in-session `.obsidian/` config store (not part of the visible tree) */
+  private configFiles = new Map<string, string>();
+
+  async readConfig(relPath: string): Promise<string | null> {
+    return this.configFiles.get(relPath) ?? null;
+  }
+
+  async writeConfig(relPath: string, content: string): Promise<void> {
+    this.configFiles.set(relPath, content);
+  }
+
   async listTree(): Promise<FolderNode> {
     const root: FolderNode = { kind: "folder", path: "", name: "", children: [] };
     const folderNodes = new Map<string, FolderNode>([["", root]]);
@@ -611,6 +647,9 @@ export function isTauri(): boolean {
  *     emits the Tauri event "vault:fs-change" with Vec<String> of changed
  *     vault-relative paths (forward slashes)
  *   vault_plugin_files(vault) -> Vec<{ name, content }> of .geode/plugins/*.js
+ *   vault_obsidian_plugins(vault) -> Vec<ObsidianPluginSource> (serde camelCase)
+ *   vault_read_config(vault, path) -> Option<String>   (path relative to .obsidian/)
+ *   vault_write_config(vault, path, content)           (creates parent dirs)
  */
 export class TauriVaultAdapter implements VaultAdapter {
   readonly kind = "tauri" as const;
@@ -684,5 +723,17 @@ export class TauriVaultAdapter implements VaultAdapter {
     return this.invoke<Array<{ name: string; content: string }>>("vault_plugin_files", {
       vault: this.root,
     });
+  }
+
+  async listObsidianPlugins(): Promise<ObsidianPluginSource[]> {
+    return this.invoke<ObsidianPluginSource[]>("vault_obsidian_plugins", { vault: this.root });
+  }
+
+  async readConfig(relPath: string): Promise<string | null> {
+    return this.invoke<string | null>("vault_read_config", { vault: this.root, path: relPath });
+  }
+
+  async writeConfig(relPath: string, content: string): Promise<void> {
+    await this.invoke("vault_write_config", { vault: this.root, path: relPath, content });
   }
 }

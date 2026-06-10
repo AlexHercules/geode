@@ -49,7 +49,9 @@ export function parseFrontmatter(content: string): FrontmatterData | null {
     }
     const kv = /^([A-Za-z0-9_\-. ]+):\s*(.*)$/.exec(line.trim());
     if (!kv) continue;
-    const key = kv[1].trim().toLowerCase();
+    // keys keep their authored case (Obsidian-faithful shape for plugins);
+    // well-known fields are looked up case-insensitively via fmField()
+    const key = kv[1].trim();
     const raw = kv[2].trim();
     currentKey = key;
     if (!raw) {
@@ -75,6 +77,19 @@ function unquote(s: string): string {
 function asList(v: string | string[] | undefined): string[] {
   if (v === undefined) return [];
   return (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean);
+}
+
+/** Case-insensitive frontmatter field lookup (keys keep their authored case). */
+export function fmField(
+  fields: Record<string, string | string[]>,
+  name: string,
+): string | string[] | undefined {
+  if (name in fields) return fields[name];
+  const lower = name.toLowerCase();
+  for (const k of Object.keys(fields)) {
+    if (k.toLowerCase() === lower) return fields[k];
+  }
+  return undefined;
 }
 
 /** Parse one markdown document into metadata. Exported for tests/reuse. */
@@ -113,8 +128,9 @@ export function parseNote(path: string, content: string): NoteMetadata {
   }
 
   // frontmatter contributes tags + aliases to the index
-  const aliases = asList(frontmatter?.fields["aliases"] ?? frontmatter?.fields["alias"]);
-  for (const t of asList(frontmatter?.fields["tags"] ?? frontmatter?.fields["tag"])) {
+  const fm = frontmatter?.fields ?? {};
+  const aliases = asList(fmField(fm, "aliases") ?? fmField(fm, "alias"));
+  for (const t of asList(fmField(fm, "tags") ?? fmField(fm, "tag"))) {
     tags.push({ tag: t.replace(/^#/, ""), from: 0 });
   }
 

@@ -30,6 +30,11 @@
 校准动作：实现任何 shim API 前，先抓取对应章节 → 把签名/语义摘录进本文件的 Tier 表 →
 实现 → 用验收插件实测。发现本文件与官方口径冲突时，以官方为准并更新本文件。
 
+R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`（8482 行）+ docs.obsidian.md
+逐字提取 T0+T1 全部 160 条签名与语义，产物在 **`.calibration/API-REFERENCE.md`**（gitignore，
+本地可再生：`curl -o .calibration/obsidian.d.ts https://raw.githubusercontent.com/obsidianmd/obsidian-api/master/obsidian.d.ts`
+后重跑校准）。shim 实现一律对照该文件，不凭记忆。
+
 ## 分层兼容目标
 
 | Tier | 范围 | 状态 |
@@ -38,6 +43,25 @@
 | **T1 高频核心** | `Plugin` 基类（addCommand / addRibbonIcon / addStatusBarItem / addSettingTab / registerEvent / registerInterval / loadData / saveData）；`App.{vault, workspace, metadataCache}`；`Vault`（read/cachedRead/modify/create/delete/rename/getAbstractFileByPath/getMarkdownFiles/getFiles + on("create"/"modify"/"delete"/"rename")）；`TFile`/`TFolder`/`TAbstractFile`；`MetadataCache`（getFileCache: headings/links/tags/frontmatter；resolvedLinks/unresolvedLinks）；`Workspace`（getActiveFile/openLinkText/on("file-open"/"active-leaf-change"/"layout-ready")）；`Notice`；`Modal`；`Setting`/`PluginSettingTab`；`normalizePath` | R4 目标 |
 | **T2 编辑与视图** | `Editor` 抽象（getValue/setValue/replaceRange/getCursor/setCursor/getSelection…，映射到 CM6）；`MarkdownView` / `MarkdownRenderer.render`; `ItemView` + `registerView`/`getLeavesOfType`（自定义面板挂进 pane 树）；`SuggestModal`/`FuzzySuggestModal`；`requestUrl`；`moment` 导出（大量插件 `import { moment } from "obsidian"`） | R5 候选 |
 | **T3 明确不做/远期** | Canvas API、移动端 API、未文档化内部、DOM 私有结构契约、Sync/Publish 专属 API | 不承诺 |
+
+## R4 实现决策（2026-06-10）
+
+- **T1.5 — 套件驱动的最小 `Editor` 子集**提前入轮：套件 5 插件中 2 个
+  （NL Dates、Paste URL）核心功能依赖 `editorCallback`，符合「套件外 API 按需求驱动加」
+  的闸门规则。子集 = getValue/setValue/getSelection/somethingSelected/replaceSelection/
+  getCursor/setCursor/setSelection/replaceRange/getLine/lineCount/lastLine/getRange/
+  posToOffset/offsetToPos/focus/hasFocus，映射到共享文档模型的 active view。
+  完整 `Editor`/`MarkdownView`/`registerView` 仍是 T2。
+- **`apiVersion = "1.5.0"`**：shim 自报的版本号；`requireApiVersion` 按 semver 对比。
+  manifest `minAppVersion` 超出时 console.warn + 设置页标注，不硬拒。
+- **moment 不入本轮**（违反「不加 npm 依赖」纪律，T2 一次性决策）；`import { moment }`
+  得到抛出说明性错误的占位 → 套件记录缺口。
+- **越级 API 一律 warn-stub**（warn 一次 + 入加载器缺口报告），插件不因调用 T2/T3 API 崩溃。
+- **法律边界落地**：`.calibration/`（官方 d.ts 及其摘录）gitignore 不入库，仓库内只保留
+  我们自己实现的接口形状。
+- 浏览器 E2E 注入口：`window.__geodeObsidianPlugins`（Memory adapter）+ `?obsfixture=1`
+  内置测试插件（compat/obsidian/fixture.ts，覆盖 manifest/命令/状态栏/设置页/Notice/
+  vault 读写/getFileCache/事件）。
 
 ## 验收方式（可度量，防自嗨）
 

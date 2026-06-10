@@ -1,6 +1,7 @@
 import type { Command } from "./types";
 import { EventBus, EventMap, EventName } from "./events";
 import { CommandRegistry } from "./commands";
+import { DocumentManager } from "./documents";
 import { MetadataIndex } from "./metadata";
 import { Store } from "./store";
 import { Vault } from "./vault";
@@ -22,6 +23,8 @@ export interface AppHandle {
   workspace: Workspace;
   commands: CommandRegistry;
   events: EventBus;
+  /** shared document model (R4) — open files, dirty state, the active editor view */
+  documents: DocumentManager;
   ui: {
     /** set (or update) a status bar item; returns a disposer */
     setStatusBarItem(id: string, text: string): void;
@@ -38,13 +41,37 @@ export interface GeodePlugin {
   onunload?(): void;
 }
 
-/** Where a plugin came from: compiled in, or loaded from `<vault>/.geode/plugins/*.js`. */
-export type PluginSource = "builtin" | "external";
+/**
+ * Where a plugin came from: compiled in, loaded from `<vault>/.geode/plugins/*.js`,
+ * or an Obsidian community plugin from `<vault>/.obsidian/plugins/` (compat layer).
+ */
+export type PluginSource = "builtin" | "external" | "obsidian";
+
+/** Per-record registration options (R4). */
+export interface RegisterOptions {
+  /** Initial enabled state, overriding the localStorage enabled-set. */
+  enabled?: boolean;
+  /**
+   * External persistence for the enabled flag (e.g. community-plugins.json).
+   * When given, localStorage persistence is skipped for this record.
+   */
+  persistEnabled?: (enabled: boolean) => void;
+}
+
+/** A plugin settings UI section (compat PluginSettingTab); SettingsModal hosts it. */
+export interface PluginSettingsSection {
+  id: string;
+  pluginId: string;
+  name: string;
+  mount(container: HTMLElement): void;
+  unmount(): void;
+}
 
 interface PluginRecord {
   plugin: GeodePlugin;
   enabled: boolean;
   readonly source: PluginSource;
+  options?: RegisterOptions;
   /** disposers collected while the plugin was active */
   disposers: Array<() => void>;
 }
@@ -69,6 +96,12 @@ export class PluginManager {
   readonly revision = new Store(0);
   /** status bar items contributed by plugins (id -> text) */
   readonly statusBarItems = new Store<ReadonlyMap<string, string>>(new Map());
+  /** element-based status bar items (compat addStatusBarItem); shell hosts the els */
+  readonly statusBarElements = new Store<ReadonlyArray<{ id: string; el: HTMLElement }>>([]);
+  /** ribbon icons (compat addRibbonIcon); each el carries its own click handler */
+  readonly ribbonItems = new Store<ReadonlyArray<{ id: string; el: HTMLElement }>>([]);
+  /** plugin settings sections (compat PluginSettingTab) rendered by SettingsModal */
+  readonly settingsSections = new Store<ReadonlyArray<PluginSettingsSection>>([]);
 
   private records = new Map<string, PluginRecord>();
   /** ids of plugins loaded from <vault>/.geode/plugins — unloaded on every reload */
@@ -122,15 +155,23 @@ export class PluginManager {
     });
   }
 
-  /** Register a plugin definition; enables it unless previously disabled. */
-  async register(plugin: GeodePlugin, source: PluginSource = "builtin"): Promise<void> {
+  /**
+   * Register a plugin definition; enables it unless previously disabled
+   * (or unless `opts.enabled` explicitly says otherwise).
+   */
+  async register(
+    plugin: GeodePlugin,
+    source: PluginSource = "builtin",
+    opts?: RegisterOptions,
+  ): Promise<void> {
     if (this.records.has(plugin.id)) {
       console.warn(`[plugins] duplicate plugin id: ${plugin.id}`);
       return;
     }
-    const record: PluginRecord = { plugin, enabled: false, source, disposers: [] };
+    const record: PluginRecord = { plugin, enabled: false, source, options: opts, disposers: [] };
     this.records.set(plugin.id, record);
-    if (this.loadEnabledSet()[plugin.id] !== false) {
+    const initiallyEnabled = opts?.enabled ?? this.loadEnabledSet()[plugin.id] !== false;
+    if (initiallyEnabled) {
       await this.enable(plugin.id);
     } else {
       this.revision.update((n) => n + 1);
@@ -143,7 +184,7 @@ export class PluginManager {
     try {
       await record.plugin.onload(this.makeHandle(record));
       record.enabled = true;
-      this.persistEnabled();
+      this.persistRecord(record);
       this.revision.update((n) => n + 1);
     } catch (err) {
       console.error(`[plugins] ${id} failed to load`, err);
@@ -163,8 +204,30 @@ export class PluginManager {
     record.disposers.forEach((d) => d());
     record.disposers = [];
     record.enabled = false;
-    this.persistEnabled();
+    this.persistRecord(record);
     this.revision.update((n) => n + 1);
+  }
+
+  /** Persist one record's enabled flag — external hook wins over localStorage. */
+  private persistRecord(record: PluginRecord) {
+    if (record.options?.persistEnabled) {
+      try {
+        record.options.persistEnabled(record.enabled);
+      } catch (err) {
+        console.error(`[plugins] persistEnabled hook for ${record.plugin.id} threw`, err);
+      }
+      return;
+    }
+    this.persistEnabled();
+  }
+
+  /**
+   * Tear a plugin down and drop its record entirely WITHOUT persisting
+   * enabled:false (used by compat/external reloads — the user's last toggle
+   * must survive a reload).
+   */
+  unregister(id: string): void {
+    this.removeRecord(id);
   }
 
   /**
@@ -267,6 +330,26 @@ export class PluginManager {
     }
   }
 
+  /* ---------- element-based UI contributions (compat layer; shell hosts them) ---------- */
+
+  addStatusBarElement(id: string, el: HTMLElement): () => void {
+    this.statusBarElements.update((arr) => [...arr.filter((x) => x.id !== id), { id, el }]);
+    return () => this.statusBarElements.update((arr) => arr.filter((x) => x.id !== id));
+  }
+
+  addRibbonElement(id: string, el: HTMLElement): () => void {
+    this.ribbonItems.update((arr) => [...arr.filter((x) => x.id !== id), { id, el }]);
+    return () => this.ribbonItems.update((arr) => arr.filter((x) => x.id !== id));
+  }
+
+  addSettingsSection(section: PluginSettingsSection): () => void {
+    this.settingsSections.update((arr) => [
+      ...arr.filter((x) => x.id !== section.id),
+      section,
+    ]);
+    return () => this.settingsSections.update((arr) => arr.filter((x) => x.id !== section.id));
+  }
+
   list(): Array<{ plugin: GeodePlugin; enabled: boolean; source: PluginSource }> {
     return [...this.records.values()].map((r) => ({
       plugin: r.plugin,
@@ -291,9 +374,12 @@ export class PluginManager {
 
   private persistEnabled() {
     // merge over the stored map so flags for plugins that are not registered
-    // yet (e.g. external ones, loaded after the builtins) are not erased
+    // yet (e.g. external ones, loaded after the builtins) are not erased;
+    // records with an external persistence hook never enter localStorage
     const map = this.loadEnabledSet();
-    for (const [id, r] of this.records) map[id] = r.enabled;
+    for (const [id, r] of this.records) {
+      if (!r.options?.persistEnabled) map[id] = r.enabled;
+    }
     try {
       localStorage.setItem(ENABLED_KEY, JSON.stringify(map));
     } catch {

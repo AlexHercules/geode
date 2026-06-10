@@ -2,7 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
 import { AppContext, GeodeApp } from "@app/AppContext";
+import { loadObsidianPlugins } from "@compat/obsidian/loader";
 import { CommandRegistry } from "@core/commands";
+import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
@@ -95,11 +97,14 @@ async function bootstrap() {
   const metadata = new MetadataIndex(vault, events);
   const workspace = new Workspace(events);
   const commands = new CommandRegistry();
-  const plugins = new PluginManager({ vault, metadata, workspace, commands, events });
+  const documents = new DocumentManager(vault, events);
+  const plugins = new PluginManager({ vault, metadata, workspace, commands, events, documents });
 
-  const app: GeodeApp = { vault, metadata, workspace, commands, events, plugins };
+  const app: GeodeApp = { vault, metadata, workspace, commands, events, plugins, documents };
 
   workspace.applyDocumentEffects();
+  // close-time flushing covers every open document (single source of dirty state)
+  workspace.registerFlusher(() => documents.flushAll());
 
   // expose the plugin API for external extension (the "extensibility story")
   (window as unknown as Record<string, unknown>).geode = {
@@ -145,6 +150,12 @@ async function bootstrap() {
       await plugins.loadExternal(vault);
     } catch (err) {
       console.error("[boot] external plugin load failed", err);
+    }
+    // Obsidian community plugins from <vault>/.obsidian/plugins/ (compat layer)
+    try {
+      await loadObsidianPlugins(app, vault);
+    } catch (err) {
+      console.error("[boot] obsidian plugin load failed", err);
     }
   }
 

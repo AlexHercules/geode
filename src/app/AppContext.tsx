@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import { CommandRegistry } from "@core/commands";
+import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
@@ -14,6 +15,7 @@ export interface GeodeApp {
   commands: CommandRegistry;
   events: EventBus;
   plugins: PluginManager;
+  documents: DocumentManager;
 }
 
 export const AppContext = createContext<GeodeApp | null>(null);

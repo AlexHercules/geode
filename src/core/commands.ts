@@ -38,6 +38,7 @@ export class CommandRegistry {
     for (const cmd of this.commands.values()) {
       if (!cmd.hotkey) continue;
       if (matchHotkey(cmd.hotkey, e)) {
+        if (cmd.available?.() === false) continue; // context-gated (e.g. needs an editor)
         e.preventDefault();
         e.stopPropagation();
         cmd.callback();

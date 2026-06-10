@@ -174,4 +174,9 @@ export interface Command {
   /** e.g. "Ctrl+P" — display + matching key, Mod = Ctrl on Windows */
   hotkey?: string;
   callback: () => void;
+  /**
+   * Context check: when it returns false the palette hides the command and
+   * hotkeys skip it (compat editorCallback variants). Must be side-effect free.
+   */
+  available?: () => boolean;
 }
