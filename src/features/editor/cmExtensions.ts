@@ -26,6 +26,7 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
+import { livePreview } from "./livePreview";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /** Dispatched when the metadata index changes so wikilink resolution re-runs. */
@@ -217,9 +218,12 @@ export function buildEditorExtensions(opts: {
   app: GeodeApp;
   path: string;
   onDocChanged: (text: string) => void;
+  /** "live" = Obsidian-style live preview (default), "source" = raw markdown */
+  mode: "live" | "source";
 }): Extension[] {
-  const { app, path, onDocChanged } = opts;
+  const { app, path, onDocChanged, mode } = opts;
   return [
+    ...(mode === "live" ? livePreview(app, path) : []),
     history(),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(mdHighlight),

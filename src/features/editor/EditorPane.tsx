@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import type { TabState } from "@core/types";
+import type { TabState, ViewMode } from "@core/types";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -40,6 +40,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const saveRef = useRef<SaveState>({ path: null, dirty: false, timer: null });
   /** ref mirror of loadedPath so event handlers can compare outside render */
   const loadedPathRef = useRef<string | null>(null);
+  /** true while we replace the doc from disk — suppresses the dirty/save cycle */
+  const externalReloadRef = useRef(false);
 
   const setLoadedPath = useCallback((path: string | null) => {
     loadedPathRef.current = path;
@@ -70,6 +72,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const handleDocChanged = useCallback(
     (text: string) => {
       textRef.current = text;
+      if (externalReloadRef.current) return; // disk → editor sync, nothing to save
       const s = saveRef.current;
       s.dirty = true;
       if (s.timer !== null) window.clearTimeout(s.timer);
@@ -114,6 +117,45 @@ export function EditorPane({ tab }: { tab: TabState }) {
     };
   }, [app, setLoadedPath]);
 
+  /* ---------- external changes (file watcher) ---------- */
+
+  useEffect(() => {
+    return app.events.on("file:external-modified", ({ path }) => {
+      if (path !== loadedPathRef.current) return;
+      const s = saveRef.current;
+      if (s.dirty || s.timer !== null) {
+        // local edits pending — last writer wins, our save will overwrite
+        console.warn(`[editor] external change to "${path}" ignored: unsaved local edits`);
+        return;
+      }
+      void app.vault.read(path).then(
+        (text) => {
+          if (path !== loadedPathRef.current) return;
+          if (text === textRef.current) return; // our own write echoed back
+          const view = viewRef.current;
+          if (view) {
+            const head = Math.min(view.state.selection.main.head, text.length);
+            externalReloadRef.current = true;
+            try {
+              view.dispatch({
+                changes: { from: 0, to: view.state.doc.length, insert: text },
+                selection: { anchor: head },
+              });
+            } finally {
+              externalReloadRef.current = false;
+            }
+          } else {
+            textRef.current = text;
+          }
+          setPreviewBump((b) => b + 1); // reading view re-renders from textRef
+        },
+        (err: unknown) => {
+          console.error(`[editor] failed to reload externally modified "${path}"`, err);
+        },
+      );
+    });
+  }, [app]);
+
   /* ---------- load file content (filePath can change in-place) ---------- */
 
   useEffect(() => {
@@ -152,7 +194,12 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (tab.mode === "preview" || !loadedPath || !hostRef.current) return;
     const state = EditorState.create({
       doc: textRef.current,
-      extensions: buildEditorExtensions({ app, path: loadedPath, onDocChanged: handleDocChanged }),
+      extensions: buildEditorExtensions({
+        app,
+        path: loadedPath,
+        onDocChanged: handleDocChanged,
+        mode: tab.mode === "source" ? "source" : "live",
+      }),
     });
     const view = new EditorView({ state, parent: hostRef.current });
     viewRef.current = view;
@@ -236,9 +283,12 @@ export function EditorPane({ tab }: { tab: TabState }) {
 
   /* ---------- chrome ---------- */
 
-  const toggleMode = useCallback(() => {
-    app.workspace.setTabMode(tab.id, tab.mode === "preview" ? "live" : "preview");
-  }, [app, tab.id, tab.mode]);
+  const setMode = useCallback(
+    (mode: ViewMode) => {
+      app.workspace.setTabMode(tab.id, mode);
+    },
+    [app, tab.id],
+  );
 
   let body: React.ReactNode;
   if (!tab.filePath) {
@@ -284,15 +334,51 @@ export function EditorPane({ tab }: { tab: TabState }) {
           {tab.title}
         </div>
         <div className="editor-header-spacer" />
-        <button
-          className="editor-mode-btn"
-          data-testid="mode-toggle"
-          title="Toggle edit/reading view (Ctrl+E)"
-          aria-label="Toggle edit/reading view"
-          onClick={toggleMode}
-        >
-          <Icon name={tab.mode !== "preview" ? "book-open" : "pencil"} size={16} />
-        </button>
+        <div className="editor-mode-group" role="group" aria-label="View mode" data-testid="mode-group">
+          <button
+            className={"editor-mode-btn" + (tab.mode === "live" ? " is-active" : "")}
+            data-testid="mode-live"
+            title="Live preview (Ctrl+E)"
+            aria-label="Live preview"
+            aria-pressed={tab.mode === "live"}
+            onClick={() => setMode("live")}
+          >
+            <Icon name="pencil" size={15} />
+          </button>
+          <button
+            className={"editor-mode-btn" + (tab.mode === "source" ? " is-active" : "")}
+            data-testid="mode-source"
+            title="Source mode (Ctrl+Shift+E)"
+            aria-label="Source mode"
+            aria-pressed={tab.mode === "source"}
+            onClick={() => setMode("source")}
+          >
+            <svg
+              width={15}
+              height={15}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M16 18l6-6-6-6" />
+              <path d="M8 6l-6 6 6 6" />
+            </svg>
+          </button>
+          <button
+            className={"editor-mode-btn" + (tab.mode === "preview" ? " is-active" : "")}
+            data-testid="mode-preview"
+            title="Reading view (Ctrl+E)"
+            aria-label="Reading view"
+            aria-pressed={tab.mode === "preview"}
+            onClick={() => setMode("preview")}
+          >
+            <Icon name="book-open" size={15} />
+          </button>
+        </div>
       </div>
       {body}
     </div>

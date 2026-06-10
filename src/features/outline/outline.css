@@ -1,0 +1,88 @@
+/* ============ Outline panel ============ */
+
+.outline-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+}
+
+.outline-count {
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.outline-empty {
+  padding: 28px 18px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.outline-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 12px;
+}
+
+/* ---- rows ---- */
+
+.outline-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 5px;
+  padding-left: calc(var(--outline-depth, 0) * 14px);
+  color: var(--text-muted);
+}
+
+.outline-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.outline-item[data-level="1"] {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.outline-chevron,
+.outline-chevron-spacer {
+  flex-shrink: 0;
+  width: 18px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+}
+
+.outline-chevron {
+  color: var(--text-faint);
+  border-radius: 4px;
+}
+
+.outline-chevron:hover {
+  color: var(--text-normal);
+  background: var(--bg-active);
+}
+
+.outline-label {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px 3px 0;
+  text-align: left;
+  line-height: 1.4;
+  color: inherit;
+  font-weight: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}

@@ -1,0 +1,83 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e27] [cursor=pointer]:
+        - img [ref=e28]
+    - complementary [ref=e31]:
+      - generic [ref=e32]:
+        - generic [ref=e33]:
+          - generic "Demo Vault" [ref=e34]
+          - generic [ref=e35]:
+            - button "New note" [ref=e36] [cursor=pointer]:
+              - img [ref=e37]
+            - button "New folder" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "Expand all" [ref=e43] [cursor=pointer]:
+              - img [ref=e44]
+        - tree [ref=e46]:
+          - generic "Daily Notes" [ref=e47] [cursor=pointer]:
+            - img [ref=e49]
+            - img [ref=e52]
+            - generic [ref=e54]: Daily Notes
+          - generic "Projects" [ref=e55] [cursor=pointer]:
+            - img [ref=e57]
+            - img [ref=e60]
+            - generic [ref=e62]: Projects
+          - generic "Getting Started.md" [ref=e63] [cursor=pointer]:
+            - generic [ref=e64]: Getting Started
+          - generic "Graph View.md" [ref=e65] [cursor=pointer]:
+            - generic [ref=e66]: Graph View
+          - generic "Markdown Syntax.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Markdown Syntax
+          - generic "Welcome.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Welcome
+          - generic "Wiki Links.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Wiki Links
+    - main [ref=e74]:
+      - tablist [ref=e75]:
+        - tab "Welcome Close Welcome" [ref=e76] [cursor=pointer]:
+          - generic [ref=e77]: Welcome
+          - button "Close Welcome" [ref=e78]:
+            - img [ref=e79]
+        - tab "Graph view Close Graph view" [selected] [ref=e82] [cursor=pointer]:
+          - img [ref=e83]
+          - generic [ref=e89]: Graph view
+          - button "Close Graph view" [ref=e90]:
+            - img [ref=e91]
+        - tab "Testing Geode Close Testing Geode" [ref=e94] [cursor=pointer]:
+          - generic [ref=e95]: Testing Geode
+          - button "Close Testing Geode" [ref=e96]:
+            - img [ref=e97]
+        - tab "Graph View Close Graph View" [ref=e100] [cursor=pointer]:
+          - generic [ref=e101]: Graph View
+          - button "Close Graph View" [ref=e102]:
+            - img [ref=e103]
+        - button "New note" [ref=e106] [cursor=pointer]:
+          - img [ref=e107]
+      - generic [ref=e109]:
+        - generic:
+          - generic:
+            - img
+            - generic: No notes to graph yet
+            - generic: Create a note and add [[wiki links]] to see connections.
+    - complementary [ref=e111]:
+      - tablist "Right panel" [ref=e113]:
+        - tab "Backlinks" [selected] [ref=e114] [cursor=pointer]:
+          - img [ref=e115]
+        - tab "Outline" [ref=e118] [cursor=pointer]:
+          - img [ref=e119]
+      - generic [ref=e121]:
+        - generic [ref=e122]: Backlinks
+        - generic [ref=e123]: Open a note to see its backlinks
+  - contentinfo [ref=e124]:
+    - generic [ref=e125]: Demo Vault

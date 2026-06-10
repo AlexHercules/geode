@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import type { PluginManager } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
 
@@ -141,6 +142,8 @@ function PluginsSection() {
   const app = useApp();
   useStore(app.plugins.revision); // re-render on enable/disable/register
   const entries = app.plugins.list();
+  const builtin = entries.filter((e) => e.source === "builtin");
+  const external = entries.filter((e) => e.source === "external");
 
   return (
     <section>
@@ -150,37 +153,92 @@ function PluginsSection() {
         also be registered at runtime via <code>window.geode.registerPlugin</code>.
       </p>
 
-      {entries.length === 0 ? (
-        <div className="settings-empty">No plugins registered.</div>
-      ) : (
-        <div className="plugin-list" data-testid="settings-plugin-list">
-          {entries.map(({ plugin, enabled }) => (
-            <div className="plugin-item" key={plugin.id} data-testid={`plugin-item-${plugin.id}`}>
-              <div className="plugin-info">
-                <div className="plugin-name">
-                  {plugin.name}
-                  {plugin.version && <span className="plugin-version">v{plugin.version}</span>}
-                </div>
-                {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
-              </div>
-              <button
-                className={`settings-toggle${enabled ? " is-on" : ""}`}
-                role="switch"
-                aria-checked={enabled}
-                aria-label={`${enabled ? "Disable" : "Enable"} ${plugin.name}`}
-                data-testid={`plugin-toggle-${plugin.id}`}
-                onClick={() => {
-                  if (enabled) app.plugins.disable(plugin.id);
-                  else void app.plugins.enable(plugin.id);
-                }}
-              >
-                <span className="settings-toggle-thumb" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="plugin-group-header">
+        <h3 className="plugin-group-title">Built-in</h3>
+      </div>
+      <PluginList entries={builtin} group="builtin" />
+
+      <div className="plugin-group-header">
+        <h3 className="plugin-group-title">External</h3>
+        <button
+          className="plugin-reload-btn"
+          data-testid="settings-reload-plugins"
+          title="Re-scan .geode/plugins and reload all external plugins"
+          onClick={() => void app.commands.execute("app:reload-plugins")}
+        >
+          {/* lucide refresh-cw (not in the shared icon set) */}
+          <svg
+            width={13}
+            height={13}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M3 21v-5h5" />
+          </svg>
+          Reload external plugins
+        </button>
+      </div>
+      <p className="settings-note plugin-path-hint" data-testid="settings-plugin-path-hint">
+        Drop <code>.js</code> files into <code>&lt;vault&gt;/.geode/plugins/</code> — see{" "}
+        <code>docs/PLUGINS.md</code> for the authoring guide.
+      </p>
+      <PluginList entries={external} group="external" />
     </section>
+  );
+}
+
+function PluginList({
+  entries,
+  group,
+}: {
+  entries: ReturnType<PluginManager["list"]>;
+  group: "builtin" | "external";
+}) {
+  const app = useApp();
+
+  if (entries.length === 0) {
+    return (
+      <div className="settings-empty" data-testid={`settings-plugin-empty-${group}`}>
+        {group === "builtin" ? "No built-in plugins registered." : "No external plugins found."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="plugin-list" data-testid={`settings-plugin-list-${group}`}>
+      {entries.map(({ plugin, enabled }) => (
+        <div className="plugin-item" key={plugin.id} data-testid={`plugin-item-${plugin.id}`}>
+          <div className="plugin-info">
+            <div className="plugin-name">
+              {plugin.name}
+              {plugin.version && <span className="plugin-version">v{plugin.version}</span>}
+            </div>
+            {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
+          </div>
+          <button
+            className={`settings-toggle${enabled ? " is-on" : ""}`}
+            role="switch"
+            aria-checked={enabled}
+            aria-label={`${enabled ? "Disable" : "Enable"} ${plugin.name}`}
+            data-testid={`plugin-toggle-${plugin.id}`}
+            onClick={() => {
+              if (enabled) app.plugins.disable(plugin.id);
+              else void app.plugins.enable(plugin.id);
+            }}
+          >
+            <span className="settings-toggle-thumb" />
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }
 
