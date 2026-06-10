@@ -24,6 +24,7 @@ const DEFAULT_STATE: WorkspaceState = {
  */
 export class Workspace {
   readonly state = new Store<WorkspaceState>(DEFAULT_STATE);
+  private flushers = new Set<() => void | Promise<void>>();
 
   constructor(private events: EventBus) {
     this.restore();
@@ -160,6 +161,29 @@ export class Workspace {
     document.documentElement.style.setProperty("--editor-font-size", `${clamped}px`);
   }
 
+  /* ---------- flushers ---------- */
+
+  /** Register a flush callback (e.g. pending editor saves); returns a disposer. */
+  registerFlusher(fn: () => void | Promise<void>): () => void {
+    this.flushers.add(fn);
+    return () => {
+      this.flushers.delete(fn);
+    };
+  }
+
+  /** Run every registered flusher and await them all. Never throws. */
+  async flushAll(): Promise<void> {
+    await Promise.all(
+      [...this.flushers].map(async (fn) => {
+        try {
+          await fn();
+        } catch (err) {
+          console.error("[workspace] flusher threw", err);
+        }
+      }),
+    );
+  }
+
   /** apply theme/font side effects on startup */
   applyDocumentEffects() {
     const s = this.state.get();
@@ -204,8 +228,12 @@ export class Workspace {
   }
 
   private update(fn: (s: WorkspaceState) => WorkspaceState) {
+    const prevModal = this.state.get().modal;
     this.state.update(fn);
     this.persist();
+    if (prevModal !== null && this.state.get().modal === null) {
+      this.events.emit("modal:closed", {});
+    }
   }
 
   private persist() {
@@ -224,10 +252,49 @@ export class Workspace {
     try {
       const raw = localStorage.getItem(PERSIST_KEY);
       if (!raw) return;
-      const saved = JSON.parse(raw) as Partial<WorkspaceState>;
-      this.state.set({ ...DEFAULT_STATE, ...saved, modal: null });
+      this.state.set(sanitizeState(JSON.parse(raw)));
     } catch {
       /* corrupted state — start fresh */
     }
   }
+}
+
+/** Validate a persisted (untrusted) state shape; fall back to DEFAULT_STATE. */
+function sanitizeState(saved: unknown): WorkspaceState {
+  if (typeof saved !== "object" || saved === null || Array.isArray(saved)) return DEFAULT_STATE;
+  const s = saved as Record<string, unknown>;
+  if (!Array.isArray(s.tabs)) return DEFAULT_STATE;
+
+  const tabs: TabState[] = [];
+  for (const raw of s.tabs) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const t = raw as Record<string, unknown>;
+    if (typeof t.id !== "string" || typeof t.title !== "string") continue;
+    if (t.viewType !== "markdown" && t.viewType !== "graph") continue;
+    if (t.mode !== "edit" && t.mode !== "preview") continue;
+    if (typeof t.filePath !== "string" && t.filePath !== null) continue;
+    tabs.push({
+      id: t.id,
+      viewType: t.viewType,
+      filePath: t.filePath,
+      mode: t.mode,
+      title: t.title,
+    });
+  }
+
+  const fontSize =
+    typeof s.fontSize === "number" && Number.isFinite(s.fontSize)
+      ? Math.max(11, Math.min(28, Math.round(s.fontSize)))
+      : DEFAULT_STATE.fontSize;
+
+  return {
+    tabs,
+    activeTabId: tabs.some((t) => t.id === s.activeTabId) ? (s.activeTabId as string) : null,
+    leftPanel: s.leftPanel === "search" ? "search" : "explorer",
+    leftSidebarOpen: Boolean(s.leftSidebarOpen ?? DEFAULT_STATE.leftSidebarOpen),
+    rightSidebarOpen: Boolean(s.rightSidebarOpen ?? DEFAULT_STATE.rightSidebarOpen),
+    modal: null,
+    theme: s.theme === "light" ? "light" : "dark",
+    fontSize,
+  };
 }

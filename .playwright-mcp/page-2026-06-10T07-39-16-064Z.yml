@@ -1,0 +1,61 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e31] [cursor=pointer]:
+        - img [ref=e32]
+    - complementary [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic "Demo Vault" [ref=e38]
+          - generic [ref=e39]:
+            - button "New note" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "New folder" [ref=e44] [cursor=pointer]:
+              - img [ref=e45]
+            - button "Expand all" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+        - tree [ref=e50]:
+          - generic "Daily Notes" [ref=e51] [cursor=pointer]:
+            - img [ref=e53]
+            - img [ref=e56]
+            - generic [ref=e58]: Daily Notes
+          - generic "Projects" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - img [ref=e64]
+            - generic [ref=e66]: Projects
+          - generic "Getting Started.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Getting Started
+          - generic "Graph View.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Graph View
+          - generic "Markdown Syntax.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Markdown Syntax
+          - generic "Welcome.md" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: Welcome
+          - generic "Wiki Links.md" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: Wiki Links
+    - main [ref=e77]:
+      - tablist [ref=e78]:
+        - button "New note" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+      - generic [ref=e83]:
+        - heading "No file is open" [level=2] [ref=e84]
+        - generic [ref=e85]:
+          - button "Create new note (Ctrl+N)" [ref=e86] [cursor=pointer]
+          - button "Open quick switcher (Ctrl+O)" [ref=e87] [cursor=pointer]
+          - button "Open graph view (Ctrl+G)" [ref=e88] [cursor=pointer]
+    - complementary [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: Backlinks
+        - generic [ref=e92]: Open a note to see its backlinks
+  - contentinfo [ref=e93]:
+    - generic [ref=e94]: Demo Vault

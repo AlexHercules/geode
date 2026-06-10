@@ -1,0 +1,143 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [active] [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e31] [cursor=pointer]:
+        - img [ref=e32]
+    - complementary [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic "Demo Vault" [ref=e38]
+          - generic [ref=e39]:
+            - button "New note" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "New folder" [ref=e44] [cursor=pointer]:
+              - img [ref=e45]
+            - button "Expand all" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+        - tree [ref=e50]:
+          - generic "Daily Notes" [ref=e51] [cursor=pointer]:
+            - img [ref=e53]
+            - img [ref=e56]
+            - generic [ref=e58]: Daily Notes
+          - generic "Projects" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - img [ref=e64]
+            - generic [ref=e66]: Projects
+          - generic "Getting Started.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Getting Started
+          - generic "Graph View.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Graph View
+          - generic "Markdown Syntax.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Markdown Syntax
+          - generic "Welcome.md" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: Welcome
+          - generic "Wiki Links.md" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: Wiki Links
+    - main [ref=e77]:
+      - tablist [ref=e78]:
+        - tab "Welcome Close Welcome" [ref=e95] [cursor=pointer]:
+          - generic [ref=e96]: Welcome
+          - button "Close Welcome" [ref=e97]:
+            - img [ref=e98]
+        - tab "Graph view Close Graph view" [ref=e211] [cursor=pointer]:
+          - img [ref=e212]
+          - generic [ref=e218]: Graph view
+          - button "Close Graph view" [ref=e219]:
+            - img [ref=e220]
+        - tab "Markdown Syntax Close Markdown Syntax" [selected] [ref=e329] [cursor=pointer]:
+          - generic [ref=e263]: Markdown Syntax
+          - button "Close Markdown Syntax" [ref=e330]:
+            - img [ref=e265]
+        - button "New note" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+      - generic [ref=e268]:
+        - generic [ref=e269]:
+          - generic "Markdown Syntax.md" [ref=e331]: Markdown Syntax
+          - button "Toggle edit/reading view" [ref=e271] [cursor=pointer]:
+            - img [ref=e272]
+        - generic [ref=e395]:
+          - heading "Markdown Syntax" [level=1] [ref=e396]
+          - heading "Emphasis" [level=2] [ref=e397]
+          - paragraph [ref=e398]:
+            - strong [ref=e399]: bold
+            - text: ","
+            - emphasis [ref=e400]: italic
+            - text: ", strikethrough,"
+            - code [ref=e401]: inline code
+          - heading "Lists" [level=2] [ref=e402]
+          - list [ref=e403]:
+            - listitem [ref=e404]: bullet
+            - listitem [ref=e405]:
+              - checkbox [ref=e406] [cursor=pointer]
+              - text: task to do
+            - listitem [ref=e407]:
+              - checkbox [checked] [ref=e408] [cursor=pointer]
+              - text: task done
+          - heading "Quote" [level=2] [ref=e409]
+          - blockquote [ref=e410]:
+            - paragraph [ref=e411]: Knowledge is a network, not a hierarchy.
+          - heading "Code" [level=2] [ref=e412]
+          - code [ref=e414]: const geode = "💎";
+          - paragraph [ref=e415]:
+            - text: See also
+            - link "Getting Started" [ref=e416] [cursor=pointer]:
+              - /url: "#"
+            - text: .
+          - paragraph [ref=e417]: "#guide #markdown"
+    - complementary [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: Backlinks
+        - generic [ref=e92]:
+          - generic [ref=e287]:
+            - button "Linked mentions 3" [expanded] [ref=e358] [cursor=pointer]:
+              - img [ref=e289]
+              - generic [ref=e291]: Linked mentions
+              - generic [ref=e292]: "3"
+            - generic [ref=e293]:
+              - generic [ref=e359]:
+                - button "2026-06-10 1" [ref=e360] [cursor=pointer]:
+                  - img [ref=e361]
+                  - generic [ref=e364]: 2026-06-10
+                  - generic [ref=e365]: "1"
+                - button "Reading [[Markdown Syntax]] and practicing [[Wiki Links]]." [ref=e367] [cursor=pointer]
+              - generic [ref=e368]:
+                - button "Getting Started 1" [ref=e369] [cursor=pointer]:
+                  - img [ref=e370]
+                  - generic [ref=e373]: Getting Started
+                  - generic [ref=e374]: "1"
+                - 'button "Related: [[Wiki Links]], [[Markdown Syntax]]" [ref=e376] [cursor=pointer]'
+              - generic [ref=e377]:
+                - button "Geode Roadmap 1" [ref=e378] [cursor=pointer]:
+                  - img [ref=e379]
+                  - generic [ref=e382]: Geode Roadmap
+                  - generic [ref=e383]: "1"
+                - button "- Core editing experience — see [[Markdown Syntax]]" [ref=e385] [cursor=pointer]
+          - generic [ref=e295]:
+            - button "Outgoing links 1" [expanded] [ref=e386] [cursor=pointer]:
+              - img [ref=e297]
+              - generic [ref=e299]: Outgoing links
+              - generic [ref=e300]: "1"
+            - button "Getting Started" [ref=e387] [cursor=pointer]:
+              - img [ref=e388]
+              - generic [ref=e391]: Getting Started
+          - generic [ref=e313]:
+            - button "Tags 2" [expanded] [ref=e392] [cursor=pointer]:
+              - img [ref=e315]
+              - generic [ref=e317]: Tags
+              - generic [ref=e318]: "2"
+            - generic [ref=e320]:
+              - generic [ref=e393]: "#guide"
+              - generic [ref=e394]: "#markdown"
+  - contentinfo [ref=e93]:
+    - generic [ref=e94]: Demo Vault
+    - generic [ref=e322]: 48 words · 277 chars

@@ -28,7 +28,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const metaRevision = useStore(app.metadata.revision);
 
   /** path whose content is currently loaded into textRef */
-  const [loadedPath, setLoadedPath] = useState<string | null>(null);
+  const [loadedPath, setLoadedPathState] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   /** bumped when preview mutates the source (task checkbox toggles) */
   const [previewBump, setPreviewBump] = useState(0);
@@ -38,10 +38,18 @@ export function EditorPane({ tab }: { tab: TabState }) {
   /** latest document text for the loaded file */
   const textRef = useRef("");
   const saveRef = useRef<SaveState>({ path: null, dirty: false, timer: null });
+  /** ref mirror of loadedPath so event handlers can compare outside render */
+  const loadedPathRef = useRef<string | null>(null);
+
+  const setLoadedPath = useCallback((path: string | null) => {
+    loadedPathRef.current = path;
+    setLoadedPathState(path);
+  }, []);
 
   /* ---------- auto-save ---------- */
 
-  const flushSave = useCallback(() => {
+  /** Flush any pending edit. Returns the write promise so callers can await IPC. */
+  const flushSave = useCallback((): Promise<void> => {
     const s = saveRef.current;
     if (s.timer !== null) {
       window.clearTimeout(s.timer);
@@ -49,10 +57,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
     }
     if (s.dirty && s.path) {
       s.dirty = false;
-      void app.vault.modify(s.path, textRef.current).catch((err) => {
-        console.error(`[editor] failed to save ${s.path}`, err);
+      // never resurrect a file that was deleted while the edit was pending
+      if (!app.vault.fileExists(s.path)) return Promise.resolve();
+      const path = s.path;
+      return app.vault.modify(path, textRef.current).catch((err) => {
+        console.error(`[editor] failed to save ${path}`, err);
       });
     }
+    return Promise.resolve();
   }, [app]);
 
   const handleDocChanged = useCallback(
@@ -69,14 +81,52 @@ export function EditorPane({ tab }: { tab: TabState }) {
     [flushSave],
   );
 
+  /* ---------- vault events: keep pending saves pointed at the live file ---------- */
+
+  useEffect(() => {
+    const remap = (path: string | null, oldPath: string, newPath: string): string | null => {
+      if (path === oldPath) return newPath;
+      if (path && path.startsWith(oldPath + "/")) return newPath + path.slice(oldPath.length);
+      return path;
+    };
+    const offRenamed = app.events.on("file:renamed", ({ oldPath, newPath }) => {
+      // retarget the pending save to the new path WITHOUT touching textRef/dirty,
+      // so in-flight edits land in the renamed file instead of the old path
+      const s = saveRef.current;
+      const nextSavePath = remap(s.path, oldPath, newPath);
+      if (nextSavePath !== s.path) s.path = nextSavePath;
+      const nextLoaded = remap(loadedPathRef.current, oldPath, newPath);
+      if (nextLoaded !== loadedPathRef.current) setLoadedPath(nextLoaded);
+    });
+    const offDeleted = app.events.on("file:deleted", ({ path }) => {
+      const s = saveRef.current;
+      if (s.path && (s.path === path || s.path.startsWith(path + "/"))) {
+        if (s.timer !== null) {
+          window.clearTimeout(s.timer);
+          s.timer = null;
+        }
+        s.dirty = false;
+      }
+    });
+    return () => {
+      offRenamed();
+      offDeleted();
+    };
+  }, [app, setLoadedPath]);
+
   /* ---------- load file content (filePath can change in-place) ---------- */
 
   useEffect(() => {
+    const path = tab.filePath;
+    // pure rename retarget: the handler above already re-pointed everything at
+    // the new path and the content is still current — skip the flush + reload
+    if (path !== null && path === saveRef.current.path && loadedPathRef.current === path) {
+      return;
+    }
     // flush whatever the previous file still had pending
-    flushSave();
+    void flushSave();
     setLoadedPath(null);
     setLoadError(null);
-    const path = tab.filePath;
     saveRef.current = { path, dirty: false, timer: null };
     if (!path) return;
     let cancelled = false;
@@ -94,7 +144,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     return () => {
       cancelled = true;
     };
-  }, [app, flushSave, tab.filePath]);
+  }, [app, flushSave, setLoadedPath, tab.filePath]);
 
   /* ---------- CodeMirror lifecycle (edit mode) ---------- */
 
@@ -113,11 +163,29 @@ export function EditorPane({ tab }: { tab: TabState }) {
     });
     return () => {
       unsubscribe();
-      flushSave();
+      void flushSave();
       viewRef.current = null;
       view.destroy();
     };
   }, [app, tab.mode, loadedPath, handleDocChanged, flushSave]);
+
+  /* ---------- app-level flush registry (close-time flushing awaits IPC) ---------- */
+
+  useEffect(() => {
+    return app.workspace.registerFlusher(() => flushSave());
+  }, [app, flushSave]);
+
+  /* ---------- focus restoration after modals close ---------- */
+
+  useEffect(() => {
+    return app.events.on("modal:closed", () => {
+      requestAnimationFrame(() => {
+        if (app.workspace.state.get().modal) return;
+        if (app.workspace.getActiveTab()?.id !== tab.id || tab.mode !== "edit") return;
+        viewRef.current?.focus();
+      });
+    });
+  }, [app, tab.id, tab.mode]);
 
   /* ---------- preview rendering + interactions ---------- */
 

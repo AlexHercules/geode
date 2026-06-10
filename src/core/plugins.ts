@@ -158,7 +158,9 @@ export class PluginManager {
 
   private loadEnabledSet(): Record<string, boolean> {
     try {
-      return JSON.parse(localStorage.getItem(ENABLED_KEY) ?? "{}");
+      const parsed: unknown = JSON.parse(localStorage.getItem(ENABLED_KEY) ?? "{}");
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+      return parsed as Record<string, boolean>;
     } catch {
       return {};
     }

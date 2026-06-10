@@ -12,6 +12,8 @@ export interface EventMap {
   "metadata:updated": Record<string, never>;
   /** active file in workspace changed */
   "active-file:changed": { path: string | null };
+  /** a workspace modal transitioned from open to closed */
+  "modal:closed": Record<string, never>;
   /** theme switched */
   "theme:changed": { theme: "dark" | "light" };
 }

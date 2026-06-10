@@ -1,0 +1,93 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [active] [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e31] [cursor=pointer]:
+        - img [ref=e32]
+    - complementary [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic "Demo Vault" [ref=e38]
+          - generic [ref=e39]:
+            - button "New note" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "New folder" [ref=e44] [cursor=pointer]:
+              - img [ref=e45]
+            - button "Expand all" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+        - tree [ref=e50]:
+          - generic "Daily Notes" [ref=e51] [cursor=pointer]:
+            - img [ref=e53]
+            - img [ref=e56]
+            - generic [ref=e58]: Daily Notes
+          - generic "Projects" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - img [ref=e64]
+            - generic [ref=e66]: Projects
+          - generic "Getting Started.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Getting Started
+          - generic "Graph View.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Graph View
+          - generic "Markdown Syntax.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Markdown Syntax
+          - generic "Testing Geode.md" [ref=e449] [cursor=pointer]:
+            - generic [ref=e450]: Testing Geode
+          - generic "Welcome.md" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: Welcome
+          - generic "Wiki Links.md" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: Wiki Links
+    - main [ref=e77]:
+      - tablist [ref=e78]:
+        - tab "Welcome Close Welcome" [ref=e95] [cursor=pointer]:
+          - generic [ref=e96]: Welcome
+          - button "Close Welcome" [ref=e97]:
+            - img [ref=e98]
+        - tab "Graph view Close Graph view" [ref=e211] [cursor=pointer]:
+          - img [ref=e212]
+          - generic [ref=e218]: Graph view
+          - button "Close Graph view" [ref=e219]:
+            - img [ref=e220]
+        - tab "Testing Geode Close Testing Geode" [selected] [ref=e451] [cursor=pointer]:
+          - generic [ref=e263]: Testing Geode
+          - button "Close Testing Geode" [ref=e452]:
+            - img [ref=e265]
+        - button "New note" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+      - generic [ref=e269]:
+        - generic "Testing Geode.md" [ref=e453]: Testing Geode
+        - button "Toggle edit/reading view" [ref=e271] [cursor=pointer]:
+          - img [ref=e272]
+    - complementary [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: Backlinks
+        - generic [ref=e92]:
+          - generic [ref=e287]:
+            - button "Linked mentions 0" [expanded] [ref=e454] [cursor=pointer]:
+              - img [ref=e289]
+              - generic [ref=e291]: Linked mentions
+              - generic [ref=e292]: "0"
+            - generic [ref=e455]: No backlinks yet
+          - generic [ref=e295]:
+            - button "Outgoing links 0" [expanded] [ref=e456] [cursor=pointer]:
+              - img [ref=e297]
+              - generic [ref=e299]: Outgoing links
+              - generic [ref=e300]: "0"
+            - generic [ref=e302]: No outgoing links
+          - generic [ref=e313]:
+            - button "Tags 0" [expanded] [ref=e457] [cursor=pointer]:
+              - img [ref=e315]
+              - generic [ref=e317]: Tags
+              - generic [ref=e318]: "0"
+            - generic [ref=e320]: No tags
+  - contentinfo [ref=e93]:
+    - generic [ref=e94]: Demo Vault
+    - generic [ref=e322]: 0 words · 0 chars

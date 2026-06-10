@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
-import { parentPath } from "@core/vault";
+import { isTauri, parentPath } from "@core/vault";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -278,7 +278,16 @@ export function Explorer() {
   const deleteNode = async (node: VaultNode) => {
     const what =
       node.kind === "folder" ? `folder "${node.name}" and all its contents` : `"${node.name}"`;
-    if (!window.confirm(`Delete ${what}?`)) return;
+    const message = `Delete ${what}?`;
+    let ok: boolean;
+    if (isTauri()) {
+      // window.confirm is unreliable in wry webviews — use the native dialog
+      const { ask } = await import("@tauri-apps/plugin-dialog");
+      ok = await ask(message, { title: "Delete", kind: "warning" });
+    } else {
+      ok = window.confirm(message);
+    }
+    if (!ok) return;
     try {
       await app.vault.remove(node.path);
     } catch (err) {

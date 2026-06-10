@@ -14,8 +14,15 @@ interface WikiLinkInfo {
 
 const WIKILINK_RE = /\[\[([^\[\]]+?)\]\]/g;
 const PLACEHOLDER_RE = /@@GEODELINK(\d+)@@/g;
+const PLACEHOLDER_TEST = /@@GEODELINK\d+@@/;
 const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
 const TASK_RE = /^\[( |x|X)\]\s+/;
+
+/** per-render data passed through markdown-it's env (md is a module singleton) */
+interface PreviewEnv {
+  geodeLinks?: WikiLinkInfo[];
+  geodeResolve?: (target: string) => string | null;
+}
 
 function escapeHtml(s: string): string {
   return s
@@ -69,15 +76,29 @@ function replaceWikilinks(source: string, links: WikiLinkInfo[]): string {
 
 const md = new MarkdownIt({ html: false, linkify: true });
 
-// open external links in a new context
+// open external links in a new context; degrade placeholder destinations
+// (e.g. [text]([[x]])) to "#" so no placeholder ever survives into an attribute
 md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
   const token = tokens[idx];
-  const href = token.attrGet("href") ?? "";
+  let href = token.attrGet("href") ?? "";
+  if (PLACEHOLDER_TEST.test(href)) {
+    href = "#";
+    token.attrSet("href", href);
+  }
   if (/^https?:/i.test(href)) {
     token.attrSet("target", "_blank");
     token.attrSet("rel", "noopener");
     token.attrJoin("class", "external-link");
   }
+  return self.renderToken(tokens, idx, options);
+};
+
+const defaultImageRule = md.renderer.rules.image;
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const src = token.attrGet("src") ?? "";
+  if (PLACEHOLDER_TEST.test(src)) token.attrSet("src", "#");
+  if (defaultImageRule) return defaultImageRule(tokens, idx, options, env, self);
   return self.renderToken(tokens, idx, options);
 };
 
@@ -155,6 +176,59 @@ md.core.ruler.push("geode-tags", (state) => {
   }
 });
 
+// wikilink placeholders → <a class="internal-link"> anchors, substituted in the
+// token stream (TEXT tokens only) so attribute contexts and code stay untouched
+md.core.ruler.push("geode-wikilinks", (state) => {
+  const env = state.env as PreviewEnv;
+  const links = env.geodeLinks;
+  const resolve = env.geodeResolve;
+  if (!links || !resolve) return;
+  for (const block of state.tokens) {
+    if (block.type !== "inline" || !block.children) continue;
+    const next: NonNullable<typeof block.children> = [];
+    for (const child of block.children) {
+      if (child.type !== "text" || !PLACEHOLDER_TEST.test(child.content)) {
+        next.push(child);
+        continue;
+      }
+      const text = child.content;
+      PLACEHOLDER_RE.lastIndex = 0;
+      let last = 0;
+      let m: RegExpExecArray | null;
+      while ((m = PLACEHOLDER_RE.exec(text))) {
+        if (m.index > last) {
+          const before = new state.Token("text", "", 0);
+          before.content = text.slice(last, m.index);
+          before.level = child.level;
+          next.push(before);
+        }
+        const info = links[Number(m[1])];
+        if (!info) {
+          const raw = new state.Token("text", "", 0);
+          raw.content = m[0];
+          raw.level = child.level;
+          next.push(raw);
+        } else {
+          const resolved = resolve(info.target) !== null;
+          const cls = resolved ? "internal-link" : "internal-link is-unresolved";
+          const anchor = new state.Token("html_inline", "", 0);
+          anchor.content = `<a class="${cls}" data-target="${escapeHtml(info.target)}" href="#">${escapeHtml(info.display)}</a>`;
+          anchor.level = child.level;
+          next.push(anchor);
+        }
+        last = m.index + m[0].length;
+      }
+      if (last < text.length) {
+        const rest = new state.Token("text", "", 0);
+        rest.content = text.slice(last);
+        rest.level = child.level;
+        next.push(rest);
+      }
+    }
+    block.children = next;
+  }
+});
+
 /* ---------------- public API ---------------- */
 
 export function renderPreview(
@@ -163,14 +237,8 @@ export function renderPreview(
 ): string {
   const links: WikiLinkInfo[] = [];
   const pre = replaceWikilinks(source, links);
-  const html = md.render(pre);
-  return html.replace(PLACEHOLDER_RE, (raw, idx: string) => {
-    const info = links[Number(idx)];
-    if (!info) return raw;
-    const resolved = resolve(info.target) !== null;
-    const cls = resolved ? "internal-link" : "internal-link is-unresolved";
-    return `<a class="${cls}" data-target="${escapeHtml(info.target)}" href="#">${escapeHtml(info.display)}</a>`;
-  });
+  const env: PreviewEnv = { geodeLinks: links, geodeResolve: resolve };
+  return md.render(pre, env);
 }
 
 /** Toggle the "[ ]"/"[x]" marker on a given 0-based line. Returns null if not a task line. */

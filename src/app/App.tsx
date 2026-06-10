@@ -103,6 +103,35 @@ export function App() {
     return () => disposers.forEach((d) => d());
   }, [app]);
 
+  /* ---- flush pending editor saves on close ---- */
+  useEffect(() => {
+    const flush = () => void app.workspace.flushAll();
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+
+    let disposed = false;
+    let unlistenClose: (() => void) | null = null;
+    if (isTauri()) {
+      // dynamic import so the browser build never loads the Tauri module
+      void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+        const unlisten = await getCurrentWindow().onCloseRequested(async (event) => {
+          event.preventDefault();
+          await app.workspace.flushAll();
+          void getCurrentWindow().destroy();
+        });
+        if (disposed) unlisten();
+        else unlistenClose = unlisten;
+      });
+    }
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+      unlistenClose?.();
+    };
+  }, [app]);
+
   /* ---- global hotkeys ---- */
   useEffect(() => {
     const onKeydown = (e: KeyboardEvent) => {

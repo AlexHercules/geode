@@ -72,13 +72,18 @@ function sortChildren(folder: FolderNode) {
 
 /* ---------------- Vault: the API features use ---------------- */
 
+/** Total characters the content cache may hold before evicting oldest entries. */
+const CONTENT_CACHE_BUDGET = 30_000_000;
+
 /**
  * Vault wraps an adapter with caching + events. Feature modules should use
  * this class (via AppContext), never the adapter directly.
  */
 export class Vault {
   readonly tree = new Store<FolderNode | null>(null);
+  /** LRU via Map insertion order; bounded by CONTENT_CACHE_BUDGET chars */
   private contentCache = new Map<string, string>();
+  private contentCacheChars = 0;
 
   constructor(
     readonly adapter: VaultAdapter,
@@ -113,15 +118,19 @@ export class Vault {
     const tree = await this.adapter.listTree();
     sortChildren(tree);
     this.contentCache.clear();
+    this.contentCacheChars = 0;
     this.tree.set(tree);
     this.events.emit("vault:changed", { reason: "load" });
   }
 
   async read(path: string): Promise<string> {
     const cached = this.contentCache.get(path);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      this.cacheSet(path, cached); // refresh LRU recency
+      return cached;
+    }
     const content = await this.adapter.readFile(path);
-    this.contentCache.set(path, content);
+    this.cacheSet(path, content);
     return content;
   }
 
@@ -132,7 +141,7 @@ export class Vault {
 
   async modify(path: string, content: string): Promise<void> {
     await this.adapter.writeFile(path, content);
-    this.contentCache.set(path, content);
+    this.cacheSet(path, content);
     this.events.emit("file:modified", { path });
     this.events.emit("vault:changed", { reason: "modify" });
   }
@@ -140,7 +149,7 @@ export class Vault {
   /** Create a file; auto-creates "Untitled n.md" style unique names upstream. */
   async create(path: string, content = ""): Promise<void> {
     await this.adapter.createFile(path, content);
-    this.contentCache.set(path, content);
+    this.cacheSet(path, content);
     await this.refreshTree();
     this.events.emit("file:created", { path });
     this.events.emit("vault:changed", { reason: "create" });
@@ -154,9 +163,14 @@ export class Vault {
 
   async rename(oldPath: string, newPath: string): Promise<void> {
     await this.adapter.rename(oldPath, newPath);
-    const cached = this.contentCache.get(oldPath);
-    this.contentCache.delete(oldPath);
-    if (cached !== undefined) this.contentCache.set(newPath, cached);
+    // remap cache entries under this path (file or folder rename)
+    for (const key of [...this.contentCache.keys()]) {
+      if (key === oldPath || key.startsWith(oldPath + "/")) {
+        const cached = this.contentCache.get(key)!;
+        this.cacheDelete(key);
+        this.cacheSet(newPath + key.slice(oldPath.length), cached);
+      }
+    }
     await this.refreshTree();
     this.events.emit("file:renamed", { oldPath, newPath });
     this.events.emit("vault:changed", { reason: "rename" });
@@ -166,7 +180,7 @@ export class Vault {
     await this.adapter.remove(path);
     // drop cache entries under this path (file or folder)
     for (const key of [...this.contentCache.keys()]) {
-      if (key === path || key.startsWith(path + "/")) this.contentCache.delete(key);
+      if (key === path || key.startsWith(path + "/")) this.cacheDelete(key);
     }
     await this.refreshTree();
     this.events.emit("file:deleted", { path });
@@ -189,6 +203,24 @@ export class Vault {
     const tree = await this.adapter.listTree();
     sortChildren(tree);
     this.tree.set(tree);
+  }
+
+  /** Insert (or refresh) a cache entry, evicting oldest entries over budget. */
+  private cacheSet(path: string, content: string) {
+    this.cacheDelete(path);
+    this.contentCache.set(path, content);
+    this.contentCacheChars += content.length;
+    while (this.contentCacheChars > CONTENT_CACHE_BUDGET && this.contentCache.size > 1) {
+      const oldest = this.contentCache.keys().next().value as string;
+      this.cacheDelete(oldest);
+    }
+  }
+
+  private cacheDelete(path: string) {
+    const prev = this.contentCache.get(path);
+    if (prev === undefined) return;
+    this.contentCacheChars -= prev.length;
+    this.contentCache.delete(path);
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
@@ -16,6 +16,12 @@ export function SettingsModal() {
   const app = useApp();
   const [section, setSection] = useState<SectionId>("appearance");
   const close = () => app.workspace.closeModal();
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  /* take focus away from the editor so keystrokes don't keep editing the note behind */
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
 
   return (
     <div
@@ -26,6 +32,8 @@ export function SettingsModal() {
       }}
     >
       <div
+        ref={panelRef}
+        tabIndex={-1}
         className="modal-panel settings-panel"
         role="dialog"
         aria-label="Settings"

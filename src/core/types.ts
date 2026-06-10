@@ -33,6 +33,8 @@ export interface LinkRef {
   /** character offset of the link in the file */
   from: number;
   to: number;
+  /** surrounding-line snippet captured at parse time (for backlink context) */
+  context?: string;
 }
 
 export interface HeadingRef {

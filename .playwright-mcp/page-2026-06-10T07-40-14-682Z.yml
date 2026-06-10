@@ -1,0 +1,139 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - navigation "Primary" [ref=e5]:
+      - button "File explorer" [ref=e6] [cursor=pointer]:
+        - img [ref=e7]
+      - button "Search" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - button "Graph view (Ctrl+G)" [ref=e14] [cursor=pointer]:
+        - img [ref=e15]
+      - button "Command palette (Ctrl+P)" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Toggle theme" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]
+      - button "Settings (Ctrl+,)" [ref=e31] [cursor=pointer]:
+        - img [ref=e32]
+    - complementary [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic "Demo Vault" [ref=e38]
+          - generic [ref=e39]:
+            - button "New note" [ref=e40] [cursor=pointer]:
+              - img [ref=e41]
+            - button "New folder" [ref=e44] [cursor=pointer]:
+              - img [ref=e45]
+            - button "Expand all" [ref=e47] [cursor=pointer]:
+              - img [ref=e48]
+        - tree [ref=e50]:
+          - generic "Daily Notes" [ref=e51] [cursor=pointer]:
+            - img [ref=e53]
+            - img [ref=e56]
+            - generic [ref=e58]: Daily Notes
+          - generic "Projects" [ref=e59] [cursor=pointer]:
+            - img [ref=e61]
+            - img [ref=e64]
+            - generic [ref=e66]: Projects
+          - generic "Getting Started.md" [ref=e67] [cursor=pointer]:
+            - generic [ref=e68]: Getting Started
+          - generic "Graph View.md" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Graph View
+          - generic "Markdown Syntax.md" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Markdown Syntax
+          - generic "Welcome.md" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: Welcome
+          - generic "Wiki Links.md" [ref=e75] [cursor=pointer]:
+            - generic [ref=e76]: Wiki Links
+    - main [ref=e77]:
+      - tablist [ref=e78]:
+        - tab "Welcome Close Welcome" [selected] [ref=e95] [cursor=pointer]:
+          - generic [ref=e96]: Welcome
+          - button "Close Welcome" [ref=e97]:
+            - img [ref=e98]
+        - button "New note" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+      - generic [ref=e101]:
+        - generic [ref=e102]:
+          - generic "Welcome.md" [ref=e103]: Welcome
+          - button "Toggle edit/reading view" [ref=e104] [cursor=pointer]:
+            - img [ref=e105]
+        - textbox [active] [ref=e111]:
+          - generic [ref=e112]: "# Welcome to Geode 💎"
+          - generic [ref=e114]: Geode is a **local-first** markdown knowledge base.
+          - generic [ref=e116]:
+            - text: "- Create notes, link them with"
+            - generic [ref=e117] [cursor=pointer]: "[[Wiki Links]]"
+          - generic [ref=e118]:
+            - text: "- Explore connections in the"
+            - generic [ref=e119] [cursor=pointer]: "[[Graph View|graph]]"
+          - generic [ref=e120]: "- Press `Ctrl+P` for the command palette, `Ctrl+O` to quick-switch notes"
+          - generic [ref=e122]:
+            - text: Start with
+            - generic [ref=e123] [cursor=pointer]: "[[Getting Started]]"
+            - text: or read about
+            - generic [ref=e124] [cursor=pointer]: "[[Daily Notes]]"
+            - text: .
+          - generic [ref=e126]: "#welcome #intro"
+    - complementary [ref=e89]:
+      - generic [ref=e90]:
+        - generic [ref=e91]: Backlinks
+        - generic [ref=e92]:
+          - generic [ref=e128]:
+            - button "Linked mentions 4" [expanded] [ref=e129] [cursor=pointer]:
+              - img [ref=e130]
+              - generic [ref=e132]: Linked mentions
+              - generic [ref=e133]: "4"
+            - generic [ref=e134]:
+              - generic [ref=e135]:
+                - button "2026-06-09 1" [ref=e136] [cursor=pointer]:
+                  - img [ref=e137]
+                  - generic [ref=e140]: 2026-06-09
+                  - generic [ref=e141]: "1"
+                - button "Started exploring [[Welcome|Geode]]. The [[Graph View]] is neat." [ref=e143] [cursor=pointer]
+              - generic [ref=e144]:
+                - button "Getting Started 1" [ref=e145] [cursor=pointer]:
+                  - img [ref=e146]
+                  - generic [ref=e149]: Getting Started
+                  - generic [ref=e150]: "1"
+                - 'button "3. Type `[[` to link to another note — try linking to [[Welcome]]" [ref=e152] [cursor=pointer]'
+              - generic [ref=e153]:
+                - button "Graph View 1" [ref=e154] [cursor=pointer]:
+                  - img [ref=e155]
+                  - generic [ref=e158]: Graph View
+                  - generic [ref=e159]: "1"
+                - button "Hub notes like [[Welcome]] grow bigger as more notes link to them." [ref=e161] [cursor=pointer]
+              - generic [ref=e162]:
+                - button "Wiki Links 1" [ref=e163] [cursor=pointer]:
+                  - img [ref=e164]
+                  - generic [ref=e167]: Wiki Links
+                  - generic [ref=e168]: "1"
+                - button "Backlinks from [[Welcome]] and [[Getting Started]] show up in the right panel." [ref=e170] [cursor=pointer]
+          - generic [ref=e171]:
+            - button "Outgoing links 4" [expanded] [ref=e172] [cursor=pointer]:
+              - img [ref=e173]
+              - generic [ref=e175]: Outgoing links
+              - generic [ref=e176]: "4"
+            - generic [ref=e178]:
+              - button "Wiki Links" [ref=e179] [cursor=pointer]:
+                - img [ref=e180]
+                - generic [ref=e183]: Wiki Links
+              - button "Graph View" [ref=e184] [cursor=pointer]:
+                - img [ref=e185]
+                - generic [ref=e188]: Graph View
+              - button "Getting Started" [ref=e189] [cursor=pointer]:
+                - img [ref=e190]
+                - generic [ref=e193]: Getting Started
+              - button "Daily Notes new" [ref=e194] [cursor=pointer]:
+                - img [ref=e195]
+                - generic [ref=e198]: Daily Notes
+                - generic [ref=e199]: new
+          - generic [ref=e200]:
+            - button "Tags 2" [expanded] [ref=e201] [cursor=pointer]:
+              - img [ref=e202]
+              - generic [ref=e204]: Tags
+              - generic [ref=e205]: "2"
+            - generic [ref=e207]:
+              - generic [ref=e208]: "#welcome"
+              - generic [ref=e209]: "#intro"
+  - contentinfo [ref=e93]:
+    - generic [ref=e94]: Demo Vault
+    - generic [ref=e210]: 49 words · 325 chars
