@@ -737,6 +737,12 @@ function VaultPicker() {
 async function openVaultFlow(app: ReturnType<typeof useApp>) {
   const picked = await app.vault.adapter.pickVaultFolder();
   if (!picked) return;
+  // Flush pending edits into the OLD vault BEFORE re-pointing the adapter:
+  // afterwards relative paths resolve into the new root, and a late save
+  // would silently overwrite the new vault's file with old-vault content.
+  // (DocumentManager additionally invalidates all handles on vault:changed
+  // reason "load" — see DocumentHandle.handleVaultLoad.)
+  await app.workspace.flushAll();
   app.vault.adapter.setVaultPath(picked);
   try {
     localStorage.setItem(LAST_VAULT_KEY, picked);

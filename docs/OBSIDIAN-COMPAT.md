@@ -62,6 +62,42 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 - 浏览器 E2E 注入口：`window.__geodeObsidianPlugins`（Memory adapter）+ `?obsfixture=1`
   内置测试插件（compat/obsidian/fixture.ts，覆盖 manifest/命令/状态栏/设置页/Notice/
   vault 读写/getFileCache/事件）。
+- **套件驱动追加（真实插件预检后补充）**：套件 5 插件中 4 个在 require/evaluate 阶段失败，
+  按需求驱动闸门补齐以下最小表面：
+  - `View` / `ItemView` / `FileView` 真实类骨架（constructor(leaf)、containerEl/contentEl
+    detached、生命周期默认空实现）——插件类必须能 evaluate 并完成加载；
+    **`registerView` 仍是 warn-stub，视图本轮不挂载（缺口见下表）**。
+  - `PopoverSuggest` / `EditorSuggest` 骨架（constructor(app) 设 this.app + this.scope =
+    new Scope()，子类构造 `super(app)` 后 `this.scope.register([...])` 不抛）；
+    **`registerEditorSuggest` 仍是 warn-stub，不触发（缺口见下表）**。
+  - `SuggestModal` / `FuzzySuggestModal` 最小真实实现：input + 建议列表、
+    ArrowUp/ArrowDown 导航、Enter/点击选择后关闭；fuzzy 变体 = substring 优先、
+    顺序字符 fuzzy 兜底。
+  - `Menu` / `MenuItem` 最小真实弹层：addItem（链式 setTitle/setIcon/setDisabled/onClick）、
+    addSeparator、showAtMouseEvent/showAtPosition（绝对定位 + 点击外部/Escape 关闭）、hide。
+  - host require map 增加 `"path"` → 纯字符串 posix shim（join/dirname/basename/extname/
+    normalize/relative/resolve/sep，posix/win32 自引用，无 node 依赖）。
+- **启动语义对齐（CREATE-ON-LOAD）**：loader 在插件循环后对所有已索引文件回放 vault
+  `create`（对齐官方"create is also called when the vault is first loaded"）；
+  `Workspace.onLayoutReady` 回调在插件加载期间排队、回放之后统一 flush（即官方文档的
+  回放豁免通道）。`metadataCache 'resolved'` 在初始索引已完成时于加载后补发一次。
+- **加载报告进设置页**：每轮 load report（含 failed/skipped 的失败原因与 minAppVersion
+  警告）通过 `obsidianLoadReport` Store 暴露，SettingsModal Obsidian 分组渲染失败条目
+  （`data-testid="obsidian-plugin-error-<id>"`）与 minAppVersion 标注。
+
+### 仍然显式保留的缺口（warn-stub / 行为偏差，按表追踪）
+
+| 缺口 | 现状 |
+|---|---|
+| `registerView` + 视图挂载 | warn-stub；View/ItemView/FileView 仅保证类可 evaluate，永不 onOpen/挂载 |
+| `registerEditorSuggest` 触发 | warn-stub；EditorSuggest 子类可构造，onTrigger/getSuggestions 永不被调用 |
+| `requestUrl` | warn-stub，始终 reject（网络不在 T0/T1） |
+| `moment` | 不打包（npm 纪律）；属性访问记缺口、调用抛说明性错误 |
+| `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
+| `App.fileManager` / `App.keymap` / `App.scope` | getter warn-stub：fileManager 方法为记录缺口的 async no-op，keymap/scope 为惰性 no-op 对象 |
+| `DataAdapter.appendBinary`（及 readBinary/writeBinary/stat/trash*） | warn-stub + 说明性 throw；append/process/rmdir/copy 已用字符串 IO 真实实现 |
+| `workspace.on('editor-change')` | 偏差：按保存的 file:modified 触发，而非每个编辑器事务 |
+| DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 
 ## 验收方式（可度量，防自嗨）
 

@@ -170,7 +170,7 @@ readonly settingsSections: Store<ReadonlyArray<PluginSettingsSection>>;
 
 ### Compat layer — `src/compat/obsidian/`
 
-`loadObsidianPlugins(app: Omit<AppHandle, "ui">, vault: Vault): Promise<void>` (from `@compat/obsidian/loader`)
+`loadObsidianPlugins(app: Omit<AppHandle, "ui"> & { plugins: PluginManager }, vault: Vault): Promise<void>` (from `@compat/obsidian/loader`)
 is idempotent like `loadExternal`: unloads previously loaded obsidian records first.
 Calibrated signatures live in `.calibration/API-REFERENCE.md` (regenerate per
 docs/OBSIDIAN-COMPAT.md); implement EXACTLY against it, never from memory.

@@ -25,10 +25,23 @@ interface DomElementInfo {
   href?: string;
 }
 
+interface SvgElementInfo {
+  cls?: string | string[];
+  attr?: { [key: string]: string | number | boolean | null };
+  parent?: Node;
+  prepend?: boolean;
+}
+
 interface Node {
   detach(): void;
   empty(): void;
+  insertAfter<T extends Node>(node: T, child: Node | null): T;
+  indexOf(other: Node): number;
+  setChildrenInPlace(children: Node[]): void;
   appendText(val: string): void;
+  instanceOf(type: new (...args: never[]) => unknown): boolean;
+  readonly doc: Document;
+  readonly win: Window;
   /** Create an element and append it to this node (o.parent overrides the target). */
   createEl<K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -40,6 +53,11 @@ interface Node {
     o?: DomElementInfo | string,
     callback?: (el: HTMLSpanElement) => void,
   ): HTMLSpanElement;
+  createSvg(
+    tag: string,
+    o?: SvgElementInfo | string,
+    callback?: (el: SVGElement) => void,
+  ): SVGElement;
 }
 
 interface Element {
@@ -56,21 +74,57 @@ interface Element {
   setAttr(qualifiedName: string, value: string | number | boolean | null): void;
   setAttrs(obj: { [key: string]: string | number | boolean | null }): void;
   getAttr(qualifiedName: string): string | null;
+  matchParent(selector: string, lastParent?: Element): Element | null;
+  getCssPropertyValue(property: string, pseudoElement?: string): string;
+  isActiveElement(): boolean;
   find(selector: string): Element | null;
   findAll(selector: string): HTMLElement[];
+  findAllSelf(selector: string): HTMLElement[];
 }
 
 interface HTMLElement {
   show(): void;
   hide(): void;
   toggle(show: boolean): void;
+  toggleVisibility(visible: boolean): void;
+  isShown(): boolean;
+  setCssStyles(styles: Partial<CSSStyleDeclaration>): void;
+  setCssProps(props: Record<string, string>): void;
+  readonly innerWidth: number;
+  readonly innerHeight: number;
+  /** delegated listener (target must match `selector` inside this element) */
+  on(
+    this: HTMLElement,
+    type: string,
+    selector: string,
+    listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  off(
+    this: HTMLElement,
+    type: string,
+    selector: string,
+    listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
   onClickEvent(
     this: HTMLElement,
     listener: (this: HTMLElement, ev: MouseEvent) => unknown,
     options?: boolean | AddEventListenerOptions,
   ): void;
+  /** warn-stub: records a gap and returns a no-op destroyer */
+  onNodeInserted(this: HTMLElement, listener: () => unknown, once?: boolean): () => void;
+  /** warn-stub: records a gap and returns a no-op destroyer */
+  onWindowMigrated(this: HTMLElement, listener: (win: Window) => unknown): () => void;
+  trigger(eventType: string): void;
   find(selector: string): HTMLElement;
   findAll(selector: string): HTMLElement[];
+  findAllSelf(selector: string): HTMLElement[];
+}
+
+interface SVGElement {
+  setCssStyles(styles: Partial<CSSStyleDeclaration>): void;
+  setCssProps(props: Record<string, string>): void;
 }
 
 interface DocumentFragment {
@@ -95,3 +149,10 @@ declare function createSpan(
 declare function createFragment(
   callback?: (el: DocumentFragment) => void,
 ): DocumentFragment;
+declare function createSvg(
+  tag: string,
+  o?: SvgElementInfo | string,
+  callback?: (el: SVGElement) => void,
+): SVGElement;
+declare function fish(selector: string): HTMLElement | null;
+declare function fishAll(selector: string): HTMLElement[];

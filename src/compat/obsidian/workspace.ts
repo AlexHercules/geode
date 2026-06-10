@@ -75,8 +75,13 @@ export class WorkspaceLeaf {
 }
 
 export class Workspace extends Events {
-  /** loader runs post-load, so the layout is always ready already */
-  layoutReady = true;
+  /**
+   * false while the loader runs the plugin loop — onLayoutReady callbacks
+   * queue and flush AFTER the startup vault 'create' replay, mirroring
+   * Obsidian's startup (onLayoutReady is the documented replay opt-out).
+   */
+  layoutReady = false;
+  private _layoutReadyQueue: Array<() => unknown> = [];
   activeLeaf: WorkspaceLeaf | null;
   /** @internal MRU fallback for getActiveFile (graph tab focused etc.) */
   _lastFilePath: string | null = null;
@@ -95,12 +100,28 @@ export class Workspace extends Events {
     return path ? this.registry.getFile(path) : null;
   }
 
-  /** 'Runs the callback right away if layout is already ready' — always is. */
+  /** 'Runs the callback right away if layout is already ready' — else queued. */
   onLayoutReady(callback: () => unknown): void {
+    if (!this.layoutReady) {
+      this._layoutReadyQueue.push(callback);
+      return;
+    }
     try {
       callback();
     } catch (err) {
       console.error("[obsidian-compat] onLayoutReady callback threw", err);
+    }
+  }
+
+  /** @internal loader: mark layout ready and flush the queued callbacks. */
+  _flushLayoutReady(): void {
+    this.layoutReady = true;
+    for (const cb of this._layoutReadyQueue.splice(0)) {
+      try {
+        cb();
+      } catch (err) {
+        console.error("[obsidian-compat] onLayoutReady callback threw", err);
+      }
     }
   }
 

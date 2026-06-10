@@ -1,9 +1,11 @@
 /**
- * Obsidian UI primitives (API-REFERENCE area 5): Notice, Modal, Setting and
- * its component classes. Chainable per the reference; setValue NEVER fires
- * onChange (only user interaction does). Styling lives in compat.css and
- * reuses the host's .modal-overlay/.modal-panel classes + CSS variables.
+ * Obsidian UI primitives (API-REFERENCE area 5): Notice, Modal (+ Suggest
+ * modals), Menu, Setting and its component classes. Chainable per the
+ * reference; setValue NEVER fires onChange (only user interaction does).
+ * Styling lives in compat.css and reuses the host's
+ * .modal-overlay/.modal-panel classes + CSS variables.
  */
+import { Component } from "./component";
 import { reportGap } from "./gaps";
 import { setIcon, type IconName } from "./icons";
 import type { App } from "./plugin";
@@ -11,6 +13,7 @@ import type { App } from "./plugin";
 /* ---------------- Scope (minimal — keyboard scopes are host-handled) ---------------- */
 
 export class Scope {
+  constructor(_parent?: Scope) {}
   register(_modifiers: unknown, _key: unknown, _func: unknown): unknown {
     return null;
   }
@@ -76,6 +79,9 @@ export class Notice {
 
 /* ---------------- Modal ---------------- */
 
+/** Stack of currently open modals — Escape closes ONLY the topmost one. */
+const modalStack: Modal[] = [];
+
 export class Modal {
   app: App;
   scope: Scope = new Scope();
@@ -87,7 +93,8 @@ export class Modal {
   private closeCallback: (() => unknown) | null = null;
   private isOpen = false;
   private keydownHandler = (e: KeyboardEvent): void => {
-    if (e.key === "Escape") {
+    // every open modal has a document-level listener; only the stack top acts
+    if (e.key === "Escape" && modalStack[modalStack.length - 1] === this) {
       e.stopPropagation();
       this.close();
     }
@@ -116,6 +123,7 @@ export class Modal {
   open(): void {
     if (this.isOpen) return;
     this.isOpen = true;
+    modalStack.push(this);
     document.body.appendChild(this.containerEl);
     document.addEventListener("keydown", this.keydownHandler, true);
     try {
@@ -132,6 +140,8 @@ export class Modal {
   close(): void {
     if (!this.isOpen) return;
     this.isOpen = false;
+    const stackIdx = modalStack.indexOf(this);
+    if (stackIdx >= 0) modalStack.splice(stackIdx, 1);
     document.removeEventListener("keydown", this.keydownHandler, true);
     this.containerEl.remove();
     try {
@@ -167,6 +177,365 @@ export class Modal {
   setCloseCallback(callback: () => unknown): this {
     this.closeCallback = callback;
     return this;
+  }
+}
+
+/* ---------------- SuggestModal / FuzzySuggestModal (suite-driven R4) ---------------- */
+
+export abstract class SuggestModal<T> extends Modal {
+  limit = 100;
+  emptyStateText = "No results found.";
+  inputEl: HTMLInputElement;
+  resultContainerEl: HTMLElement;
+  private _items: T[] = [];
+  private _selected = 0;
+  private _itemEls: HTMLElement[] = [];
+  private _queryToken = 0;
+
+  constructor(app: App) {
+    super(app);
+    this.modalEl.classList.add("prompt", "geode-compat-prompt");
+    this.inputEl = document.createElement("input");
+    this.inputEl.type = "text";
+    this.inputEl.className = "prompt-input";
+    this.inputEl.setAttribute("data-testid", "compat-suggest-input");
+    this.resultContainerEl = document.createElement("div");
+    this.resultContainerEl.className = "prompt-results";
+    this.contentEl.append(this.inputEl, this.resultContainerEl);
+    this.inputEl.addEventListener("input", () => void this._updateSuggestions());
+    this.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        this._moveSelection(e.key === "ArrowDown" ? 1 : -1);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        this.selectActiveSuggestion(e);
+      }
+    });
+  }
+
+  override open(): void {
+    super.open();
+    this.inputEl.focus();
+    void this._updateSuggestions();
+  }
+
+  setPlaceholder(placeholder: string): void {
+    this.inputEl.placeholder = placeholder;
+  }
+
+  /** Instruction hints are not rendered by the shim (visual nicety only). */
+  setInstructions(_instructions: unknown[]): void {}
+
+  onNoSuggestion(): void {}
+
+  /** Default behavior: close the modal, then hand the value to the subclass. */
+  selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent): void {
+    this.close();
+    this.onChooseSuggestion(value, evt);
+  }
+
+  selectActiveSuggestion(evt: MouseEvent | KeyboardEvent): void {
+    const item = this._items[this._selected];
+    if (item !== undefined) this.selectSuggestion(item, evt);
+  }
+
+  abstract getSuggestions(query: string): T[] | Promise<T[]>;
+  abstract renderSuggestion(value: T, el: HTMLElement): void;
+  abstract onChooseSuggestion(item: T, evt: MouseEvent | KeyboardEvent): void;
+
+  private async _updateSuggestions(): Promise<void> {
+    const token = ++this._queryToken;
+    let items: T[];
+    try {
+      items = await this.getSuggestions(this.inputEl.value);
+    } catch (err) {
+      console.error("[obsidian-compat] SuggestModal.getSuggestions threw", err);
+      items = [];
+    }
+    if (token !== this._queryToken) return; // stale async result
+    this._items = items.slice(0, this.limit);
+    this._selected = 0;
+    this._render();
+  }
+
+  private _render(): void {
+    this.resultContainerEl.textContent = "";
+    this._itemEls = [];
+    if (this._items.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "suggestion-empty";
+      empty.textContent = this.emptyStateText;
+      this.resultContainerEl.appendChild(empty);
+      this.onNoSuggestion();
+      return;
+    }
+    this._items.forEach((item, i) => {
+      const el = document.createElement("div");
+      el.className = "suggestion-item";
+      el.setAttribute("data-testid", "compat-suggestion-item");
+      if (i === this._selected) el.classList.add("is-selected");
+      try {
+        this.renderSuggestion(item, el);
+      } catch (err) {
+        console.error("[obsidian-compat] renderSuggestion threw", err);
+      }
+      el.addEventListener("click", (evt) => this.selectSuggestion(item, evt));
+      el.addEventListener("mousemove", () => this._setSelected(i));
+      this.resultContainerEl.appendChild(el);
+      this._itemEls.push(el);
+    });
+  }
+
+  private _setSelected(i: number): void {
+    if (i === this._selected) return;
+    this._itemEls[this._selected]?.classList.remove("is-selected");
+    this._selected = i;
+    this._itemEls[i]?.classList.add("is-selected");
+  }
+
+  private _moveSelection(delta: number): void {
+    if (this._items.length === 0) return;
+    const next = (this._selected + delta + this._items.length) % this._items.length;
+    this._setSelected(next);
+    this._itemEls[next]?.scrollIntoView({ block: "nearest" });
+  }
+}
+
+export interface SearchResult {
+  score: number;
+  matches: Array<[number, number]>;
+}
+
+export interface FuzzyMatch<T> {
+  item: T;
+  match: SearchResult;
+}
+
+/** Substring match scores best; otherwise in-order character fuzzy match. */
+function fuzzyMatch(text: string, query: string): SearchResult | null {
+  if (!query) return { score: 0, matches: [] };
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  const idx = lower.indexOf(q);
+  if (idx >= 0) {
+    return {
+      score: 1000 - idx - (lower.length - q.length) * 0.01,
+      matches: [[idx, idx + q.length]],
+    };
+  }
+  const matches: Array<[number, number]> = [];
+  let cursor = 0;
+  let score = 0;
+  for (const ch of q) {
+    if (/\s/.test(ch)) continue;
+    const at = lower.indexOf(ch, cursor);
+    if (at === -1) return null;
+    const last = matches[matches.length - 1];
+    if (last && last[1] === at) last[1] = at + 1;
+    else matches.push([at, at + 1]);
+    score -= at - cursor; // distance between hits costs score
+    cursor = at + 1;
+  }
+  return { score: score - matches.length * 10, matches };
+}
+
+export abstract class FuzzySuggestModal<T> extends SuggestModal<FuzzyMatch<T>> {
+  getSuggestions(query: string): Array<FuzzyMatch<T>> {
+    const out: Array<FuzzyMatch<T>> = [];
+    for (const item of this.getItems()) {
+      const match = fuzzyMatch(this.getItemText(item), query.trim());
+      if (match) out.push({ item, match });
+    }
+    out.sort((a, b) => b.match.score - a.match.score);
+    return out;
+  }
+
+  renderSuggestion(value: FuzzyMatch<T>, el: HTMLElement): void {
+    el.textContent = this.getItemText(value.item);
+  }
+
+  onChooseSuggestion(item: FuzzyMatch<T>, evt: MouseEvent | KeyboardEvent): void {
+    this.onChooseItem(item.item, evt);
+  }
+
+  abstract getItems(): T[];
+  abstract getItemText(item: T): string;
+  abstract onChooseItem(item: T, evt: MouseEvent | KeyboardEvent): void;
+}
+
+/* ---------------- Menu (suite-driven R4 — minimal real popup) ---------------- */
+
+export class MenuItem {
+  /** @internal */
+  readonly dom: HTMLElement;
+  private iconEl: HTMLElement;
+  private titleEl: HTMLElement;
+  private disabled = false;
+  private clickCallback: ((evt: MouseEvent | KeyboardEvent) => unknown) | null = null;
+
+  /** @internal Use Menu.addItem — real Obsidian's constructor is private. */
+  constructor(menu: Menu) {
+    this.dom = document.createElement("div");
+    this.dom.className = "menu-item";
+    this.dom.setAttribute("data-testid", "compat-menu-item");
+    this.iconEl = document.createElement("div");
+    this.iconEl.className = "menu-item-icon";
+    this.titleEl = document.createElement("div");
+    this.titleEl.className = "menu-item-title";
+    this.dom.append(this.iconEl, this.titleEl);
+    this.dom.addEventListener("click", (evt) => {
+      if (this.disabled) return;
+      menu.hide();
+      try {
+        void this.clickCallback?.(evt);
+      } catch (err) {
+        console.error("[obsidian-compat] MenuItem onClick threw", err);
+      }
+    });
+  }
+
+  setTitle(title: string | DocumentFragment): this {
+    if (typeof title === "string") {
+      this.titleEl.textContent = title;
+    } else {
+      this.titleEl.textContent = "";
+      this.titleEl.appendChild(title);
+    }
+    return this;
+  }
+
+  setIcon(icon: IconName | null): this {
+    this.iconEl.textContent = "";
+    if (icon) setIcon(this.iconEl, icon);
+    return this;
+  }
+
+  setDisabled(disabled: boolean): this {
+    this.disabled = disabled;
+    this.dom.classList.toggle("is-disabled", disabled);
+    return this;
+  }
+
+  setChecked(checked: boolean | null): this {
+    this.dom.classList.toggle("is-checked", checked === true);
+    return this;
+  }
+
+  setWarning(isWarning: boolean): this {
+    this.dom.classList.toggle("is-warning", isWarning);
+    return this;
+  }
+
+  setIsLabel(isLabel: boolean): this {
+    this.dom.classList.toggle("is-label", isLabel);
+    return this;
+  }
+
+  setSection(section: string): this {
+    this.dom.setAttribute("data-section", section);
+    return this;
+  }
+
+  onClick(callback: (evt: MouseEvent | KeyboardEvent) => unknown): this {
+    this.clickCallback = callback;
+    return this;
+  }
+}
+
+export class Menu extends Component {
+  /** @internal */
+  readonly dom: HTMLElement;
+  private hideCallback: (() => unknown) | null = null;
+  private visible = false;
+  private detachListeners: (() => void) | null = null;
+
+  constructor() {
+    super();
+    this.dom = document.createElement("div");
+    this.dom.className = "menu geode-compat-menu";
+    this.dom.setAttribute("data-testid", "compat-menu");
+  }
+
+  setNoIcon(): this {
+    this.dom.classList.add("no-icon");
+    return this;
+  }
+
+  /** Native menus do not exist in Geode — DOM menu is always used. */
+  setUseNativeMenu(_useNativeMenu: boolean): this {
+    return this;
+  }
+
+  addItem(cb: (item: MenuItem) => unknown): this {
+    const item = new MenuItem(this);
+    this.dom.appendChild(item.dom);
+    cb(item);
+    return this;
+  }
+
+  addSeparator(): this {
+    const sep = document.createElement("div");
+    sep.className = "menu-separator";
+    this.dom.appendChild(sep);
+    return this;
+  }
+
+  showAtMouseEvent(evt: MouseEvent): this {
+    return this.showAtPosition({ x: evt.clientX, y: evt.clientY });
+  }
+
+  showAtPosition(position: { x: number; y: number }, _doc?: Document): this {
+    if (this.visible) this.hide();
+    this.visible = true;
+    document.body.appendChild(this.dom);
+    // clamp into the viewport once the size is known
+    const rect = this.dom.getBoundingClientRect();
+    const x = Math.min(position.x, window.innerWidth - rect.width - 4);
+    const y = Math.min(position.y, window.innerHeight - rect.height - 4);
+    this.dom.style.left = `${Math.max(0, x)}px`;
+    this.dom.style.top = `${Math.max(0, y)}px`;
+    const onDown = (e: MouseEvent): void => {
+      if (e.target instanceof Node && this.dom.contains(e.target)) return;
+      this.hide();
+    };
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        this.hide();
+      }
+    };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    this.detachListeners = () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+    this.load();
+    return this;
+  }
+
+  hide(): this {
+    if (!this.visible) return this;
+    this.visible = false;
+    this.detachListeners?.();
+    this.detachListeners = null;
+    this.dom.remove();
+    try {
+      void this.hideCallback?.();
+    } catch (err) {
+      console.error("[obsidian-compat] Menu onHide callback threw", err);
+    }
+    this.unload();
+    return this;
+  }
+
+  close(): void {
+    this.hide();
+  }
+
+  onHide(callback: () => unknown): void {
+    this.hideCallback = callback;
   }
 }
 

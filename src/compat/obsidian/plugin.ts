@@ -10,6 +10,7 @@ import type { FileRegistry } from "./files";
 import { reportGap } from "./gaps";
 import { getIconSvg, type IconName } from "./icons";
 import type { MetadataCache } from "./metadata";
+import { Scope } from "./ui";
 import type { Vault } from "./vault";
 import { makeActiveMarkdownView, type MarkdownView, type Workspace } from "./workspace";
 
@@ -53,18 +54,62 @@ export interface GeodeBridge {
   registry: FileRegistry;
 }
 
+/**
+ * fileManager warn-stub: every method access records a gap and resolves to
+ * undefined, so chains like `app.fileManager.processFrontMatter(...)` do not
+ * crash. `then` is excluded so the proxy is not accidentally thenable.
+ */
+const fileManagerStub: unknown = new Proxy(
+  {},
+  {
+    get(_target, prop): unknown {
+      if (typeof prop !== "string" || prop === "then") return undefined;
+      reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
+      return async () => undefined;
+    },
+  },
+);
+
+const keymapStub = {
+  pushScope(_scope: unknown): void {},
+  popScope(_scope: unknown): void {},
+};
+
 export class App {
   vault: Vault;
   workspace: Workspace;
   metadataCache: MetadataCache;
   /** @internal geode bridge — NOT part of the public obsidian surface */
   readonly _geode: GeodeBridge;
+  private _scopeStub: Scope | null = null;
 
   constructor(bridge: GeodeBridge, vault: Vault, workspace: Workspace, metadataCache: MetadataCache) {
     this._geode = bridge;
     this.vault = vault;
     this.workspace = workspace;
     this.metadataCache = metadataCache;
+  }
+
+  /* ----- out-of-tier App members: warn-stubs, never a crash (T2 gaps) ----- */
+
+  get fileManager(): unknown {
+    reportGap("App", "App.fileManager", "warn-stub — methods are recorded no-ops");
+    return fileManagerStub;
+  }
+
+  get keymap(): typeof keymapStub {
+    reportGap("App", "App.keymap", "warn-stub — pushScope/popScope are no-ops");
+    return keymapStub;
+  }
+
+  get scope(): Scope {
+    reportGap("App", "App.scope", "warn-stub Scope — register is a no-op");
+    return (this._scopeStub ??= new Scope());
+  }
+
+  /** Matches the official `UserEvent | null` — no user-event tracking (no gap). */
+  get lastEvent(): null {
+    return null;
   }
 }
 
@@ -154,7 +199,23 @@ export abstract class Plugin extends Component {
       callback,
     };
     if (available) geodeCommand.available = available;
-    const hotkey = hotkeyToString(command.hotkeys?.[0]);
+    // bind the first host-representable hotkey; record every dropped one
+    // (Meta-based, or beyond the single host hotkey slot) as a gap
+    let hotkey: string | null = null;
+    for (const h of command.hotkeys ?? []) {
+      const mapped = hotkeyToString(h);
+      if (mapped !== null && hotkey === null) {
+        hotkey = mapped;
+        continue;
+      }
+      reportGap(
+        this.manifest.id,
+        "Command.hotkeys",
+        `"${command.id}": hotkey ${JSON.stringify(h)} not bindable on host (${
+          mapped === null ? "Meta modifier unsupported" : "single hotkey slot"
+        })`,
+      );
+    }
     if (hotkey) geodeCommand.hotkey = hotkey;
 
     const dispose = once(bridge.handle.commands.register(geodeCommand));

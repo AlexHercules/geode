@@ -10,6 +10,15 @@
  *  - active-file:changed                    -> workspace 'active-leaf-change' + 'file-open'
  *  - file:modified (active editor)          -> workspace 'editor-change'  [DEVIATION]
  *  - workspace root identity change         -> workspace 'layout-change'
+ *
+ * Startup semantics (CREATE-ON-LOAD, API-REFERENCE area 2/3):
+ *  - vault 'create' is replayed by the LOADER for every indexed file after
+ *    the plugin loop, mirroring Obsidian's startup; Workspace.onLayoutReady
+ *    callbacks queue during plugin load and flush AFTER the replay (the
+ *    documented opt-out).
+ *  - metadataCache 'resolved' is fired once by the loader when the initial
+ *    vault-wide index already finished before plugin load; afterwards it
+ *    fires on every metadata:updated batch (below).
  */
 import type { AppHandle, PluginManager } from "@core/plugins";
 import type { Vault as GeodeVault } from "@core/vault";
@@ -52,7 +61,11 @@ export function createCompatContext(
   disposers.push(
     ev.on("file:created", ({ path }) => {
       registry.handleCreated(path);
-      if (isMarkdown(path)) pendingChanged.add(path);
+      if (isMarkdown(path)) {
+        pendingChanged.add(path);
+        // a new basename can resolve other files' unresolved links
+        metadataCache._invalidateLinkTables();
+      }
     }),
   );
 
@@ -61,18 +74,25 @@ export function createCompatContext(
       const file = registry.getFile(path);
       const prevCache = file ? metadataCache.getCache(path) : null;
       registry.handleDeleted(path);
+      metadataCache._invalidateLinkTables();
       if (file) metadataCache.trigger("deleted", file, prevCache);
     }),
   );
 
   disposers.push(
-    ev.on("file:renamed", ({ oldPath, newPath }) => registry.handleRenamed(oldPath, newPath)),
+    ev.on("file:renamed", ({ oldPath, newPath }) => {
+      registry.handleRenamed(oldPath, newPath);
+      metadataCache._invalidateLinkTables();
+    }),
   );
 
   disposers.push(
     ev.on("file:modified", ({ path }) => {
       registry.handleModified(path);
-      if (isMarkdown(path)) pendingChanged.add(path);
+      if (isMarkdown(path)) {
+        pendingChanged.add(path);
+        metadataCache._markLinkSourceDirty(path);
+      }
       // DEVIATION: obsidian fires 'editor-change' per editor transaction;
       // Geode surfaces saved modifications of the focused document instead.
       const active = handle.documents.getActiveView();
@@ -83,10 +103,23 @@ export function createCompatContext(
     }),
   );
 
+  let lastTree = geodeVault.tree.get();
   disposers.push(
     ev.on("vault:changed", ({ reason }) => {
-      if (reason === "load") registry.rebuildFromVault(geodeVault);
-      else registry.reconcileFolders(geodeVault.tree.get());
+      const tree = geodeVault.tree.get();
+      if (reason === "load") {
+        registry.rebuildFromVault(geodeVault);
+        metadataCache._invalidateLinkTables();
+        lastTree = tree;
+        return;
+      }
+      // internal modify() never rebuilds the tree (same root object identity);
+      // every path that can add folders goes through refreshTree and produces
+      // a fresh root — skip the O(tree) walk on each debounced save
+      if (tree !== lastTree) {
+        lastTree = tree;
+        registry.reconcileFolders(tree);
+      }
     }),
   );
 

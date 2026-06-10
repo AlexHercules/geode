@@ -110,6 +110,11 @@ export class Vault {
   /** LRU via Map insertion order; bounded by CONTENT_CACHE_BUDGET chars */
   private contentCache = new Map<string, string>();
   private contentCacheChars = 0;
+  /** O(1) existence lookups. Rebuilt ONLY by indexTree(), which runs at the
+   *  two central tree choke points — load() and refreshTree() — and nowhere
+   *  else, so the sets can never drift from this.tree. */
+  private filePaths = new Set<string>();
+  private folderPaths = new Set<string>();
 
   constructor(
     readonly adapter: VaultAdapter,
@@ -137,28 +142,33 @@ export class Vault {
   }
 
   fileExists(path: string): boolean {
-    return this.getFiles().some((f) => f.path === path);
+    return this.filePaths.has(path);
   }
 
   folderExists(path: string): boolean {
-    const t = this.tree.get();
-    if (!t || !path) return false;
-    let found = false;
-    const walk = (n: VaultNode) => {
-      if (found || n.kind !== "folder") return;
-      if (n.path === path) {
-        found = true;
-        return;
+    // the root ("") is deliberately excluded, matching the pre-index behavior
+    return path !== "" && this.folderPaths.has(path);
+  }
+
+  /** Rebuild the O(1) path indexes from a freshly listed tree (one walk). */
+  private indexTree(root: FolderNode): void {
+    this.filePaths.clear();
+    this.folderPaths.clear();
+    const walk = (node: VaultNode) => {
+      if (node.kind === "file") {
+        this.filePaths.add(node.path);
+      } else {
+        if (node.path) this.folderPaths.add(node.path);
+        node.children.forEach(walk);
       }
-      n.children.forEach(walk);
     };
-    walk(t);
-    return found;
+    walk(root);
   }
 
   async load(): Promise<void> {
     const tree = await this.adapter.listTree();
     sortChildren(tree);
+    this.indexTree(tree);
     this.contentCache.clear();
     this.contentCacheChars = 0;
     this.tree.set(tree);
@@ -278,6 +288,7 @@ export class Vault {
   private async refreshTree() {
     const tree = await this.adapter.listTree();
     sortChildren(tree);
+    this.indexTree(tree);
     this.tree.set(tree);
   }
 

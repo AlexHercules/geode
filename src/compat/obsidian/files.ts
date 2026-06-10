@@ -8,10 +8,13 @@
  *  - rename MUTATES the instance in place and fires per-descendant
  *    rename(file, oldPath) (folder renames fire for the folder AND every child).
  *  - folder delete fires ONE 'delete' with the TFolder, children intact.
- *  - TFile.stat stays zeroed (documented gap — Geode's tree carries no stats).
+ *  - TFile.stat: Geode's tree carries no file stats, so ctime/size stay 0 for
+ *    pre-existing files (recorded gap); mtime/ctime are tracked session-local
+ *    for live modifies/creates so recency ordering is at least monotonic.
  */
 import type { FolderNode, VaultNode } from "@core/types";
 import { basename, extension, parentPath, stripExtension, type Vault as GeodeVault } from "@core/vault";
+import { reportGap } from "./gaps";
 import type { Vault } from "./vault";
 
 export interface FileStats {
@@ -63,6 +66,11 @@ export class FileRegistry {
   attach(vault: Vault): void {
     this.vaultShim = vault;
     this.root.vault = vault;
+    reportGap(
+      "TFile",
+      "stat",
+      "ctime/size stay 0 for pre-existing files (Geode's tree carries no stats); mtime tracks session-local modifies only",
+    );
   }
 
   private trigger(name: "create" | "modify" | "delete" | "rename", ...data: unknown[]): void {
@@ -127,7 +135,11 @@ export class FileRegistry {
     file.parent = parent;
     parent.children.push(file);
     this.byPath.set(path, file);
-    if (fireCreate) this.trigger("create", file);
+    if (fireCreate) {
+      // live creation (not a silent rebuild) — session-local timestamps
+      file.stat.ctime = file.stat.mtime = Date.now();
+      this.trigger("create", file);
+    }
     return file;
   }
 
@@ -170,6 +182,7 @@ export class FileRegistry {
     const node = this.get(path);
     if (node instanceof TFolder) return;
     const file = node instanceof TFile ? node : this.ensureFile(path, false);
+    file.stat.mtime = Date.now();
     this.trigger("modify", file);
   }
 

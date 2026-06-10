@@ -75,6 +75,36 @@ export class CompatDataAdapter {
     await this.geode.rename(normalizedPath, normalizedNewPath);
   }
 
+  async append(normalizedPath: string, data: string, _options?: DataWriteOptions): Promise<void> {
+    let current = "";
+    try {
+      current = await this.read(normalizedPath);
+    } catch {
+      /* missing file — append creates it */
+    }
+    await this.write(normalizedPath, current + data);
+  }
+
+  /** Read -> transform -> write-if-changed; returns the new content. */
+  async process(
+    normalizedPath: string,
+    fn: (data: string) => string,
+    _options?: DataWriteOptions,
+  ): Promise<string> {
+    const data = await this.read(normalizedPath);
+    const next = fn(data);
+    if (next !== data) await this.write(normalizedPath, next);
+    return next;
+  }
+
+  async rmdir(normalizedPath: string, _recursive: boolean): Promise<void> {
+    await this.geode.remove(normalizedPath);
+  }
+
+  async copy(normalizedPath: string, normalizedNewPath: string): Promise<void> {
+    await this.write(normalizedNewPath, await this.read(normalizedPath));
+  }
+
   async list(normalizedPath: string): Promise<{ files: string[]; folders: string[] }> {
     const prefix = normalizedPath && normalizedPath !== "/" ? `${normalizedPath}/` : "";
     const files: string[] = [];
@@ -97,6 +127,10 @@ export class CompatDataAdapter {
   async writeBinary(_p: string, _d: ArrayBuffer): Promise<void> {
     reportGap("DataAdapter", "writeBinary");
     throw new Error("DataAdapter.writeBinary is not available in Geode");
+  }
+  async appendBinary(_p: string, _d: ArrayBuffer): Promise<void> {
+    reportGap("DataAdapter", "appendBinary");
+    throw new Error("DataAdapter.appendBinary is not available in Geode");
   }
   async stat(_p: string): Promise<null> {
     reportGap("DataAdapter", "stat", "returns null");

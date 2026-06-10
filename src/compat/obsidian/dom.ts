@@ -8,9 +8,15 @@
  *
  * Method-form `el.createEl(...)` AUTO-APPENDS to the receiver; the global
  * free function creates a DETACHED element unless `o.parent` is given.
+ *
+ * Deliberately deferred members (onNodeInserted / onWindowMigrated) are
+ * installed as warn-stubs that record a gap instead of being left undefined.
  */
+import { reportGap } from "./gaps";
 
 const MARKER = "__geodeObsidianDomInstalled";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
 
 /* ---------------- shared element factory ---------------- */
 
@@ -56,6 +62,27 @@ function buildEl(
   return el;
 }
 
+function buildSvg(
+  tag: string,
+  o: SvgElementInfo | string | undefined,
+  callback: ((el: SVGElement) => void) | undefined,
+  receiver: Node | null,
+): SVGElement {
+  const el = document.createElementNS(SVG_NS, tag);
+  const info: SvgElementInfo = typeof o === "string" ? { cls: o } : o ?? {};
+  if (info.cls !== undefined) el.classList.add(...splitClasses(info.cls));
+  if (info.attr) {
+    for (const [k, v] of Object.entries(info.attr)) setAttrImpl(el, k, v);
+  }
+  const target = info.parent ?? receiver;
+  if (target) {
+    if (info.prepend) target.insertBefore(el, target.firstChild);
+    else target.appendChild(el);
+  }
+  callback?.(el);
+  return el;
+}
+
 /* ---------------- installation ---------------- */
 
 type AnyFn = (...args: never[]) => unknown;
@@ -70,6 +97,22 @@ function define(proto: object, methods: Record<string, AnyFn>): void {
     });
   }
 }
+
+function defineGetters(proto: object, getters: Record<string, () => unknown>): void {
+  for (const [name, get] of Object.entries(getters)) {
+    Object.defineProperty(proto, name, { get, configurable: true, enumerable: false });
+  }
+}
+
+/** bookkeeping for delegated HTMLElement.on/off listeners (_EVENTS) */
+interface DelegatedListenerInfo {
+  selector: string;
+  listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown;
+  options?: boolean | AddEventListenerOptions;
+  wrapped: EventListener;
+}
+
+type DelegatedHost = HTMLElement & { _EVENTS?: Record<string, DelegatedListenerInfo[]> };
 
 export function installDomAugmentation(): void {
   const g = globalThis as unknown as Record<string, unknown>;
@@ -86,6 +129,27 @@ export function installDomAugmentation(): void {
     },
     appendText(this: Node, val: string): void {
       this.appendChild(document.createTextNode(val));
+    },
+    insertAfter<T extends Node>(this: Node, node: T, child: Node | null): T {
+      return this.insertBefore(node, child ? child.nextSibling : this.firstChild);
+    },
+    indexOf(this: Node, other: Node): number {
+      return Array.prototype.indexOf.call(this.childNodes, other);
+    },
+    setChildrenInPlace(this: Node, children: Node[]): void {
+      while (this.firstChild) this.removeChild(this.firstChild);
+      for (const child of children) this.appendChild(child);
+    },
+    instanceOf(this: Node, type: new (...args: never[]) => unknown): boolean {
+      return this instanceof type;
+    },
+    createSvg(
+      this: Node,
+      tag: string,
+      o?: SvgElementInfo | string,
+      callback?: (el: SVGElement) => void,
+    ): SVGElement {
+      return buildSvg(tag, o, callback, this);
     },
     createEl(
       this: Node,
@@ -111,12 +175,26 @@ export function installDomAugmentation(): void {
     },
   });
 
+  defineGetters(Node.prototype, {
+    doc(this: Node): Document {
+      return this.ownerDocument ?? document;
+    },
+    win(this: Node): Window {
+      return (this.ownerDocument ?? document).defaultView ?? window;
+    },
+  });
+
   /* ----- Element ----- */
   const findImpl = function (this: Element | DocumentFragment, selector: string): Element | null {
     return this.querySelector(selector);
   };
   const findAllImpl = function (this: Element | DocumentFragment, selector: string): Element[] {
     return Array.from(this.querySelectorAll(selector));
+  };
+  const findAllSelfImpl = function (this: Element, selector: string): Element[] {
+    const out: Element[] = this.matches(selector) ? [this] : [];
+    for (const el of Array.from(this.querySelectorAll(selector))) out.push(el);
+    return out;
   };
   define(Element.prototype, {
     getText(this: Element): string {
@@ -157,8 +235,24 @@ export function installDomAugmentation(): void {
     getAttr(this: Element, name: string): string | null {
       return this.getAttribute(name);
     },
+    matchParent(this: Element, selector: string, lastParent?: Element): Element | null {
+      let el: Element | null = this;
+      while (el) {
+        if (el.matches(selector)) return el;
+        if (el === lastParent) return null;
+        el = el.parentElement;
+      }
+      return null;
+    },
+    getCssPropertyValue(this: Element, property: string, pseudoElement?: string): string {
+      return getComputedStyle(this, pseudoElement).getPropertyValue(property);
+    },
+    isActiveElement(this: Element): boolean {
+      return (this.ownerDocument ?? document).activeElement === this;
+    },
     find: findImpl,
     findAll: findAllImpl,
+    findAllSelf: findAllSelfImpl,
   });
   define(DocumentFragment.prototype, { find: findImpl, findAll: findAllImpl });
 
@@ -180,6 +274,90 @@ export function installDomAugmentation(): void {
     ): void {
       this.addEventListener("click", listener as EventListener, options);
     },
+    toggleVisibility(this: HTMLElement, visible: boolean): void {
+      this.style.visibility = visible ? "" : "hidden";
+    },
+    isShown(this: HTMLElement): boolean {
+      // display:none on self or an ancestor leaves offsetParent null
+      // (calibrated limitation: also null for body/html and position:fixed)
+      return this.isConnected && this.offsetParent !== null;
+    },
+    setCssStyles(this: HTMLElement, styles: Partial<CSSStyleDeclaration>): void {
+      Object.assign(this.style, styles);
+    },
+    setCssProps(this: HTMLElement, props: Record<string, string>): void {
+      for (const [k, v] of Object.entries(props)) this.style.setProperty(k, v);
+    },
+    findAllSelf: findAllSelfImpl,
+    trigger(this: HTMLElement, eventType: string): void {
+      this.dispatchEvent(new Event(eventType, { bubbles: true }));
+    },
+    /** delegated listener: fires when the event target matches `selector` inside this element */
+    on(
+      this: HTMLElement,
+      type: string,
+      selector: string,
+      listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
+      options?: boolean | AddEventListenerOptions,
+    ): void {
+      const host = this as DelegatedHost;
+      const wrapped: EventListener = (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element)) return;
+        const match = target.closest(selector);
+        if (match instanceof HTMLElement && host.contains(match)) {
+          listener.call(host, ev, match);
+        }
+      };
+      const events = (host._EVENTS ??= {});
+      (events[type] ??= []).push({ selector, listener, options, wrapped });
+      host.addEventListener(type, wrapped, options);
+    },
+    off(
+      this: HTMLElement,
+      type: string,
+      selector: string,
+      listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
+      _options?: boolean | AddEventListenerOptions,
+    ): void {
+      const host = this as DelegatedHost;
+      const list = host._EVENTS?.[type];
+      if (!list) return;
+      const idx = list.findIndex((i) => i.selector === selector && i.listener === listener);
+      if (idx < 0) return;
+      const [info] = list.splice(idx, 1);
+      host.removeEventListener(type, info.wrapped, info.options);
+    },
+    /* deferred members — warn-stubs so the gap report stays truthful */
+    onNodeInserted(this: HTMLElement, _listener: () => unknown, _once?: boolean): () => void {
+      reportGap("dom", "HTMLElement.onNodeInserted", "no-op (returns a no-op destroyer)");
+      return () => undefined;
+    },
+    onWindowMigrated(this: HTMLElement, _listener: (win: Window) => unknown): () => void {
+      reportGap("dom", "HTMLElement.onWindowMigrated", "no-op (single-window host)");
+      return () => undefined;
+    },
+  });
+
+  defineGetters(HTMLElement.prototype, {
+    innerWidth(this: HTMLElement): number {
+      const s = getComputedStyle(this);
+      return this.clientWidth - (parseFloat(s.paddingLeft) || 0) - (parseFloat(s.paddingRight) || 0);
+    },
+    innerHeight(this: HTMLElement): number {
+      const s = getComputedStyle(this);
+      return this.clientHeight - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0);
+    },
+  });
+
+  /* ----- SVGElement ----- */
+  define(SVGElement.prototype, {
+    setCssStyles(this: SVGElement, styles: Partial<CSSStyleDeclaration>): void {
+      Object.assign(this.style, styles);
+    },
+    setCssProps(this: SVGElement, props: Record<string, string>): void {
+      for (const [k, v] of Object.entries(props)) this.style.setProperty(k, v);
+    },
   });
 
   /* ----- global free functions (detached creation) ----- */
@@ -197,4 +375,12 @@ export function installDomAugmentation(): void {
     callback?.(frag);
     return frag;
   };
+  g.createSvg = (
+    tag: string,
+    o?: SvgElementInfo | string,
+    callback?: (el: SVGElement) => void,
+  ): SVGElement => buildSvg(tag, o, callback, null);
+  g.fish = (selector: string): HTMLElement | null => document.querySelector(selector);
+  g.fishAll = (selector: string): HTMLElement[] =>
+    Array.from(document.querySelectorAll(selector));
 }

@@ -18,13 +18,15 @@ import * as cmState from "@codemirror/state";
 import * as cmView from "@codemirror/view";
 import * as lezerHighlight from "@lezer/highlight";
 import type { AppHandle, GeodePlugin, PluginManager } from "@core/plugins";
+import { Store } from "@core/store";
 import type { ObsidianPluginSource, Vault } from "@core/vault";
 import { loadComponentAsync } from "./component";
 import { createCompatContext, type CompatContext } from "./context";
 import { installDomAugmentation } from "./dom";
 import { FIXTURE_PLUGIN, FIXTURE_PLUGIN_ID } from "./fixture";
-import { drainGaps } from "./gaps";
+import { drainGaps, resetGaps } from "./gaps";
 import * as obsidianModule from "./index";
+import { pathShim } from "./path-shim";
 import type { Plugin as ObsidianPlugin, PluginManifest } from "./plugin";
 import { apiVersion, semverCompare } from "./util";
 
@@ -32,11 +34,13 @@ import { apiVersion, semverCompare } from "./util";
 
 /**
  * `obsidian` resolves to the shim; @codemirror/* and @lezer/highlight resolve
- * to the HOST instances (instanceof across plugin/host must work). Anything
+ * to the HOST instances (instanceof across plugin/host must work); `path` is
+ * a tiny posix string shim (plugins require it at evaluate time). Anything
  * else throws — the loader records it as the plugin's failure reason.
  */
 const HOST_MODULES: Record<string, unknown> = {
   obsidian: obsidianModule,
+  path: pathShim,
   "@codemirror/state": cmState,
   "@codemirror/view": cmView,
   "@codemirror/language": cmLanguage,
@@ -113,30 +117,50 @@ function isNonEmptyString(v: unknown): v is string {
 let previousContext: CompatContext | null = null;
 let loadedIds: string[] = [];
 
-interface PluginReport {
+export interface ObsidianPluginReport {
   id: string;
   status: "enabled" | "disabled" | "failed" | "skipped";
   detail?: string;
+  /** set when manifest.minAppVersion exceeds the shim's apiVersion */
+  minAppWarning?: string;
 }
+
+/**
+ * Last load report — SettingsModal renders failed/skipped entries (with their
+ * failure reason) and minAppVersion warnings from here.
+ */
+export const obsidianLoadReport = new Store<ReadonlyArray<ObsidianPluginReport>>([]);
 
 /* ---------------- the frozen entry point ---------------- */
 
-export async function loadObsidianPlugins(
-  app: Omit<AppHandle, "ui">,
+/**
+ * Serialized via a module-level promise chain: a second call always waits for
+ * the in-flight run to finish its full unregister/dispose/register cycle, so
+ * concurrent reloads can never register plugins against a disposed context.
+ */
+let loadChain: Promise<void> = Promise.resolve();
+
+export function loadObsidianPlugins(
+  app: Omit<AppHandle, "ui"> & { plugins: PluginManager },
   vault: Vault,
 ): Promise<void> {
-  // PluginManager travels on the bootstrap GeodeApp object (same shape minus "ui")
-  const plugins = (app as Partial<{ plugins: PluginManager }>).plugins;
-  if (!plugins) {
-    console.error("[obsidian-compat] loader requires app.plugins (PluginManager) on the handle");
-    return;
-  }
+  const run = loadChain.then(() => runLoad(app, vault));
+  loadChain = run.catch(() => undefined);
+  return run;
+}
+
+async function runLoad(
+  app: Omit<AppHandle, "ui"> & { plugins: PluginManager },
+  vault: Vault,
+): Promise<void> {
+  const plugins = app.plugins;
 
   installDomAugmentation();
 
   // idempotent: unload the previous round first (does NOT persist enabled:false)
   for (const id of loadedIds.splice(0)) plugins.unregister(id);
   previousContext?.dispose();
+  resetGaps(); // warn-once + report state is per load
   const ctx = (previousContext = createCompatContext(app, plugins, vault));
 
   let sources: ObsidianPluginSource[] = [];
@@ -155,18 +179,33 @@ export async function loadObsidianPlugins(
 
   const enabledIds = await readEnabledIds(vault);
   const seenIds = new Set<string>();
-  const report: PluginReport[] = [];
+  const report: ObsidianPluginReport[] = [];
 
   for (const source of sources) {
     const entry = await loadOne(source);
     report.push(entry);
   }
 
+  // CREATE-ON-LOAD replay (API-REFERENCE area 2): real Obsidian fires vault
+  // 'create' for every existing file when the vault loads. Replay it now that
+  // plugins have registered their handlers; onLayoutReady callbacks queued
+  // during the plugin loop flush AFTER the replay (the documented opt-out).
+  for (const f of ctx.registry.allLoadedFiles()) {
+    if (f !== ctx.registry.root) ctx.vault.trigger("create", f);
+  }
+  ctx.workspace._flushLayoutReady();
+
+  // initial 'resolved' (fires once after vault-wide resolution): if the core
+  // index finished before plugin load, deliver it now; otherwise the pending
+  // metadata:updated will trigger it through the context handler.
+  if (app.metadata.revision.get() > 0) ctx.metadataCache.trigger("resolved");
+
+  obsidianLoadReport.set(report);
   logReport(report);
 
   /* ---------------- per-plugin pipeline (failures isolate) ---------------- */
 
-  async function loadOne(source: ObsidianPluginSource): Promise<PluginReport> {
+  async function loadOne(source: ObsidianPluginSource): Promise<ObsidianPluginReport> {
     /* 1. manifest */
     let raw: RawManifest;
     try {
@@ -190,12 +229,22 @@ export async function loadObsidianPlugins(
     if (source.dir !== id) {
       console.warn(`[obsidian-compat] folder "${source.dir}" does not match manifest id "${id}"`);
     }
-    if (isNonEmptyString(raw.minAppVersion) && semverCompare(raw.minAppVersion, apiVersion) > 0) {
+    // contract: missing id/name/version rejects; OTHER gaps warn (never block —
+    // absent minAppVersion in particular must not reject)
+    const missing = (["author", "minAppVersion", "description"] as const).filter(
+      (k) => !isNonEmptyString(raw[k]),
+    );
+    if (missing.length > 0) {
       console.warn(
-        `[obsidian-compat] ${id}: requires app ${raw.minAppVersion} but Geode reports ${apiVersion} — loading anyway`,
+        `[obsidian-compat] ${id}: manifest missing ${missing.join(", ")} — defaulting to ""`,
       );
     }
-    if (plugins!.list().some((r) => r.plugin.id === id)) {
+    let minAppWarning: string | undefined;
+    if (isNonEmptyString(raw.minAppVersion) && semverCompare(raw.minAppVersion, apiVersion) > 0) {
+      minAppWarning = `requires app ${raw.minAppVersion} (Geode reports ${apiVersion})`;
+      console.warn(`[obsidian-compat] ${id}: ${minAppWarning} — loading anyway`);
+    }
+    if (plugins.list().some((r) => r.plugin.id === id)) {
       console.error(`[obsidian-compat] ${id}: collides with an existing Geode plugin — skipped`);
       return { id, status: "skipped", detail: "id collision with a host plugin" };
     }
@@ -231,7 +280,12 @@ export async function loadObsidianPlugins(
       ctor = candidate as typeof ctor;
     } catch (err) {
       console.error(`[obsidian-compat] ${id}: failed to evaluate main.js`, err);
-      return { id, status: "failed", detail: err instanceof Error ? err.message : String(err) };
+      return {
+        id,
+        status: "failed",
+        detail: err instanceof Error ? err.message : String(err),
+        ...(minAppWarning ? { minAppWarning } : {}),
+      };
     }
 
     /* 3. wrap as a GeodePlugin (instance created lazily on each enable) */
@@ -260,6 +314,18 @@ export async function loadObsidianPlugins(
           }
           await loadComponentAsync(instance);
         } catch (err) {
+          // unload the partially-loaded Component: commands, DOM listeners,
+          // intervals and event refs registered before the throw must not leak
+          try {
+            if (instance && typeof (instance as { unload?: unknown }).unload === "function") {
+              instance.unload();
+            }
+          } catch (cleanupErr) {
+            console.error(
+              `[obsidian-compat] ${id}: cleanup after failed onload threw`,
+              cleanupErr,
+            );
+          }
           instance = null;
           removeStyles();
           throw err;
@@ -278,26 +344,40 @@ export async function loadObsidianPlugins(
     /* 4. register; enabled mirrors community-plugins.json (fixture opts in) */
     const enabled = enabledIds.includes(id) || (fixtureRequested && id === FIXTURE_PLUGIN_ID);
     try {
-      await plugins!.register(wrapper, "obsidian", {
+      await plugins.register(wrapper, "obsidian", {
         enabled,
         persistEnabled: (on) => persistEnabledId(vault, id, on),
       });
       loadedIds.push(id);
     } catch (err) {
       console.error(`[obsidian-compat] ${id}: registration failed`, err);
-      return { id, status: "failed", detail: err instanceof Error ? err.message : String(err) };
+      return {
+        id,
+        status: "failed",
+        detail: err instanceof Error ? err.message : String(err),
+        ...(minAppWarning ? { minAppWarning } : {}),
+      };
     }
-    if (enabled && !plugins!.isEnabled(id)) {
+    if (enabled && !plugins.isEnabled(id)) {
       // PluginManager caught the onload failure — surface it in the report
-      return { id, status: "failed", detail: "onload failed (see error above)" };
+      return {
+        id,
+        status: "failed",
+        detail: "onload failed (see error above)",
+        ...(minAppWarning ? { minAppWarning } : {}),
+      };
     }
-    return { id, status: enabled ? "enabled" : "disabled" };
+    return {
+      id,
+      status: enabled ? "enabled" : "disabled",
+      ...(minAppWarning ? { minAppWarning } : {}),
+    };
   }
 }
 
 /* ---------------- status report ---------------- */
 
-function logReport(report: PluginReport[]): void {
+function logReport(report: ObsidianPluginReport[]): void {
   const gaps = drainGaps();
   const enabled = report.filter((r) => r.status === "enabled").length;
   const failed = report.filter((r) => r.status === "failed" || r.status === "skipped").length;

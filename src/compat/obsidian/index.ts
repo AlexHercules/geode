@@ -35,6 +35,13 @@ export {
   type PaneType,
   type SplitDirection,
 } from "./workspace";
+export { FileView, ItemView, View, type ViewStateResult } from "./view";
+export {
+  EditorSuggest,
+  PopoverSuggest,
+  type EditorSuggestContext,
+  type EditorSuggestTriggerInfo,
+} from "./suggest";
 export { Editor, type EditorPosition } from "./editor";
 export {
   App,
@@ -52,6 +59,9 @@ export {
   ButtonComponent,
   DropdownComponent,
   ExtraButtonComponent,
+  FuzzySuggestModal,
+  Menu,
+  MenuItem,
   Modal,
   MomentFormatComponent,
   Notice,
@@ -59,10 +69,13 @@ export {
   SearchComponent,
   Setting,
   SliderComponent,
+  SuggestModal,
   TextAreaComponent,
   TextComponent,
   ToggleComponent,
   ValueComponent,
+  type FuzzyMatch,
+  type SearchResult,
 } from "./ui";
 export { addIcon, setIcon, type IconName } from "./icons";
 export {

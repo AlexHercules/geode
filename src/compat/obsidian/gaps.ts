@@ -28,3 +28,14 @@ export function reportGap(scope: string, api: string, detail?: string): void {
 export function drainGaps(): GapEntry[] {
   return pending.splice(0);
 }
+
+/**
+ * Reset ALL gap state (warn-once keys + pending entries). Called by the
+ * loader at the start of every run so warn-once and the consolidated report
+ * are both per-load, and runtime gaps hit between loads are not misattributed
+ * to the next load.
+ */
+export function resetGaps(): void {
+  warnedKeys.clear();
+  pending.length = 0;
+}

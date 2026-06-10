@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import { obsidianLoadReport } from "@compat/obsidian/loader";
 import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
@@ -149,10 +150,22 @@ function PluginsSection() {
   const app = useApp();
   useStore(app.plugins.revision); // re-render on enable/disable/register
   const settingsSections = useStore(app.plugins.settingsSections);
+  const obsidianReport = useStore(obsidianLoadReport);
   const entries = app.plugins.list();
   const builtin = entries.filter((e) => e.source === "builtin");
   const external = entries.filter((e) => e.source === "external");
   const obsidian = entries.filter((e) => e.source === "obsidian");
+
+  /* compat loader report: failed/skipped plugins never reach the registry,
+     so the load report is the only place their failure reason exists */
+  const obsidianIssues = obsidianReport.filter(
+    (r) => r.status === "failed" || r.status === "skipped",
+  );
+  const obsidianWarnings = new Map(
+    obsidianReport
+      .filter((r) => r.minAppWarning !== undefined)
+      .map((r) => [r.id, r.minAppWarning as string] as const),
+  );
 
   /* settings sections contributed by ENABLED plugins, with the plugin name for the header */
   const enabledByid = new Map(entries.filter((e) => e.enabled).map((e) => [e.plugin.id, e.plugin]));
@@ -216,7 +229,30 @@ function PluginsSection() {
         Obsidian community plugins from <code>&lt;vault&gt;/.obsidian/plugins/</code>, loaded
         through the compatibility layer.
       </p>
-      <PluginList entries={obsidian} group="obsidian" />
+      <PluginList entries={obsidian} group="obsidian" warnings={obsidianWarnings} />
+
+      {obsidianIssues.length > 0 && (
+        <div className="plugin-list plugin-error-list" data-testid="settings-obsidian-errors">
+          {obsidianIssues.map((r) => (
+            <div
+              className="plugin-item plugin-item-error"
+              key={r.id}
+              data-testid={`obsidian-plugin-error-${r.id}`}
+            >
+              <div className="plugin-info">
+                <div className="plugin-name">
+                  {r.id}
+                  <span className="plugin-source-badge plugin-source-obsidian">obsidian</span>
+                  <span className="plugin-error-status">
+                    {r.status === "failed" ? "failed to load" : "skipped"}
+                  </span>
+                </div>
+                <div className="plugin-error-reason">{r.detail ?? "no detail recorded"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {activeSections.length > 0 && (
         <>
@@ -298,9 +334,12 @@ const EMPTY_GROUP_TEXT: Record<PluginSource, string> = {
 function PluginList({
   entries,
   group,
+  warnings,
 }: {
   entries: ReturnType<PluginManager["list"]>;
   group: PluginSource;
+  /** plugin id -> manifest warning (e.g. minAppVersion exceeds apiVersion) */
+  warnings?: ReadonlyMap<string, string>;
 }) {
   const app = useApp();
 
@@ -328,6 +367,14 @@ function PluginList({
               </span>
             </div>
             {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
+            {warnings?.has(plugin.id) && (
+              <div
+                className="plugin-warning"
+                data-testid={`plugin-minapp-warning-${plugin.id}`}
+              >
+                {warnings.get(plugin.id)}
+              </div>
+            )}
           </div>
           <button
             className={`settings-toggle${enabled ? " is-on" : ""}`}

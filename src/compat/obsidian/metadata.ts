@@ -2,10 +2,15 @@
  * Obsidian MetadataCache shim (API-REFERENCE area 3) over Geode's MetadataIndex.
  *
  * - headings WITHOUT '#', tags WITH '#', frontmatter keys keep authored case.
+ * - cache.tags contains BODY tag occurrences only — frontmatter tags live in
+ *   cache.frontmatter and are merged by getAllTags(), like real Obsidian.
  * - Pos/Loc are 0-based line/col, computed lazily from cached content with
- *   per-(path, revision) caching; falls back to zeroed line/col when the
- *   content is not in the LRU cache (a read is warmed for next time).
- * - resolvedLinks / unresolvedLinks recomputed lazily per index revision.
+ *   per-file caching (keyed on NoteMetadata identity, so a save invalidates
+ *   exactly that file); falls back to zeroed line/col when the content is not
+ *   in the LRU cache (a read is warmed for next time, result not cached).
+ * - resolvedLinks / unresolvedLinks maintained lazily: dirty source rows are
+ *   recomputed incrementally on content modifications; create/delete/rename/
+ *   load and alias changes fall back to a full rebuild.
  */
 import type { AppHandle } from "@core/plugins";
 import type { NoteMetadata } from "@core/types";
@@ -92,11 +97,33 @@ function offsetToLoc(offset: number, starts: number[] | null): Loc {
   return { line: lo, col: offset - starts[lo], offset };
 }
 
+/** Aliases are the only modify-mutable input that can flip OTHER files' link resolution. */
+function aliasSignature(meta: NoteMetadata): string {
+  return meta.aliases.join("\n");
+}
+
 export class MetadataCache extends Events {
-  private cacheByPath = new Map<string, { rev: number; cache: CachedMetadata | null }>();
+  /**
+   * Per-file cache keyed on NoteMetadata object identity — MetadataIndex
+   * creates a fresh NoteMetadata per reparse, so saving file A invalidates
+   * exactly A's entry; deleted/renamed paths fall out via GC.
+   */
+  private cacheByMeta = new WeakMap<NoteMetadata, CachedMetadata>();
   private linksRev = -1;
   private _resolved: LinkTable = {};
   private _unresolved: LinkTable = {};
+  /**
+   * Link-table dirty tracking: source path -> the meta object + alias
+   * signature captured BEFORE the reindex. An entry is consumed only once its
+   * meta identity has changed (the reindex landed); until then it stays
+   * pending across syncs, so a bump caused by another file cannot swallow it.
+   */
+  private dirtyLinkSources = new Map<
+    string,
+    { prevMeta: NoteMetadata | undefined; prevSig: string | null }
+  >();
+  /** create/delete/rename/load — anything that can flip other files' rows */
+  private linksNeedFullRebuild = false;
 
   constructor(
     private handle: Handle,
@@ -122,12 +149,19 @@ export class MetadataCache extends Events {
   }
 
   getCache(path: string): CachedMetadata | null {
-    const rev = this.handle.metadata.revision.get();
-    const hit = this.cacheByPath.get(path);
-    if (hit && hit.rev === rev) return hit.cache;
     const meta = this.handle.metadata.getMetadata(path);
-    const cache = meta ? this.buildCache(meta) : null;
-    this.cacheByPath.set(path, { rev, cache });
+    if (!meta) return null;
+    const hit = this.cacheByMeta.get(meta);
+    if (hit) return hit;
+    const content = this.handle.vault.readCached(path);
+    if (content === undefined) {
+      // warm the cache so positions are accurate on the next call
+      void this.handle.vault.read(path).catch(() => undefined);
+    }
+    const cache = this.buildCache(meta, content);
+    // zero-position results built without content are NOT cached, so positions
+    // heal on the next call once the warm-up read has landed
+    if (content !== undefined) this.cacheByMeta.set(meta, cache);
     return cache;
   }
 
@@ -170,12 +204,7 @@ export class MetadataCache extends Events {
 
   /* ----- internals ----- */
 
-  private buildCache(meta: NoteMetadata): CachedMetadata {
-    const content = this.handle.vault.readCached(meta.path);
-    if (content === undefined) {
-      // warm the cache so positions are accurate on the next call
-      void this.handle.vault.read(meta.path).catch(() => undefined);
-    }
+  private buildCache(meta: NoteMetadata, content: string | undefined): CachedMetadata {
     const starts = content !== undefined ? lineStarts(content) : null;
     const pos = (from: number, to: number): Pos => ({
       start: offsetToLoc(from, starts),
@@ -206,8 +235,14 @@ export class MetadataCache extends Events {
         position: pos(l.from, l.to),
       }));
     }
-    if (meta.tags.length > 0) {
-      out.tags = meta.tags.map((t) => ({
+    // frontmatter-sourced tag refs (parseNote pushes them with from: 0) are
+    // excluded: real Obsidian keeps cache.tags body-only and merges
+    // frontmatter tags via getAllTags(). parseNote masks the frontmatter
+    // region before tag matching, so genuine body tags always start >= fm.to.
+    const fmEnd = meta.frontmatter?.to ?? 0;
+    const bodyTags = meta.tags.filter((t) => t.from >= fmEnd);
+    if (bodyTags.length > 0) {
+      out.tags = bodyTags.map((t) => ({
         tag: `#${t.tag}`,
         position: pos(t.from, t.from + t.tag.length + 1),
       }));
@@ -219,22 +254,78 @@ export class MetadataCache extends Events {
     return out;
   }
 
+  /**
+   * @internal Mark a source file's link rows stale (saved content
+   * modification). Captures the pre-reindex meta + alias signature; alias
+   * changes (which can flip resolution of OTHER files' links) force a full
+   * rebuild when the reindex lands.
+   */
+  _markLinkSourceDirty(path: string): void {
+    if (!this.dirtyLinkSources.has(path)) {
+      const prev = this.handle.metadata.getMetadata(path);
+      this.dirtyLinkSources.set(path, {
+        prevMeta: prev,
+        prevSig: prev ? aliasSignature(prev) : null,
+      });
+    }
+  }
+
+  /** @internal Force a full link-table rebuild (create/delete/rename/load). */
+  _invalidateLinkTables(): void {
+    this.linksNeedFullRebuild = true;
+  }
+
   private ensureLinkTables(): void {
     const rev = this.handle.metadata.revision.get();
     if (rev === this.linksRev) return;
-    const resolved: LinkTable = {};
-    const unresolved: LinkTable = {};
-    for (const meta of this.handle.metadata.getAll()) {
-      for (const link of meta.links) {
-        const dest = this.handle.metadata.resolveLink(link.target, meta.path);
-        const table = dest ? resolved : unresolved;
-        const key = dest ?? link.target;
-        const row = (table[meta.path] ??= {});
-        row[key] = (row[key] ?? 0) + 1;
+
+    // partition dirty entries: landed (meta identity changed since the mark)
+    // vs still pending (reindex not finished — keep for a later bump)
+    const landed: string[] = [];
+    let needFull = this.linksNeedFullRebuild || this.linksRev === -1;
+    for (const [path, prev] of this.dirtyLinkSources) {
+      const meta = this.handle.metadata.getMetadata(path);
+      if (meta === prev.prevMeta) {
+        // both undefined => nothing to apply; drop instead of pending forever
+        if (meta === undefined) landed.push(path);
+        continue;
+      }
+      landed.push(path);
+      // changed aliases/name contribution can flip OTHER files' rows
+      if (!needFull && (meta ? aliasSignature(meta) : null) !== prev.prevSig) {
+        needFull = true;
       }
     }
-    this._resolved = resolved;
-    this._unresolved = unresolved;
+
+    if (needFull) {
+      const resolved: LinkTable = {};
+      const unresolved: LinkTable = {};
+      for (const meta of this.handle.metadata.getAll()) {
+        this.addLinkRows(meta, resolved, unresolved);
+      }
+      this._resolved = resolved;
+      this._unresolved = unresolved;
+      this.linksNeedFullRebuild = false;
+    } else {
+      // incremental: recompute only the landed source rows — O(changed files)
+      for (const path of landed) {
+        delete this._resolved[path];
+        delete this._unresolved[path];
+        const meta = this.handle.metadata.getMetadata(path);
+        if (meta) this.addLinkRows(meta, this._resolved, this._unresolved);
+      }
+    }
+    for (const path of landed) this.dirtyLinkSources.delete(path);
     this.linksRev = rev;
+  }
+
+  private addLinkRows(meta: NoteMetadata, resolved: LinkTable, unresolved: LinkTable): void {
+    for (const link of meta.links) {
+      const dest = this.handle.metadata.resolveLink(link.target, meta.path);
+      const table = dest ? resolved : unresolved;
+      const key = dest ?? link.target;
+      const row = (table[meta.path] ??= {});
+      row[key] = (row[key] ?? 0) + 1;
+    }
   }
 }

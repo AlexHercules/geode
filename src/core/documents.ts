@@ -1,4 +1,4 @@
-import { history, historyKeymap, redo, undo } from "@codemirror/commands";
+import { history, historyField, historyKeymap, redo, undo } from "@codemirror/commands";
 import {
   Annotation,
   Compartment,
@@ -99,9 +99,14 @@ export class DocumentHandle {
         });
       }
     }
-    // receivers run this too (nested, synchronously) — same content, harmless
-    this.text = update.state.doc.toString();
+    // Canonical text is materialized ONCE per user edit, from the ORIGIN
+    // view's post-transaction state. Receivers only ever see sync-annotated
+    // transactions (local stays false) and must not re-toString: with N panes
+    // on a large note that would cost N full O(doc) rope→string flattenings
+    // per keystroke. Non-local replaces (setText/reload) set this.text in
+    // applyReplace directly.
     if (local) {
+      this.text = update.state.doc.toString();
       this.scheduleSave();
       this.revision.update((r) => r + 1);
     }
@@ -156,7 +161,13 @@ export class DocumentHandle {
       if (this.historyHost === view) {
         this.historyHost = null;
         const next = this.views.values().next().value as EditorView | undefined;
-        if (next) this.promoteHistoryHost(next);
+        if (next) {
+          // Transplant the undo history to the new host: this disposer runs
+          // BEFORE view.destroy() (EditorPane cleanup order), so the detaching
+          // host's state is still readable. Without this, promoting would
+          // create a fresh empty history and silently wipe every undo step.
+          this.promoteHistoryHost(next, view.state.field(historyField, false));
+        }
       }
     };
   }
@@ -233,6 +244,29 @@ export class DocumentHandle {
   }
 
   /**
+   * vault:changed reason "load" — the vault ROOT switched (or reloaded).
+   * Handles are keyed by vault-RELATIVE path, which collides across vaults,
+   * so cached text must never survive the switch (mirrors Vault.load()
+   * clearing its contentCache). openVaultFlow flushes every document BEFORE
+   * re-pointing the adapter, so anything still dirty here raced the switch
+   * and belongs to the OLD vault — writing it would corrupt the new vault's
+   * file, so it is dropped, never saved.
+   *
+   * Returns true when the handle is unreferenced and the manager should
+   * remove it (so the next acquire() always fresh-reads). Retained handles
+   * (surviving tabs/panes) are reloaded with the NEW vault's content when the
+   * path exists there; when it does not, the stale text stays visible but can
+   * never be written back — flush()'s fileExists no-resurrect guard blocks
+   * every save for a path missing from the new tree.
+   */
+  handleVaultLoad(): boolean {
+    this.handleDeleted(); // cancel timer + dirty — old-vault edits never cross the switch
+    if (this.refs <= 0) return true;
+    if (this.vault.fileExists(this.currentPath)) this.reloadFromDisk("modified");
+    return false;
+  }
+
+  /**
    * file:external-modified / file:modified — re-read from disk and replace,
    * but ONLY while clean (an in-flight save counts as dirty). Our own save
    * echoes back as file:modified with identical content → equality no-op,
@@ -279,7 +313,15 @@ export class DocumentHandle {
     return this.historyHost ? cmd(this.historyHost) : false;
   }
 
-  private promoteHistoryHost(view: EditorView): void {
+  /**
+   * `savedHistory` (the previous host's historyField value, captured in the
+   * detach disposer) seeds the newly-added field via historyField.init():
+   * history() and init() reference the SAME StateField instance, so the
+   * extensions dedupe and the init facet only overrides the create function —
+   * undo/redo entries survive the host handoff. All views are byte-identical,
+   * so the transplanted entries apply cleanly to the new host's doc.
+   */
+  private promoteHistoryHost(view: EditorView, savedHistory?: unknown): void {
     this.historyHost = view;
     const compartment = view.state.facet(historyCompartmentFacet)[0];
     if (!compartment) {
@@ -288,7 +330,12 @@ export class DocumentHandle {
       );
       return;
     }
-    view.dispatch({ effects: compartment.reconfigure(hostHistoryExtensions) });
+    view.dispatch({
+      effects: compartment.reconfigure([
+        savedHistory !== undefined ? historyField.init(() => savedHistory) : [],
+        hostHistoryExtensions,
+      ]),
+    });
   }
 
   private scheduleSave(): void {
@@ -320,6 +367,9 @@ export class DocumentManager {
   private handles = new Map<string, DocumentHandle>();
   /** in-flight loads, deduped so concurrent acquires share one handle */
   private pending = new Map<string, Promise<DocumentHandle>>();
+  /** bumped on every vault (re)load — in-flight reads from the OLD vault
+   *  detect the switch and re-read instead of seeding stale content */
+  private generation = 0;
   private active: { view: EditorView; path: string } | null = null;
 
   constructor(
@@ -340,6 +390,16 @@ export class DocumentManager {
     this.events.on("file:modified", ({ path }) =>
       this.handles.get(path)?.reloadFromDisk("modified"),
     );
+    // Vault root switched/reloaded: relative paths collide across vaults, so
+    // every cached handle is invalidated (see DocumentHandle.handleVaultLoad).
+    this.events.on("vault:changed", ({ reason }) => {
+      if (reason !== "load") return;
+      this.generation++;
+      this.pending.clear(); // old-vault loads must not be shared; they re-read via the generation guard
+      for (const [path, handle] of [...this.handles]) {
+        if (handle.handleVaultLoad()) this.handles.delete(path);
+      }
+    });
   }
 
   /** Load (or share) the document for a vault path. Refcounted: pair with release(). */
@@ -353,9 +413,17 @@ export class DocumentManager {
     }
     let load = this.pending.get(path);
     if (!load) {
+      const startGen = this.generation;
       load = this.vault
         .read(path)
-        .then((text) => {
+        .then(async (text) => {
+          // vault switched while the read was in flight — re-read so the
+          // handle is seeded with the CURRENT vault's content, never stale
+          let gen = startGen;
+          while (gen !== this.generation) {
+            gen = this.generation;
+            text = await this.vault.read(path);
+          }
           let handle = this.handles.get(path);
           if (!handle) {
             handle = new DocumentHandle(this, this.vault, path, text);
@@ -364,11 +432,16 @@ export class DocumentManager {
           return handle;
         })
         .finally(() => {
-          this.pending.delete(path);
+          // identity-guarded: a vault switch cleared pending and a NEW load
+          // may already occupy this key — never delete someone else's entry
+          if (this.pending.get(path) === load) this.pending.delete(path);
         });
       this.pending.set(path, load);
     }
     const handle = await load;
+    // a vault switch may have dropped the handle from the map between the
+    // load resolving and this continuation running — acquire afresh
+    if (this.handles.get(path) !== handle) return this.acquire(path);
     handle.retain();
     return handle;
   }

@@ -52,6 +52,128 @@
   color: var(--text-normal);
 }
 
+/* ---------------- suggest modals (SuggestModal / FuzzySuggestModal) ---------------- */
+
+.geode-compat-prompt .modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.geode-compat-prompt .prompt-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.geode-compat-prompt .prompt-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.geode-compat-prompt .prompt-results {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.geode-compat-prompt .suggestion-item {
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.geode-compat-prompt .suggestion-item.is-selected {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.geode-compat-prompt .suggestion-empty {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ---------------- menu (compat Menu popup) ---------------- */
+
+.geode-compat-menu {
+  position: fixed;
+  z-index: 10001;
+  min-width: 160px;
+  max-width: 320px;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-modal);
+}
+
+.geode-compat-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+  user-select: none;
+}
+
+.geode-compat-menu .menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.geode-compat-menu .menu-item.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.geode-compat-menu .menu-item.is-disabled:hover {
+  background: transparent;
+}
+
+.geode-compat-menu .menu-item.is-warning {
+  color: var(--danger);
+}
+
+.geode-compat-menu .menu-item.is-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: default;
+}
+
+.geode-compat-menu .menu-item-icon {
+  display: inline-flex;
+  align-items: center;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.geode-compat-menu .menu-item-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.geode-compat-menu.no-icon .menu-item-icon {
+  display: none;
+}
+
+.geode-compat-menu .menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
 /* ---------------- setting rows ---------------- */
 
 .setting-item {
