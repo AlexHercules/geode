@@ -4,3 +4,5 @@ src-tauri/target/
 src-tauri/gen/
 *.local
 .DS_Store
+.playwright-mcp/
+bench-vault/
