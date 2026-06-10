@@ -14,6 +14,7 @@ import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { SettingsModal } from "@features/settings/SettingsModal";
 import { isTauri } from "@core/vault";
+import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
 
@@ -55,6 +56,8 @@ export function App() {
   const ws = useStore(app.workspace.state);
   const tree = useStore(app.vault.tree);
   const statusItems = useStore(app.plugins.statusBarItems);
+  const statusBarElements = useStore(app.plugins.statusBarElements);
+  const ribbonItems = useStore(app.plugins.ribbonItems);
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -111,7 +114,12 @@ export function App() {
       commands.register({
         id: "app:reload-plugins",
         name: "Reload external plugins",
-        callback: () => void app.plugins.loadExternal(vault),
+        callback: () =>
+          void (async () => {
+            // sequential: external first, then the Obsidian compat layer
+            await app.plugins.loadExternal(vault);
+            await loadObsidianPlugins(app, vault);
+          })(),
       }),
       commands.register({
         id: "app:open-graph",
@@ -268,6 +276,12 @@ export function App() {
             title="Command palette (Ctrl+P)"
             onClick={() => app.workspace.openModal("palette")}
           />
+          {/* plugin-contributed ribbon icons (compat addRibbonIcon); els own their handlers */}
+          <PluginElementHost
+            items={ribbonItems}
+            elClassName="ribbon-btn"
+            testid="plugin-ribbon-items"
+          />
           <div className="ribbon-spacer" />
           <RibbonButton
             icon={ws.theme === "dark" ? "sun" : "moon"}
@@ -342,6 +356,12 @@ export function App() {
             {text}
           </span>
         ))}
+        {/* element-based status bar items (compat addStatusBarItem) */}
+        <PluginElementHost
+          items={statusBarElements}
+          elClassName="status-item"
+          testid="plugin-status-bar-items"
+        />
       </footer>
 
       {/* modals */}
@@ -388,6 +408,38 @@ function SidebarResizer({ side }: { side: "left" | "right" }) {
       onMouseDown={onMouseDown}
     />
   );
+}
+
+/**
+ * Hosts plugin-owned DOM elements (compat ribbon icons / status bar items).
+ * `display: contents` makes each el a direct flex item of the surrounding
+ * ribbon/status-bar container, so they pick up the native layout. The els
+ * carry their own event handlers — we only append/remove them.
+ */
+function PluginElementHost({
+  items,
+  elClassName,
+  testid,
+}: {
+  items: ReadonlyArray<{ id: string; el: HTMLElement }>;
+  elClassName: string;
+  testid: string;
+}) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    for (const { el } of items) {
+      el.classList.add(elClassName);
+      host.appendChild(el);
+    }
+    return () => {
+      for (const { el } of items) {
+        if (el.parentNode === host) host.removeChild(el);
+      }
+    };
+  }, [items, elClassName]);
+  return <div ref={hostRef} style={{ display: "contents" }} data-testid={testid} />;
 }
 
 function RibbonButton(props: { icon: string; title: string; active?: boolean; onClick: () => void }) {
@@ -696,6 +748,11 @@ async function openVaultFlow(app: ReturnType<typeof useApp>) {
     await app.plugins.loadExternal(app.vault);
   } catch (err) {
     console.error("[vault] external plugin load failed", err);
+  }
+  try {
+    await loadObsidianPlugins(app, app.vault);
+  } catch (err) {
+    console.error("[vault] obsidian plugin load failed", err);
   }
 }
 

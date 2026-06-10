@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
-import type { PluginManager } from "@core/plugins";
+import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
 
@@ -138,12 +138,29 @@ function AppearanceSection() {
 
 /* ---------------- Plugins ---------------- */
 
+/** Badge label per plugin source ("builtin" reads as "core" in the UI). */
+const SOURCE_LABEL: Record<PluginSource, string> = {
+  builtin: "core",
+  external: "external",
+  obsidian: "obsidian",
+};
+
 function PluginsSection() {
   const app = useApp();
   useStore(app.plugins.revision); // re-render on enable/disable/register
+  const settingsSections = useStore(app.plugins.settingsSections);
   const entries = app.plugins.list();
   const builtin = entries.filter((e) => e.source === "builtin");
   const external = entries.filter((e) => e.source === "external");
+  const obsidian = entries.filter((e) => e.source === "obsidian");
+
+  /* settings sections contributed by ENABLED plugins, with the plugin name for the header */
+  const enabledByid = new Map(entries.filter((e) => e.enabled).map((e) => [e.plugin.id, e.plugin]));
+  const activeSections = settingsSections
+    .map((section) => ({ section, plugin: enabledByid.get(section.pluginId) }))
+    .filter((x): x is { section: PluginSettingsSection; plugin: (typeof entries)[number]["plugin"] } =>
+      x.plugin !== undefined,
+    );
 
   return (
     <section>
@@ -191,35 +208,124 @@ function PluginsSection() {
         <code>docs/PLUGINS.md</code> for the authoring guide.
       </p>
       <PluginList entries={external} group="external" />
+
+      <div className="plugin-group-header">
+        <h3 className="plugin-group-title">Obsidian</h3>
+      </div>
+      <p className="settings-note plugin-path-hint" data-testid="settings-obsidian-path-hint">
+        Obsidian community plugins from <code>&lt;vault&gt;/.obsidian/plugins/</code>, loaded
+        through the compatibility layer.
+      </p>
+      <PluginList entries={obsidian} group="obsidian" />
+
+      {activeSections.length > 0 && (
+        <>
+          <div className="plugin-group-header">
+            <h3 className="plugin-group-title">Plugin settings</h3>
+          </div>
+          {activeSections.map(({ section, plugin }) => (
+            <PluginSettingsBlock key={section.id} section={section} pluginName={plugin.name} />
+          ))}
+        </>
+      )}
     </section>
   );
 }
+
+/** Collapsible host for one plugin-contributed settings section (compat PluginSettingTab). */
+function PluginSettingsBlock({
+  section,
+  pluginName,
+}: {
+  section: PluginSettingsSection;
+  pluginName: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="plugin-settings-block"
+      data-testid={`plugin-settings-section-${section.id}`}
+    >
+      <button
+        className="plugin-settings-header"
+        aria-expanded={open}
+        data-testid={`plugin-settings-toggle-${section.id}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Icon name={open ? "chevron-down" : "chevron-right"} size={14} />
+        <span className="plugin-settings-title">{pluginName}</span>
+        {section.name && section.name !== pluginName && (
+          <span className="plugin-settings-subtitle">{section.name}</span>
+        )}
+      </button>
+      {open && <PluginSettingsBody section={section} />}
+    </div>
+  );
+}
+
+/** Mounts section.mount(container) while visible; unmounts on collapse/unmount. */
+function PluginSettingsBody({ section }: { section: PluginSettingsSection }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(false); // guards double-mount under StrictMode
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || mountedRef.current) return;
+    mountedRef.current = true;
+    try {
+      section.mount(host);
+    } catch (err) {
+      console.error(`[settings] plugin section ${section.id} mount threw`, err);
+    }
+    return () => {
+      mountedRef.current = false;
+      try {
+        section.unmount();
+      } catch (err) {
+        console.error(`[settings] plugin section ${section.id} unmount threw`, err);
+      }
+      host.replaceChildren();
+    };
+  }, [section]);
+  return <div ref={hostRef} className="plugin-settings-body" />;
+}
+
+const EMPTY_GROUP_TEXT: Record<PluginSource, string> = {
+  builtin: "No built-in plugins registered.",
+  external: "No external plugins found.",
+  obsidian: "No Obsidian plugins found.",
+};
 
 function PluginList({
   entries,
   group,
 }: {
   entries: ReturnType<PluginManager["list"]>;
-  group: "builtin" | "external";
+  group: PluginSource;
 }) {
   const app = useApp();
 
   if (entries.length === 0) {
     return (
       <div className="settings-empty" data-testid={`settings-plugin-empty-${group}`}>
-        {group === "builtin" ? "No built-in plugins registered." : "No external plugins found."}
+        {EMPTY_GROUP_TEXT[group]}
       </div>
     );
   }
 
   return (
     <div className="plugin-list" data-testid={`settings-plugin-list-${group}`}>
-      {entries.map(({ plugin, enabled }) => (
+      {entries.map(({ plugin, enabled, source }) => (
         <div className="plugin-item" key={plugin.id} data-testid={`plugin-item-${plugin.id}`}>
           <div className="plugin-info">
             <div className="plugin-name">
               {plugin.name}
               {plugin.version && <span className="plugin-version">v{plugin.version}</span>}
+              <span
+                className={`plugin-source-badge plugin-source-${source}`}
+                data-testid="plugin-source-badge"
+              >
+                {SOURCE_LABEL[source]}
+              </span>
             </div>
             {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
           </div>

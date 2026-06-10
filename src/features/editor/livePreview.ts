@@ -436,7 +436,7 @@ const livePreviewPlugin = ViewPlugin.fromClass(
  * text shows and Ctrl+Click — handled in cmExtensions — still navigates).
  * Ctrl+Click on a collapsed markdown link opens the URL externally.
  */
-function liveClickHandler(app: GeodeApp, path: string): Extension {
+function liveClickHandler(app: GeodeApp, getPath: () => string): Extension {
   return EditorView.domEventHandlers({
     mousedown: (event) => {
       if (event.button !== 0) return false;
@@ -459,7 +459,7 @@ function liveClickHandler(app: GeodeApp, path: string): Extension {
         const target = wl.getAttribute("data-link-target");
         if (target) {
           event.preventDefault();
-          void openWikilink(app, target, path);
+          void openWikilink(app, target, getPath());
           return true;
         }
       }
@@ -473,7 +473,8 @@ const liveTheme = EditorView.theme({
   ".cm-live-wikilink": { cursor: "pointer" },
 });
 
-/** The full live-preview extension set (only included when mode === "live"). */
-export function livePreview(app: GeodeApp, path: string): Extension[] {
-  return [frontmatterField, livePreviewPlugin, liveClickHandler(app, path), liveTheme];
+/** The full live-preview extension set (only included when mode === "live").
+ *  `getPath` is a live accessor — file:renamed retargets without a rebuild. */
+export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
+  return [frontmatterField, livePreviewPlugin, liveClickHandler(app, getPath), liveTheme];
 }

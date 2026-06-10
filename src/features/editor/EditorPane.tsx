@@ -1,6 +1,6 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { EditorState } from "@codemirror/state";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@codemirror/view";
+import type { DocumentHandle } from "@core/documents";
 import type { TabState, ViewMode } from "@core/types";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
@@ -10,212 +10,160 @@ import { renderPreview, toggleTaskOnLine } from "./preview";
 import { openWikilink } from "./wikilinks";
 import "./editor.css";
 
-const SAVE_DEBOUNCE_MS = 600;
-
-interface SaveState {
-  path: string | null;
-  dirty: boolean;
-  timer: number | null;
-  /** true while a vault.modify is in flight — reloads must treat this as dirty */
-  saving: boolean;
-}
-
 /**
  * EditorPane — markdown editing (CodeMirror 6) + reading view for one tab.
- * The same component instance can be re-pointed at another file (tab id is
- * reused), so pending saves are flushed before every file switch and unmount.
+ *
+ * R4: text / dirty / auto-save state lives in the shared DocumentHandle
+ * (core/documents.ts) — ONE per open file no matter how many panes show it.
+ * The pane acquires the handle on mount / path change and releases it on
+ * unmount; per-tab view mode, selection and scroll stay local to this pane's
+ * own CM view. The same component instance can be re-pointed at another file
+ * (tab id is reused), and on rename the workspace re-points tab.filePath at
+ * the new path: the manager has already re-keyed the handle, so acquire()
+ * returns the SAME object and the CM view survives with its undo history,
+ * cursor and scroll intact (R3 defect fix).
  */
 export function EditorPane({ tab }: { tab: TabState }) {
   const app = useApp();
   const metaRevision = useStore(app.metadata.revision);
 
-  /** path whose content is currently loaded into textRef */
-  const [loadedPath, setLoadedPathState] = useState<string | null>(null);
+  /** the shared document handle for tab.filePath (null while loading) */
+  const [handle, setHandleState] = useState<DocumentHandle | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  /** bumped when preview mutates the source (task checkbox toggles) */
+  /** bumped when the handle's text changes while we are in reading view */
   const [previewBump, setPreviewBump] = useState(0);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
-  /** latest document text for the loaded file */
-  const textRef = useRef("");
-  const saveRef = useRef<SaveState>({ path: null, dirty: false, timer: null, saving: false });
-  /** ref mirror of loadedPath so event handlers can compare outside render */
-  const loadedPathRef = useRef<string | null>(null);
-  /** true while we replace the doc from disk — suppresses the dirty/save cycle */
-  const externalReloadRef = useRef(false);
+  /** ref mirror of `handle` so event handlers can compare outside render */
+  const handleRef = useRef<DocumentHandle | null>(null);
 
-  const setLoadedPath = useCallback((path: string | null) => {
-    loadedPathRef.current = path;
-    setLoadedPathState(path);
+  const setHandle = useCallback((h: DocumentHandle | null) => {
+    handleRef.current = h;
+    setHandleState(h);
   }, []);
 
-  /* ---------- auto-save ---------- */
-
-  /** Flush any pending edit. Returns the write promise so callers can await IPC. */
-  const flushSave = useCallback((): Promise<void> => {
-    const s = saveRef.current;
-    if (s.timer !== null) {
-      window.clearTimeout(s.timer);
-      s.timer = null;
-    }
-    if (s.dirty && s.path) {
-      s.dirty = false;
-      // never resurrect a file that was deleted while the edit was pending
-      if (!app.vault.fileExists(s.path)) return Promise.resolve();
-      // read s.path at call time (NOT an earlier closure capture): the
-      // file:renamed handler retargets it, so late flushes hit the live path
-      const path = s.path;
-      const written = textRef.current;
-      s.saving = true;
-      return app.vault
-        .modify(path, written)
-        .catch((err) => {
-          console.error(`[editor] failed to save ${path}`, err);
-          // write failed and the user hasn't typed since (no newer pending
-          // content) — restore dirty so the next flush/auto-save retries
-          if (textRef.current === written) s.dirty = true;
-        })
-        .finally(() => {
-          s.saving = false;
-        });
-    }
-    return Promise.resolve();
-  }, [app]);
-
-  const handleDocChanged = useCallback(
-    (text: string) => {
-      textRef.current = text;
-      if (externalReloadRef.current) return; // disk → editor sync, nothing to save
-      const s = saveRef.current;
-      s.dirty = true;
-      if (s.timer !== null) window.clearTimeout(s.timer);
-      s.timer = window.setTimeout(() => {
-        s.timer = null;
-        flushSave();
-      }, SAVE_DEBOUNCE_MS);
-    },
-    [flushSave],
-  );
-
-  /* ---------- vault events: keep pending saves pointed at the live file ---------- */
+  /* ---------- acquire/release the shared document handle ---------- */
 
   useEffect(() => {
-    const remap = (path: string | null, oldPath: string, newPath: string): string | null => {
-      if (path === oldPath) return newPath;
-      if (path && path.startsWith(oldPath + "/")) return newPath + path.slice(oldPath.length);
-      return path;
-    };
-    const offRenamed = app.events.on("file:renamed", ({ oldPath, newPath }) => {
-      // retarget the pending save to the new path WITHOUT touching textRef/dirty,
-      // so in-flight edits land in the renamed file instead of the old path
-      const s = saveRef.current;
-      const nextSavePath = remap(s.path, oldPath, newPath);
-      if (nextSavePath !== s.path) s.path = nextSavePath;
-      const nextLoaded = remap(loadedPathRef.current, oldPath, newPath);
-      if (nextLoaded !== loadedPathRef.current) setLoadedPath(nextLoaded);
-    });
-    const offDeleted = app.events.on("file:deleted", ({ path }) => {
-      const s = saveRef.current;
-      if (s.path && (s.path === path || s.path.startsWith(path + "/"))) {
-        if (s.timer !== null) {
-          window.clearTimeout(s.timer);
-          s.timer = null;
+    const path = tab.filePath;
+    if (!path) {
+      setHandle(null);
+      setLoadError(null);
+      return;
+    }
+    // Pure rename retarget: the manager re-keyed the map in place, so the
+    // handle we already hold IS the live handle for the new path. Keep it
+    // mounted (do NOT null it out — that would tear down the CM view and
+    // lose undo history / cursor / scroll). We still acquire() below to keep
+    // the refcount paired with the cleanup's release().
+    const live = app.documents.get(path);
+    if (!live || live !== handleRef.current) {
+      setHandle(null);
+      setLoadError(null);
+    }
+    let cancelled = false;
+    let acquired: DocumentHandle | null = null;
+    void app.documents.acquire(path).then(
+      (h) => {
+        if (cancelled) {
+          h.release();
+          return;
         }
-        s.dirty = false;
-      }
-    });
+        acquired = h;
+        setLoadError(null);
+        setHandle(h); // same object on rename → no downstream effect re-runs
+      },
+      (err: unknown) => {
+        if (cancelled) return;
+        setHandle(null);
+        setLoadError(err instanceof Error ? err.message : String(err));
+      },
+    );
     return () => {
-      offRenamed();
-      offDeleted();
+      cancelled = true;
+      // release AFTER the next effect's synchronous re-acquire can run — the
+      // manager defers the actual drop by a microtask, so a rename retarget
+      // (or StrictMode re-mount) never destroys the handle in between
+      acquired?.release();
     };
-  }, [app, setLoadedPath]);
+  }, [app, setHandle, tab.filePath]);
 
-  /* ---------- reload from disk (file watcher + cross-pane same-file sync) ---------- */
-
-  /**
-   * Re-read `path` and replace the doc, but ONLY while this instance is clean
-   * (no unsaved edits, no pending save timer). Shared by two triggers:
-   * - "file:external-modified": the file changed on disk outside the app;
-   * - "file:modified": another editor instance of the SAME file (split pane)
-   *   saved through the vault — sync this instance up.
-   * Our own saves also emit "file:modified", but then doc === disk content and
-   * the equality check below makes it a no-op, so there is no reload loop.
-   * `source` controls warning noise: own-save echoes routinely race fresh
-   * keystrokes, so only genuinely external skips are worth logging.
-   */
-  const reloadFromDisk = useCallback(
-    (path: string, source: "external" | "modified") => {
-      if (path !== loadedPathRef.current) return;
-      const s = saveRef.current;
-      // an in-flight write (saving) counts as dirty: a slow disk read finishing
-      // after the write must not roll the document back
-      if (s.dirty || s.timer !== null || s.saving) {
-        // local edits pending — last writer wins, our save will overwrite
-        if (source === "external") {
-          console.warn(`[editor] external change to "${path}" ignored: unsaved local edits`);
-        }
-        return;
-      }
-      void app.vault.read(path).then(
-        (text) => {
-          if (path !== loadedPathRef.current) return;
-          // re-check with a FRESH ref read: keystrokes may have arrived during
-          // the async read — never revert them with stale disk content
-          const s2 = saveRef.current;
-          if (s2.dirty || s2.timer !== null || s2.saving) {
-            if (source === "external") {
-              console.warn(`[editor] external reload of "${path}" skipped: local edits arrived during read`);
-            }
-            return;
-          }
-          if (text === textRef.current) return; // already in sync (e.g. our own write echoed back)
-          const view = viewRef.current;
-          if (view) {
-            const head = Math.min(view.state.selection.main.head, text.length);
-            externalReloadRef.current = true;
-            try {
-              view.dispatch({
-                changes: { from: 0, to: view.state.doc.length, insert: text },
-                selection: { anchor: head },
-              });
-            } finally {
-              externalReloadRef.current = false;
-            }
-          } else {
-            textRef.current = text;
-          }
-          setPreviewBump((b) => b + 1); // reading view re-renders from textRef
-        },
-        (err: unknown) => {
-          console.error(`[editor] failed to reload "${path}" from disk`, err);
-        },
-      );
-    },
-    [app],
-  );
+  /* ---------- CodeMirror lifecycle (live / source modes) ---------- */
 
   useEffect(() => {
-    const offExternal = app.events.on("file:external-modified", ({ path }) =>
-      reloadFromDisk(path, "external"),
-    );
-    // NOTE: external changes emit BOTH events (vault re-uses the reindex
-    // pipeline); the second reload no-ops via the content equality check.
-    const offModified = app.events.on("file:modified", ({ path }) =>
-      reloadFromDisk(path, "modified"),
-    );
+    if (tab.mode === "preview" || !handle || !hostRef.current) return;
+    const view = new EditorView({
+      // per-view state seeded with the shared doc + the handle's sync glue;
+      // undo history is managed by the handle (one history per FILE)
+      state: handle.createViewState(
+        buildEditorExtensions({
+          app,
+          // live accessor: rename retargets the handle without a rebuild
+          getPath: () => handle.path,
+          mode: tab.mode === "source" ? "source" : "live",
+        }),
+      ),
+      parent: hostRef.current,
+    });
+    viewRef.current = view;
+    const detach = handle.attachView(view);
+    // report the focused view — the compat Editor shim consumes it
+    const onFocusIn = () => app.documents.setActiveView(view, handle.path);
+    view.dom.addEventListener("focusin", onFocusIn);
+    view.focus();
+    if (app.workspace.getActiveTab()?.id === tab.id) {
+      app.documents.setActiveView(view, handle.path);
+    }
+    // re-evaluate wikilink resolution whenever the metadata index changes
+    const unsubscribe = app.metadata.revision.subscribe(() => {
+      view.dispatch({ effects: refreshWikilinks.of(null) });
+    });
     return () => {
-      offExternal();
-      offModified();
+      unsubscribe();
+      view.dom.removeEventListener("focusin", onFocusIn);
+      // clear the active-view report if it still points at this view
+      if (app.documents.getActiveView()?.view === view) {
+        app.documents.setActiveView(null, null);
+      }
+      detach();
+      viewRef.current = null;
+      view.destroy();
+      // no flush here: pending saves belong to the handle, which outlives the
+      // view (other panes / the manager's deferred-drop flush / flushAll)
     };
-  }, [app, reloadFromDisk]);
+  }, [app, tab.mode, tab.id, handle]);
+
+  /* ---------- report the active view when this tab becomes active ---------- */
+
+  useEffect(() => {
+    if (!handle) return;
+    const report = () => {
+      const view = viewRef.current;
+      if (!view) return;
+      if (app.workspace.getActiveTab()?.id === tab.id) {
+        app.documents.setActiveView(view, handle.path);
+      }
+    };
+    report();
+    return app.workspace.state.subscribe(report);
+  }, [app, tab.id, handle]);
+
+  /* ---------- reading view follows the shared document ---------- */
+
+  useEffect(() => {
+    if (!handle || tab.mode !== "preview") return;
+    // covers external reloads AND live edits from another pane showing the
+    // same file — the reading view re-renders from handle.getText()
+    return handle.revision.subscribe(() => setPreviewBump((b) => b + 1));
+  }, [handle, tab.mode]);
 
   /* ---------- outline navigation (geode:scroll-to-heading) ---------- */
 
   useEffect(() => {
     const onJump = (e: Event) => {
       const detail = (e as CustomEvent<{ path: string; from: number }>).detail;
-      if (!detail || detail.path !== loadedPathRef.current) return;
+      if (!detail || detail.path !== handleRef.current?.path) return;
       // split panes can host the same file in several instances — only the
       // active pane's ACTIVE tab may jump (and steal focus/flip view mode)
       if (app.workspace.getActiveTab()?.id !== tab.id) return;
@@ -237,72 +185,6 @@ export function EditorPane({ tab }: { tab: TabState }) {
     return () => window.removeEventListener("geode:scroll-to-heading", onJump);
   }, [app, tab.id, tab.mode]);
 
-  /* ---------- load file content (filePath can change in-place) ---------- */
-
-  useEffect(() => {
-    const path = tab.filePath;
-    // pure rename retarget: the handler above already re-pointed everything at
-    // the new path and the content is still current — skip the flush + reload
-    if (path !== null && path === saveRef.current.path && loadedPathRef.current === path) {
-      return;
-    }
-    // flush whatever the previous file still had pending
-    void flushSave();
-    setLoadedPath(null);
-    setLoadError(null);
-    saveRef.current = { path, dirty: false, timer: null, saving: false };
-    if (!path) return;
-    let cancelled = false;
-    void app.vault.read(path).then(
-      (text) => {
-        if (cancelled) return;
-        textRef.current = text;
-        setLoadedPath(path);
-      },
-      (err: unknown) => {
-        if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : String(err));
-      },
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [app, flushSave, setLoadedPath, tab.filePath]);
-
-  /* ---------- CodeMirror lifecycle (edit mode) ---------- */
-
-  useEffect(() => {
-    if (tab.mode === "preview" || !loadedPath || !hostRef.current) return;
-    const state = EditorState.create({
-      doc: textRef.current,
-      extensions: buildEditorExtensions({
-        app,
-        path: loadedPath,
-        onDocChanged: handleDocChanged,
-        mode: tab.mode === "source" ? "source" : "live",
-      }),
-    });
-    const view = new EditorView({ state, parent: hostRef.current });
-    viewRef.current = view;
-    view.focus();
-    // re-evaluate wikilink resolution whenever the metadata index changes
-    const unsubscribe = app.metadata.revision.subscribe(() => {
-      view.dispatch({ effects: refreshWikilinks.of(null) });
-    });
-    return () => {
-      unsubscribe();
-      void flushSave();
-      viewRef.current = null;
-      view.destroy();
-    };
-  }, [app, tab.mode, loadedPath, handleDocChanged, flushSave]);
-
-  /* ---------- app-level flush registry (close-time flushing awaits IPC) ---------- */
-
-  useEffect(() => {
-    return app.workspace.registerFlusher(() => flushSave());
-  }, [app, flushSave]);
-
   /* ---------- focus restoration after modals close ---------- */
 
   useEffect(() => {
@@ -318,29 +200,33 @@ export function EditorPane({ tab }: { tab: TabState }) {
   /* ---------- preview rendering + interactions ---------- */
 
   const previewHtml = useMemo(() => {
-    if (tab.mode !== "preview" || !loadedPath) return "";
-    return renderPreview(textRef.current, (target) => app.metadata.resolveLink(target, loadedPath));
+    if (tab.mode !== "preview" || !handle) return "";
+    return renderPreview(handle.getText(), (target) =>
+      app.metadata.resolveLink(target, handle.path),
+    );
     // metaRevision/previewBump are render triggers, not direct inputs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app, tab.mode, loadedPath, metaRevision, previewBump]);
+  }, [app, tab.mode, handle, metaRevision, previewBump]);
 
   const onPreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const el = e.target instanceof HTMLElement ? e.target : null;
-      if (!el || !loadedPath) return;
+      if (!el || !handle) return;
 
       const checkbox = el.closest<HTMLInputElement>("input.task-checkbox");
       if (checkbox) {
         e.preventDefault();
         const line = Number(checkbox.dataset.line);
-        const next = toggleTaskOnLine(textRef.current, line);
+        const next = toggleTaskOnLine(handle.getText(), line);
         if (next !== null) {
-          textRef.current = next;
-          saveRef.current.dirty = false;
-          void app.vault.modify(loadedPath, next).catch((err) => {
-            console.error(`[editor] failed to save task toggle in ${loadedPath}`, err);
+          const path = handle.path;
+          // setText syncs every attached view (other panes) without marking
+          // dirty; the explicit modify below persists it — our own
+          // file:modified echo then no-ops via the content equality check
+          handle.setText(next);
+          void app.vault.modify(path, next).catch((err) => {
+            console.error(`[editor] failed to save task toggle in ${path}`, err);
           });
-          setPreviewBump((b) => b + 1);
         }
         return;
       }
@@ -349,7 +235,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       if (internal) {
         e.preventDefault();
         const target = internal.dataset.target;
-        if (target) void openWikilink(app, target, loadedPath);
+        if (target) void openWikilink(app, target, handle.path);
         return;
       }
 
@@ -359,7 +245,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
         if (!/^https?:/i.test(href)) e.preventDefault();
       }
     },
-    [app, loadedPath],
+    [app, handle],
   );
 
   /* ---------- chrome ---------- */
@@ -386,7 +272,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
         <div className="editor-error-detail">{loadError}</div>
       </div>
     );
-  } else if (!loadedPath) {
+  } else if (!handle) {
     body = (
       <div className="editor-loading" aria-hidden="true">
         <div className="editor-skeleton-line is-title" />

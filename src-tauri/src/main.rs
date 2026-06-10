@@ -34,6 +34,18 @@ struct PluginFile {
     content: String,
 }
 
+/// An installed Obsidian community plugin under `<vault>/.obsidian/plugins/<dir>/`.
+/// Mirrors `ObsidianPluginSource` in src/core/vault.ts (serde camelCase).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianPluginSource {
+    dir: String,
+    manifest_json: String,
+    main_js: String,
+    styles_css: Option<String>,
+    data_json: Option<String>,
+}
+
 /// Active vault filesystem watcher. Replacing the inner watcher drops the old
 /// one, which disconnects its mpsc channel and lets its debounce thread exit.
 struct WatcherState(Mutex<Option<RecommendedWatcher>>);
@@ -53,6 +65,13 @@ fn safe_join(vault: &str, rel: &str) -> CmdResult<PathBuf> {
         }
     }
     Ok(Path::new(vault).join(rel_path))
+}
+
+/// Join a path relative to `<vault>/.obsidian` onto that config root, with the
+/// same traversal rejection as `safe_join`. Config IO is confined to `.obsidian/`.
+fn safe_join_obsidian(vault: &str, rel: &str) -> CmdResult<PathBuf> {
+    let config_root = Path::new(vault).join(".obsidian");
+    safe_join(&config_root.to_string_lossy(), rel)
 }
 
 fn node_name(p: &Path) -> String {
@@ -300,6 +319,82 @@ fn vault_plugin_files(vault: String) -> CmdResult<Vec<PluginFile>> {
     Ok(files)
 }
 
+/// Read an optional UTF-8 file. Ok(None) when missing, Err(reason) on a real
+/// read failure (permissions, invalid UTF-8, ...).
+fn read_optional(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(format!("read {}: {e}", path.display())),
+    }
+}
+
+/// List installed Obsidian community plugins under `<vault>/.obsidian/plugins/*/`.
+/// A directory is included only when BOTH manifest.json and main.js exist and
+/// read as UTF-8; unreadable/incomplete dirs are skipped (logged), never fatal.
+/// A missing plugins directory is not an error — returns an empty list.
+#[tauri::command]
+fn vault_obsidian_plugins(vault: String) -> CmdResult<Vec<ObsidianPluginSource>> {
+    let plugins_dir = Path::new(&vault).join(".obsidian").join("plugins");
+    if !plugins_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut sources = Vec::new();
+    let entries = fs::read_dir(&plugins_dir)
+        .map_err(|e| format!("read_dir {}: {e}", plugins_dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let dir = entry.file_name().to_string_lossy().into_owned();
+        let manifest_json = match fs::read_to_string(path.join("manifest.json")) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[obsidian-plugins] skipping {dir}: manifest.json: {e}");
+                continue;
+            }
+        };
+        let main_js = match fs::read_to_string(path.join("main.js")) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[obsidian-plugins] skipping {dir}: main.js: {e}");
+                continue;
+            }
+        };
+        // optional companions — a read error here also just degrades to None
+        let styles_css = read_optional(&path.join("styles.css")).unwrap_or_else(|e| {
+            eprintln!("[obsidian-plugins] {dir}: {e}");
+            None
+        });
+        let data_json = read_optional(&path.join("data.json")).unwrap_or_else(|e| {
+            eprintln!("[obsidian-plugins] {dir}: {e}");
+            None
+        });
+        sources.push(ObsidianPluginSource { dir, manifest_json, main_js, styles_css, data_json });
+    }
+    sources.sort_by(|a, b| a.dir.cmp(&b.dir));
+    Ok(sources)
+}
+
+/// Read a config file under `<vault>/.obsidian/`. Ok(None) when missing.
+#[tauri::command]
+fn vault_read_config(vault: String, path: String) -> CmdResult<Option<String>> {
+    let abs = safe_join_obsidian(&vault, &path)?;
+    read_optional(&abs)
+}
+
+/// Write a config file under `<vault>/.obsidian/`, creating parent directories.
+#[tauri::command]
+fn vault_write_config(vault: String, path: String, content: String) -> CmdResult<()> {
+    let abs = safe_join_obsidian(&vault, &path)?;
+    if let Some(parent) = abs.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir parents for {path}: {e}"))?;
+    }
+    fs::write(&abs, content).map_err(|e| format!("write config {path}: {e}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -314,7 +409,10 @@ fn main() {
             vault_rename,
             vault_delete,
             vault_watch,
-            vault_plugin_files
+            vault_plugin_files,
+            vault_obsidian_plugins,
+            vault_read_config,
+            vault_write_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running Geode");

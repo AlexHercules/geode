@@ -1,7 +1,11 @@
 /**
  * CodeMirror 6 extension stack for the Geode markdown editor:
- * theme + markdown highlighting, wikilink/tag decorations, click-to-navigate,
- * [[ autocomplete and the doc-changed listener used for auto-save.
+ * theme + markdown highlighting, wikilink/tag decorations, click-to-navigate
+ * and [[ autocomplete. Undo history and the doc-changed/auto-save listener
+ * live in the shared DocumentHandle (core/documents.ts) — NOT here — so that
+ * one history + one save exist per file regardless of pane count.
+ * The file path is passed as a GETTER because file:renamed retargets the
+ * document in place without rebuilding the view.
  */
 import {
   autocompletion,
@@ -9,7 +13,7 @@ import {
   type CompletionContext,
   type CompletionResult,
 } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -109,13 +113,13 @@ const mdHighlight = HighlightStyle.define([
 
 const WIKILINK_DECO_RE = /\[\[([^\[\]]+?)\]\]/g;
 
-function wikilinkDecorations(app: GeodeApp, path: string): Extension {
+function wikilinkDecorations(app: GeodeApp, getPath: () => string): Extension {
   const matcher = new MatchDecorator({
     regexp: WIKILINK_DECO_RE,
     decoration: (m) => {
       const target = wikilinkTarget(m[1]);
       if (!target) return null;
-      const resolved = app.metadata.resolveLink(target, path) !== null;
+      const resolved = app.metadata.resolveLink(target, getPath()) !== null;
       return Decoration.mark({
         class: resolved ? "cm-wikilink" : "cm-wikilink cm-wikilink-unresolved",
         attributes: { "data-link-target": target },
@@ -165,7 +169,7 @@ const tagPlugin = ViewPlugin.fromClass(
 
 /* ---------------- Ctrl+Click navigation ---------------- */
 
-function wikilinkClickHandler(app: GeodeApp, path: string): Extension {
+function wikilinkClickHandler(app: GeodeApp, getPath: () => string): Extension {
   return EditorView.domEventHandlers({
     mousedown: (event) => {
       if (event.button !== 0 || !(event.ctrlKey || event.metaKey)) return false;
@@ -174,7 +178,7 @@ function wikilinkClickHandler(app: GeodeApp, path: string): Extension {
       const target = el?.getAttribute("data-link-target");
       if (!target) return false;
       event.preventDefault();
-      void openWikilink(app, target, path);
+      void openWikilink(app, target, getPath());
       return true;
     },
   });
@@ -216,27 +220,23 @@ function wikilinkCompletionSource(app: GeodeApp) {
 
 export function buildEditorExtensions(opts: {
   app: GeodeApp;
-  path: string;
-  onDocChanged: (text: string) => void;
+  /** live path accessor — file:renamed retargets without a view rebuild */
+  getPath: () => string;
   /** "live" = Obsidian-style live preview (default), "source" = raw markdown */
   mode: "live" | "source";
 }): Extension[] {
-  const { app, path, onDocChanged, mode } = opts;
+  const { app, getPath, mode } = opts;
   return [
-    ...(mode === "live" ? livePreview(app, path) : []),
-    history(),
+    ...(mode === "live" ? livePreview(app, getPath) : []),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(mdHighlight),
     EditorView.lineWrapping,
     placeholder("Start writing…"),
     editorTheme,
-    keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+    keymap.of([...defaultKeymap, indentWithTab]),
     autocompletion({ override: [wikilinkCompletionSource(app)], icons: false }),
-    wikilinkDecorations(app, path),
+    wikilinkDecorations(app, getPath),
     tagPlugin,
-    wikilinkClickHandler(app, path),
-    EditorView.updateListener.of((update) => {
-      if (update.docChanged) onDocChanged(update.state.doc.toString());
-    }),
+    wikilinkClickHandler(app, getPath),
   ];
 }

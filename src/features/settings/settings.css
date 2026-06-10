@@ -323,6 +323,66 @@
   color: var(--text-muted);
 }
 
+.plugin-source-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--bg-panel-alt);
+  vertical-align: 2px;
+  user-select: none;
+}
+
+.plugin-source-badge.plugin-source-obsidian {
+  color: var(--accent);
+  border-color: var(--accent-muted);
+  background: var(--accent-muted);
+}
+
+/* ---------- plugin settings sections (compat PluginSettingTab) ---------- */
+
+.plugin-settings-block {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.plugin-settings-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  color: var(--text-normal);
+  background: var(--bg-panel-alt);
+}
+
+.plugin-settings-header:hover {
+  background: var(--bg-hover);
+}
+
+.plugin-settings-title {
+  font-weight: 600;
+}
+
+.plugin-settings-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.plugin-settings-body {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+
 /* ---------- toggle switch ---------- */
 
 .settings-toggle {
