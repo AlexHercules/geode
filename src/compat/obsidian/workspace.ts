@@ -64,6 +64,20 @@ export class WorkspaceLeaf {
     return { type: tab ? tab.viewType : "empty" };
   }
 
+  /**
+   * Custom view types are never mounted this round (registerView gap) — a
+   * markdown state with a file opens that file, anything else is a recorded
+   * no-op. Keeps plugin initLeaf() patterns (calendar, recent-files) alive.
+   */
+  async setViewState(state: { type?: string; state?: { file?: string } }): Promise<void> {
+    const file = state?.state?.file;
+    if (state?.type === "markdown" && typeof file === "string") {
+      this.handle.workspace.openFile(file, { newTab: this.newTab });
+      return;
+    }
+    reportGap("WorkspaceLeaf", "setViewState", `view type "${state?.type ?? "?"}" not mounted`);
+  }
+
   getDisplayText(): string {
     return findActiveTab(this.handle.workspace.state.get())?.title ?? "";
   }
@@ -134,6 +148,24 @@ export class Workspace extends Events {
   /** Custom view types are T2 (registerView is a warn-stub) — always empty. */
   getLeavesOfType(_viewType: string): WorkspaceLeaf[] {
     return [];
+  }
+
+  /**
+   * Sidebar leaves are not part of the pane tree this round — return a
+   * detached leaf facade so plugin initLeaf() code paths (e.g. calendar's
+   * getRightLeaf(false).setViewState(...)) run without crashing; the custom
+   * view simply never appears (registerView gap, recorded via setViewState).
+   */
+  getRightLeaf(_split: boolean): WorkspaceLeaf {
+    return new WorkspaceLeaf(this.handle, this.registry, true);
+  }
+
+  getLeftLeaf(_split: boolean): WorkspaceLeaf {
+    return new WorkspaceLeaf(this.handle, this.registry, true);
+  }
+
+  revealLeaf(_leaf: WorkspaceLeaf): void {
+    reportGap("Workspace", "revealLeaf");
   }
 
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => unknown): void {

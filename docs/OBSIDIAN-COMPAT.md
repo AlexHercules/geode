@@ -39,9 +39,9 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 
 | Tier | 范围 | 状态 |
 |---|---|---|
-| **T0 加载管道** | 发现并加载 `<vault>/.obsidian/plugins/<id>/{manifest.json, main.js, styles.css}`；`require("obsidian")` 模块注入；启用状态对齐 `community-plugins.json`；manifest 校验（minAppVersion 提示而非硬拒） | R4 目标 |
-| **T1 高频核心** | `Plugin` 基类（addCommand / addRibbonIcon / addStatusBarItem / addSettingTab / registerEvent / registerInterval / loadData / saveData）；`App.{vault, workspace, metadataCache}`；`Vault`（read/cachedRead/modify/create/delete/rename/getAbstractFileByPath/getMarkdownFiles/getFiles + on("create"/"modify"/"delete"/"rename")）；`TFile`/`TFolder`/`TAbstractFile`；`MetadataCache`（getFileCache: headings/links/tags/frontmatter；resolvedLinks/unresolvedLinks）；`Workspace`（getActiveFile/openLinkText/on("file-open"/"active-leaf-change"/"layout-ready")）；`Notice`；`Modal`；`Setting`/`PluginSettingTab`；`normalizePath` | R4 目标 |
-| **T2 编辑与视图** | `Editor` 抽象（getValue/setValue/replaceRange/getCursor/setCursor/getSelection…，映射到 CM6）；`MarkdownView` / `MarkdownRenderer.render`; `ItemView` + `registerView`/`getLeavesOfType`（自定义面板挂进 pane 树）；`SuggestModal`/`FuzzySuggestModal`；`requestUrl`；`moment` 导出（大量插件 `import { moment } from "obsidian"`） | R5 候选 |
+| **T0 加载管道** | 发现并加载 `<vault>/.obsidian/plugins/<id>/{manifest.json, main.js, styles.css}`；`require("obsidian")` 模块注入；启用状态对齐 `community-plugins.json`；manifest 校验（minAppVersion 提示而非硬拒） | **R4 已实现** |
+| **T1 高频核心** | `Plugin` 基类（addCommand / addRibbonIcon / addStatusBarItem / addSettingTab / registerEvent / registerInterval / loadData / saveData）；`App.{vault, workspace, metadataCache}`；`Vault`（read/cachedRead/modify/create/delete/rename/getAbstractFileByPath/getMarkdownFiles/getFiles + on("create"/"modify"/"delete"/"rename")）；`TFile`/`TFolder`/`TAbstractFile`；`MetadataCache`（getFileCache: headings/links/tags/frontmatter；resolvedLinks/unresolvedLinks）；`Workspace`（getActiveFile/openLinkText/on("file-open"/"active-leaf-change"/"layout-ready")）；`Notice`；`Modal`；`Setting`/`PluginSettingTab`；`normalizePath` | **R4 已实现** |
+| **T2 编辑与视图** | `Editor` 抽象（**最小子集已在 R4 以 T1.5 落地**，完整版含 transaction/extension 仍 T2）；`MarkdownView` / `MarkdownRenderer.render`; `ItemView` + `registerView`/`getLeavesOfType` **真实挂载**（类骨架 R4 已可 evaluate）；~~`SuggestModal`/`FuzzySuggestModal`~~（R4 已落地最小真实版）；`requestUrl`；`moment` 导出（套件实测 nldates 核心功能的唯一阻断点，R5 P0） | R5 候选 |
 | **T3 明确不做/远期** | Canvas API、移动端 API、未文档化内部、DOM 私有结构契约、Sync/Publish 专属 API | 不承诺 |
 
 ## R4 实现决策（2026-06-10）
@@ -107,6 +107,28 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
    每轮记录每个插件：加载✓/命令✓/设置页✓/核心功能✓/缺口列表。
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
+
+### R4 套件矩阵（2026-06-10，套件 vault 制备脚本见 compat-vault/，gitignore 本地再生）
+
+| 插件（上游版本） | 加载 | 命令 | 设置页 | 核心功能 | 缺口 |
+|---|---|---|---|---|---|
+| recent-files-obsidian 1.7.9 | ✓ | ✓ (1) | ✓ | ✗ 面板不显示 | registerView 挂载（R5 P0） |
+| better-word-count 0.10.1 | ✓ | ✓ (0，状态栏驱动) | ✓ | ✓ 状态栏字数 | — |
+| nldates-obsidian 0.6.2 | ✓ | ✓ (8) | ✓ | ✗ 日期解析 | moment（R5 P0）；EditorSuggest 触发 |
+| url-into-selection 1.11.4 | ✓ | ✓ (1) | ✓ | ✓ editorCallback 粘贴 | — |
+| calendar 1.5.10 | ✓ | ✓ (3) | ✓ | ✗ 日历面板不显示 | registerView 挂载；moment |
+
+R4 起点（修复前预检）仅 1/5 可加载；套件驱动追加 View/ItemView/EditorSuggest/
+SuggestModal/Menu/path + getRightLeaf/getLeftLeaf/revealLeaf/leaf.setViewState
+（calendar 重启用路径实测暴露）后 **5/5 加载启用**。manifest 边界用例已覆盖：
+better-word-count 与 url-into-selection 上游 manifest 均缺 minAppVersion（warn 不拒载）。
+
+**桌面端杀手演示（发布版 v0.4.0，截图 docs/screenshots/r4-desktop-killer-demo.png）**：
+`geode.exe compat-vault` 直开 → 5 插件从真实 `.obsidian/plugins/` 加载、设置页
+OBSIDIAN badge + 开关 + 设置区块齐全；disable/enable 往返实测
+`community-plugins.json` 磁盘写回（顺序保留、跨会话状态还原）；calendar 在真实
+文件系统写入 `data.json`（saveData 链路）。CDP 探针脚本 `.calibration/cdp-probe.mjs`
+（发布版加 WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222 驱动）。
 
 ## 与现有架构的映射起点
 
