@@ -53,6 +53,15 @@ Browser mode uses `MemoryVaultAdapter` (a seeded demo vault) so the entire UI ru
 and can be E2E-tested without the native shell. The desktop build swaps in
 `TauriVaultAdapter`, which talks to the Rust backend over IPC.
 
+## Documentation
+
+| Doc | What's inside |
+|---|---|
+| [docs/ROADMAP.md](docs/ROADMAP.md) | 核心使命（不变项）、已完成轮次、R3 商业化候选、技术债 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 上手路径、阅读顺序、开发纪律、每轮编排节奏、验证手段 |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层规则、核心 API、组件契约（并行开发的"宪法"） |
+| [docs/PLUGINS.md](docs/PLUGINS.md) | 插件 API + 外部插件（`.geode/plugins`）authoring 指南 |
+
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
