@@ -68,6 +68,8 @@ and can be E2E-tested without the native shell. The desktop build swaps in
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层规则、核心 API、组件契约（并行开发的"宪法"） |
 | [docs/PLUGINS.md](docs/PLUGINS.md) | 插件 API + 外部插件（`.geode/plugins`）authoring 指南 |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | 万级笔记基准方法论、优化前后数字、剩余瓶颈 |
+| [docs/OBSIDIAN-COMPAT.md](docs/OBSIDIAN-COMPAT.md) | 方向校准：Obsidian 插件兼容层（Tier 表、校准机制、验收套件） |
+| [docs/HANDOFF.md](docs/HANDOFF.md) | 重开对话续接开发的提示词与背景速览 |
 
 ## Architecture
 

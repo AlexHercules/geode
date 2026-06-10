@@ -12,6 +12,14 @@
 3. **双端可验证**：浏览器模式（MemoryVaultAdapter）跑 E2E，桌面端实测真实文件系统
 4. **契约先行**：跨模块接口先冻结在 `ARCHITECTURE.md`，再并行开发
 
+### 方向校准（2026-06-10，R3 末）
+
+商业主轴确立为 **Obsidian 插件生态一键迁移**：以兼容层（shim）方式实现 Obsidian 插件
+API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官方 `obsidian.d.ts`
+自我校准，用真实插件套件验收。完整判断、Tier 表、法律边界、验收方式见
+**`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
+shim 建立其上。
+
 ## 已完成
 
 ### R1 — v0.1（2026-06-10）核心复刻
@@ -40,10 +48,11 @@ Ctrl+\\ / Ctrl+Shift+\\ 分屏命令；同文件多实例非脏实时同步。
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P0 | 共享文档模型（同文件多 pane 共用 EditorState） | 根治双脏 last-writer-wins；顺带保住重命名时的 undo 历史 |
+| P0 | **Obsidian 插件兼容层 T0+T1**（加载管道 + 高频核心 API） | 商业主轴，见 docs/OBSIDIAN-COMPAT.md 的 Tier 表与验收套件 |
+| P0 | 共享文档模型（同文件多 pane 共用 EditorState） | 根治双脏 last-writer-wins + 重命名 undo；也是 compat T2 `Editor` 的前置依赖 |
 | P1 | 快捷键自定义（设置页 + 冲突检测） | CommandRegistry 已有 hotkey 字段，做编辑 UI + 持久化 |
-| P1 | 导出 PDF / HTML | 阅读视图已有渲染管线，接打印/文件输出 |
 | P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱；10k 节点 settle 后按需渲染/抽样 |
+| P2 | 导出 PDF / HTML | 阅读视图已有渲染管线，接打印/文件输出 |
 | P2 | i18n（中/英起步） | UI 字符串集中化 |
 | P2 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
 | P2 | watcher 回声抑制 | vault.modify 记录 (path, hash)，外部事件命中则跳过 |
