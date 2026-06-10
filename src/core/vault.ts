@@ -22,6 +22,13 @@ export interface VaultAdapter {
   createFolder(path: string): Promise<void>;
   rename(oldPath: string, newPath: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /**
+   * Start (or restart) watching the vault for EXTERNAL filesystem changes.
+   * `onChange` receives debounced vault-relative paths. No-op for memory.
+   */
+  startWatch(onChange: (paths: string[]) => void): Promise<void>;
+  /** List external plugin files at <vault>/.geode/plugins/*.js (name + source). */
+  listPluginFiles(): Promise<Array<{ name: string; content: string }>>;
 }
 
 /* ---------------- helpers ---------------- */
@@ -121,6 +128,37 @@ export class Vault {
     this.contentCacheChars = 0;
     this.tree.set(tree);
     this.events.emit("vault:changed", { reason: "load" });
+    // watch for external filesystem changes (no-op for the memory adapter)
+    try {
+      await this.adapter.startWatch((paths) => void this.handleExternalChanges(paths));
+    } catch (err) {
+      console.warn("[vault] file watcher unavailable", err);
+    }
+  }
+
+  /**
+   * Reconcile EXTERNAL filesystem changes (from the watcher): refresh the
+   * tree, drop stale cache entries, and notify the app. Editors decide
+   * whether to reload based on their own dirty state.
+   */
+  private async handleExternalChanges(paths: string[]): Promise<void> {
+    if (paths.length === 0) return;
+    await this.refreshTree();
+    for (const path of paths) {
+      if (this.contentCache.has(path)) this.cacheDelete(path);
+    }
+    for (const path of paths) {
+      if (path.toLowerCase().endsWith(".md") && this.fileExists(path)) {
+        this.events.emit("file:external-modified", { path });
+        this.events.emit("file:modified", { path }); // reuse reindex pipeline
+      } else if (!this.fileExists(path)) {
+        this.events.emit("file:deleted", { path });
+      } else {
+        this.events.emit("file:created", { path });
+      }
+    }
+    this.events.emit("vault:external-changed", { paths });
+    this.events.emit("vault:changed", { reason: "modify" });
   }
 
   async read(path: string): Promise<string> {
@@ -347,6 +385,14 @@ export class MemoryVaultAdapter implements VaultAdapter {
     return null;
   }
 
+  async startWatch(_onChange: (paths: string[]) => void): Promise<void> {
+    // nothing external can change an in-memory vault
+  }
+
+  async listPluginFiles(): Promise<Array<{ name: string; content: string }>> {
+    return [];
+  }
+
   async listTree(): Promise<FolderNode> {
     const root: FolderNode = { kind: "folder", path: "", name: "", children: [] };
     const folderNodes = new Map<string, FolderNode>([["", root]]);
@@ -443,10 +489,15 @@ export function isTauri(): boolean {
  *   vault_mkdir(vault, path)
  *   vault_rename(vault, old_path, new_path)
  *   vault_delete(vault, path)
+ *   vault_watch(vault) -> starts/replaces a debounced fs watcher; the backend
+ *     emits the Tauri event "vault:fs-change" with Vec<String> of changed
+ *     vault-relative paths (forward slashes)
+ *   vault_plugin_files(vault) -> Vec<{ name, content }> of .geode/plugins/*.js
  */
 export class TauriVaultAdapter implements VaultAdapter {
   readonly kind = "tauri" as const;
   private vaultPath: string | null = null;
+  private unlistenWatch: (() => void) | null = null;
 
   setVaultPath(absPath: string): void {
     this.vaultPath = absPath;
@@ -498,5 +549,22 @@ export class TauriVaultAdapter implements VaultAdapter {
 
   async remove(path: string): Promise<void> {
     await this.invoke("vault_delete", { vault: this.root, path });
+  }
+
+  async startWatch(onChange: (paths: string[]) => void): Promise<void> {
+    // re-register the event listener (a new vault may have been opened)
+    this.unlistenWatch?.();
+    this.unlistenWatch = null;
+    const { listen } = await import("@tauri-apps/api/event");
+    this.unlistenWatch = await listen<string[]>("vault:fs-change", (e) => {
+      if (Array.isArray(e.payload) && e.payload.length > 0) onChange(e.payload);
+    });
+    await this.invoke("vault_watch", { vault: this.root });
+  }
+
+  async listPluginFiles(): Promise<Array<{ name: string; content: string }>> {
+    return this.invoke<Array<{ name: string; content: string }>>("vault_plugin_files", {
+      vault: this.root,
+    });
   }
 }

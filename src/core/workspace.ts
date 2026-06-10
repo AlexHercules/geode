@@ -1,4 +1,12 @@
-import type { LeftPanelKind, ModalKind, TabState, ThemeKind, ViewMode, WorkspaceState } from "./types";
+import type {
+  LeftPanelKind,
+  ModalKind,
+  RightPanelKind,
+  TabState,
+  ThemeKind,
+  ViewMode,
+  WorkspaceState,
+} from "./types";
 import { EventBus } from "./events";
 import { Store } from "./store";
 import { basename, stripExtension } from "./vault";
@@ -11,12 +19,18 @@ const DEFAULT_STATE: WorkspaceState = {
   tabs: [],
   activeTabId: null,
   leftPanel: "explorer",
+  rightPanel: "backlinks",
   leftSidebarOpen: true,
   rightSidebarOpen: true,
+  leftWidth: 270,
+  rightWidth: 290,
   modal: null,
   theme: "dark",
   fontSize: 16,
 };
+
+const MIN_SIDEBAR_W = 170;
+const MAX_SIDEBAR_W = 560;
 
 /**
  * Workspace — open tabs, sidebars, modals, theme. Persisted to localStorage.
@@ -66,7 +80,7 @@ export class Workspace {
         id: newTabId(),
         viewType: "markdown",
         filePath: path,
-        mode: "edit",
+        mode: "live",
         title: stripExtension(basename(path)),
       };
       return { ...s, tabs: [...s.tabs, tab], activeTabId: tab.id, modal: null };
@@ -116,10 +130,19 @@ export class Workspace {
     }));
   }
 
+  /** Ctrl+E: toggle between editing (live) and reading view. */
   toggleActiveTabMode() {
     const tab = this.getActiveTab();
     if (tab?.viewType === "markdown") {
-      this.setTabMode(tab.id, tab.mode === "edit" ? "preview" : "edit");
+      this.setTabMode(tab.id, tab.mode === "preview" ? "live" : "preview");
+    }
+  }
+
+  /** Toggle the active markdown tab between live preview and raw source. */
+  toggleActiveSourceMode() {
+    const tab = this.getActiveTab();
+    if (tab?.viewType === "markdown") {
+      this.setTabMode(tab.id, tab.mode === "source" ? "live" : "source");
     }
   }
 
@@ -127,6 +150,18 @@ export class Workspace {
 
   setLeftPanel(panel: LeftPanelKind) {
     this.update((s) => ({ ...s, leftPanel: panel, leftSidebarOpen: true }));
+  }
+
+  setRightPanel(panel: RightPanelKind) {
+    this.update((s) => ({ ...s, rightPanel: panel, rightSidebarOpen: true }));
+  }
+
+  /** Resize a sidebar (clamped); used by the drag handles in the shell. */
+  setSidebarWidth(side: "left" | "right", px: number) {
+    const clamped = Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, Math.round(px)));
+    this.update((s) =>
+      side === "left" ? { ...s, leftWidth: clamped } : { ...s, rightWidth: clamped },
+    );
   }
 
   toggleLeftSidebar() {
@@ -271,13 +306,15 @@ function sanitizeState(saved: unknown): WorkspaceState {
     const t = raw as Record<string, unknown>;
     if (typeof t.id !== "string" || typeof t.title !== "string") continue;
     if (t.viewType !== "markdown" && t.viewType !== "graph") continue;
-    if (t.mode !== "edit" && t.mode !== "preview") continue;
+    // migrate pre-R2 "edit" mode to live preview
+    const mode: ViewMode =
+      t.mode === "preview" ? "preview" : t.mode === "source" ? "source" : "live";
     if (typeof t.filePath !== "string" && t.filePath !== null) continue;
     tabs.push({
       id: t.id,
       viewType: t.viewType,
       filePath: t.filePath,
-      mode: t.mode,
+      mode,
       title: t.title,
     });
   }
@@ -287,12 +324,20 @@ function sanitizeState(saved: unknown): WorkspaceState {
       ? Math.max(11, Math.min(28, Math.round(s.fontSize)))
       : DEFAULT_STATE.fontSize;
 
+  const width = (v: unknown, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v)
+      ? Math.max(MIN_SIDEBAR_W, Math.min(MAX_SIDEBAR_W, Math.round(v)))
+      : fallback;
+
   return {
     tabs,
     activeTabId: tabs.some((t) => t.id === s.activeTabId) ? (s.activeTabId as string) : null,
     leftPanel: s.leftPanel === "search" ? "search" : "explorer",
+    rightPanel: s.rightPanel === "outline" ? "outline" : "backlinks",
     leftSidebarOpen: Boolean(s.leftSidebarOpen ?? DEFAULT_STATE.leftSidebarOpen),
     rightSidebarOpen: Boolean(s.rightSidebarOpen ?? DEFAULT_STATE.rightSidebarOpen),
+    leftWidth: width(s.leftWidth, DEFAULT_STATE.leftWidth),
+    rightWidth: width(s.rightWidth, DEFAULT_STATE.rightWidth),
     modal: null,
     theme: s.theme === "light" ? "light" : "dark",
     fontSize,

@@ -7,6 +7,7 @@ import { SearchPanel } from "@features/search/SearchPanel";
 import { EditorPane } from "@features/editor/EditorPane";
 import { GraphView } from "@features/graph/GraphView";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
+import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { SettingsModal } from "@features/settings/SettingsModal";
@@ -50,9 +51,20 @@ export function App() {
       }),
       commands.register({
         id: "app:toggle-mode",
-        name: "Toggle edit / reading view",
+        name: "Toggle editing / reading view",
         hotkey: "Ctrl+E",
         callback: () => workspace.toggleActiveTabMode(),
+      }),
+      commands.register({
+        id: "app:toggle-source",
+        name: "Toggle live preview / source mode",
+        hotkey: "Ctrl+Shift+E",
+        callback: () => workspace.toggleActiveSourceMode(),
+      }),
+      commands.register({
+        id: "app:reload-plugins",
+        name: "Reload external plugins",
+        callback: () => void app.plugins.loadExternal(vault),
       }),
       commands.register({
         id: "app:open-graph",
@@ -201,8 +213,13 @@ export function App() {
 
         {/* left sidebar */}
         {ws.leftSidebarOpen && (
-          <aside className="sidebar sidebar-left" data-testid="left-sidebar">
+          <aside
+            className="sidebar sidebar-left"
+            style={{ width: ws.leftWidth }}
+            data-testid="left-sidebar"
+          >
             {ws.leftPanel === "explorer" ? <Explorer /> : <SearchPanel />}
+            <SidebarResizer side="left" />
           </aside>
         )}
 
@@ -224,8 +241,37 @@ export function App() {
 
         {/* right sidebar */}
         {ws.rightSidebarOpen && (
-          <aside className="sidebar sidebar-right" data-testid="right-sidebar">
-            <BacklinksPanel />
+          <aside
+            className="sidebar sidebar-right"
+            style={{ width: ws.rightWidth }}
+            data-testid="right-sidebar"
+          >
+            <SidebarResizer side="right" />
+            <div className="right-tabs" role="tablist" aria-label="Right panel">
+              <button
+                role="tab"
+                aria-selected={ws.rightPanel === "backlinks"}
+                className={`right-tab${ws.rightPanel === "backlinks" ? " is-active" : ""}`}
+                title="Backlinks"
+                data-testid="right-tab-backlinks"
+                onClick={() => app.workspace.setRightPanel("backlinks")}
+              >
+                <Icon name="link" size={15} />
+              </button>
+              <button
+                role="tab"
+                aria-selected={ws.rightPanel === "outline"}
+                className={`right-tab${ws.rightPanel === "outline" ? " is-active" : ""}`}
+                title="Outline"
+                data-testid="right-tab-outline"
+                onClick={() => app.workspace.setRightPanel("outline")}
+              >
+                <Icon name="list" size={15} />
+              </button>
+            </div>
+            <div className="right-panel-body">
+              {ws.rightPanel === "backlinks" ? <BacklinksPanel /> : <OutlinePanel />}
+            </div>
           </aside>
         )}
       </div>
@@ -250,6 +296,35 @@ export function App() {
 }
 
 /* ---------------- pieces ---------------- */
+
+/** Drag handle on the inner edge of a sidebar. */
+function SidebarResizer({ side }: { side: "left" | "right" }) {
+  const app = useApp();
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = side === "left" ? app.workspace.state.get().leftWidth : app.workspace.state.get().rightWidth;
+    const onMove = (ev: MouseEvent) => {
+      const dx = ev.clientX - startX;
+      app.workspace.setSidebarWidth(side, side === "left" ? startW + dx : startW - dx);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+  return (
+    <div
+      className={`sidebar-resizer sidebar-resizer-${side}`}
+      data-testid={`resizer-${side}`}
+      onMouseDown={onMouseDown}
+    />
+  );
+}
 
 function RibbonButton(props: { icon: string; title: string; active?: boolean; onClick: () => void }) {
   return (
@@ -346,6 +421,11 @@ async function openVaultFlow(app: ReturnType<typeof useApp>) {
     /* ignore */
   }
   await app.vault.load();
+  try {
+    await app.plugins.loadExternal(app.vault);
+  } catch (err) {
+    console.error("[vault] external plugin load failed", err);
+  }
 }
 
 export { LAST_VAULT_KEY };

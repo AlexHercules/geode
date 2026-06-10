@@ -56,6 +56,10 @@ export interface NoteMetadata {
   links: LinkRef[];
   tags: TagRef[];
   headings: HeadingRef[];
+  /** YAML frontmatter, if the file starts with a --- block */
+  frontmatter?: FrontmatterData;
+  /** alternative names from frontmatter `aliases:` — participate in link resolution */
+  aliases: string[];
   /** plain-text-ish content used for search previews */
   contentLength: number;
 }
@@ -93,8 +97,22 @@ export interface SearchResultItem {
   score: number;
 }
 
+/** Frontmatter properties parsed from a leading YAML block. */
+export interface FrontmatterData {
+  /** raw key -> scalar/list (string values only; minimal YAML subset) */
+  fields: Record<string, string | string[]>;
+  /** character span of the whole block including both --- fences */
+  from: number;
+  to: number;
+}
+
 /** Workspace */
-export type ViewMode = "edit" | "preview";
+/**
+ * "live"    — Obsidian-style live preview (default editing mode)
+ * "source"  — plain markdown source editing
+ * "preview" — rendered reading view
+ */
+export type ViewMode = "live" | "source" | "preview";
 
 export interface TabState {
   id: string;
@@ -106,6 +124,7 @@ export interface TabState {
 }
 
 export type LeftPanelKind = "explorer" | "search";
+export type RightPanelKind = "backlinks" | "outline";
 export type ModalKind = "palette" | "switcher" | "settings" | null;
 export type ThemeKind = "dark" | "light";
 
@@ -113,8 +132,12 @@ export interface WorkspaceState {
   tabs: TabState[];
   activeTabId: string | null;
   leftPanel: LeftPanelKind;
+  rightPanel: RightPanelKind;
   leftSidebarOpen: boolean;
   rightSidebarOpen: boolean;
+  /** sidebar widths in px (user-resizable) */
+  leftWidth: number;
+  rightWidth: number;
   modal: ModalKind;
   theme: ThemeKind;
   /** editor font size in px */

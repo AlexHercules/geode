@@ -14,6 +14,10 @@ export interface EventMap {
   "active-file:changed": { path: string | null };
   /** a workspace modal transitioned from open to closed */
   "modal:closed": Record<string, never>;
+  /** an open file changed on disk OUTSIDE the app (file watcher) */
+  "file:external-modified": { path: string };
+  /** the vault changed on disk outside the app (tree already refreshed) */
+  "vault:external-changed": { paths: string[] };
   /** theme switched */
   "theme:changed": { theme: "dark" | "light" };
 }

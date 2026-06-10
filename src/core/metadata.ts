@@ -1,6 +1,7 @@
 import type {
   BacklinkEntry,
   FileNode,
+  FrontmatterData,
   GraphData,
   GraphEdge,
   GraphNode,
@@ -19,11 +20,72 @@ const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
 const CODE_FENCE_RE = /```[\s\S]*?(```|$)/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
 
+/**
+ * Parse a leading YAML frontmatter block (minimal subset: scalar values,
+ * inline lists `[a, b]`, and block lists). Returns null if absent.
+ */
+export function parseFrontmatter(content: string): FrontmatterData | null {
+  if (!content.startsWith("---")) return null;
+  const firstLineEnd = content.indexOf("\n");
+  if (firstLineEnd === -1 || content.slice(0, firstLineEnd).trim() !== "---") return null;
+  const close = content.indexOf("\n---", firstLineEnd);
+  if (close === -1) return null;
+  const closeLineEnd = content.indexOf("\n", close + 1);
+  const to = closeLineEnd === -1 ? content.length : closeLineEnd + 1;
+  const body = content.slice(firstLineEnd + 1, close + 1);
+
+  const fields: Record<string, string | string[]> = {};
+  let currentKey: string | null = null;
+  for (const rawLine of body.split("\n")) {
+    const line = rawLine.replace(/\t/g, "  ");
+    if (!line.trim()) continue;
+    const itemMatch = /^\s+-\s+(.+)$/.exec(line);
+    if (itemMatch && currentKey) {
+      const list = fields[currentKey];
+      const value = unquote(itemMatch[1]);
+      if (Array.isArray(list)) list.push(value);
+      else fields[currentKey] = [value];
+      continue;
+    }
+    const kv = /^([A-Za-z0-9_\-. ]+):\s*(.*)$/.exec(line.trim());
+    if (!kv) continue;
+    const key = kv[1].trim().toLowerCase();
+    const raw = kv[2].trim();
+    currentKey = key;
+    if (!raw) {
+      fields[key] = []; // block list (or empty) follows
+    } else if (raw.startsWith("[") && raw.endsWith("]")) {
+      fields[key] = raw
+        .slice(1, -1)
+        .split(",")
+        .map((s) => unquote(s))
+        .filter(Boolean);
+    } else {
+      fields[key] = unquote(raw);
+    }
+  }
+  return { fields, from: 0, to };
+}
+
+function unquote(s: string): string {
+  const t = s.trim();
+  return /^(['"]).*\1$/.test(t) ? t.slice(1, -1) : t;
+}
+
+function asList(v: string | string[] | undefined): string[] {
+  if (v === undefined) return [];
+  return (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean);
+}
+
 /** Parse one markdown document into metadata. Exported for tests/reuse. */
 export function parseNote(path: string, content: string): NoteMetadata {
-  // blank out code regions so links/tags inside code are ignored,
+  const frontmatter = parseFrontmatter(content) ?? undefined;
+  // blank out frontmatter + code regions so links/tags inside are ignored,
   // while keeping offsets stable
-  const masked = content
+  const withoutFm = frontmatter
+    ? " ".repeat(frontmatter.to) + content.slice(frontmatter.to)
+    : content;
+  const masked = withoutFm
     .replace(CODE_FENCE_RE, (m) => " ".repeat(m.length))
     .replace(INLINE_CODE_RE, (m) => " ".repeat(m.length));
 
@@ -50,7 +112,13 @@ export function parseNote(path: string, content: string): NoteMetadata {
     headings.push({ level: m[1].length, text: m[2].trim(), from: m.index! });
   }
 
-  return { path, links, tags, headings, contentLength: content.length };
+  // frontmatter contributes tags + aliases to the index
+  const aliases = asList(frontmatter?.fields["aliases"] ?? frontmatter?.fields["alias"]);
+  for (const t of asList(frontmatter?.fields["tags"] ?? frontmatter?.fields["tag"])) {
+    tags.push({ tag: t.replace(/^#/, ""), from: 0 });
+  }
+
+  return { path, links, tags, headings, frontmatter, aliases, contentLength: content.length };
 }
 
 /**
@@ -155,11 +223,17 @@ export class MetadataIndex {
 
   private rebuildNameMap() {
     this.nameToPaths.clear();
-    for (const path of this.byPath.keys()) {
-      const name = (path.split("/").pop() ?? path).replace(/\.md$/i, "").toLowerCase();
-      let set = this.nameToPaths.get(name);
-      if (!set) this.nameToPaths.set(name, (set = new Set()));
+    const add = (name: string, path: string) => {
+      const key = name.toLowerCase();
+      if (!key) return;
+      let set = this.nameToPaths.get(key);
+      if (!set) this.nameToPaths.set(key, (set = new Set()));
       set.add(path);
+    };
+    for (const meta of this.byPath.values()) {
+      add((meta.path.split("/").pop() ?? meta.path).replace(/\.md$/i, ""), meta.path);
+      // frontmatter aliases resolve like real names (Obsidian behaviour)
+      for (const alias of meta.aliases) add(alias, meta.path);
     }
   }
 

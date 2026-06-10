@@ -172,16 +172,73 @@ textarea:focus {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .sidebar-left {
-  width: 270px;
   border-right: 1px solid var(--border);
 }
 
 .sidebar-right {
-  width: 290px;
   border-left: 1px solid var(--border);
+}
+
+/* drag handles on the inner edge of each sidebar */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.sidebar-resizer-left {
+  right: -3px;
+}
+
+.sidebar-resizer-right {
+  left: -3px;
+}
+
+.sidebar-resizer:hover {
+  background: var(--accent-muted);
+}
+
+/* right sidebar panel tabs */
+.right-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  flex-shrink: 0;
+}
+
+.right-tab {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.right-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.right-tab.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.right-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .main {

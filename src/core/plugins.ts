@@ -148,6 +148,13 @@ export class PluginManager {
     this.revision.update((n) => n + 1);
   }
 
+  /**
+   * STUB (R2): load external plugins from `<vault>/.geode/plugins/*.js` via
+   * vault.adapter.listPluginFiles(). Idempotent — re-loading first unloads
+   * previously loaded external plugins. Implemented by the plugin-loader agent.
+   */
+  async loadExternal(_vault: Vault): Promise<void> {}
+
   list(): Array<{ plugin: GeodePlugin; enabled: boolean }> {
     return [...this.records.values()].map((r) => ({ plugin: r.plugin, enabled: r.enabled }));
   }

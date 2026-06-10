@@ -139,6 +139,15 @@ async function bootstrap() {
     }
   }
 
+  // external plugins from <vault>/.geode/plugins/*.js (desktop, vault open)
+  if (vault.isOpen) {
+    try {
+      await plugins.loadExternal(vault);
+    } catch (err) {
+      console.error("[boot] external plugin load failed", err);
+    }
+  }
+
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <ErrorBoundary>

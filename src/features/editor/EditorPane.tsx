@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { TabState } from "@core/types";
@@ -149,7 +149,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   /* ---------- CodeMirror lifecycle (edit mode) ---------- */
 
   useEffect(() => {
-    if (tab.mode !== "edit" || !loadedPath || !hostRef.current) return;
+    if (tab.mode === "preview" || !loadedPath || !hostRef.current) return;
     const state = EditorState.create({
       doc: textRef.current,
       extensions: buildEditorExtensions({ app, path: loadedPath, onDocChanged: handleDocChanged }),
@@ -181,7 +181,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     return app.events.on("modal:closed", () => {
       requestAnimationFrame(() => {
         if (app.workspace.state.get().modal) return;
-        if (app.workspace.getActiveTab()?.id !== tab.id || tab.mode !== "edit") return;
+        if (app.workspace.getActiveTab()?.id !== tab.id || tab.mode === "preview") return;
         viewRef.current?.focus();
       });
     });
@@ -237,7 +237,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   /* ---------- chrome ---------- */
 
   const toggleMode = useCallback(() => {
-    app.workspace.setTabMode(tab.id, tab.mode === "edit" ? "preview" : "edit");
+    app.workspace.setTabMode(tab.id, tab.mode === "preview" ? "live" : "preview");
   }, [app, tab.id, tab.mode]);
 
   let body: React.ReactNode;
@@ -251,7 +251,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     body = (
       <div className="editor-error" data-testid="editor-error">
         <Icon name="file-text" size={28} />
-        <div className="editor-error-title">Couldn&apos;t open “{tab.title}”</div>
+        <div className="editor-error-title">Couldn&apos;t open &quot;{tab.title}&quot;</div>
         <div className="editor-error-detail">{loadError}</div>
       </div>
     );
@@ -263,7 +263,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
         <div className="editor-skeleton-line is-short" />
       </div>
     );
-  } else if (tab.mode === "edit") {
+  } else if (tab.mode !== "preview") {
     body = <div className="editor-cm-host" data-testid="cm-editor" ref={hostRef} />;
   } else {
     body = (
@@ -291,7 +291,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           aria-label="Toggle edit/reading view"
           onClick={toggleMode}
         >
-          <Icon name={tab.mode === "edit" ? "book-open" : "pencil"} size={16} />
+          <Icon name={tab.mode !== "preview" ? "book-open" : "pencil"} size={16} />
         </button>
       </div>
       {body}
