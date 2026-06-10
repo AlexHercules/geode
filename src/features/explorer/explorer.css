@@ -1,0 +1,192 @@
+/* ============ Explorer panel ============ */
+
+.explorer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.explorer .panel-header {
+  min-width: 0;
+}
+
+.explorer-vault-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ---- tree ---- */
+
+.explorer-tree {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 12px;
+  outline: none;
+}
+
+.explorer-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding-right: 6px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.explorer-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.explorer-item.is-selected {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.explorer-tree:focus-visible .explorer-item.is-selected {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.explorer-item.is-active {
+  background: var(--bg-active);
+  color: var(--accent);
+}
+
+.explorer-chevron {
+  width: 15px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.explorer-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.explorer-item.is-active .explorer-icon,
+.explorer-item.is-active .explorer-chevron {
+  color: var(--accent);
+}
+
+.explorer-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer-ext {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--code-bg);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+/* ---- inline rename ---- */
+
+.explorer-rename {
+  flex: 1;
+  min-width: 0;
+  height: 22px;
+  padding: 1px 5px;
+  font-size: 13px;
+  border-radius: 4px;
+}
+
+.explorer-rename.is-invalid,
+.explorer-rename.is-invalid:focus {
+  border-color: var(--danger);
+}
+
+/* ---- context menu ---- */
+
+.explorer-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 170px;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+}
+
+.explorer-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.explorer-menu button svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.explorer-menu button:hover {
+  background: var(--bg-hover);
+}
+
+.explorer-menu button.is-danger {
+  color: var(--danger);
+}
+
+.explorer-menu button.is-danger svg {
+  color: var(--danger);
+}
+
+.explorer-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+}
+
+/* ---- empty state ---- */
+
+.explorer-empty {
+  padding: 28px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.explorer-empty p {
+  margin: 0 0 12px;
+}
+
+.explorer-empty-btn {
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+}
+
+.explorer-empty-btn:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}

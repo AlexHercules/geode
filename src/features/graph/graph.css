@@ -1,0 +1,74 @@
+/* ============ Graph view ============ */
+
+.graph-view {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-app);
+}
+
+.graph-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.graph-legend {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.92;
+}
+
+.graph-legend-sep {
+  color: var(--text-faint);
+}
+
+.graph-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.graph-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.graph-empty-card svg {
+  color: var(--text-faint);
+  margin-bottom: 4px;
+}
+
+.graph-empty-title {
+  font-weight: 600;
+}
+
+.graph-empty-hint {
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
