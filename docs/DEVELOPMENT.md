@@ -37,6 +37,10 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
 ## 验证手段
 
 - 浏览器：Playwright（dev server :1420，`data-testid` 全覆盖）
+- 性能：`http://localhost:1420/?bench=10000` 生成确定性合成 vault（不持久化，
+  不污染正常 workspace）；`window.__geodePerf` 暴露各环节耗时，口径见 docs/PERFORMANCE.md
+- 核心 API 断言：浏览器里 `window.geode.registerPlugin({id,name,onload(app){window.__app=app}})`
+  拿 AppHandle，直接驱动 workspace/vault 验证 core 行为（R3 回归即此法）
 - 桌面：`geode.exe demo-vault` + 截图；外部改 `demo-vault/*.md` 验证 watcher；
   `demo-vault/.geode/plugins/hello-status.js` 验证外部插件
 - demo vault 是回归夹具，测试痕迹要清理后再提交

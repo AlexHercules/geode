@@ -251,7 +251,7 @@ function AboutSection() {
       <div className="about-card">
         <div className="about-logo">💎</div>
         <div className="about-title">
-          Geode <span className="about-version">0.2.0</span>
+          Geode <span className="about-version">0.3.0</span>
         </div>
         <p className="about-desc">
           Geode is a local-first markdown knowledge base. Your notes are plain files on your

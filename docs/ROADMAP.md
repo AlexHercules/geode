@@ -27,15 +27,23 @@ vault/文件树/CM6 编辑器（wikilink 补全+跳转）/阅读视图/反链/�
 大纲面板、frontmatter（aliases 参与链接解析）、侧栏拖拽调宽、右栏 Tab 化。
 评审确认 4 缺陷全修复（1 critical：watcher 文件夹路径误判为删除）。
 
-## R3 候选 — 商业交付轮（按优先级）
+### R3 — v0.3（2026-06-10）分屏 + 万级性能
+
+**分屏 panes**：Workspace 升级为 pane 树（`PaneLeaf`/`PaneSplit`，v1 持久化自动迁移）；
+split 拖拽调宽（12% 下限）、tab 跨 pane 拖拽（五分区边缘 drop + 插入指示线）、
+Ctrl+\\ / Ctrl+Shift+\\ 分屏命令；同文件多实例非脏实时同步。
+**性能**（`?bench=N` 合成 vault，10k 笔记优化前→后）：switcher 打开 471→15ms、
+全文搜索最坏 2585→347ms、explorer 展开全部 424→10ms（>200 行虚拟化）、索引 ~110ms。
+评审 5 维度 24 finding，对抗验证确认 21（去重 16）全部修复或显式延期。详见 docs/PERFORMANCE.md。
+
+## R4 候选 — 商业交付轮（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P0 | 分屏 panes（左右/上下拆分，拖拽 tab） | Workspace 模型从 tabs 数组升级为 pane 树，动 core 契约 |
-| P0 | 万级笔记性能基准 + 优化 | 生成 10k 笔记测试 vault；索引/搜索/图谱的退化曲线 |
+| P0 | 共享文档模型（同文件多 pane 共用 EditorState） | 根治双脏 last-writer-wins；顺带保住重命名时的 undo 历史 |
 | P1 | 快捷键自定义（设置页 + 冲突检测） | CommandRegistry 已有 hotkey 字段，做编辑 UI + 持久化 |
 | P1 | 导出 PDF / HTML | 阅读视图已有渲染管线，接打印/文件输出 |
-| P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱（当前笔记邻域） |
+| P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱；10k 节点 settle 后按需渲染/抽样 |
 | P2 | i18n（中/英起步） | UI 字符串集中化 |
 | P2 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
 | P2 | watcher 回声抑制 | vault.modify 记录 (path, hash)，外部事件命中则跳过 |

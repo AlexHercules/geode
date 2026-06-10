@@ -1,6 +1,6 @@
 [package]
 name = "geode"
-version = "0.2.0"
+version = "0.3.0"
 description = "Geode — a local-first markdown knowledge base"
 edition = "2021"
 

@@ -13,7 +13,11 @@ A local-first markdown knowledge base in the spirit of Obsidian — built with
 - **Editor** — CodeMirror 6 with `[[wikilink]]` autocomplete, click navigation,
   tags, interactive checkboxes, frontmatter properties, auto-save
 - **Reading view** — rendered preview with clickable links and task checkboxes (Ctrl+E to toggle)
+- **Split panes** — split right/down (Ctrl+\), drag tabs between panes or onto
+  pane edges, drag the divider to resize; the same note stays in sync across panes
 - **File watching** — edits made outside Geode (other editors, sync tools) appear live
+- **Scales to 10k+ notes** — virtualized file tree, capped result rendering,
+  ~110ms full metadata index (see [docs/PERFORMANCE.md](docs/PERFORMANCE.md))
 - **Outline** — heading tree for the active note (right sidebar tab)
 - **Backlinks** — linked mentions, outgoing links and tags for the active note
 - **Graph view** — force-directed graph of every note and link (Ctrl+G)
@@ -37,6 +41,8 @@ A local-first markdown knowledge base in the spirit of Obsidian — built with
 | `Ctrl+G` | Graph view |
 | `Ctrl+D` | Open today's daily note |
 | `Ctrl+W` | Close tab |
+| `Ctrl+\` / `Ctrl+Shift+\` | Split pane right / down |
+| `Ctrl+Alt+←/→` | Focus previous / next pane |
 | `Ctrl+,` | Settings |
 
 ## Development
@@ -61,6 +67,7 @@ and can be E2E-tested without the native shell. The desktop build swaps in
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 上手路径、阅读顺序、开发纪律、每轮编排节奏、验证手段 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 分层规则、核心 API、组件契约（并行开发的"宪法"） |
 | [docs/PLUGINS.md](docs/PLUGINS.md) | 插件 API + 外部插件（`.geode/plugins`）authoring 指南 |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | 万级笔记基准方法论、优化前后数字、剩余瓶颈 |
 
 ## Architecture
 
