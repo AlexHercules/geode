@@ -12,7 +12,7 @@ import {
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
-import type { GraphNode } from "@core/types";
+import type { GraphEdge, GraphNode } from "@core/types";
 import "./graph.css";
 
 /* ---------------- types & helpers ---------------- */
@@ -58,6 +58,8 @@ interface GraphState {
   sim: Simulation<SimNode, SimLink> | null;
   transform: Transform;
   hovered: SimNode | null;
+  /** local-mode anchor node — accent ring + always-on label */
+  anchorNode: SimNode | null;
   drag: DragState;
   palette: Palette;
   width: number;
@@ -68,11 +70,59 @@ interface GraphState {
 
 const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 6;
+const MAX_FIT_ZOOM = 1.5;
+const FIT_PADDING = 40;
 const LABEL_ZOOM = 0.8;
 const CLICK_SLOP = 4;
+/** culling margin (css px) around the viewport for nodes/labels */
+const CULL_MARGIN = 80;
+/** above this many nodes (and not "show all"), render the top-degree sample only */
+const RENDER_CAP = 3000;
+
+const fmt = (n: number) => n.toLocaleString("en-US");
 
 function nodeRadius(n: SimNode): number {
   return Math.min(14, 4 + Math.sqrt(n.degree) * 2);
+}
+
+/** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
+function perfMark(key: string, value: number): void {
+  const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
+  g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
+}
+
+/* ---------------- persisted toolbar prefs ---------------- */
+
+interface GraphPrefs {
+  mode: "global" | "local";
+  depth: 1 | 2;
+  showAll: boolean;
+}
+
+const PREFS_KEY = "geode.graphPrefs";
+const DEFAULT_PREFS: GraphPrefs = { mode: "global", depth: 1, showAll: false };
+
+function loadPrefs(): GraphPrefs {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    if (!raw) return DEFAULT_PREFS;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      mode: p.mode === "local" ? "local" : "global",
+      depth: p.depth === 2 ? 2 : 1,
+      showAll: p.showAll === true,
+    };
+  } catch {
+    return DEFAULT_PREFS; // corrupt/missing → defaults
+  }
+}
+
+function savePrefs(p: GraphPrefs): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+  } catch {
+    /* storage unavailable — fine */
+  }
 }
 
 function readPalette(el: HTMLElement): Palette {
@@ -106,15 +156,83 @@ function pickNode(s: GraphState, gx: number, gy: number): SimNode | null {
   return null;
 }
 
+/** Top-`cap` nodes by degree, stable tie-break by id; `mustKeep` is always retained. */
+function sampleByDegree(nodes: GraphNode[], cap: number, mustKeep: string | null): GraphNode[] {
+  const sorted = [...nodes].sort(
+    (a, b) => b.degree - a.degree || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+  const kept = sorted.slice(0, cap);
+  if (mustKeep && !kept.some((n) => n.id === mustKeep)) {
+    const anchor = nodes.find((n) => n.id === mustKeep);
+    if (anchor) kept[kept.length - 1] = anchor;
+  }
+  return kept;
+}
+
+/** BFS over the full adjacency map, depth ≤ N (unresolved neighbors included). */
+function bfs(adjacency: Map<string, Set<string>>, start: string, depth: number): Set<string> {
+  const visited = new Set<string>([start]);
+  let frontier = [start];
+  for (let d = 0; d < depth && frontier.length > 0; d++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      for (const nb of adjacency.get(id) ?? []) {
+        if (!visited.has(nb)) {
+          visited.add(nb);
+          next.push(nb);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return visited;
+}
+
+function buildAdjacency(edges: GraphEdge[]): Map<string, Set<string>> {
+  const adjacency = new Map<string, Set<string>>();
+  const addAdj = (a: string, b: string) => {
+    let set = adjacency.get(a);
+    if (!set) adjacency.set(a, (set = new Set()));
+    set.add(b);
+  };
+  for (const e of edges) {
+    addAdj(e.source, e.target);
+    addAdj(e.target, e.source);
+  }
+  return adjacency;
+}
+
 /* ---------------- component ---------------- */
 
 export function GraphView() {
   const app = useApp();
   const rev = useStore(app.metadata.revision);
+  const lastActiveFile = useStore(app.workspace.lastActiveFile);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [counts, setCounts] = useState({ nodes: 0, edges: 0 });
+  const [prefs, setPrefs] = useState<GraphPrefs>(loadPrefs);
+  const [info, setInfo] = useState({
+    nodes: 0,
+    edges: 0,
+    totalNodes: 0,
+    capped: false,
+    localEmpty: false,
+  });
   const firstBuild = useRef(true);
+  /** user panned/zoomed since mount — suppresses the first-settle auto-fit */
+  const interactedRef = useRef(false);
+  /** first sim "end" already consumed (auto-fit happens at most once for it) */
+  const firstSettleDoneRef = useRef(false);
+  /** the next sim "end" should auto-fit (local re-anchor) */
+  const fitOnSettleRef = useRef(false);
+  /** anchor used by the previous LOCAL rebuild (null while in global mode) */
+  const lastAnchorRef = useRef<string | null>(null);
+  const rafRef = useRef(0);
+
+  // anchor only matters (and only triggers rebuilds) in local mode
+  const anchor = prefs.mode === "local" ? lastActiveFile : null;
+
+  useEffect(() => savePrefs(prefs), [prefs]);
 
   const stateRef = useRef<GraphState>({
     nodes: [],
@@ -123,6 +241,7 @@ export function GraphView() {
     sim: null,
     transform: { x: 0, y: 0, k: 1 },
     hovered: null,
+    anchorNode: null,
     drag: null,
     palette: FALLBACK_PALETTE,
     width: 0,
@@ -131,7 +250,7 @@ export function GraphView() {
     initialized: false,
   });
 
-  /* ---------- rendering ---------- */
+  /* ---------- rendering (batched, viewport-culled) ---------- */
 
   const draw = useCallback(() => {
     const s = stateRef.current;
@@ -139,6 +258,7 @@ export function GraphView() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    const t0 = performance.now();
 
     const { transform: t, palette: p } = s;
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
@@ -147,37 +267,87 @@ export function GraphView() {
     ctx.scale(t.k, t.k);
 
     const hovered = s.hovered;
+    const anchorNode = s.anchorNode;
     const neighbors = hovered ? s.adjacency.get(hovered.id) : undefined;
     const isDim = (id: string) =>
       hovered !== null && id !== hovered.id && !(neighbors?.has(id) ?? false);
 
-    // edges
-    ctx.lineWidth = 1 / t.k;
+    // viewport bounds in graph coords (+margin) for node/label culling
+    const vx0 = (-CULL_MARGIN - t.x) / t.k;
+    const vy0 = (-CULL_MARGIN - t.y) / t.k;
+    const vx1 = (s.width + CULL_MARGIN - t.x) / t.k;
+    const vy1 = (s.height + CULL_MARGIN - t.y) / t.k;
+    const inView = (x: number, y: number) => x >= vx0 && x <= vx1 && y >= vy0 && y <= vy1;
+
+    // edges — per-edge strokes, endpoint-culled. Measured (bench=10000,
+    // 6.5k edges): ONE mega-Path2D stroke rasterizes in ~197ms — Chromium
+    // flattens/composites the whole path as a unit — while 6.5k individual
+    // strokes raster in ~9ms (internal per-stroke culling). Batching edges
+    // into a Path2D is a 20x DE-optimization; don't reintroduce it.
+    const dimAlpha = hovered !== null ? 0.1 : 0.8;
     for (const link of s.links) {
       const a = link.source;
       const b = link.target;
       if (typeof a !== "object" || typeof b !== "object") continue;
+      const ax = a.x ?? 0;
+      const ay = a.y ?? 0;
+      const bx = b.x ?? 0;
+      const by = b.y ?? 0;
+      // skip edges fully outside the viewport (a crossing edge with both
+      // endpoints out is rare and clipped for a frame at most)
+      if (!inView(ax, ay) && !inView(bx, by)) continue;
       const lit = hovered !== null && (a.id === hovered.id || b.id === hovered.id);
       ctx.strokeStyle = lit ? p.accent : p.borderStrong;
-      ctx.globalAlpha = hovered !== null && !lit ? 0.1 : 0.8;
+      ctx.globalAlpha = lit ? 0.8 : dimAlpha;
       ctx.lineWidth = (lit ? 1.6 : 1) / t.k;
       ctx.beginPath();
-      ctx.moveTo(a.x ?? 0, a.y ?? 0);
-      ctx.lineTo(b.x ?? 0, b.y ?? 0);
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx, by);
       ctx.stroke();
     }
 
-    // nodes
+    // nodes — bucketed by fill style (resolved/unresolved × normal/dim)
+    const fillNormal = new Path2D();
+    const fillDim = new Path2D();
+    const hollowNormal = new Path2D();
+    const hollowDim = new Path2D();
     for (const n of s.nodes) {
+      const x = n.x ?? 0;
+      const y = n.y ?? 0;
+      if (!inView(x, y)) continue;
+      if (hovered !== null && n.id === hovered.id) continue; // drawn individually below
       const r = nodeRadius(n);
-      ctx.globalAlpha = isDim(n.id) ? 0.16 : 1;
+      const dim = isDim(n.id);
+      const path = n.resolved ? (dim ? fillDim : fillNormal) : (dim ? hollowDim : hollowNormal);
+      path.moveTo(x + r, y);
+      path.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = p.accent;
+    ctx.fill(fillNormal);
+    ctx.globalAlpha = 0.16;
+    ctx.fill(fillDim);
+    // unresolved: hollow + dimmed ring
+    ctx.lineWidth = 1.5 / t.k;
+    ctx.strokeStyle = p.unresolved;
+    ctx.fillStyle = p.bgPanel;
+    ctx.globalAlpha = 1;
+    ctx.fill(hollowNormal);
+    ctx.stroke(hollowNormal);
+    ctx.globalAlpha = 0.16;
+    ctx.fill(hollowDim);
+    ctx.stroke(hollowDim);
+
+    // hovered node on top
+    if (hovered) {
+      const r = nodeRadius(hovered);
+      ctx.globalAlpha = 1;
       ctx.beginPath();
-      ctx.arc(n.x ?? 0, n.y ?? 0, r, 0, Math.PI * 2);
-      if (n.resolved) {
-        ctx.fillStyle = hovered?.id === n.id ? p.accentHover : p.accent;
+      ctx.arc(hovered.x ?? 0, hovered.y ?? 0, r, 0, Math.PI * 2);
+      if (hovered.resolved) {
+        ctx.fillStyle = p.accentHover;
         ctx.fill();
       } else {
-        // unresolved: hollow + dimmed ring
         ctx.fillStyle = p.bgPanel;
         ctx.fill();
         ctx.lineWidth = 1.5 / t.k;
@@ -186,28 +356,102 @@ export function GraphView() {
       }
     }
 
-    // labels (constant on-screen size)
-    const showAll = t.k > LABEL_ZOOM;
-    if (showAll || hovered !== null) {
+    // local-mode anchor: accent ring
+    if (anchorNode) {
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.arc(anchorNode.x ?? 0, anchorNode.y ?? 0, nodeRadius(anchorNode) + 3.5 / t.k, 0, Math.PI * 2);
+      ctx.strokeStyle = p.accent;
+      ctx.lineWidth = 2 / t.k;
+      ctx.stroke();
+    }
+
+    // labels (constant on-screen size); anchor label is always visible.
+    // While the simulation is still hot, batch labels are suppressed — at 3k
+    // nodes the fillText pass throttles ticks ~10x (43s settle vs ~5s), and
+    // labels on a moving layout carry no information anyway.
+    const settling = s.sim !== null && s.sim.alpha() > 0.05;
+    const showAllLabels = t.k > LABEL_ZOOM && !settling;
+    if (showAllLabels || hovered !== null || anchorNode !== null) {
       const fontPx = 11 / t.k;
       const fadeIn = Math.max(0, Math.min(1, (t.k - LABEL_ZOOM) / 0.3));
       ctx.font = `${fontPx}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       for (const n of s.nodes) {
+        const x = n.x ?? 0;
+        const y = n.y ?? 0;
+        const isAnchor = anchorNode !== null && n.id === anchorNode.id;
         const hl =
           hovered !== null && (n.id === hovered.id || (neighbors?.has(n.id) ?? false));
-        if (!showAll && !hl) continue;
-        if (isDim(n.id)) continue;
-        ctx.globalAlpha = hl ? 1 : fadeIn * 0.9;
-        ctx.fillStyle = hl ? p.text : p.textMuted;
-        ctx.fillText(n.label, n.x ?? 0, (n.y ?? 0) + nodeRadius(n) + 4 / t.k);
+        if (!showAllLabels && !hl && !isAnchor) continue;
+        if (!isAnchor && isDim(n.id)) continue;
+        if (!inView(x, y)) continue;
+        ctx.globalAlpha = hl || isAnchor ? 1 : fadeIn * 0.9;
+        ctx.fillStyle = hl || isAnchor ? p.text : p.textMuted;
+        ctx.fillText(n.label, x, y + nodeRadius(n) + 4 / t.k);
       }
     }
     ctx.globalAlpha = 1;
+    perfMark("graphDrawMs", performance.now() - t0);
   }, []);
 
-  /* ---------- sizing (ResizeObserver + dpr) ---------- */
+  /** rAF-coalesced draw: dirty flag + at most one canvas draw per frame */
+  const requestDraw = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      draw();
+    });
+  }, [draw]);
+
+  // cancel any pending frame on unmount — and RESET the ref: StrictMode's
+  // dev double-mount reuses it, and a stale cancelled id would make every
+  // future requestDraw early-return (blank canvas forever)
+  useEffect(
+    () => () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = 0;
+      }
+    },
+    [],
+  );
+
+  /* ---------- fit to view ---------- */
+
+  const fitToView = useCallback(() => {
+    const s = stateRef.current;
+    if (s.nodes.length === 0 || s.width < 2 || s.height < 2) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const n of s.nodes) {
+      const r = nodeRadius(n);
+      const x = n.x ?? 0;
+      const y = n.y ?? 0;
+      if (x - r < minX) minX = x - r;
+      if (y - r < minY) minY = y - r;
+      if (x + r > maxX) maxX = x + r;
+      if (y + r > maxY) maxY = y + r;
+    }
+    const bw = maxX - minX + FIT_PADDING * 2;
+    const bh = maxY - minY + FIT_PADDING * 2;
+    const k = Math.max(MIN_ZOOM, Math.min(MAX_FIT_ZOOM, Math.min(s.width / bw, s.height / bh)));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    s.transform = { x: s.width / 2 - cx * k, y: s.height / 2 - cy * k, k };
+    requestDraw();
+  }, [requestDraw]);
+
+  /* ---------- sizing (ResizeObserver + dpr) ----------
+   * R3 debt root cause: the mount-time measurement could see a not-yet-final
+   * rect (graph tab just created / window mid-maximize), and the initial
+   * transform centers the graph ORIGIN — while forceCenter only steers the
+   * centroid, so the settled bbox center never coincides with the origin.
+   * Fix: only initialize from a real laid-out rect (re-measure on the next
+   * frame), keep the Δ/2 resize compensation, and bbox-fit on first settle. */
 
   useEffect(() => {
     const container = containerRef.current;
@@ -216,16 +460,18 @@ export function GraphView() {
     const s = stateRef.current;
     s.palette = readPalette(container);
 
-    const fit = () => {
+    const measure = () => {
       const rect = container.getBoundingClientRect();
       const w = Math.max(1, rect.width);
       const h = Math.max(1, rect.height);
       const dpr = window.devicePixelRatio || 1;
       if (!s.initialized) {
+        // ignore degenerate pre-layout rects — RO / the rAF below re-measure
+        if (rect.width < 2 || rect.height < 2) return;
         s.transform = { x: w / 2, y: h / 2, k: 1 };
         s.initialized = true;
-      } else {
-        // keep the graph centred when the pane resizes
+      } else if (w !== s.width || h !== s.height) {
+        // keep the graph centred when the pane resizes (maximize/restore)
         s.transform.x += (w - s.width) / 2;
         s.transform.y += (h - s.height) / 2;
       }
@@ -234,14 +480,22 @@ export function GraphView() {
       s.dpr = dpr;
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
-      draw();
+      requestDraw();
     };
 
-    fit();
-    const ro = new ResizeObserver(fit);
+    measure();
+    // re-measure after the first laid-out frame (mount during layout transitions)
+    const raf = requestAnimationFrame(measure);
+    const ro = new ResizeObserver(measure);
     ro.observe(container);
-    return () => ro.disconnect();
-  }, [draw]);
+    // RO misses dpr-only changes (window moved across monitors)
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [requestDraw]);
 
   /* ---------- theme changes re-read CSS vars ---------- */
 
@@ -250,20 +504,53 @@ export function GraphView() {
       app.events.on("theme:changed", () => {
         const container = containerRef.current;
         if (container) stateRef.current.palette = readPalette(container);
-        draw();
+        requestDraw();
       }),
-    [app, draw],
+    [app, requestDraw],
   );
 
-  /* ---------- (re)build simulation when index changes ---------- */
+  /* ---------- (re)build simulation on index/prefs/anchor change ---------- */
 
   const rebuild = useCallback(() => {
     const s = stateRef.current;
     const data = app.metadata.getGraph();
+    const buildStart = performance.now();
+
+    // pick the rendered node set: local BFS subgraph, then degree sampling
+    let picked: GraphNode[] = data.nodes;
+    let anchorId: string | null = null;
+    let localEmpty = false;
+    if (prefs.mode === "local") {
+      anchorId =
+        anchor !== null && data.nodes.some((n) => n.id === anchor) ? anchor : null;
+      if (anchorId === null) {
+        picked = [];
+        localEmpty = true;
+      } else {
+        // full adjacency (BFS source — must see ALL edges, not the rendered
+        // subset); only the local mode needs it, global would build-and-drop
+        const visited = bfs(buildAdjacency(data.edges), anchorId, prefs.depth);
+        picked = data.nodes.filter((n) => visited.has(n.id));
+      }
+    }
+    const totalNodes = picked.length;
+    let capped = false;
+    if (picked.length > RENDER_CAP && !prefs.showAll) {
+      picked = sampleByDegree(picked, RENDER_CAP, anchorId);
+      capped = true;
+    }
+    const keptIds = new Set(picked.map((n) => n.id));
+    const renderedEdges = data.edges.filter(
+      (e) => keptIds.has(e.source) && keptIds.has(e.target),
+    );
+
+    // local re-anchor (incl. entering local mode) → auto-fit
+    const reAnchor = anchorId !== null && anchorId !== lastAnchorRef.current;
+    lastAnchorRef.current = anchorId;
 
     // keep positions of surviving nodes across rebuilds
     const prev = new Map(s.nodes.map((n) => [n.id, n]));
-    const nodes: SimNode[] = data.nodes.map((n) => {
+    const nodes: SimNode[] = picked.map((n) => {
       const old = prev.get(n.id);
       if (old) {
         old.label = n.label;
@@ -275,46 +562,59 @@ export function GraphView() {
       const dist = 60 + Math.random() * 180;
       return { ...n, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist };
     });
-    const links: SimLink[] = data.edges.map((e) => ({ source: e.source, target: e.target }));
-
-    const adjacency = new Map<string, Set<string>>();
-    const addAdj = (a: string, b: string) => {
-      let set = adjacency.get(a);
-      if (!set) adjacency.set(a, (set = new Set()));
-      set.add(b);
-    };
-    for (const e of data.edges) {
-      addAdj(e.source, e.target);
-      addAdj(e.target, e.source);
-    }
+    const links: SimLink[] = renderedEdges.map((e) => ({ source: e.source, target: e.target }));
 
     s.sim?.stop();
-    const sim = forceSimulation<SimNode>(nodes)
-      .force(
-        "link",
-        forceLink<SimNode, SimLink>(links)
-          .id((d) => d.id)
-          .distance(70)
-          .strength(0.5),
-      )
-      .force("charge", forceManyBody<SimNode>().strength(-200).distanceMax(420))
-      .force("center", forceCenter(0, 0).strength(0.06))
-      .force("collide", forceCollide<SimNode>((d) => nodeRadius(d) + 5))
-      .alpha(prev.size > 0 ? 0.45 : 1)
-      .alphaDecay(0.03);
-    sim.on("tick", draw);
+    let sim: Simulation<SimNode, SimLink> | null = null;
+    if (nodes.length > 0) {
+      // simulation runs over the RENDERED subset only
+      sim = forceSimulation<SimNode>(nodes)
+        .force(
+          "link",
+          forceLink<SimNode, SimLink>(links)
+            .id((d) => d.id)
+            .distance(70)
+            .strength(0.5),
+        )
+        .force("charge", forceManyBody<SimNode>().strength(-200).distanceMax(420))
+        .force("center", forceCenter(0, 0).strength(0.06))
+        .force("collide", forceCollide<SimNode>((d) => nodeRadius(d) + 5))
+        .alpha(prev.size > 0 ? 0.45 : 1)
+        .alphaDecay(0.03);
+      sim.on("tick", requestDraw);
+      let settled = false;
+      sim.on("end", () => {
+        if (settled) return; // drag reheats fire "end" again — settle is per rebuild
+        settled = true;
+        perfMark("graphSettleMs", performance.now() - buildStart);
+        const wantFit =
+          fitOnSettleRef.current || (!firstSettleDoneRef.current && !interactedRef.current);
+        firstSettleDoneRef.current = true;
+        fitOnSettleRef.current = false;
+        // a draw either way: the settle-phase label suppression needs one
+        // cool frame to bring the labels back
+        if (wantFit) fitToView();
+        else requestDraw();
+      });
+    }
 
     s.nodes = nodes;
     s.links = links;
-    s.adjacency = adjacency;
+    s.adjacency = buildAdjacency(renderedEdges);
     s.sim = sim;
+    s.anchorNode = anchorId !== null ? nodes.find((n) => n.id === anchorId) ?? null : null;
     if (s.hovered && !nodes.includes(s.hovered)) s.hovered = null;
-    setCounts({ nodes: nodes.length, edges: links.length });
-    draw();
-  }, [app, draw]);
+    setInfo({ nodes: nodes.length, edges: links.length, totalNodes, capped, localEmpty });
+    if (reAnchor) {
+      // show the new neighborhood immediately, then re-fit once it settles
+      fitOnSettleRef.current = true;
+      fitToView();
+    }
+    requestDraw();
+  }, [app, requestDraw, fitToView, prefs.mode, prefs.depth, prefs.showAll, anchor]);
 
   useEffect(() => {
-    const delay = firstBuild.current ? 0 : 250; // debounce bursts of edits
+    const delay = firstBuild.current ? 0 : 250; // debounce bursts of edits / anchor hops
     firstBuild.current = false;
     const timer = window.setTimeout(rebuild, delay);
     return () => window.clearTimeout(timer);
@@ -399,10 +699,14 @@ export function GraphView() {
           d.node.fx = gx;
           d.node.fy = gy;
         } else {
+          if (d.moved) {
+            interactedRef.current = true; // user pan suppresses auto-fit
+            fitOnSettleRef.current = false; // incl. a pending re-anchor fit
+          }
           s.transform.x = d.origin.x + dx;
           s.transform.y = d.origin.y + dy;
         }
-        draw();
+        requestDraw();
         return;
       }
       // hover
@@ -412,7 +716,7 @@ export function GraphView() {
       canvas.style.cursor = node ? "pointer" : "grab";
       if (node !== s.hovered) {
         s.hovered = node;
-        draw();
+        requestDraw();
       }
     };
 
@@ -433,7 +737,7 @@ export function GraphView() {
         d.node.fy = null;
         if (!d.moved) openNode(d.node);
       }
-      draw();
+      requestDraw();
     };
 
     const onPointerLeave = () => {
@@ -441,7 +745,7 @@ export function GraphView() {
       if (s.drag) return; // pointer captured, keep dragging
       if (s.hovered) {
         s.hovered = null;
-        draw();
+        requestDraw();
       }
     };
 
@@ -453,11 +757,13 @@ export function GraphView() {
       const factor = Math.exp(-e.deltaY * 0.0015);
       const k2 = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, t.k * factor));
       if (k2 === t.k) return;
+      interactedRef.current = true; // user zoom suppresses auto-fit
+      fitOnSettleRef.current = false; // incl. a pending re-anchor fit
       // zoom toward the cursor
       t.x = mx - ((mx - t.x) / t.k) * k2;
       t.y = my - ((my - t.y) / t.k) * k2;
       t.k = k2;
-      draw();
+      requestDraw();
     };
 
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -474,25 +780,94 @@ export function GraphView() {
       canvas.removeEventListener("pointerleave", onPointerLeave);
       canvas.removeEventListener("wheel", onWheel);
     };
-  }, [draw, openNode]);
+  }, [requestDraw, openNode]);
 
   /* ---------- render ---------- */
+
+  const setMode = (mode: "global" | "local") =>
+    setPrefs((p) => (p.mode === mode ? p : { ...p, mode }));
 
   return (
     <div className="graph-view" data-testid="graph-view" ref={containerRef}>
       <canvas ref={canvasRef} className="graph-canvas" data-testid="graph-canvas" />
-      {counts.nodes > 0 && (
+      <div className="graph-toolbar" data-testid="graph-toolbar">
+        <div className="graph-mode-toggle">
+          <button
+            type="button"
+            className={prefs.mode === "global" ? "is-active" : ""}
+            data-testid="graph-mode-global"
+            onClick={() => setMode("global")}
+          >
+            Global
+          </button>
+          <button
+            type="button"
+            className={prefs.mode === "local" ? "is-active" : ""}
+            data-testid="graph-mode-local"
+            onClick={() => setMode("local")}
+          >
+            Local
+          </button>
+        </div>
+        {prefs.mode === "local" && (
+          <select
+            className="graph-depth-select"
+            data-testid="graph-depth"
+            value={prefs.depth}
+            onChange={(e) =>
+              setPrefs((p) => ({ ...p, depth: e.target.value === "2" ? 2 : 1 }))
+            }
+          >
+            <option value={1}>Depth 1</option>
+            <option value={2}>Depth 2</option>
+          </select>
+        )}
+        <button
+          type="button"
+          className="graph-fit-btn"
+          data-testid="graph-fit"
+          onClick={fitToView}
+          title="Fit graph to view"
+        >
+          Fit
+        </button>
+      </div>
+      {info.nodes > 0 && (
         <div className="graph-legend" data-testid="graph-legend">
-          <span>
-            {counts.nodes} {counts.nodes === 1 ? "node" : "nodes"}
-          </span>
+          {info.capped ? (
+            <span>
+              top {fmt(info.nodes)} of {fmt(info.totalNodes)} nodes
+            </span>
+          ) : (
+            <span>
+              {fmt(info.nodes)} {info.nodes === 1 ? "node" : "nodes"}
+            </span>
+          )}
           <span className="graph-legend-sep">·</span>
           <span>
-            {counts.edges} {counts.edges === 1 ? "link" : "links"}
+            {fmt(info.edges)} {info.edges === 1 ? "link" : "links"}
           </span>
+          {info.totalNodes > RENDER_CAP && (
+            <button
+              type="button"
+              className="graph-legend-btn"
+              data-testid="graph-show-all"
+              onClick={() => setPrefs((p) => ({ ...p, showAll: !p.showAll }))}
+            >
+              {prefs.showAll ? `Show top ${fmt(RENDER_CAP)}` : "Show all"}
+            </button>
+          )}
         </div>
       )}
-      {counts.nodes === 0 && (
+      {prefs.mode === "local" && info.localEmpty && (
+        <div className="graph-empty" data-testid="graph-local-empty">
+          <div className="graph-empty-card">
+            <Icon name="graph" size={30} />
+            <div className="graph-empty-title">Open a note to see its local graph.</div>
+          </div>
+        </div>
+      )}
+      {prefs.mode === "global" && info.nodes === 0 && (
         <div className="graph-empty" data-testid="graph-empty">
           <div className="graph-empty-card">
             <Icon name="graph" size={30} />

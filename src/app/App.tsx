@@ -14,6 +14,7 @@ import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { SettingsModal } from "@features/settings/SettingsModal";
+import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { isTauri } from "@core/vault";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
@@ -203,6 +204,18 @@ export function App() {
         name: "Focus previous pane",
         hotkey: "Ctrl+Alt+ArrowLeft",
         callback: () => workspace.focusAdjacentPane(-1),
+      }),
+      commands.register({
+        id: "app:export-html",
+        name: "Export note as HTML…",
+        callback: () => void exportActiveNoteHtml(app),
+        available: () => workspace.getActiveFile() !== null,
+      }),
+      commands.register({
+        id: "app:export-pdf",
+        name: "Export note as PDF (print)…",
+        callback: () => void printActiveNote(app),
+        available: () => workspace.getActiveFile() !== null,
       }),
     ];
     if (isTauri()) {
@@ -865,6 +878,9 @@ async function openVaultFlow(app: ReturnType<typeof useApp>) {
   // (DocumentManager additionally invalidates all handles on vault:changed
   // reason "load" — see DocumentHandle.handleVaultLoad.)
   await app.workspace.flushAll();
+  // relative paths from the OLD vault must never anchor the local graph in the
+  // new one (same-named files would silently collide)
+  app.workspace.lastActiveFile.set(null);
   app.vault.adapter.setVaultPath(picked);
   try {
     localStorage.setItem(LAST_VAULT_KEY, picked);

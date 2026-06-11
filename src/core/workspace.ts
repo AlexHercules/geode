@@ -159,10 +159,14 @@ function defaultState(): WorkspaceState {
  */
 export class Workspace {
   readonly state = new Store<WorkspaceState>(defaultState());
+  /** Most recent NON-NULL active file (survives switching to the graph tab / modals).
+   *  Session-only — not persisted. Seeded from the active tab on load. */
+  readonly lastActiveFile = new Store<string | null>(null);
   private flushers = new Set<() => void | Promise<void>>();
 
   constructor(private events: EventBus) {
     this.restore();
+    this.lastActiveFile.set(this.getActiveFile());
     // when a file is deleted/renamed, fix tabs that point at it
     events.on("file:deleted", ({ path }) => this.handleDeleted(path));
     events.on("file:renamed", ({ oldPath, newPath }) => this.handleRenamed(oldPath, newPath));
@@ -538,6 +542,12 @@ export class Workspace {
         : flattenLeaves(root)[0].id;
       return { ...s, root, activePaneId };
     });
+    // a deleted file must not linger as the local graph's anchor; emitActiveFile
+    // below re-seeds it from the new active file when there is one
+    const last = this.lastActiveFile.get();
+    if (last !== null && (last === path || last.startsWith(path + "/"))) {
+      this.lastActiveFile.set(null);
+    }
     this.emitActiveFile();
   }
 
@@ -559,10 +569,23 @@ export class Workspace {
         }),
       })),
     }));
+    // remap directly: the choke point can't see this rename when a non-markdown
+    // tab (graph) is active — getActiveFile() is null and the guard keeps the
+    // stale old path, breaking the local graph's anchor
+    const last = this.lastActiveFile.get();
+    if (last === oldPath) {
+      this.lastActiveFile.set(newPath);
+    } else if (last !== null && last.startsWith(oldPath + "/")) {
+      this.lastActiveFile.set(newPath + last.slice(oldPath.length));
+    }
+    this.emitActiveFile();
   }
 
   private emitActiveFile() {
-    this.events.emit("active-file:changed", { path: this.getActiveFile() });
+    const path = this.getActiveFile();
+    // single choke point for active-file changes — keep the last non-null file
+    if (path !== null) this.lastActiveFile.set(path);
+    this.events.emit("active-file:changed", { path });
   }
 
   private update(fn: (s: WorkspaceState) => WorkspaceState) {

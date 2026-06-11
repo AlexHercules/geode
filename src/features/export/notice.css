@@ -1,0 +1,23 @@
+/* ============ Export feedback toast (in-app, NOT part of exported docs) ============ */
+
+.export-notice {
+  position: fixed;
+  top: 44px;
+  right: 16px;
+  z-index: 1000;
+  max-width: 420px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-normal);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-modal);
+  pointer-events: none;
+  user-select: none;
+}
+
+.export-notice.is-error {
+  border-color: var(--danger);
+  color: var(--danger);
+}

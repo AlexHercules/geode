@@ -20,6 +20,70 @@
   touch-action: none;
 }
 
+/* ---- toolbar (top-left; small box — must not block canvas drag elsewhere) ---- */
+
+.graph-toolbar {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.graph-mode-toggle {
+  display: flex;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.graph-mode-toggle button {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.graph-mode-toggle button:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.graph-mode-toggle button.is-active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.graph-depth-select {
+  padding: 2px 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.graph-fit-btn {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.graph-fit-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
 .graph-legend {
   position: absolute;
   top: 10px;
@@ -36,6 +100,23 @@
   pointer-events: none;
   user-select: none;
   opacity: 0.92;
+}
+
+/* the show-all toggle stays clickable inside the otherwise inert legend */
+.graph-legend-btn {
+  pointer-events: auto;
+  margin-left: 4px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--text-normal);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.graph-legend-btn:hover {
+  background: var(--bg-active);
 }
 
 .graph-legend-sep {

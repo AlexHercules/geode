@@ -482,6 +482,30 @@ fn http_request(req: HttpRequest) -> CmdResult<HttpResponse> {
     })
 }
 
+/// Write exported note content (UTF-8) to an ABSOLUTE path returned by the
+/// native save dialog. No safe_join on purpose — exporting outside the vault
+/// is the point; the path always comes from a user-driven dialog, which also
+/// guarantees the parent directory exists. Relative paths are rejected.
+/// `(async)`: file IO runs off the main thread (R6 lesson).
+#[tauri::command(async)]
+fn export_write(path: String, content: String) -> CmdResult<()> {
+    let abs = Path::new(&path);
+    if !abs.is_absolute() {
+        return Err(format!("export_write: path must be absolute, got '{path}'"));
+    }
+    // sibling temp file + rename: a mid-write failure (disk full, kill) must
+    // never leave a user-chosen existing file truncated
+    let mut tmp_name = abs.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    tmp_name.push(".geode-export.tmp");
+    let tmp = abs.with_file_name(tmp_name);
+    fs::write(&tmp, content)
+        .and_then(|_| fs::rename(&tmp, abs))
+        .map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            format!("export_write {path}: {e}")
+        })
+}
+
 /// Read a config file under `<vault>/.obsidian/`. Ok(None) when missing.
 #[tauri::command]
 fn vault_read_config(vault: String, path: String) -> CmdResult<Option<String>> {
@@ -517,7 +541,8 @@ fn main() {
             vault_obsidian_plugins,
             vault_read_config,
             vault_write_config,
-            http_request
+            http_request,
+            export_write
         ])
         .run(tauri::generate_context!())
         .expect("error while running Geode");
