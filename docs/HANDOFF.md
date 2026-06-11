@@ -2,7 +2,8 @@
 
 ```
 继续开发 Geode（C:\Users\16778\Desktop\开发\rock，Obsidian 复刻桌面应用，当前 v0.15.0）。
-启用 workflows。
+启用 workflows。远端：https://github.com/AlexHercules/geode（私有，origin/master）——
+每轮收尾提交后 git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证书决策。
 
 按顺序读这五个文档再动手：
 1. docs/ROADMAP.md      — 核心使命（不变项）、四条底线、R15 完成记录、R16 候选
