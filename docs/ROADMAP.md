@@ -271,14 +271,50 @@ graphSettle 3958ms（R7 5771 更优）、graphDraw 2.9ms、metadataIndex 185ms�
 preview 直接消费新口径）探针全绿 + 套件 5/5 + nldates 全链路不回退。
 更新链路（r9-up*）自 R9 零改动跳过（记录）。
 
-## R16 候选
+## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
-| P | 功能 | 备注 |
-|---|---|---|
-| P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策与证书购买需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand。**P2 池已见底——没有此输入，建议暂停特性轮** |
-| P2 | 全文搜索专项（基线复测 + 防抖自适应 + 倒排索引远期） | PERFORMANCE.md R3 遗留建议 |
-| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps |
-| P2 | PDF/音频嵌入、行内 code 装饰对称、[[#h]] 同文链接 | 体验长尾 |
+> 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
+> 老用户立刻撞墙的四件。用户口径：发布暂缓（渠道/证书不催），先补迁移体验。
+
+### R16 — 重命名自动更新引用（第一梯队 #1，数据安全重轮）
+
+- 重命名/移动文件（含文件夹级联）时，自动改写全库所有指向它的 `[[链接]]` 与
+  `![[嵌入]]`（含 `#subpath`/`|alias` 形态保留、大小写/路径式/basename 式引用全覆盖）。
+- **数据安全等级最高的一轮**：批量改写用户文件——必须走完整节奏（契约/并行/评审/
+  对抗验证/双端），改写必须经共享文档模型（打开中的文件走 DocumentHandle 不丢
+  undo/光标）、未打开文件磁盘原子写、与 watcher 回声抑制协同（自写指纹）、
+  改写前后链接解析等价断言（probe 级验证）。Obsidian 行为校准：仅 basename 引用
+  且新名冲突时的歧义处理、设置项（自动更新开关）。
+- 顺带小件：`[[#h]]` 同文链接（target 空 → 解析为当前笔记，R14 记录的缺口）。
+
+### R17 — 附件摄入 + 折叠
+
+- **粘贴/拖拽图片入库**：编辑器 paste/drop 二进制 → 写入附件目录（默认 `assets/`，
+  设置项可改——Obsidian 的 attachment folder 语义校准）→ 光标处插入 `![[名称]]`；
+  需要 VaultAdapter.writeBinary + Rust 命令（既有 readBinary 的镜像）；命名冲突
+  uniquePath；Memory 适配器同步实现（浏览器 E2E 用 DataTransfer 注入）。
+- **标题/列表折叠**：CM6 folding 接线（fold gutter 或 Obsidian 式悬浮箭头取舍，
+  live preview 装饰共存性是评审重点）。
+
+### R18 — Markdown 方言长尾
+
+- 纯管线可做（无新依赖）：**callouts**（`> [!note]` 全类型+折叠变体）、`==高亮==`、
+  脚注、`%%注释%%`（双视图隐藏）。
+- **一次性依赖决策**（chief 级，参照 moment/ureq 先例）：数学公式（KaTeX，比 MathJax
+  轻）+ mermaid（重，~1MB——按需动态 import 或显式不做，决策时定）。
+- 双视图（live preview 装饰 + 阅读视图管线）+ 导出 css 同步是验收口径。
+
+### R19+ 候选池（迁移叙事第二梯队，按需取）
+
+| 功能 | 备注 |
+|---|---|
+| 主题 CSS 类名兼容层 | OBSIDIAN-COMPAT 规划过的独立可选层，迁移叙事里与插件兼容同级但未开工 |
+| Properties 可视化编辑 | frontmatter 结构化面板 |
+| 模板系统 | 新建套模板 + 日期变量 |
+| 搜索运算符（path:/tag:/file:/正则）| 搜索专项一并做 |
+| 未链接提及 | 反链面板扩展 |
+| 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |
+| 图谱 WebGL/Worker、倒排索引 | 性能远期 |
 
 ## 已知技术债
 
