@@ -41,7 +41,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 |---|---|---|
 | **T0 加载管道** | 发现并加载 `<vault>/.obsidian/plugins/<id>/{manifest.json, main.js, styles.css}`；`require("obsidian")` 模块注入；启用状态对齐 `community-plugins.json`；manifest 校验（minAppVersion 提示而非硬拒） | **R4 已实现** |
 | **T1 高频核心** | `Plugin` 基类（addCommand / addRibbonIcon / addStatusBarItem / addSettingTab / registerEvent / registerInterval / loadData / saveData）；`App.{vault, workspace, metadataCache}`；`Vault`（read/cachedRead/modify/create/delete/rename/getAbstractFileByPath/getMarkdownFiles/getFiles + on("create"/"modify"/"delete"/"rename")）；`TFile`/`TFolder`/`TAbstractFile`；`MetadataCache`（getFileCache: headings/links/tags/frontmatter；resolvedLinks/unresolvedLinks）；`Workspace`（getActiveFile/openLinkText/on("file-open"/"active-leaf-change"/"layout-ready")）；`Notice`；`Modal`；`Setting`/`PluginSettingTab`；`normalizePath` | **R4 已实现** |
-| **T2 编辑与视图** | `Editor` 抽象（**最小子集已在 R4 以 T1.5 落地**，完整版含 transaction/extension 仍 T2）；`MarkdownView` / `MarkdownRenderer.render`; `ItemView` + `registerView`/`getLeavesOfType` **真实挂载**（类骨架 R4 已可 evaluate）；~~`SuggestModal`/`FuzzySuggestModal`~~（R4 已落地最小真实版）；`requestUrl`；`moment` 导出（套件实测 nldates 核心功能的唯一阻断点，R5 P0） | R5 候选 |
+| **T2 编辑与视图** | ~~`ItemView` + `registerView`/`getLeavesOfType`/`getLeftLeaf`/`getRightLeaf`/`revealLeaf`/`detachLeavesOfType`/`ensureSideLeaf` 真实挂载（侧栏面板宿主）~~（**R5 已实现**，含 legacy `layout-ready` 事件/`splitActiveLeaf`/`getUnpinnedLeaf`）；~~`moment` 导出 + `window.moment`~~（**R5 已实现**，moment-with-locales 单实例 138 locale）；~~`workspace.on('editor-change')` 逐事务~~（**R5 已实现**，core `document:changed` 驱动）；~~`SuggestModal`/`FuzzySuggestModal`~~（R4）；`Editor` 完整版（transaction/extension）；`MarkdownRenderer.render`；`requestUrl`；`EditorSuggest` 真实触发 | R5 主体落地；余项 R6 候选 |
 | **T3 明确不做/远期** | Canvas API、移动端 API、未文档化内部、DOM 私有结构契约、Sync/Publish 专属 API | 不承诺 |
 
 ## R4 实现决策（2026-06-10）
@@ -85,18 +85,41 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
   警告）通过 `obsidianLoadReport` Store 暴露，SettingsModal Obsidian 分组渲染失败条目
   （`data-testid="obsidian-plugin-error-<id>"`）与 minAppVersion 标注。
 
-### 仍然显式保留的缺口（warn-stub / 行为偏差，按表追踪）
+## R5 实现决策（2026-06-10）
+
+- **moment 打包定案**：npm 依赖 `moment@2.30.1`，经 `moment/min/moment-with-locales`
+  导入（138 locale 单实例；独立 locale 入口在 Vite 预打包下会注册到第二份副本——已踩坑）。
+  套件实测两个 P0 插件**只用 `window.moment`**（零 import），loader 在求值任何插件前
+  `window.moment ??= moment`、`window.app = ctx.app`（后者 calendar 30+ 处直读，缺失即
+  TypeError——R5 评审 critical）。
+- **registerView 挂载方案**：自定义视图挂**侧栏**（Obsidian 套件插件的真实用法），不进中央
+  pane 树。core 侧新增通用 `SidebarPanelContribution` 贡献点（App shell 渲染左侧 ribbon
+  按钮/右侧 tab + 元素宿主），compat 的 `SidebarViewLeaf` 实现完整 leaf 表面。同 type 二次
+  挂载先 detach 旧 leaf（panel id 按 type 键控）；onOpen 抛错回滚拆除，不向插件冒泡。
+- **官方全局原型扩展全集**落地（Array contains/remove/shuffle/unique、Object.isEmpty/each、
+  Math.clamp/square、String.contains/format 等）——recent-files 的 redraw 在真实挂载后才
+  暴露 `.contains()` 调用，证明"视图不挂载=调用面测不到"。
+- `onUserEnable` 经 `PluginManager.enable(id, { userAction: true })`（设置页开关）触发。
+- `editor-change` 逐事务化：core 新增 `document:changed` 事件（DocumentHandle 的
+  updateListener 对本地事务 emit，CM6 在 listener 阶段已重置 update 锁，同步 dispatch 安全
+  ——评审两条"必崩"finding 均被对抗验证以装包源码证伪）。
+
+### 仍然显式保留的缺口（warn-stub / 行为偏差，按表追踪；R5 已清项划线）
 
 | 缺口 | 现状 |
 |---|---|
-| `registerView` + 视图挂载 | warn-stub；View/ItemView/FileView 仅保证类可 evaluate，永不 onOpen/挂载 |
-| `registerEditorSuggest` 触发 | warn-stub；EditorSuggest 子类可构造，onTrigger/getSuggestions 永不被调用 |
+| ~~`registerView` + 视图挂载~~ | **R5 已实现**：侧栏真实挂载（SidebarViewLeaf + core sidebar panel 宿主），onOpen/onClose 全生命周期；视图不持久化——重启后靠插件自身启动逻辑重建（calendar 的 layout-ready 路径实测可行，recent-files 走命令/onUserEnable） |
+| ~~`moment`~~ | **R5 已实现**：moment-with-locales 2.30.1 单实例，`import { moment }` 与 `window.moment` 同源 |
+| ~~`workspace.on('editor-change')`~~ | **R5 已修**：core `document:changed` 逐编辑事务驱动（pre-save，每 keystroke） |
+| `registerEditorSuggest` 触发 | warn-stub；EditorSuggest 子类可构造，onTrigger/getSuggestions 永不被调用（nldates 自动建议不可用；其 8 条命令共用同一 parseDate 核心，核心功能不受阻） |
 | `requestUrl` | warn-stub，始终 reject（网络不在 T0/T1） |
-| `moment` | 不打包（npm 纪律）；属性访问记缺口、调用抛说明性错误 |
+| `getLeavesOfType("markdown")` 等内建类型 | 偏差：恒返回 `[]`（只跟踪 compat 自定义视图 leaf） |
+| `WorkspaceLeaf.openFile` 的 openState | 仅映射 `mode: "source"|"preview"` → tab 模式；eState/group/active 忽略 |
+| `vault.getConfig`（非公开 API） | 固定值：defaultViewMode→"source"、useMarkdownLinks→false，其余 undefined（每 key 记缺口） |
+| `App.dragManager` / `App.internalPlugins` / `App.plugins` | warn-stub 形状（dragFile→null、getEnabledPluginById→null、plugins:{} 空字典）——recent-files 拖拽降级、daily-notes 探测返回"未启用" |
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
 | `App.fileManager` / `App.keymap` / `App.scope` | getter warn-stub：fileManager 方法为记录缺口的 async no-op，keymap/scope 为惰性 no-op 对象 |
 | `DataAdapter.appendBinary`（及 readBinary/writeBinary/stat/trash*） | warn-stub + 说明性 throw；append/process/rmdir/copy 已用字符串 IO 真实实现 |
-| `workspace.on('editor-change')` | 偏差：按保存的 file:modified 触发，而非每个编辑器事务 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 
 ## 验收方式（可度量，防自嗨）
@@ -108,22 +131,42 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
-### R4 套件矩阵（2026-06-10，套件 vault 制备脚本见 compat-vault/，gitignore 本地再生）
+### R5 套件矩阵（2026-06-10，桌面 release 实测 `geode.exe compat-vault`）
 
 | 插件（上游版本） | 加载 | 命令 | 设置页 | 核心功能 | 缺口 |
 |---|---|---|---|---|---|
-| recent-files-obsidian 1.7.9 | ✓ | ✓ (1) | ✓ | ✗ 面板不显示 | registerView 挂载（R5 P0） |
+| recent-files-obsidian 1.7.9 | ✓ | ✓ (1) | ✓ | **✓ 左栏面板实时列表**（open 命令 + onUserEnable 双路径；hover-link/拖拽降级） | dragManager 拖拽 |
 | better-word-count 0.10.1 | ✓ | ✓ (0，状态栏驱动) | ✓ | ✓ 状态栏字数 | — |
-| nldates-obsidian 0.6.2 | ✓ | ✓ (8) | ✓ | ✗ 日期解析 | moment（R5 P0）；EditorSuggest 触发 |
+| nldates-obsidian 0.6.2 | ✓ | ✓ (8) | ✓ | **✓ 日期解析**（"tomorrow"→`[[2026-06-11]]` 实测；nlp-now/today/time 全通） | EditorSuggest 自动建议触发 |
 | url-into-selection 1.11.4 | ✓ | ✓ (1) | ✓ | ✓ editorCallback 粘贴 | — |
-| calendar 1.5.10 | ✓ | ✓ (3) | ✓ | ✗ 日历面板不显示 | registerView 挂载；moment |
+| calendar 1.5.10 | ✓ | ✓ (3) | ✓ | **✓ 右栏月历自动挂载**（legacy layout-ready 启动路径；42 格 + 周序号 + locale 全量） | 点日创建 daily note 依赖 daily-notes 内部插件（探测返回未启用，按钮降级） |
+
+**R5 目标达成：5/5 核心功能列全 ✓**（R4 时为 2/5）。
+
+### R4 套件矩阵（历史，修复前 1/5 可加载 → 修复后 5/5 加载、2/5 核心功能）
+
+| 插件 | 核心功能（R4） | 当时缺口 |
+|---|---|---|
+| recent-files-obsidian | ✗ 面板不显示 | registerView 挂载 |
+| better-word-count | ✓ | — |
+| nldates-obsidian | ✗ 日期解析 | moment；EditorSuggest |
+| url-into-selection | ✓ | — |
+| calendar | ✗ 日历面板不显示 | registerView 挂载；moment |
 
 R4 起点（修复前预检）仅 1/5 可加载；套件驱动追加 View/ItemView/EditorSuggest/
 SuggestModal/Menu/path + getRightLeaf/getLeftLeaf/revealLeaf/leaf.setViewState
 （calendar 重启用路径实测暴露）后 **5/5 加载启用**。manifest 边界用例已覆盖：
 better-word-count 与 url-into-selection 上游 manifest 均缺 minAppVersion（warn 不拒载）。
 
-**桌面端杀手演示（发布版 v0.4.0，截图 docs/screenshots/r4-desktop-killer-demo.png）**：
+**R5 桌面端杀手演示（发布版，截图 docs/screenshots/r5-desktop-killer-demo.png）**：
+`geode.exe compat-vault` 直开 → calendar 经 legacy `layout-ready` 事件**自动**在右栏挂出
+Jun 2026 月历（42 格）；`recent-files-open` 命令把 Recent Files 面板挂到左栏并 reveal，
+列表随 file-open 实时更新；选中 "tomorrow" 跑 `nlp-dates` 得 `[[2026-06-11]]`；
+`app:reload-plugins` 幂等（视图拆除重建，console 零 error）。探针脚本
+`.calibration/cdp-run.mjs <expr文件>`（从文件读表达式，免 PowerShell 转义）+
+`.calibration/cdp-shot.mjs <png>`（CDP 截屏）。
+
+**R4 桌面端杀手演示（v0.4.0，截图 docs/screenshots/r4-desktop-killer-demo.png）**：
 `geode.exe compat-vault` 直开 → 5 插件从真实 `.obsidian/plugins/` 加载、设置页
 OBSIDIAN badge + 开关 + 设置区块齐全；disable/enable 往返实测
 `community-plugins.json` 磁盘写回（顺序保留、跨会话状态还原）；calendar 在真实

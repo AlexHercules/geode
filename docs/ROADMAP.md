@@ -57,12 +57,25 @@ Workspace/Notice/Modal/Setting DSL/SuggestModal/Menu/最小 Editor 子集；DOM 
 **真实插件套件 5/5 加载启用**（Recent Files / Better Word Count / NL Dates /
 Paste URL into selection / Calendar），缺口显式记录（moment、registerView 挂载）。
 
-## R5 候选 — 兼容层纵深 + 商业打磨（按优先级）
+### R5 — v0.5（2026-06-10）compat T2：moment + registerView 真实挂载，套件 5/5 ✓
+
+**moment**（一次性决策落地）：moment-with-locales 2.30.1 单实例，`import { moment }` 与
+`window.moment` 同源（套件实测两个 P0 插件只用后者）；`window.app` 同步注入（评审 critical）。
+**registerView 真实挂载**：core `SidebarPanelContribution` 贡献点（左 ribbon 按钮/右 tab +
+元素宿主）+ compat `SidebarViewLeaf`（setViewState 全生命周期、revealLeaf/detachLeavesOfType/
+ensureSideLeaf、legacy layout-ready/splitActiveLeaf/getUnpinnedLeaf）；官方全局原型扩展全集
+（Array.contains 等）；MarkdownView extends FileView；onUserEnable 接线。
+**editor-change 逐事务化**：core `document:changed` 事件（R3/R4 偏差债清除）。
+评审 5 维 20 finding，对抗验证确认 18（2 证伪），全修复。
+**套件矩阵 5/5 核心功能 ✓**（R4 为 2/5）：calendar 月历自动挂载、Recent Files 实时列表、
+nldates "tomorrow"→`[[date]]` 桌面实测通过；reload 幂等零 error。
+截图 docs/screenshots/r5-desktop-killer-demo.png。
+
+## R6 候选 — 兼容层余项 + 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P0 | **compat T2：moment 打包 + registerView/ItemView 真实挂载** | 套件实测的两大核心功能阻断点：nldates 日期解析、Recent Files/Calendar 面板；moment ≈ +70KB 一次性决策 |
-| P1 | compat：MarkdownRenderer.render / requestUrl / editor-change 逐事务化 | 按套件需求驱动 |
+| P1 | compat：MarkdownRenderer.render / requestUrl / EditorSuggest 真实触发 | 按套件需求驱动；EditorSuggest 触发解锁 nldates 自动建议 |
 | P1 | 快捷键自定义（设置页 + 冲突检测） | CommandRegistry 已有 hotkey 字段，做编辑 UI + 持久化 |
 | P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱；10k 节点 settle 后按需渲染/抽样 |
 | P2 | 导出 PDF / HTML | 阅读视图已有渲染管线，接打印/文件输出 |
@@ -79,6 +92,10 @@ Paste URL into selection / Calendar），缺口显式记录（moment、registerV
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
 - ~~重命名打开中的文件丢 undo/光标/滚动~~（R4 根治）
 - vault 切换后指向新 vault 不存在路径的 tab 不自动关闭（保存被 no-resurrect 守卫挡住，
-  数据安全无虞，但 UX 上应关闭/标记，R4 评审 A 残留项）
-- compat `workspace.on('editor-change')` 按保存触发而非逐事务（偏差已记录，R5 随 T2 修）
+  数据安全无虞，但 UX 上应关闭/标记，R4 评审 A 残留项；R5 桌面演示再次撞见）
+- ~~compat `workspace.on('editor-change')` 按保存触发而非逐事务~~（R5 document:changed 根治）
 - live↔source 模式切换仍重建视图丢选区/滚动（R4 前已有，未恶化）
+- compat 自定义视图不随 workspace 持久化——重启后靠插件自身启动逻辑重建
+  （calendar 的 layout-ready 路径可自愈；recent-files 需用户再开，官方行为是布局还原）
+- moment-with-locales 全量打包（主 chunk +~330KB min 前）；如需瘦身可改按需 locale 子集
+- bench 口径未覆盖 compat 视图挂载/卸载路径（R5 无性能回归实测，10k vault 下未量化）

@@ -71,7 +71,183 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 4 additions (current) — Obsidian compat T0+T1 + shared document model
+## Round 5 additions (current) — compat T2: moment + registerView real mounting
+
+Calibration source: `.calibration/API-REFERENCE-R5.md` (regenerated 2026-06-10 from official
+obsidian.d.ts + suite main.js call-site scans). Implement EXACTLY against it.
+Suite facts that drive this contract:
+- nldates & calendar consume moment **exclusively via `window.moment`** (zero imports);
+  the official module also has `export const moment: typeof Moment` — we provide BOTH.
+- calendar uses the LEGACY startup API: `workspace.layoutReady` bool + `on("layout-ready")`
+  **event**, then `getRightLeaf(false).setViewState({type})` chained synchronously (non-null!).
+- recent-files: `[leaf] = getLeavesOfType(type)`, `getLeftLeaf(!1)`, `await setViewState({type})`,
+  `await revealLeaf(leaf)`, `detachLeavesOfType(type)`, `ensureSideLeaf(type,"left",{reveal:true})`
+  (onUserEnable), `getLeavesOfType(type).first()` (obsidian's Array.prototype extension!).
+- calendar's ItemView subclass touches `this.app` and `this.registerEvent` **inside its
+  constructor** — `View`'s constructor must set `app` from the leaf before subclass code runs.
+
+### moment (one-time T2 decision, ROADMAP R5 P0)
+
+- npm dependency `moment@^2.30.1` is added by the chief — implementation agents still must
+  NOT add further deps.
+- `compat/obsidian/util.ts`: `export const moment` becomes the real moment instance
+  (replaces the throwing placeholder; remove the gap plumbing for it).
+- Loader sets `window.moment` (idempotent) BEFORE evaluating any plugin main.js, in both
+  desktop and browser/fixture paths. Do not overwrite an existing `window.moment`.
+- `window._bundledLocaleWeekSpec` writes by calendar are allowed (plain window global, no-op for us).
+
+### Core: `document:changed` event (per-transaction editor signal)
+
+`core/events.ts` EventMap gains:
+```ts
+/** a LOCAL editor transaction changed a document's text (pre-save, per keystroke) */
+"document:changed": { path: string };
+```
+Emitted from `DocumentHandle.syncExtension` (core/documents.ts) when an update contains a
+local (non-sync-annotated) doc change — one emit per update, after forwarding to other views.
+NOT emitted for setText/external reload/undo-history moves without doc change.
+compat `context.ts` rewires workspace `'editor-change'` to this event (replacing the
+file:modified DEVIATION — remove that gap report and the warn in workspace.on).
+
+### Core: plugin sidebar panels (host for compat custom views)
+
+`core/plugins.ts`:
+```ts
+export interface SidebarPanelContribution {
+  id: string;                 // unique, e.g. "obsidian:view:recent-files"
+  side: "left" | "right";
+  title: string;
+  iconSvg?: string;           // raw <svg> markup for the selector button
+  el: HTMLElement;            // panel body, owned by the contributor
+}
+// PluginManager:
+addSidebarPanel(p: SidebarPanelContribution): () => void;   // disposer removes it
+readonly sidebarPanels: Store<ReadonlyArray<SidebarPanelContribution>>;
+```
+
+`core/types.ts`: `LeftPanelKind = "explorer" | "search" | (string & {})` and
+`RightPanelKind = "backlinks" | "outline" | (string & {})` — dynamic ids are sidebar panel
+ids. `core/workspace.ts` sanitizeState accepts any non-empty string for both fields.
+Selecting/falling back is the App shell's job: an unknown id renders the default panel
+(explorer / backlinks) WITHOUT mutating state, so a panel that registers later wins again.
+
+App shell (`app/App.tsx`):
+- Left side: one ribbon button per left `sidebarPanels` entry (after the built-in buttons,
+  before plugin ribbon icons; `data-testid="sidebar-panel-btn-<id>"`), toggling
+  `setLeftPanel(p.id)` like the built-ins.
+- Right side: one extra tab per right entry in the existing `right-tabs` strip
+  (`data-testid="sidebar-panel-tab-<id>"`), switching `setRightPanel(p.id)`.
+- Body: when the selected id matches a registered panel, host `p.el` via an element-host
+  div (`data-testid="sidebar-panel-<id>"`, same append/remove pattern as PluginElementHost).
+- Panel removal while selected: App falls back to the default panel automatically on the
+  next render (store update re-renders; no workspace state mutation).
+
+### Compat: real WorkspaceLeaf for sidebar views
+
+`compat/obsidian/workspace.ts` — view registry + two leaf kinds:
+- Workspace gains `_viewRegistry: Map<string, { creator: ViewCreator; pluginId: string }>`
+  and `_sideLeaves: Set<SidebarViewLeaf>` (internal).
+- `Plugin.registerView(type, viewCreator)` (plugin.ts) becomes REAL: registers into the
+  active Workspace shim's registry; duplicate type → console.warn + ignore. The plugin's
+  unload disposer runs `detachLeavesOfType(type)` then unregisters the creator.
+- `class SidebarViewLeaf` implements the WorkspaceLeaf surface (same class hierarchy or
+  duck-typed twin of the active-pane facade — implementor's choice; `instanceof
+  WorkspaceLeaf` is NOT required by the suite):
+  - carries `side: "left" | "right"`, `_app: App` (View constructor reads it), the mounted
+    `view: View | null`, panel wrapper el + panel disposer.
+  - `async setViewState({ type, active? })`: unknown type → gap report (current behavior);
+    known type → tear down any current view, `view = creator(this)`, `view.load()`,
+    append `view.containerEl` into a `.geode-compat-view-panel` wrapper,
+    `plugins.addSidebarPanel({ id: "obsidian:view:" + type, side, title:
+    view.getDisplayText(), iconSvg: getIconSvg(view.getIcon()), el: wrapper })`,
+    then `await view.onOpen()` (cast — it is protected), register in `_sideLeaves`.
+    `active: true` → reveal (below).
+  - `detach()`: fire-and-forget `view.onClose()`, `view.unload()`, panel disposer,
+    remove from `_sideLeaves`. Safe to call twice.
+  - `getViewState()` → `{ type: view?.getViewType() ?? "empty" }`;
+    `getDisplayText()`/`getIcon()` delegate to the view; `openFile` → workspace.openFile.
+- Workspace methods (signatures per API-REFERENCE-R5):
+  - `getLeftLeaf(split)` / `getRightLeaf(split)` → ALWAYS a fresh non-null SidebarViewLeaf
+    (calendar chains `.setViewState` without a null check).
+  - `getLeavesOfType(type)` → real array of mounted SidebarViewLeaf matching; built-in
+    types ("markdown" etc.) keep returning `[]` (recorded deviation).
+  - `revealLeaf(leaf)` → `Promise<void>`: mounted sidebar leaf → `setLeftPanel/'s panel id
+    or setRightPanel` (this also opens the sidebar); other leaves → resolved no-op.
+  - `detachLeavesOfType(type)` → detach every matching leaf (replaces the warn-stub).
+  - `ensureSideLeaf(type, side, opts?: { reveal?: boolean })` → existing leaf or create on
+    `side` + `setViewState({type})`; reveal when asked; returns `Promise<WorkspaceLeaf>`.
+  - `iterateAllLeaves(cb)` → activeLeaf facade + every mounted side leaf.
+  - `splitActiveLeaf(_direction?)` (legacy) → `handle.workspace.splitActivePane("row")` and
+    return a fresh active-pane facade; `getUnpinnedLeaf()` (legacy) → active-pane facade.
+  - `_flushLayoutReady()` additionally `this.trigger("layout-ready")` AFTER flushing the
+    onLayoutReady queue (calendar's legacy startup path).
+- `view.ts`: `View` constructor sets `this.app` from the leaf's `_app` when present
+  (active-pane facade also carries `_app` now); `onOpen`/`onClose` stay protected.
+  Remove the "never mounted this round" comments.
+
+### Compat: misc surface the suite's runtime paths hit
+
+- `dom.ts`: add obsidian's `Array.prototype.first()/last()` augmentation (idempotent,
+  non-enumerable) + global `activeDocument`/`activeWindow` (aliases of document/window);
+  verify `createDiv("cls-string", cb)` / `createEl(tag, "cls-string")` string-info overload
+  works (official DomElementInfo | string).
+- `icons.ts`: export `setTooltip(el: HTMLElement, tooltip: string, options?: unknown): void`
+  (sets aria-label + title); `getIconSvg` already exists.
+- `ui.ts`: export `class Keymap` with static `isModEvent(evt?: UserEvent | null):
+  PaneType | boolean` (ctrl/meta → "tab", else false).
+- `plugin.ts` App shim getters (warn-stub once + gap report, never crash):
+  `dragManager` → `{ dragFile: () => null, onDragStart: () => {} }`;
+  `internalPlugins` → `{ getEnabledPluginById: () => null, getPluginById: () => null }`;
+  `plugins` → `{ getPlugin: () => null, enabledPlugins: new Set<string>(), plugins: {} }`.
+- `vault.ts` shim: `getConfig(key: string): unknown` (non-public API calendar/nldates call):
+  `defaultViewMode` → `"source"`, `useMarkdownLinks` → `false`, anything else `undefined`;
+  each key reported as gap once.
+- `index.ts` re-exports the new names: `Keymap`, `setTooltip` (moment is already exported).
+- `fixture.ts`: register a fixture ItemView (`type "fixture-view"`, content carries
+  `data-testid="obsfixture-view-body"`), a command `fixture: open view` running the
+  recent-files sequence (getLeavesOfType → getRightLeaf(false) → await setViewState →
+  await revealLeaf), and a command asserting `window.moment` works
+  (`window.moment().format("YYYY-MM-DD")` written into a status bar item).
+
+### As-built deltas (post-review, all adversarially confirmed)
+
+- **`window.app = ctx.app`** is assigned in the loader before any plugin evaluates (both
+  suite P0 plugins read `window.app` directly — fixture probes it via
+  `data-testid="obsfixture-app-probe"`). `window.moment ??= moment` (typed, no cast).
+- moment ships as **`moment/min/moment-with-locales`** (138 locales on ONE instance —
+  a separate `moment/min/locales` entry registers against a second copy under Vite's dep
+  optimizer); global locale restored to `"en"` after the locale definitions run.
+- dom.ts installs the FULL official global block (obsidian.d.ts lines 10-48):
+  `Array.prototype.{first,last,contains,remove,shuffle,unique}`, `Array.combine`,
+  `Object.{isEmpty,each}`, `Math.{clamp,square}`, `String.{isString}` +
+  `String.prototype.{contains,format}`, `Number.isNumber` (recent-files' settings probe
+  calls `.contains()` on arrays at redraw time).
+- compat `MarkdownView extends FileView` (calendar gates on `view instanceof FileView`).
+- `SidebarViewLeaf.setViewState` detaches other leaves of the same type before mounting
+  (panel ids are type-keyed) and contains a rejecting `onOpen()` (console.error +
+  gap + rollback detach — mirrors detach()'s onClose containment).
+- `addSidebarPanel`'s disposer removes by object identity, not id.
+- `WorkspaceLeaf.openFile` maps `openState.state?.mode ?? openState.mode`
+  ("source"/"preview") onto `setTabMode`; anything else keeps the live default.
+- `GeodePlugin.onUserEnable?()` exists on the core interface;
+  `PluginManager.enable(id, { userAction: true })` (the SettingsModal toggle) calls it
+  after a successful onload — the loader wrapper forwards to the obsidian instance
+  (recent-files auto-mounts its view on user enable via `ensureSideLeaf`).
+- App shell highlights use the FALLBACK-resolved panel id (stale persisted ids no longer
+  produce a zero-selected tablist); `iconSvg` is mounted only when it parses to a single
+  `<svg>` root. SettingsModal no longer imports `@compat` — `obsidianLoadReport` is
+  forwarded through the app context (`app.obsidianLoadReport`, wired in main.tsx).
+
+### Round 5 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/events.ts, core/documents.ts, core/plugins.ts, core/types.ts, core/workspace.ts |
+| compat-views | compat/obsidian/{workspace,view,plugin,loader,context}.ts |
+| compat-misc | compat/obsidian/{dom,icons,ui,util,vault,index,fixture,gaps}.ts, global.d.ts, compat.css |
+| shell | app/App.tsx, styles/app.css |
+
+## Round 4 additions — Obsidian compat T0+T1 + shared document model
 
 ### Shared document model — `core/documents.ts`
 
