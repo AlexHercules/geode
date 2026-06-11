@@ -5,6 +5,7 @@
  *  - wikilink pre-pass on the source ([[target|alias]] → placeholder → <a class="internal-link">)
  *  - #tag pills
  *  - interactive GFM task-list checkboxes carrying their source line number
+ *  - trailing `^block-id` markers stripped outside fences (R13, all callers)
  */
 import MarkdownIt from "markdown-it";
 
@@ -64,6 +65,8 @@ const PLACEHOLDER_RE = /@@GEODELINK(\d+)@@/g;
 const PLACEHOLDER_TEST = /@@GEODELINK\d+@@/;
 const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
 const TASK_RE = /^\[( |x|X)\]\s+/;
+/** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
+const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
 /** per-render data passed through markdown-it's env (md is a module singleton) */
 interface PreviewEnv {
@@ -106,8 +109,14 @@ function replaceWikilinks(
       return line;
     }
     if (inFence) return line;
+    // R13 (intentional all-callers change): drop a trailing `^block-id`
+    // marker before inline processing — Obsidian's reading view never renders
+    // block markers. Inline-only, so source line numbers stay stable. A
+    // marker inside a trailing inline-code span cannot match (such a line
+    // ends with a backtick, which the regex rejects).
+    const stripped = line.replace(BLOCK_MARKER_RE, "");
     // odd segments are inline code spans — leave them untouched
-    return line
+    return stripped
       .split(/(`+[^`]*`+)/g)
       .map((seg, i) => {
         if (i % 2 === 1) return seg;

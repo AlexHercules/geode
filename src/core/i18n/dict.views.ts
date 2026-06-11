@@ -127,6 +127,7 @@ export const en = {
   "editor.editProperties": "Edit properties",
   "editor.embedCircular": "Circular embed: {name}",
   "editor.embedMissingHeading": 'Heading "{heading}" not found in {name}',
+  "editor.embedMissingBlock": 'Block "^{block}" not found in {name}',
 
   // ---- export ----
   "export.success": 'Exported "{name}"',
@@ -250,6 +251,7 @@ export const zh: Record<keyof typeof en, string> = {
   "editor.editProperties": "编辑属性",
   "editor.embedCircular": "循环嵌入：{name}",
   "editor.embedMissingHeading": "在 {name} 中找不到标题 \"{heading}\"",
+  "editor.embedMissingBlock": "在 {name} 中找不到块 \"^{block}\"",
 
   // ---- export ----
   "export.success": "已导出“{name}”",

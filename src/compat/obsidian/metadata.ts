@@ -57,19 +57,27 @@ export interface HeadingCache extends CacheItem {
   level: number;
 }
 
+export interface BlockCache extends CacheItem {
+  /** Block id WITHOUT the leading '^'. */
+  id: string;
+}
+
 export interface FrontMatterCache {
   [key: string]: unknown;
 }
 
 /**
- * embeds / sections / listItems / blocks / frontmatterLinks are NOT produced
- * by Geode's parser yet (all optional fields — recorded gap).
+ * embeds / sections / listItems / frontmatterLinks are NOT produced by
+ * Geode's parser yet (all optional fields — recorded gap). blocks is real
+ * since R13 (`^id` markers indexed by core's parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
   embeds?: EmbedCache[];
   tags?: TagCache[];
   headings?: HeadingCache[];
+  /** id (without '^') -> block cache; omitted when the note has no blocks. */
+  blocks?: Record<string, BlockCache>;
   frontmatter?: FrontMatterCache;
   frontmatterPosition?: Pos;
 }
@@ -223,6 +231,16 @@ export class MetadataCache extends Events {
         level: h.level,
         position: pos(h.from, lineEnd(h.from, h.level + 1 + h.text.length)),
       }));
+    }
+    // R13: ^block markers — official Record shape (assignment order makes
+    // duplicate ids last-wins, matching Obsidian's Record semantics); omitted
+    // when empty, following the headings/links/tags convention above
+    if (meta.blocks.length > 0) {
+      const blocks: Record<string, BlockCache> = {};
+      for (const b of meta.blocks) {
+        blocks[b.id] = { id: b.id, position: pos(b.from, b.to) };
+      }
+      out.blocks = blocks;
     }
     if (meta.links.length > 0) {
       out.links = meta.links.map((l) => ({

@@ -50,12 +50,23 @@ export interface TagRef {
   from: number;
 }
 
+/** A `^block-id` reference target found inside a note (R13). */
+export interface BlockRef {
+  /** block id WITHOUT the '^' */
+  id: string;
+  /** span of the whole block (paragraph approximation) INCLUDING the marker */
+  from: number;
+  to: number;
+}
+
 /** Parsed metadata for a single markdown file. */
 export interface NoteMetadata {
   path: string;
   links: LinkRef[];
   tags: TagRef[];
   headings: HeadingRef[];
+  /** `^block-id` targets, document order; duplicate ids keep the LAST one */
+  blocks: BlockRef[];
   /** YAML frontmatter, if the file starts with a --- block */
   frontmatter?: FrontmatterData;
   /** alternative names from frontmatter `aliases:` — participate in link resolution */

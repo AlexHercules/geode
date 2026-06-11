@@ -1,5 +1,6 @@
 import type {
   BacklinkEntry,
+  BlockRef,
   FileNode,
   FrontmatterData,
   GraphData,
@@ -19,6 +20,8 @@ const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
 const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
 const CODE_FENCE_RE = /```[\s\S]*?(```|$)/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
+/** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
+const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
 /**
  * Parse a leading YAML frontmatter block (minimal subset: scalar values,
@@ -127,6 +130,46 @@ export function parseNote(path: string, content: string): NoteMetadata {
     headings.push({ level: m[1].length, text: m[2].trim(), from: m.index! });
   }
 
+  // `^block-id` markers at line ends (R13). Scanned against `masked` (all
+  // replacements are same-length, so offsets line up with `content`), which
+  // excludes fences, inline code and the frontmatter block. A block span is
+  // the contiguous run of non-blank lines containing the marker line
+  // (paragraph approximation), expanded up/down to blank lines or the
+  // document edges; the frontmatter region counts as blank so spans never
+  // reach into it. Duplicate ids (case-insensitive): the LATER one wins,
+  // mirroring the official Record<string, BlockCache> overwrite semantics.
+  const blocks: BlockRef[] = [];
+  {
+    const blockIndexById = new Map<string, number>(); // lowercased id -> index
+    const lineStarts: number[] = [0];
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10 /* \n */) lineStarts.push(i + 1);
+    }
+    const lineCount = lineStarts.length;
+    const lineEndAt = (li: number): number => {
+      let end = li + 1 < lineCount ? lineStarts[li + 1] - 1 : content.length;
+      if (end > lineStarts[li] && content.charCodeAt(end - 1) === 13 /* \r */) end--;
+      return end;
+    };
+    const isBlank = (li: number): boolean =>
+      withoutFm.slice(lineStarts[li], lineEndAt(li)).trim() === "";
+    for (let li = 0; li < lineCount; li++) {
+      const m = BLOCK_MARKER_RE.exec(masked.slice(lineStarts[li], lineEndAt(li)));
+      if (!m) continue;
+      let start = li;
+      while (start > 0 && !isBlank(start - 1)) start--;
+      let end = li;
+      while (end + 1 < lineCount && !isBlank(end + 1)) end++;
+      const ref: BlockRef = { id: m[1], from: lineStarts[start], to: lineEndAt(end) };
+      const existing = blockIndexById.get(m[1].toLowerCase());
+      if (existing !== undefined) blocks[existing] = ref;
+      else {
+        blockIndexById.set(m[1].toLowerCase(), blocks.length);
+        blocks.push(ref);
+      }
+    }
+  }
+
   // frontmatter contributes tags + aliases to the index
   const fm = frontmatter?.fields ?? {};
   const aliases = asList(fmField(fm, "aliases") ?? fmField(fm, "alias"));
@@ -134,7 +177,16 @@ export function parseNote(path: string, content: string): NoteMetadata {
     tags.push({ tag: t.replace(/^#/, ""), from: 0 });
   }
 
-  return { path, links, tags, headings, frontmatter, aliases, contentLength: content.length };
+  return {
+    path,
+    links,
+    tags,
+    headings,
+    blocks,
+    frontmatter,
+    aliases,
+    contentLength: content.length,
+  };
 }
 
 /**

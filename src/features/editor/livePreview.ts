@@ -17,6 +17,9 @@
  * note are replaced with a NoteEmbedWidget — a reading-view-isomorphic
  * placeholder hydrated by the shared core engine. Image check runs FIRST;
  * unresolved targets stay raw text. Display only: never writes the document.
+ *
+ * R13: trailing block id markers (" ^id") are hidden — leading space included
+ * — unless the selection touches the line, mirroring the reading-view strip.
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
@@ -282,6 +285,9 @@ const frontmatterField = StateField.define<DecorationSet>({
 
 const WIKILINK_RE = /\[\[([^\[\]]+?)\]\]/g;
 
+/** Trailing block id marker, e.g. " ^quote-1" (R13 frozen contract regex). */
+const BLOCK_MARK_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
+
 interface Spec {
   from: number;
   to: number;
@@ -308,6 +314,8 @@ function computeDecorations(
     replaces.push({ from, to, deco: Decoration.replace({}) });
   };
 
+  /** line numbers inside FencedCode nodes — block-marker hiding skips them */
+  const fencedLines = new Set<number>();
   for (const range of view.visibleRanges) {
     syntaxTree(state).iterate({
       from: range.from,
@@ -464,6 +472,7 @@ function computeDecorations(
             const first = doc.lineAt(node.from).number;
             const last = doc.lineAt(node.to).number;
             for (let n = first; n <= last; n++) {
+              fencedLines.add(n); // marker hiding must not touch fence content (R13 contract)
               const line = doc.line(n);
               let cls = "cm-live-codeline";
               if (n === first) cls += " cm-live-codeline-first";
@@ -540,6 +549,27 @@ function computeDecorations(
           }),
         });
       }
+    }
+
+    /* ---- trailing block id markers " ^id" (R13) ---- */
+    // Per-line scan. Fenced code is EXCLUDED (R13 contract: "fence 内不处理" —
+    // mirrors the reading-view strip in core/markdown.ts and the block index,
+    // which both ignore fence interiors; fencedLines was collected from the
+    // FencedCode syntax nodes above). The hide span starts at the matched
+    // leading whitespace and runs to line end; selection anywhere on the line
+    // reveals the raw marker. The merge pass below drops it if a wider
+    // replace (embed widget, …) already covers it.
+    const firstLine = doc.lineAt(range.from).number;
+    const lastLine = doc.lineAt(range.to).number;
+    for (let n = firstLine; n <= lastLine; n++) {
+      if (fencedLines.has(n)) continue; // fence content is never a block marker
+      const line = doc.line(n);
+      if (line.from < fmEnd) continue; // frontmatter is owned by the pill field
+      const bm = BLOCK_MARK_RE.exec(line.text);
+      if (!bm) continue;
+      const markFrom = line.from + bm.index;
+      if (lineTouched(state, markFrom)) continue; // cursor on the line: reveal
+      hide(markFrom, line.from + bm.index + bm[0].length);
     }
   }
 

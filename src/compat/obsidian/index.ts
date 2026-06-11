@@ -16,6 +16,7 @@ export { TAbstractFile, TFile, TFolder, type FileStats } from "./files";
 export { Vault, CompatDataAdapter, type DataAdapter, type DataWriteOptions } from "./vault";
 export {
   MetadataCache,
+  type BlockCache,
   type CachedMetadata,
   type CacheItem,
   type EmbedCache,

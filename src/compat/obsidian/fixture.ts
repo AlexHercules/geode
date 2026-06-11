@@ -10,6 +10,9 @@
  * R9: the suggest calls setInstructions in its constructor so the browser E2E
  * can assert the instructions bar (editor-suggest-instructions) renders, and
  * cursor movement out of the trigger range (ArrowLeft) closes the popup.
+ * R13: the MarkdownRenderer probe also renders ![[Welcome]] (note embed —
+ * assert .geode-embed-note-content) and ![[Fixture Block#^fxblock]] against a
+ * fixture-created note, probing getFileCache().blocks along the way.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -220,19 +223,33 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
       }
     });
 
-    // R6: MarkdownRenderer probe — renders into a child of a status bar item
+    // R6: MarkdownRenderer probe — renders into a child of a status bar item.
+    // R13: the source also exercises a note embed (![[Welcome]] — the E2E can
+    // assert .geode-embed-note-content) and a ^block embed positive case
+    // against a note the fixture creates itself (content fully controlled).
     var mdHostEl = this.addStatusBarItem();
     mdHostEl.setAttr("data-testid", "obsfixture-md-host");
     this.addCommand({
       id: "render-markdown",
       name: "Render markdown",
       callback: async () => {
+        var blockPath = "Fixture Block.md";
+        if (!self.app.vault.getAbstractFileByPath(blockPath)) {
+          await self.app.vault.create(blockPath, "Block embed target paragraph. ^fxblock\\n");
+        }
+        // bounded poll: wait for the metadata index to expose the block id
+        // (also a live probe of getFileCache().blocks) before rendering
+        for (var i = 0; i < 30; i++) {
+          var cache = self.app.metadataCache.getCache(blockPath);
+          if (cache && cache.blocks && cache.blocks.fxblock) break;
+          await new Promise(function (resolve) { setTimeout(resolve, 100); });
+        }
         mdHostEl.empty();
         var target = mdHostEl.createDiv({ attr: { "data-testid": "obsfixture-md-render" } });
         var active = self.app.workspace.getActiveFile();
         await obsidian.MarkdownRenderer.render(
           self.app,
-          "**bold** [[Welcome]]\\n\\n- [ ] task",
+          "**bold** [[Welcome]]\\n\\n- [ ] task\\n\\n![[Welcome]]\\n\\n![[Fixture Block#^fxblock]]",
           target,
           active ? active.path : "",
           self

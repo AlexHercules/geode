@@ -7,8 +7,11 @@
 // "moment/min/locales" entry registers against a second copy under Vite's
 // dep optimizer. Defining locales switches the global one; restored below.
 import momentImpl from "moment/min/moment-with-locales";
+import { hydrateEmbeds } from "@core/embeds";
 import { renderMarkdownToHtml } from "@core/markdown";
+import type { MetadataIndex } from "@core/metadata";
 import { base64ToBytes, bytesToBase64, httpRequest } from "@core/net";
+import type { Vault as GeodeVault } from "@core/vault";
 import type { Component } from "./component";
 import { reportGap } from "./gaps";
 import type { CachedMetadata, FrontMatterCache } from "./metadata";
@@ -17,12 +20,15 @@ import type { App } from "./plugin";
 /* ---------------- host handle plumbing (R6 contract) ---------------- */
 
 /**
- * Minimal structural slice of the Geode AppHandle that module-level APIs
- * (MarkdownRenderer.render) need. context.ts sets it on create and clears it
- * in dispose; the real AppHandle satisfies this shape structurally.
+ * Slice of the Geode AppHandle that module-level APIs (MarkdownRenderer.render)
+ * need. context.ts sets it on create and clears it in dispose; the real
+ * AppHandle satisfies this shape structurally. R13 widens vault/metadata to
+ * the real core types — the embed hydration engine (core/embeds) takes them
+ * nominally.
  */
 export interface CompatHostHandle {
-  metadata: { resolveLink(target: string, fromPath: string): string | null };
+  vault: GeodeVault;
+  metadata: MetadataIndex;
   workspace: { openFile(path: string, opts?: { newTab?: boolean }): void };
 }
 
@@ -368,11 +374,53 @@ export function request(request: RequestUrlParam | string): Promise<string> {
 
 /* ---------------- MarkdownRenderer (real, R6) ---------------- */
 
+/** MIME by lowercase extension — mirrors IMAGE_EXTS in core/markdown.ts. */
+const EMBED_MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+};
+
+/**
+ * path → settled/in-flight blob-URL promise for embed images (R13).
+ * Deliberately NOT invalidated on vault events: compat MarkdownRenderer output
+ * is a one-shot fragment that is never re-rendered on file changes, so a
+ * snapshot-at-render-time URL is the documented behaviour.
+ */
+const embedUrlCache = new Map<string, Promise<string>>();
+
+/** Cached vault.readBinary → blob object URL (failed loads evict for retry). */
+function compatEmbedSrc(vault: GeodeVault, path: string): Promise<string> {
+  const cached = embedUrlCache.get(path);
+  if (cached) return cached;
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  const mime = EMBED_MIME_BY_EXT[ext] ?? "application/octet-stream";
+  const load = vault.readBinary(path).then((bytes) => {
+    // copy into a fresh ArrayBuffer-backed view: TS types adapter bytes over
+    // ArrayBufferLike, which BlobPart rejects (and a view may have an offset)
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return URL.createObjectURL(new Blob([copy], { type: mime }));
+  });
+  load.catch(() => {
+    // identity-guarded: the entry may have been replaced meanwhile
+    if (embedUrlCache.get(path) === load) embedUrlCache.delete(path);
+  });
+  embedUrlCache.set(path, load);
+  return load;
+}
+
 /**
  * Renders through the same markdown-it pipeline as the preview (core/markdown).
  * Links resolve via the current loader context's host handle; without one
  * (render called outside a compat context AND `app` is not our App shim) the
- * markdown still renders, with every wikilink unresolved.
+ * markdown still renders, with every wikilink unresolved. R13: `![[...]]`
+ * image and note embeds hydrate through the shared core engine before the
+ * returned promise resolves (the official signature is Promise<void>).
  */
 export class MarkdownRenderer {
   static async render(
@@ -387,13 +435,31 @@ export class MarkdownRenderer {
       _getCompatHostHandle() ??
       (app as unknown as { _geode?: { handle?: CompatHostHandle } } | null)?._geode?.handle ??
       null;
-    const html = renderMarkdownToHtml(markdown, (target) =>
-      handle ? handle.metadata.resolveLink(target, sourcePath) : null,
+    const html = renderMarkdownToHtml(
+      markdown,
+      (target) => (handle ? handle.metadata.resolveLink(target, sourcePath) : null),
+      {
+        ...(handle
+          ? { resolveEmbed: (target: string) => handle.metadata.resolveAttachment(target, sourcePath) }
+          : {}),
+        noteEmbeds: true,
+      },
     );
     // markdown-it runs html:false — no raw-HTML injection from plugin input
     el.innerHTML = html;
     el.classList.add("markdown-rendered");
+    // R13: fill image srcs + expand note transclusions before resolving;
+    // without a handle there is nothing to hydrate (no embed placeholders)
+    if (handle) {
+      await hydrateEmbeds(el, {
+        vault: handle.vault,
+        metadata: handle.metadata,
+        imageSrc: (path) => compatEmbedSrc(handle.vault, path),
+        ancestors: new Set([sourcePath]),
+      });
+    }
     // no source mapping for plugin-rendered fragments → checkboxes are inert
+    // (runs AFTER hydration so checkboxes inside embedded notes are covered)
     el.querySelectorAll<HTMLInputElement>("input.task-checkbox").forEach((cb) => {
       cb.disabled = true;
     });

@@ -7,8 +7,8 @@
  *    (editor passes blob URLs, export passes data: URIs); a failure only
  *    marks the img `.geode-embed-failed`.
  *  - `span.geode-embed-note` is expanded into a note transclusion: header
- *    link + rendered note content (optionally sliced to a heading section),
- *    then hydrated recursively.
+ *    link + rendered note content (optionally sliced to a heading section or
+ *    a `^block-id` block, R13), then hydrated recursively.
  *
  * Guard rails (self-defined — Obsidian documents no nesting/cycle limits):
  * depth >= 5 renders a plain link sign; a cycle (embedded path already in
@@ -37,6 +37,9 @@ export interface HydrateContext {
 /** Nesting guard (self-defined; Obsidian documents no limit). */
 const MAX_EMBED_DEPTH = 5;
 
+/** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
+const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
+
 /** Markdown-stripped, space-collapsed, lowercased heading text — mirrors
  *  Obsidian's stripHeading link-matching semantics (loose second pass only;
  *  the exact raw-text match always wins first). */
@@ -54,8 +57,8 @@ function noteName(path: string): string {
 }
 
 /** Degraded rendering: a plain internal link inside the container (depth
- *  limit and `#^block` subpaths). Clicks ride the caller's existing
- *  `a.internal-link` delegation — data-target resolves via resolveLink. */
+ *  limit). Clicks ride the caller's existing `a.internal-link` delegation —
+ *  data-target resolves via resolveLink. */
 function renderLinkSign(span: HTMLElement, path: string, display: string): void {
   span.textContent = "";
   const a = document.createElement("a");
@@ -104,15 +107,27 @@ async function hydrateNote(
       renderLinkSign(span, path, display);
       return;
     }
-    if (subpath.startsWith("^")) {
-      // block references are out of scope this round — degrade to a link
-      renderLinkSign(span, path, display);
-      return;
-    }
-
     const content = await ctx.vault.read(path);
     let slice = content;
-    if (subpath) {
+    if (subpath.startsWith("^")) {
+      // R13: `#^block-id` — case-insensitive id match against the block
+      // index; slice [from, to) and drop the trailing ` ^id` marker so it
+      // never renders (the render pipeline strips line-end markers too, but
+      // the contract calls for an explicit tail strip here)
+      const id = subpath.slice(1);
+      const lower = id.toLowerCase();
+      const blocks = ctx.metadata.getMetadata(path)?.blocks ?? [];
+      const hit = blocks.find((b) => b.id.toLowerCase() === lower);
+      if (!hit) {
+        renderCallout(
+          span,
+          "geode-embed-missing",
+          t("editor.embedMissingBlock", { block: id, name: noteName(path) }),
+        );
+        return;
+      }
+      slice = content.slice(hit.from, hit.to).replace(BLOCK_MARKER_RE, "");
+    } else if (subpath) {
       const headings = ctx.metadata.getMetadata(path)?.headings ?? [];
       const lower = subpath.toLowerCase();
       let idx = headings.findIndex((h) => h.text.toLowerCase() === lower);
