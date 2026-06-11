@@ -71,21 +71,42 @@ ensureSideLeaf、legacy layout-ready/splitActiveLeaf/getUnpinnedLeaf）；官方
 nldates "tomorrow"→`[[date]]` 桌面实测通过；reload 幂等零 error。
 截图 docs/screenshots/r5-desktop-killer-demo.png。
 
-## R6 候选 — 兼容层余项 + 商业打磨（按优先级）
+### R6 — v0.6（2026-06-10）compat 余项三件 + 快捷键自定义，nldates 自动建议解锁
+
+**EditorSuggest 真实触发**（套件解锁标杆）：core `document:changed` 驱动 EditorSuggestManager
+（注册序、首个非 null onTrigger 胜出、async stale-token、popup 键盘捕获先查 suggest.scope
+——nldates Shift+Enter 路径、非公开 `this.suggestions.useSelectedItem`、焦点守卫）；Scope 做实。
+**MarkdownRenderer.render / requestUrl / request**：markdown-it 管线提取到 core/markdown.ts
+共享；requestUrl 官方全形状（RequestUrlResponsePromise 便捷属性、throw 语义、data: URL 层内
+解析），桌面走 Rust `http_request`（ureq，`#[tauri::command(async)]`，CORS-free），浏览器 fetch。
+**快捷键自定义**：CommandRegistry 覆盖 API（getEffectiveHotkey/setHotkeyOverride/
+findHotkeyConflicts/normalizeHotkey + hotkeyFromEvent 单一文法权威、热路径预解析缓存）、
+设置页 Hotkeys 节（捕获模式、冲突双行徽标、重置、localStorage 持久化）。
+评审 5 维 13 finding 确认（9 根因）2 证伪，全修复（含 1 个 Tauri 2 线程模型事实性错误——
+同步命令在主线程跑，30s 阻塞请求会停摆自动保存）。
+**桌面实测**（release `geode.exe compat-vault`）：逐键 `@tomorrow` → 弹层 → Enter →
+`[[2026-06-11]]`；套件 5/5 不回退、reload 幂等。截图
+docs/screenshots/r6-desktop-nldates-autosuggest.png。
+教训：nldates 的 onTrigger 锚点是逐键增量建立的（首键 "@" 落锚、后续复用 context.start）
+——探针一次性插入整串文本测不到触发，必须逐字符事务模拟真实输入。
+
+## R7 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P1 | compat：MarkdownRenderer.render / requestUrl / EditorSuggest 真实触发 | 按套件需求驱动；EditorSuggest 触发解锁 nldates 自动建议 |
-| P1 | 快捷键自定义（设置页 + 冲突检测） | CommandRegistry 已有 hotkey 字段，做编辑 UI + 持久化 |
 | P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱；10k 节点 settle 后按需渲染/抽样 |
-| P2 | 导出 PDF / HTML | 阅读视图已有渲染管线，接打印/文件输出 |
+| P2 | 导出 PDF / HTML | 阅读视图渲染管线已提取到 core/markdown.ts，接打印/文件输出 |
 | P2 | i18n（中/英起步） | UI 字符串集中化 |
 | P2 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
 | P2 | watcher 回声抑制 | vault.modify 记录 (path, hash)，外部事件命中则跳过 |
+| P2 | compat：suggest 指令条渲染 + 光标移动重评估 | R6 两条显式缺口（见 OBSIDIAN-COMPAT 缺口表） |
 
 ## 已知技术债
 
 - 图谱最大化窗口下居中偏移（R3 P1）
+- compat EditorSuggest：纯光标移动不重评估 onTrigger（逐事务驱动，显式偏差）；
+  setInstructions 指令条不渲染（gap 上报）；popup 不随窗口 resize/scroll 重定位
+- moment-with-locales + ureq：安装包体量随轮次缓涨，商业分发前可做按需裁剪
 - 自身写入回声触发 watcher（幂等无害，R3 P2）
 - 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口）
 - 图谱 10k 节点 ~12fps（基准结论：需 settle 后按需渲染/抽样/WebGL，见 docs/PERFORMANCE.md）
