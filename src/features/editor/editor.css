@@ -385,6 +385,14 @@
   }
 }
 
+/* reading-view reveal flash (R15) — same one-shot accent fade as
+   .cm-reveal-flash, applied to the located preview heading; EditorPane
+   removes the class ~1.2s later (timer held in a ref, cleared on unmount). */
+.preview-content .preview-reveal-flash {
+  animation: reveal-flash-fade 1.2s ease-out forwards;
+  border-radius: 4px;
+}
+
 /* frontmatter "Properties · n fields" pill (block widget) */
 .cm-live-frontmatter {
   display: inline-flex;

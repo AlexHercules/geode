@@ -237,6 +237,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const reveal = useStore(app.workspace.revealTarget);
   /** pending flash-clear timer id — zeroed on fire, cleared on unmount */
   const flashTimerRef = useRef<number | null>(null);
+  /** preview heading currently flashing (R15) — class removed when the timer fires */
+  const previewFlashElRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     return () => {
@@ -244,36 +246,13 @@ export function EditorPane({ tab }: { tab: TabState }) {
         window.clearTimeout(flashTimerRef.current);
         flashTimerRef.current = null;
       }
+      previewFlashElRef.current = null;
     };
   }, []);
 
-  useEffect(() => {
-    // Consume only when this pane targets the requested path AND a CM view
-    // exists (live/source). Preview mode or a path mismatch leaves the
-    // request pending — openFile switches tabs first, so this pane may mount
-    // (handle ready, view built by the lifecycle effect above) AFTER the
-    // requestReveal; depending on both `handle` and `reveal` re-runs the
-    // check on either side arriving.
-    if (!reveal || !handle || reveal.path !== handle.path) return;
-    if (isPreview) return;
-    const view = viewRef.current;
-    if (!view) return;
-    // clamp: subpath offsets come from the metadata index, which may lag
-    // unsaved local edits
-    const from = Math.min(Math.max(0, reveal.from), view.state.doc.length);
-    view.dispatch({
-      selection: { anchor: from },
-      effects: [EditorView.scrollIntoView(from, { y: "center" }), revealFlash.of({ from })],
-    });
-    app.workspace.revealTarget.set(null);
-    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
-    flashTimerRef.current = window.setTimeout(() => {
-      flashTimerRef.current = null;
-      // the view may have been rebuilt meanwhile — a fresh field starts
-      // empty, so dispatching the clear there is a harmless no-op
-      viewRef.current?.dispatch({ effects: clearRevealFlash.of(null) });
-    }, 1200);
-  }, [app, handle, isPreview, reveal]);
+  // NOTE: the consuming effect lives below the previewHtml memo — the preview
+  // branch (R15) must observe previewHtml so it re-runs only after the
+  // rendered HTML has been committed to the DOM.
 
   /* ---------- report the active view when this tab becomes active ---------- */
 
@@ -377,6 +356,80 @@ export function EditorPane({ tab }: { tab: TabState }) {
     const el = previewContentRef.current;
     if (el) void hydrateEmbeds(el, app, handle.path);
   }, [app, tab.mode, handle, previewHtml]);
+
+  /* ---------- one-shot reveal consumption (R14 editor / R15 preview) ---------- */
+
+  useEffect(() => {
+    // Consume only when this pane targets the requested path AND the matching
+    // surface is mounted: a CM view (live/source) or the rendered reading-view
+    // DOM (R15). A path mismatch leaves the request pending — openFile
+    // switches tabs first, so this pane may mount (handle ready, view built /
+    // preview HTML committed) AFTER the requestReveal; depending on `handle`,
+    // `reveal` AND `previewHtml` re-runs the check on whichever side arrives
+    // last (effects run post-commit, so previewContentRef holds the DOM
+    // rendered from the CURRENT previewHtml when this fires).
+    if (!reveal || !handle || reveal.path !== handle.path) return;
+    if (isPreview) {
+      const content = previewContentRef.current;
+      const scroller = previewScrollRef.current;
+      if (!content || !scroller) return; // not committed yet — stay pending
+      // Heading reveal: exact `from` match against the metadata index, then
+      // locate by document-order ordinal — the preview pipeline renders
+      // headings 1:1, so the ordinal is stabler than text matching. Headings
+      // inside hydrated note embeds (.geode-embed-note) are excluded so late
+      // embed hydration cannot shift the ordinals.
+      const headings = app.metadata.getMetadata(handle.path)?.headings ?? [];
+      const ordinal = headings.findIndex((h) => h.from === reveal.from);
+      let target: HTMLElement | null = null;
+      if (ordinal >= 0) {
+        const els = Array.from(
+          content.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6"),
+        ).filter((el) => !el.closest(".geode-embed-note"));
+        target = els[ordinal] ?? null;
+      }
+      if (target) {
+        target.scrollIntoView({ block: "center" });
+        // restart cleanly if a previous flash is still running
+        const prev = previewFlashElRef.current;
+        if (prev) prev.classList.remove("preview-reveal-flash");
+        void target.offsetWidth; // reflow so re-adding the class replays the animation
+        target.classList.add("preview-reveal-flash");
+        previewFlashElRef.current = target;
+        if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+        flashTimerRef.current = window.setTimeout(() => {
+          flashTimerRef.current = null;
+          previewFlashElRef.current?.classList.remove("preview-reveal-flash");
+          previewFlashElRef.current = null;
+        }, 1200);
+      } else {
+        // Block / unlocatable target: proportional approximation against the
+        // raw source length (reveal.from shares that coordinate space). No
+        // flash — approximate by design (recorded口径).
+        const len = app.metadata.getMetadata(handle.path)?.contentLength || handle.getText().length || 1;
+        scroller.scrollTop =
+          (reveal.from / len) * scroller.scrollHeight - scroller.clientHeight / 2;
+      }
+      app.workspace.revealTarget.set(null);
+      return;
+    }
+    const view = viewRef.current;
+    if (!view) return;
+    // clamp: subpath offsets come from the metadata index, which may lag
+    // unsaved local edits
+    const from = Math.min(Math.max(0, reveal.from), view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: from },
+      effects: [EditorView.scrollIntoView(from, { y: "center" }), revealFlash.of({ from })],
+    });
+    app.workspace.revealTarget.set(null);
+    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      flashTimerRef.current = null;
+      // the view may have been rebuilt meanwhile — a fresh field starts
+      // empty, so dispatching the clear there is a harmless no-op
+      viewRef.current?.dispatch({ effects: clearRevealFlash.of(null) });
+    }, 1200);
+  }, [app, handle, isPreview, reveal, previewHtml]);
 
   const onPreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
