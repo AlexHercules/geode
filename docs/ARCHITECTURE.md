@@ -6,7 +6,7 @@ Stack: **Tauri 2 (Rust shell) + React 18 + TypeScript (strict) + Vite + CodeMirr
 ## Layering — who may import what
 
 ```
-src/core/      pure TS, NO React components (only hooks in store.ts). Never imports features/app.
+src/core/      pure TS, NO React components (only hooks in store.ts / i18n.ts). Never imports features/app.
                (May import @codemirror/* — the shared document model lives here.)
 src/app/       shell: App.tsx layout, AppContext, icons. Imports core + feature entry components
                + compat (bootstrap wiring only).
@@ -71,7 +71,142 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 7 additions (current) — 图谱打磨（fit/局部图谱/10k 性能）+ 导出 HTML/PDF
+## Round 8 additions (current) — i18n（中/英）+ watcher 回声抑制
+
+Native round（compat 表面零改动——套件只需不回退）。No new npm deps（i18n 手写，不引 i18next）。
+
+### Core: i18n — `core/i18n.ts` (new) + `core/i18n/dict.*.ts` (new, 3 fragments)
+
+Layering amendment: `core/i18n.ts` is the SECOND hooks exception besides store.ts
+(pure TS + one React hook; never imports components).
+
+```ts
+export type Locale = "en" | "zh";
+export type I18nKey = keyof typeof en;   // en = merged fragment dictionaries
+/** singleton — current locale. Initial: localStorage "geode.locale" if valid,
+ *  else navigator.language startsWith("zh") → "zh", else "en". */
+export const locale: Store<Locale>;
+export function setLocale(l: Locale): void;  // sets store + persists localStorage
+/** Translate: current-locale dict → en fallback → the key itself (never throws).
+ *  Params interpolate "{name}"-style placeholders. */
+export function t(key: I18nKey, params?: Record<string, string | number>): string;
+/** React hook: subscribes to `locale` (useStore) and returns `t` — components
+ *  re-render on locale switch. Usage: `const t = useI18n();` */
+export function useI18n(): typeof t;
+```
+
+- **Dictionary fragments** (one per sweep agent — exclusive ownership, no merge
+  conflicts): `core/i18n/dict.app.ts`, `dict.panels.ts`, `dict.views.ts`, each
+  `export const en = { ... } as const;` + `export const zh: Record<keyof typeof en, string> = { ... };`
+  `core/i18n.ts` spreads them: `const en = { ...appEn, ...panelsEn, ...viewsEn }`.
+  Key namespaces match the fragment: `app.*`/`cmd.*`/`plugin.*` (dict.app),
+  `explorer.*`/`search.*`/`backlinks.*`/`outline.*`/`palette.*`/`switcher.*` (dict.panels),
+  `settings.*`/`graph.*`/`editor.*`/`export.*` (dict.views).
+- **Scope**: every user-visible string in src/app, src/main.tsx, src/features,
+  src/plugins — JSX text, placeholder/title/aria-label, command names, empty states,
+  toasts, confirm dialogs. **NOT in scope**: console.* messages (stay English),
+  src/compat/** (untouched this round), data-testid values, localStorage keys.
+- **Persisted strings stay language-neutral**: tab titles persist in workspace
+  state — the graph tab's stored title is ignored at render time (tab strip renders
+  `t("app.graphTab")` when `viewType === "graph"`); file tabs keep the basename.
+
+### Core: command names become translatable — `core/types.ts` + `core/commands.ts` (chief, pre-phase)
+
+```ts
+// types.ts
+interface Command { name: string | (() => string); ... }   // string still valid (compat passes strings)
+// commands.ts
+export function getCommandName(cmd: Command): string;       // resolves the thunk
+```
+
+- Native registrations switch to `name: () => t("cmd.xxx")` — NO re-registration on
+  locale switch; display sites resolve at render time.
+- `CommandRegistry.list()` sorts via `getCommandName`. All display/filter sites
+  (CommandPalette fuzzy + chips, SettingsModal hotkeys rows + conflict labels) use
+  `getCommandName` and subscribe to locale via `useI18n()`.
+
+### Settings: language picker — `features/settings/SettingsModal.tsx` (Appearance section)
+
+Setting row "Language / 语言": `<select data-testid="settings-language">` with options
+`en` → "English", `zh` → "中文" (option labels are SELF-named, never translated).
+onChange → `setLocale`. Locale persists across reload.
+
+### 中文术语表（zh 文案统一口径，向 Obsidian 中文社区习惯对齐）
+
+vault=库 · note=笔记 · tab=标签页 · pane=窗格 · backlinks=反向链接 · outgoing links=出链 ·
+outline=大纲 · graph view=关系图谱 · command palette=命令面板 · quick switcher=快速切换 ·
+live preview=实时预览 · reading view=阅读视图 · source mode=源码模式 · appearance=外观 ·
+hotkeys=快捷键 · theme=主题 · dark/light=深色/浅色 · export=导出 · tag=标签 ·
+folder=文件夹 · daily note=日记 · word count=字数 · status bar=状态栏 · sidebar=侧边栏 ·
+unresolved=未创建 · settings=设置 · plugin=插件。语气：简体中文、不加句号的短标签、
+按钮用动词短语（"新建笔记"），空状态用完整句（"打开笔记以查看其反向链接。"）。
+
+### Core: watcher echo suppression — `core/vault.ts` ONLY
+
+Self-writes echo back through the fs watcher today (full refreshTree + double
+reload reads per save, downstream equality makes it a no-op). Suppress at the source:
+
+- `modify()`/`create()` record `recentSelfWrites: Map<path, { hash, at }>`
+  (FNV-1a 32-bit over the written content, local helper) **BEFORE** awaiting
+  `adapter.writeFile` (the echo can arrive while the write promise is pending).
+  Entries expire after 10s (TTL pruned opportunistically); a newer write to the
+  same path overwrites the entry. Entries are KEPT until expiry (notify may
+  deliver several echo batches for one write).
+- `handleExternalChanges(paths)` partitions first: a path with a fresh entry →
+  `adapter.readFile` + hash compare. Match → **suppressed**: keep the content
+  cache (it IS the written content — no cacheDelete), emit nothing for this path.
+  Mismatch or read error → delete the entry, treat as a real external change.
+- ALL paths suppressed → return before `refreshTree` (the main win: zero work per
+  auto-save echo). Otherwise the existing pipeline runs for the surviving paths only.
+- Deletes/renames/folders: out of scope — only paths with recorded entries are
+  ever suppressed; everything else keeps current behavior.
+- Probes: `window.__geodeWatchEcho = { suppressed, external }` counters (both ends,
+  cheap, always on). `MemoryVaultAdapter.startWatch` additionally registers
+  `window.__geodeFireWatch = (paths: string[]) => onChange(paths)` so browser E2E
+  can simulate watcher events (desktop notify path is exercised in the desktop pass).
+
+### As-built deltas (post-review, adversarially verified — R8)
+
+Review: 5 dimensions, 10 findings → 5 confirmed (ALL downgraded to minor by adversarial
+verification — zero surviving major/critical), 5 refuted. Disposition:
+
+- **FIXED — failed writes clear their fingerprint**: `modify()`/`create()` wrap the adapter
+  write in try/catch; on failure `clearSelfWrite(path, content)` removes the entry only if
+  it still belongs to that write (hash equality — a newer concurrent write keeps its own).
+  Without this, a failed write's fingerprint could suppress a byte-identical REAL external
+  change within the 10s TTL.
+- **Recorded limitation (no code change)** — un-awaited concurrent `modify()` calls to the
+  same path keep only the LAST fingerprint; an echo of the first write hashes as external →
+  one redundant refresh + spurious external events. Downstream is fully guarded (dirty
+  check + content-equality no-op; `vault:external-changed` has zero subscribers) and the
+  failure direction is safe-by-design (mis-classify as external, never mis-suppress).
+- **Recorded limitation (no code change)** — strings resolved at CM6 view/widget BUILD time
+  (editor placeholder, task-checkbox aria-label, frontmatter pill) keep the previous locale
+  until the view/widget rebuilds (mode switch / tab reopen / editing the line). Intentional:
+  rebuilding live editors on locale switch risks editor state for an a11y label. Noted in
+  code comments at each site.
+- Refuted (not defects, examples): non-md external creates emitting `file:created` is
+  pre-existing R2 behavior untouched by the partition; `Record<keyof typeof en, string>`
+  exactly matches the contract's fragment shape; ErrorBoundary's imperative `t()` is a
+  terminal page (no live switch reachable).
+
+### Round 8 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| watcher | core/vault.ts ONLY |
+| sweep-app | app/App.tsx, src/main.tsx, src/plugins/*.ts, core/i18n/dict.app.ts |
+| sweep-panels | features/explorer/*, features/search/*, features/backlinks/*, features/outline/*, features/palette/*, core/i18n/dict.panels.ts |
+| sweep-views | features/settings/*, features/graph/*, features/editor/* (strings only), features/export/*, core/i18n/dict.views.ts |
+
+Pre-phase (chief, before agents start): this section + `core/i18n.ts` complete +
+3 fragment stubs + `Command.name` widening + `getCommandName` — tsc green at the
+starting line. Frozen cross-agent surfaces: the `core/i18n.ts` API block, the
+fragment file shape, `getCommandName`, `data-testid="settings-language"`,
+`window.__geodeFireWatch` / `__geodeWatchEcho`. Every agent runs `npx tsc --noEmit`
+before finishing; no agent touches another's files; no new npm deps.
+
+## Round 7 additions — 图谱打磨（fit/局部图谱/10k 性能）+ 导出 HTML/PDF
 
 Native round (no obsidian API surface change — compat suite must simply not regress).
 

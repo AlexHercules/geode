@@ -43,4 +43,8 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
   拿 AppHandle，直接驱动 workspace/vault 验证 core 行为（R3 回归即此法）
 - 桌面：`geode.exe demo-vault` + 截图；外部改 `demo-vault/*.md` 验证 watcher；
   `demo-vault/.geode/plugins/hello-status.js` 验证外部插件
+- i18n（R8）：UI 字符串一律 `t()/useI18n()`（core/i18n.ts，键放对应命名空间的
+  core/i18n/dict.*.ts 片段）；验证用设置页 `settings-language` 下拉 + localStorage
+  `geode.locale`；watcher 回声口径：`window.__geodeWatchEcho` 计数器、浏览器
+  `window.__geodeFireWatch(paths)` 模拟外部事件
 - demo vault 是回归夹具，测试痕迹要清理后再提交

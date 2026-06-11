@@ -109,15 +109,38 @@ settle 期 24ms/帧（~42fps）、单帧 3.9ms、idle 0 draw；bench=1000 不回
 calendar 重挂载）、export_write 真实落盘+相对路径拒绝。
 截图 docs/screenshots/r7-desktop-graph-maximized.png、r7-bench10k-sampled.png。
 
-## R8 候选 — 商业打磨（按优先级）
+### R8 — v0.8（2026-06-11）i18n（中/英）+ watcher 回声抑制
+
+**i18n**（零 npm 依赖，手写 ~80 行运行时）：`core/i18n.ts`（locale Store + localStorage
+`geode.locale` 持久化 + `navigator.language` zh 自动检测 + en 回退 + `{param}` 插值 +
+`useI18n()` hook——core 第二个 hooks 例外）；字典按 agent 所有权拆 3 个片段文件
+（dict.app/panels/views，~188 键，`zh: Record<keyof typeof en, string>` 缺译即类型错误）；
+**Command.name thunk 化**（`string | (() => string)` + `getCommandName`，compat 字符串名
+不受影响，显示处逐 locale 解析——切语言命令面板/快捷键页即时翻转且无需重注册）；
+设置页 Appearance 语言下拉（`settings-language`）；graph tab 持久化标题渲染层覆盖；
+中文术语表冻结在契约（向 Obsidian 中文社区对齐）。
+**watcher 回声抑制**（R3 P2 债清偿）：modify/create 在 await 写盘前记录 FNV-1a 指纹
+（10s TTL），handleExternalChanges 先分流——指纹命中即抑制（保缓存、零事件），全部命中
+在 refreshTree 前直接返回（自动保存回声零开销）；不匹配/读错即放行（宁可放过不可错杀）；
+探针 `__geodeWatchEcho` 计数器 + Memory 适配器 `__geodeFireWatch` E2E 注入口。
+评审 5 维 10 finding：5 确认（对抗验证全部降级 minor）、5 证伪；修 1 处（写失败时
+清理指纹，防失败写入的 hash 残留 TTL 窗口误抑制同字节外部修改），4 处记显式已知限制。
+浏览器实测：zh-CN 环境自动中文、设置页切换即时全 UI 翻转、重载持久化、命令面板中文名、
+回声计数 suppressed 1→2（双批回声）/ external 仅无指纹路径。
+桌面 release 实测（v0.8.0 `geode.exe compat-vault`）：套件 5/5 不回退、nldates 逐键
+`@tomorrow`→`[[2026-06-12]]`、reload 幂等；真实 notify 链路自写回声 suppressed、
+外部 PowerShell 改文件正常重载且 external 计数；中文 UI 截图。
+截图 docs/screenshots/r8-browser-zh-settings.png、r8-desktop-zh-suite.png。
+
+## R9 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P1 | i18n（中/英起步） | UI 字符串集中化 |
-| P1 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
-| P2 | watcher 回声抑制 | vault.modify 记录 (path, hash)，外部事件命中则跳过 |
+| P1 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提；**需购买代码签名证书（外部依赖，R8 因此改选 i18n）** |
 | P2 | compat：suggest 指令条渲染 + 光标移动重评估 | R6 两条显式缺口（见 OBSIDIAN-COMPAT 缺口表） |
 | P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
+| P2 | vault 切换后 stale tab 自动关闭 | R4 评审残留，R5 桌面演示再次撞见 |
+| P2 | GeodePlugin.name/description 可本地化 | 插件名在设置页不随语言切换（Command.name 已解决） |
 
 ## 已知技术债
 
@@ -125,7 +148,13 @@ calendar 重挂载）、export_write 真实落盘+相对路径拒绝。
 - compat EditorSuggest：纯光标移动不重评估 onTrigger（逐事务驱动，显式偏差）；
   setInstructions 指令条不渲染（gap 上报）；popup 不随窗口 resize/scroll 重定位
 - moment-with-locales + ureq：安装包体量随轮次缓涨，商业分发前可做按需裁剪
-- 自身写入回声触发 watcher（幂等无害，R3 P2）
+- ~~自身写入回声触发 watcher~~（R8 根治：FNV-1a 指纹分流 + 全抑制快速路径。
+  残留显式限制：未 await 的同路径并发写可能把首个回声判为外部——下游 dirty 守卫 +
+  内容相等 no-op 全兜住，失败方向安全，仅多一次冗余刷新）
+- i18n 已知限制（R8，有意取舍）：CM6 构建期解析的字符串（编辑器 placeholder、任务
+  复选框 aria-label、frontmatter 药丸 title）切语言后保持旧语言直到视图/widget 重建
+  （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；GeodePlugin.name/description
+  仍是纯字符串（见 R9 候选）
 - 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口）
 - ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
   剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
