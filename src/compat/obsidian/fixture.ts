@@ -5,7 +5,8 @@
  * DSL), Notice, vault.on("modify"), metadataCache.getFileCache headings,
  * loadData/saveData and normalizePath. R5 adds the T2 surface: a registered
  * ItemView opened via the recent-files leaf sequence, and a window.moment
- * assertion written into a status bar item.
+ * assertion written into a status bar item. R6 adds an EditorSuggest ("@@"
+ * trigger), a requestUrl data:-URL probe and a MarkdownRenderer.render probe.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -61,6 +62,34 @@ var FixtureView = class extends obsidian.ItemView {
       text: probe,
       attr: { "data-testid": "obsfixture-app-probe" }
     });
+  }
+};
+
+// R6: real EditorSuggest — typing "@@" pops static suggestions; selecting one
+// replaces the whole trigger range (start..end from the stored context).
+var FixtureSuggest = class extends obsidian.EditorSuggest {
+  onTrigger(cursor, editor, file) {
+    var before = editor.getLine(cursor.line).slice(0, cursor.ch);
+    var m = before.match(/@@([A-Za-z]*)$/);
+    if (!m) return null;
+    return {
+      start: { line: cursor.line, ch: cursor.ch - m[0].length },
+      end: { line: cursor.line, ch: cursor.ch },
+      query: m[1]
+    };
+  }
+  getSuggestions(context) {
+    var all = ["alpha", "beta", "gamma"];
+    var q = context.query.toLowerCase();
+    return all.filter(function (s) { return s.indexOf(q) === 0; });
+  }
+  renderSuggestion(value, el) {
+    el.setText(value);
+  }
+  selectSuggestion(value, evt) {
+    var ctx = this.context;
+    if (!ctx) return;
+    ctx.editor.replaceRange(value, ctx.start, ctx.end);
   }
 };
 
@@ -160,6 +189,46 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
       name: "Write moment date to status bar",
       callback: () => {
         momentEl.setText("moment: " + window.moment().format("YYYY-MM-DD"));
+      }
+    });
+
+    // R6: EditorSuggest registration ("@@" trigger, see FixtureSuggest above)
+    this.registerEditorSuggest(new FixtureSuggest(this.app));
+
+    // R6: requestUrl probe — data: URL resolves in-layer (deterministic, no network)
+    var requestEl = this.addStatusBarItem();
+    requestEl.setText("requesturl: pending");
+    requestEl.setAttr("data-testid", "obsfixture-requesturl");
+    this.addCommand({
+      id: "requesturl-probe",
+      name: "requestUrl probe",
+      callback: async () => {
+        try {
+          var res = await obsidian.requestUrl('data:application/json,{"ok":true}');
+          requestEl.setText("requesturl: " + res.status + " ok=" + res.json.ok);
+        } catch (e) {
+          requestEl.setText("requesturl: error " + e.message);
+        }
+      }
+    });
+
+    // R6: MarkdownRenderer probe — renders into a child of a status bar item
+    var mdHostEl = this.addStatusBarItem();
+    mdHostEl.setAttr("data-testid", "obsfixture-md-host");
+    this.addCommand({
+      id: "render-markdown",
+      name: "Render markdown",
+      callback: async () => {
+        mdHostEl.empty();
+        var target = mdHostEl.createDiv({ attr: { "data-testid": "obsfixture-md-render" } });
+        var active = self.app.workspace.getActiveFile();
+        await obsidian.MarkdownRenderer.render(
+          self.app,
+          "**bold** [[Welcome]]\\n\\n- [ ] task",
+          target,
+          active ? active.path : "",
+          self
+        );
       }
     });
 

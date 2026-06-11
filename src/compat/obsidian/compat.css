@@ -361,6 +361,38 @@
   line-height: 14px;
 }
 
+/* ---------------- editor suggest popup (EditorSuggest, real since R6) ---------------- */
+
+.geode-suggest-popup {
+  position: fixed;
+  z-index: 10001;
+  min-width: 180px;
+  max-width: 360px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-modal);
+}
+
+.geode-suggest-popup .suggestion-item {
+  padding: 5px 9px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.geode-suggest-popup .suggestion-item.is-selected {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
 /* ---------------- custom view panels (registerView side leaves) ---------------- */
 
 .geode-compat-view-panel {

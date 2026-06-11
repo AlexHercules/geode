@@ -9,6 +9,7 @@
  *  - metadata:updated                       -> metadataCache 'changed'/'resolve'/'resolved'
  *  - active-file:changed                    -> workspace 'active-leaf-change' + 'file-open'
  *  - document:changed (active editor)       -> workspace 'editor-change'
+ *                                              + EditorSuggest trigger loop (R6)
  *  - workspace root identity change         -> workspace 'layout-change'
  *
  * Startup semantics (CREATE-ON-LOAD, API-REFERENCE area 2/3):
@@ -25,6 +26,8 @@ import type { Vault as GeodeVault } from "@core/vault";
 import { FileRegistry } from "./files";
 import { MetadataCache } from "./metadata";
 import { App } from "./plugin";
+import { EditorSuggestManager } from "./suggest";
+import { _setCompatHostHandle } from "./util";
 import { Vault } from "./vault";
 import { makeActiveMarkdownView, Workspace } from "./workspace";
 
@@ -53,6 +56,12 @@ export function createCompatContext(
   const app = new App({ handle, plugins, registry }, vault, workspace, metadataCache);
   // the workspace shim (and its leaves) need the App bridge for view mounting
   workspace._setApp(app);
+  // EditorSuggest runtime (R6) — registerEditorSuggest reaches it via the App
+  const suggests = new EditorSuggestManager();
+  app._suggests = suggests;
+  // module-level APIs (MarkdownRenderer.render) resolve links/open files
+  // through the CURRENT context's handle; cleared again in dispose
+  _setCompatHostHandle(handle);
 
   const disposers: Array<() => void> = [];
   const ev = handle.events;
@@ -99,13 +108,17 @@ export function createCompatContext(
   );
 
   // per-transaction editor signal (R5): only the active document fires
-  // 'editor-change', matching obsidian's focused-editor semantics
+  // 'editor-change', matching obsidian's focused-editor semantics. The same
+  // transaction drives the EditorSuggest trigger loop (R6).
   disposers.push(
     ev.on("document:changed", ({ path }) => {
       const active = handle.documents.getActiveView();
       if (active && active.path === path) {
         const view = makeActiveMarkdownView(handle, registry);
-        if (view) workspace.trigger("editor-change", view.editor, view);
+        if (view) {
+          workspace.trigger("editor-change", view.editor, view);
+          void suggests.runTrigger(view.editor, view.file);
+        }
       }
     }),
   );
@@ -152,6 +165,8 @@ export function createCompatContext(
   disposers.push(
     ev.on("active-file:changed", ({ path }) => {
       if (path) workspace._lastFilePath = path;
+      // switching the active file/view closes any open editor-suggest popup
+      suggests.closeActive();
       workspace.trigger("active-leaf-change", workspace.activeLeaf);
       workspace.trigger("file-open", path ? registry.getFile(path) : null);
     }),
@@ -182,6 +197,8 @@ export function createCompatContext(
           console.error("[obsidian-compat] context disposer threw", err);
         }
       }
+      suggests.dispose();
+      _setCompatHostHandle(null);
     },
   };
 }

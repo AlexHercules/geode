@@ -71,7 +71,216 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 5 additions (current) — compat T2: moment + registerView real mounting
+## Round 6 additions (current) — compat 余项（EditorSuggest 真实触发 / MarkdownRenderer / requestUrl）+ 快捷键自定义
+
+Calibration source: **`.calibration/API-REFERENCE-R6.md`** (generated 2026-06-10 from official
+obsidian.d.ts + suite main.js call-site scans). Implement EXACTLY against it.
+Suite facts that drive this contract:
+- The suite has **ZERO callers** of MarkdownRenderer/requestUrl — both are implemented to the
+  official d.ts shape only, no suite-specific accommodation needed.
+- nldates' DateSuggest (the EditorSuggest unlock) additionally needs: `this.scope.register(
+  ["Shift"], "Enter", cb)` (a REAL Scope), `this.setInstructions(...)`, **the non-public
+  `this.suggestions.useSelectedItem(evt)`**, context.start reuse across keystrokes,
+  `editor.getRange/replaceRange`, `el.setText`, `vault.getConfig("useMarkdownLinks")` (exists).
+- onTrigger officially fires "very often (on each keypress)" — we drive it from the
+  `document:changed` core event (per local transaction). Cursor-move-only re-evaluation is a
+  recorded deviation (suite unaffected).
+
+### Core: hotkey overrides — `core/commands.ts`
+
+```ts
+// CommandRegistry additions (all bump `revision`):
+getEffectiveHotkey(id: string): string | null;      // override ?? command.hotkey ?? null
+setHotkeyOverride(id: string, hotkey: string | null): void; // null = explicitly unbound; persists
+clearHotkeyOverride(id: string): void;              // back to the command's default; persists
+hasHotkeyOverride(id: string): boolean;
+findHotkeyConflicts(hotkey: string, excludeId?: string): Command[]; // normalized effective-hotkey match
+export function normalizeHotkey(hotkey: string): string; // canonical "Ctrl+Alt+Shift+Key" (Mod→Ctrl)
+```
+
+- Overrides persist to localStorage `"geode.hotkeyOverrides"` as `Record<string, string | null>`
+  (same global-key pattern as the plugin enabled-set). Unknown command ids are kept (a plugin
+  may register later).
+- `handleKeydown` matches EFFECTIVE hotkeys only. `matchHotkey` keeps its signature.
+- CommandPalette displays `getEffectiveHotkey(cmd.id)` instead of `cmd.hotkey`.
+
+### Core: markdown pipeline extraction — `core/markdown.ts` (new)
+
+The markdown-it pipeline moves VERBATIM from `features/editor/preview.ts` to `core/markdown.ts`
+(core may import markdown-it; no React). Exports:
+`renderMarkdownToHtml(source: string, resolve: (target: string) => string | null): string`
+(wikilinks/tags/task checkboxes — semantics unchanged).
+`features/editor/preview.ts` keeps its exports (`renderPreview`, `toggleTaskOnLine`) — 
+`renderPreview` becomes a thin delegate; EditorPane is untouched.
+
+### Core: HTTP transport — `core/net.ts` (new)
+
+```ts
+export interface HttpRequestParams { url: string; method?: string;
+  headers?: Record<string, string>; contentType?: string;
+  bodyText?: string; bodyBase64?: string; }
+export interface HttpResponseData { status: number;
+  headers: Record<string, string>; bodyBase64: string; }
+/** Tauri: invoke("http_request") — CORS-free. Browser: fetch (CORS-bound; rejects on network error). */
+export function httpRequest(params: HttpRequestParams): Promise<HttpResponseData>;
+```
+
+Pure transport: never throws on HTTP status (4xx/5xx return normally) — `throw` semantics live
+in the compat layer. Browser path reads the response as ArrayBuffer → base64.
+
+### Rust: `http_request` command (src-tauri)
+
+One-time dep decision (chief): **`ureq = "2"` (rustls) + `base64 = "0.22"`** in Cargo.toml —
+implementation agents still must not add further deps. Command (serde camelCase,
+**`#[tauri::command(async)]` — a plain sync command runs ON the main thread in Tauri 2 and a
+blocking 30s request would stall the event loop and every queued vault_* command**):
+`http_request(req: HttpRequest) -> CmdResult<HttpResponse>` where HttpRequest
+`{ url, method?, headers?, bodyBase64? }`, HttpResponse `{ status, headers, bodyBase64 }`.
+Method defaults GET; 30s timeout; redirects followed (ureq default); 4xx/5xx are NOT errors
+(`ureq::Error::Status` maps to a normal response); duplicate response headers join with ", ".
+Only http/https URLs accepted (anything else → CmdResult error).
+
+### Compat: requestUrl / request — `util.ts`
+
+Implement per API-REFERENCE-R6 (official shapes):
+- `requestUrl(request: RequestUrlParam | string): RequestUrlResponsePromise` over
+  `core/net.httpRequest`. The returned object is a Promise PLUS `arrayBuffer/json/text`
+  promise properties (official RequestUrlResponsePromise).
+- Resolved `RequestUrlResponse`: `status`, `headers`, and `arrayBuffer/json/text` as
+  PROPERTIES (not methods): text = utf-8 decode, json = lazy JSON.parse(text),
+  arrayBuffer = base64 decode.
+- `throw` defaults true → status ≥ 400 rejects with a descriptive Error; `throw: false`
+  resolves normally.
+- `body: string | ArrayBuffer` maps to bodyText/bodyBase64; `contentType` becomes the
+  Content-Type header (explicit `headers["Content-Type"]` wins).
+- **`data:` URLs are resolved in-layer** (no network, both ends — the deterministic fixture
+  path). `export function request(req): Promise<string>` = `requestUrl(req).text`.
+- Remove the requestUrl gap plumbing. Network failures reject with the transport error.
+
+### Compat: MarkdownRenderer — `util.ts`
+
+- `static async render(app, markdown, el, sourcePath, component)`: html =
+  `renderMarkdownToHtml(markdown, target => metadata.resolveLink(target, sourcePath))` from
+  the CURRENT loader context (module-level handle, see below); `el.innerHTML = html`
+  (markdown-it runs html:false — no raw-HTML injection); add `.markdown-rendered` class;
+  one delegated click listener wires `.internal-link` → `workspace.openFile(resolved)`;
+  task checkboxes render disabled (no source mapping for plugin-rendered fragments).
+  When `component` looks like a Component (`typeof component?.register === "function"`),
+  register the listener teardown there.
+- `static renderMarkdown(markdown, el, sourcePath, component)` (deprecated 4-arg) delegates.
+- Module-level current-handle plumbing: `context.ts` calls `_setCompatHostHandle(handle)`
+  on create and `_setCompatHostHandle(null)` in dispose; `render` falls back to the `app`
+  argument's internal handle when module handle is absent. Remove the MarkdownRenderer gap
+  reporting.
+
+### Compat: EditorSuggest real triggering — `suggest.ts` + `ui.ts` + `plugin.ts` + `context.ts`
+
+- `ui.ts` Scope becomes REAL: stores `{ modifiers, key, func }` handlers;
+  `register(modifiers: Modifier[] | null, key: string | null, func): KeymapEventHandler`
+  (returns `{ modifiers, key, scope }`); `unregister(handler)` removes by identity;
+  internal readonly `_handlers` array for the popup's keydown dispatch. (Calibrated:
+  modifiers `null` = match any modifier state; `Mod` → Ctrl on the host.)
+- `suggest.ts` gains the runtime (one manager per compat context):
+  - `class EditorSuggestManager`: ordered registry of EditorSuggest instances
+    (`registerEditorSuggest` order, per-plugin disposers).
+  - Trigger loop, subscribed in `context.ts` to `document:changed` (active view only —
+    same guard as the editor-change wiring): build the Editor shim + TFile from the
+    registry; for each suggest in order run `onTrigger(cursor, editor, file)`; first
+    non-null wins → `suggest.context = { ...info, editor, file }` → `getSuggestions`
+    (await; stale-token guard) → non-empty → popup; empty/null → close.
+  - Popup (`compat.css`, `.geode-suggest-popup`): fixed-position at
+    `view.coordsAtPos(posToOffset(start))`, below the line (flips above near the bottom);
+    items capped at `suggest.limit`; `renderSuggestion(item, itemEl)`; hover selects,
+    click → `selectSuggestion(item, evt)` + close; `data-testid="editor-suggest-popup"`,
+    items `data-testid="editor-suggest-item"`.
+  - Document-capture keydown while open: suggest.scope `_handlers` are consulted FIRST
+    (exact modifier-set match; `func(evt, ctx)` returning false → preventDefault +
+    stopPropagation — nldates' Shift+Enter path); then ArrowDown/ArrowUp navigate,
+    Enter → `selectSuggestion(selected, evt)` + close, Escape → close. Plain typing
+    falls through to the editor.
+  - Non-public surface nldates needs: every EditorSuggest instance gets
+    `this.suggestions = { useSelectedItem(evt) }` → selectSuggestion(current) + close.
+  - `PopoverSuggest.open/close` drive the popup; `close()` clears `suggest.context = null`
+    and is idempotent. Close on: trigger returning null, selection made, active file/view
+    switch (`active-file:changed`), mousedown outside popup + editor, Escape, plugin unload.
+  - Deviation (recorded once as a gap note, not per keystroke): onTrigger re-evaluates per
+    local doc transaction, not on pure cursor movement.
+- `plugin.ts`: `registerEditorSuggest(suggest)` becomes REAL — registers into the manager,
+  unload disposer unregisters. Remove its gap reporting.
+- `fixture.ts` (browser E2E): a fixture EditorSuggest (trigger phrase `@@`, static
+  suggestions, selection replaces the trigger range), a command probing
+  `requestUrl("data:application/json,...")` into a status-bar item
+  (`data-testid` via existing fixture pattern), and a command rendering
+  `"**bold** [[Welcome]] - [ ] task"` through `MarkdownRenderer.render` into a probe
+  element (`data-testid="obsfixture-md-render"`).
+
+### Settings: Hotkeys section — `features/settings/SettingsModal.tsx`
+
+- New section `{ id: "hotkeys", label: "Hotkeys", icon: "command" }` (between Plugins and
+  About; pick any existing keyboard-ish icon if "command" is absent).
+- Filter input (`data-testid="settings-hotkeys-filter"`); rows from
+  `commands.list()` + `useStore(commands.revision)`, each row
+  (`data-testid="hotkey-row-<id>"`): command name, effective-hotkey chip (or "Not set"),
+  customize button (`data-testid="hotkey-edit-<id>"`) entering CAPTURE mode:
+  - capture takes the NEXT keydown with a non-modifier key → candidate hotkey string
+    (built consistently with `matchHotkey`'s grammar, via `normalizeHotkey`);
+    Escape cancels; Backspace/Delete sets the override to null (unbound);
+    modifier-only chords are never saved.
+  - Conflict check via `findHotkeyConflicts(candidate, id)`: warning inline
+    (`data-testid="hotkey-conflict-<id>"`) naming the conflicting command; saving is still
+    allowed (Obsidian behavior) — both rows then show a conflict badge.
+  - Reset-to-default button when `hasHotkeyOverride(id)` (`data-testid="hotkey-reset-<id>"`).
+- `features/palette/CommandPalette.tsx`: hotkey chip reads `getEffectiveHotkey`.
+
+### As-built deltas (post-review, adversarially confirmed — R6)
+
+Review: 5 dimensions, 13 findings confirmed (9 unique root causes), 2 refuted. All fixed:
+
+- **`closeActive()` cancels in-flight `getSuggestions`** (token bump) and clears EVERY
+  lingering `suggest.context` — a pending async suggest has a context but no popup yet, so
+  closing only the active one let a stale popup open later (Enter would then replaceRange
+  stale coordinates — data-safety). Trigger-null / file-switch / Escape / outside-click /
+  dispose all route through it. The winner-selection loop closes other suggests by
+  context, not just the active one.
+- **Suggest popup keydown has a focus guard**: keystrokes whose target is outside the
+  editor + popup (palette input, modals) are never consumed — the popup closes instead.
+- **`hotkeyFromEvent(e): string | null` lives in `core/commands.ts`** (exported), not in the
+  settings UI: single grammar authority. It returns null (capture keeps waiting) for Meta
+  combos, modifier-only chords, a literal "+", and **bare printable keys — a binding
+  without Ctrl/Alt (function keys exempt) would swallow normal typing**. Shifted
+  punctuation is normalized to the physical base char via e.code (capturing Ctrl+Shift+\
+  yields "Ctrl+Shift+\", matching the default binding's spelling, so conflict detection
+  compares like with like).
+- **`handleKeydown` pre-parses effective hotkeys** (cache invalidated on register/
+  unregister/override change), rejects `e.metaKey` outright, and **suppresses
+  Ctrl/Alt-less bindings while an editable element has focus** (defense for stale
+  persisted bare-key overrides). `matchHotkey` also rejects metaKey.
+- **`http_request` is `#[tauri::command(async)]`** — a plain sync command runs ON the main
+  thread in Tauri 2; a blocking 30s request would stall the event loop and every queued
+  vault_* command (the original contract sentence claimed the opposite and was corrected).
+  The HTTP method is validated (`is_ascii_alphabetic`) — ureq validates headers but writes
+  the method into the request line unchecked (CRLF smuggling).
+- `setInstructions` (EditorSuggest + SuggestModal) reports a gap once instead of silently
+  no-op'ing (nldates' "Shift: keep text as alias" hint bar is not rendered).
+- Refuted (not defects): Backspace-with-modifiers unbinding in capture mode is the
+  contract's explicit carve-out; the 10MB body cap mapping to a transport error has no
+  reachable trigger in the suite and falls under the declared transport-error bucket.
+
+### Round 6 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/commands.ts, core/markdown.ts (new), core/net.ts (new), features/editor/preview.ts (pipeline move only) |
+| compat-suggest | compat/obsidian/{suggest,plugin,context,ui}.ts, compat/obsidian/compat.css |
+| compat-net-render | compat/obsidian/{util,index,fixture}.ts |
+| shell-settings | features/settings/*, features/palette/CommandPalette.tsx, src-tauri/Cargo.toml, src-tauri/src/main.rs |
+
+Frozen cross-agent surfaces: everything in this section's code blocks. compat-net-render
+consumes `core/net.ts` + `core/markdown.ts` exactly as declared; compat-suggest consumes
+`document:changed` + the Editor shim as declared; shell-settings consumes the
+CommandRegistry additions as declared.
+
+## Round 5 additions — compat T2: moment + registerView real mounting
 
 Calibration source: `.calibration/API-REFERENCE-R5.md` (regenerated 2026-06-10 from official
 obsidian.d.ts + suite main.js call-site scans). Implement EXACTLY against it.

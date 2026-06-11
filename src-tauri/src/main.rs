@@ -3,9 +3,12 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use base64::Engine as _;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::Mutex;
@@ -378,6 +381,107 @@ fn vault_obsidian_plugins(vault: String) -> CmdResult<Vec<ObsidianPluginSource>>
     Ok(sources)
 }
 
+/// Max bytes accepted from an `http_request` response body (anti-abuse cap).
+const HTTP_BODY_LIMIT: u64 = 10 * 1024 * 1024;
+
+/// HTTP request from the frontend transport (src/core/net.ts, serde camelCase).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct HttpRequest {
+    url: String,
+    method: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body_base64: Option<String>,
+}
+
+/// HTTP response back to the frontend (serde camelCase).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HttpResponse {
+    status: u16,
+    headers: HashMap<String, String>,
+    body_base64: String,
+}
+
+/// CORS-free HTTP for the frontend, backing the compat layer's `requestUrl`.
+/// GET by default, 30s timeout, redirects followed (ureq default). HTTP error
+/// statuses (4xx/5xx) are NOT command errors — `ureq::Error::Status` maps to a
+/// normal response; only transport failures (DNS, TLS, timeout, ...) are Err.
+/// `(async)`: blocking ureq I/O must run off the main thread — a plain sync
+/// command executes ON the main thread in Tauri 2 and would stall the event
+/// loop (and every queued vault_* command) for up to the full 30s timeout.
+#[tauri::command(async)]
+fn http_request(req: HttpRequest) -> CmdResult<HttpResponse> {
+    if !(req.url.starts_with("http://") || req.url.starts_with("https://")) {
+        return Err(format!(
+            "http_request: only http/https URLs are allowed, got '{}'",
+            req.url
+        ));
+    }
+    let body = match &req.body_base64 {
+        Some(b64) => Some(
+            base64::engine::general_purpose::STANDARD
+                .decode(b64)
+                .map_err(|e| format!("http_request: invalid base64 body: {e}"))?,
+        ),
+        None => None,
+    };
+
+    let agent = ureq::AgentBuilder::new().timeout(Duration::from_secs(30)).build();
+    let method = req.method.as_deref().unwrap_or("GET").to_uppercase();
+    // ureq validates headers (no CR/LF) but writes the method into the request
+    // line unchecked — reject anything that could smuggle CRLF
+    if method.is_empty() || !method.bytes().all(|b| b.is_ascii_alphabetic()) {
+        return Err(format!(
+            "http_request: invalid HTTP method '{}'",
+            method.escape_default()
+        ));
+    }
+    let mut request = agent.request(&method, &req.url);
+    if let Some(headers) = &req.headers {
+        for (name, value) in headers {
+            request = request.set(name, value);
+        }
+    }
+
+    let response = match body {
+        Some(bytes) => request.send_bytes(&bytes),
+        None => request.call(),
+    };
+    let response = match response {
+        Ok(r) => r,
+        // 4xx/5xx — a real response the caller decides what to do with
+        Err(ureq::Error::Status(_, r)) => r,
+        Err(e) => return Err(format!("http_request: {e}")),
+    };
+
+    let status = response.status();
+    let mut headers = HashMap::new();
+    for name in response.headers_names() {
+        // duplicate response headers (e.g. Set-Cookie) join with ", "
+        let joined = response.all(&name).join(", ");
+        headers.insert(name, joined);
+    }
+
+    let mut bytes: Vec<u8> = Vec::new();
+    response
+        .into_reader()
+        .take(HTTP_BODY_LIMIT + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("http_request: read body: {e}"))?;
+    if bytes.len() as u64 > HTTP_BODY_LIMIT {
+        return Err(format!(
+            "http_request: response body exceeds the {HTTP_BODY_LIMIT}-byte limit"
+        ));
+    }
+
+    Ok(HttpResponse {
+        status,
+        headers,
+        body_base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
+    })
+}
+
 /// Read a config file under `<vault>/.obsidian/`. Ok(None) when missing.
 #[tauri::command]
 fn vault_read_config(vault: String, path: String) -> CmdResult<Option<String>> {
@@ -412,7 +516,8 @@ fn main() {
             vault_plugin_files,
             vault_obsidian_plugins,
             vault_read_config,
-            vault_write_config
+            vault_write_config,
+            http_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running Geode");

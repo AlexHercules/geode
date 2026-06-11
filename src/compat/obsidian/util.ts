@@ -1,14 +1,42 @@
 /**
  * Module-level obsidian exports: normalizePath, apiVersion/requireApiVersion,
- * frontmatter/tag helpers, debounce, Platform, the real moment (R5), and the
- * remaining T2 warn-stubs (htmlToMarkdown / MarkdownRenderer / requestUrl).
+ * frontmatter/tag helpers, debounce, Platform, the real moment (R5), the real
+ * requestUrl/request + MarkdownRenderer (R6), and the htmlToMarkdown warn-stub.
  */
 // The with-locales bundle keeps everything on ONE instance — a separate
 // "moment/min/locales" entry registers against a second copy under Vite's
 // dep optimizer. Defining locales switches the global one; restored below.
 import momentImpl from "moment/min/moment-with-locales";
+import { renderMarkdownToHtml } from "@core/markdown";
+import { base64ToBytes, bytesToBase64, httpRequest } from "@core/net";
+import type { Component } from "./component";
 import { reportGap } from "./gaps";
 import type { CachedMetadata, FrontMatterCache } from "./metadata";
+import type { App } from "./plugin";
+
+/* ---------------- host handle plumbing (R6 contract) ---------------- */
+
+/**
+ * Minimal structural slice of the Geode AppHandle that module-level APIs
+ * (MarkdownRenderer.render) need. context.ts sets it on create and clears it
+ * in dispose; the real AppHandle satisfies this shape structurally.
+ */
+export interface CompatHostHandle {
+  metadata: { resolveLink(target: string, fromPath: string): string | null };
+  workspace: { openFile(path: string, opts?: { newTab?: boolean }): void };
+}
+
+let hostHandle: CompatHostHandle | null = null;
+
+/** @internal wired by context.ts (create → handle, dispose → null). */
+export function _setCompatHostHandle(handle: CompatHostHandle | null): void {
+  hostHandle = handle;
+}
+
+/** @internal */
+export function _getCompatHostHandle(): CompatHostHandle | null {
+  return hostHandle;
+}
 
 /* ---------------- versioning ---------------- */
 
@@ -211,37 +239,189 @@ export function htmlToMarkdown(html: string | HTMLElement | Document | DocumentF
   return html.textContent ?? "";
 }
 
-/** Warn-stub: network access is not part of T0/T1 — always rejects. */
-export function requestUrl(request: unknown): Promise<never> {
-  const url =
-    typeof request === "string"
-      ? request
-      : ((request as { url?: string } | null)?.url ?? "<unknown>");
-  reportGap("module", "requestUrl", `request to ${url} rejected`);
-  return Promise.reject(new Error("requestUrl is not available in Geode (T2 gap)"));
+/* ---------------- requestUrl / request (real, R6) ---------------- */
+
+export interface RequestUrlParam {
+  url: string;
+  method?: string;
+  contentType?: string;
+  body?: string | ArrayBuffer;
+  headers?: Record<string, string>;
+  /** Whether to throw an error when the status code is 400+. Defaults to true. */
+  throw?: boolean;
 }
 
-/** Warn-stub renderer: inserts the raw markdown as plain text. */
+/** Official shape: arrayBuffer/json/text are PROPERTIES, not methods. */
+export interface RequestUrlResponse {
+  status: number;
+  headers: Record<string, string>;
+  arrayBuffer: ArrayBuffer;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  json: any;
+  text: string;
+}
+
+export interface RequestUrlResponsePromise extends Promise<RequestUrlResponse> {
+  arrayBuffer: Promise<ArrayBuffer>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  json: Promise<any>;
+  text: Promise<string>;
+}
+
+/** Body bytes are decoded/parsed lazily and cached (text = utf-8, json = JSON.parse(text)). */
+function buildResponse(
+  status: number,
+  headers: Record<string, string>,
+  getBytes: () => Uint8Array<ArrayBuffer>,
+): RequestUrlResponse {
+  let bytes: Uint8Array<ArrayBuffer> | null = null;
+  let text: string | null = null;
+  let json: unknown;
+  let jsonParsed = false;
+  return {
+    status,
+    headers,
+    get arrayBuffer(): ArrayBuffer {
+      bytes ??= getBytes();
+      return bytes.buffer;
+    },
+    get text(): string {
+      bytes ??= getBytes();
+      text ??= new TextDecoder().decode(bytes);
+      return text;
+    },
+    get json(): unknown {
+      if (!jsonParsed) {
+        json = JSON.parse(this.text);
+        jsonParsed = true;
+      }
+      return json;
+    },
+  };
+}
+
+/** `data:[<mediatype>][;base64],<payload>` — both base64 and URL-encoded payloads. */
+const DATA_URL_RE = /^data:([^,]*),([\s\S]*)$/;
+
+/** Resolve a data: URL entirely in-layer (no network — the deterministic fixture path). */
+function dataUrlResponse(url: string): RequestUrlResponse {
+  const m = DATA_URL_RE.exec(url);
+  if (!m) throw new Error(`requestUrl: malformed data: URL "${url}"`);
+  const [, meta, payload] = m;
+  const isBase64 = /;base64$/i.test(meta);
+  const contentType = (isBase64 ? meta.slice(0, -";base64".length) : meta) || "text/plain";
+  const getBytes = (): Uint8Array<ArrayBuffer> =>
+    isBase64
+      ? base64ToBytes(payload)
+      : new TextEncoder().encode(decodeURIComponent(payload)) as Uint8Array<ArrayBuffer>;
+  return buildResponse(200, { "content-type": contentType }, getBytes);
+}
+
+async function performRequest(params: RequestUrlParam): Promise<RequestUrlResponse> {
+  let response: RequestUrlResponse;
+  if (/^data:/i.test(params.url)) {
+    response = dataUrlResponse(params.url);
+  } else {
+    // body string|ArrayBuffer → bodyText/bodyBase64; contentType becomes the
+    // Content-Type header inside core/net (explicit headers["Content-Type"] wins)
+    const res = await httpRequest({
+      url: params.url,
+      method: params.method,
+      headers: params.headers,
+      contentType: params.contentType,
+      bodyText: typeof params.body === "string" ? params.body : undefined,
+      bodyBase64:
+        params.body instanceof ArrayBuffer
+          ? bytesToBase64(new Uint8Array(params.body))
+          : undefined,
+    });
+    response = buildResponse(res.status, res.headers, () => base64ToBytes(res.bodyBase64));
+  }
+  // `throw` defaults true: HTTP errors reject; transport errors reject above
+  if (params.throw !== false && response.status >= 400) {
+    throw new Error(`Request failed, status ${response.status} (${params.url})`);
+  }
+  return response;
+}
+
+/**
+ * Official requestUrl: CORS-free HTTP(S) via core/net (Tauri command on desktop,
+ * fetch in the browser). Returns a Promise that ALSO carries arrayBuffer/json/text
+ * promise properties (RequestUrlResponsePromise).
+ */
+export function requestUrl(request: RequestUrlParam | string): RequestUrlResponsePromise {
+  const params = typeof request === "string" ? { url: request } : request;
+  const promise = performRequest(params);
+  // lazy getters: only the consumed property derives a promise, so an unused
+  // `.json` never parses (or surfaces an unhandled rejection for) non-JSON bodies
+  return Object.defineProperties(promise, {
+    arrayBuffer: { get: () => promise.then((r) => r.arrayBuffer) },
+    json: { get: () => promise.then((r) => r.json) },
+    text: { get: () => promise.then((r) => r.text) },
+  }) as RequestUrlResponsePromise;
+}
+
+/** Official request: same params as requestUrl, resolves to the response text. */
+export function request(request: RequestUrlParam | string): Promise<string> {
+  return requestUrl(request).text;
+}
+
+/* ---------------- MarkdownRenderer (real, R6) ---------------- */
+
+/**
+ * Renders through the same markdown-it pipeline as the preview (core/markdown).
+ * Links resolve via the current loader context's host handle; without one
+ * (render called outside a compat context AND `app` is not our App shim) the
+ * markdown still renders, with every wikilink unresolved.
+ */
 export class MarkdownRenderer {
   static async render(
-    _app: unknown,
+    app: App,
     markdown: string,
     el: HTMLElement,
-    _sourcePath: string,
-    _component: unknown,
+    sourcePath: string,
+    component: Component,
   ): Promise<void> {
-    reportGap("module", "MarkdownRenderer.render", "renders plain text");
-    el.textContent = markdown;
+    // module handle first (set by context.ts), else the App shim's internal bridge
+    const handle =
+      _getCompatHostHandle() ??
+      (app as unknown as { _geode?: { handle?: CompatHostHandle } } | null)?._geode?.handle ??
+      null;
+    const html = renderMarkdownToHtml(markdown, (target) =>
+      handle ? handle.metadata.resolveLink(target, sourcePath) : null,
+    );
+    // markdown-it runs html:false — no raw-HTML injection from plugin input
+    el.innerHTML = html;
+    el.classList.add("markdown-rendered");
+    // no source mapping for plugin-rendered fragments → checkboxes are inert
+    el.querySelectorAll<HTMLInputElement>("input.task-checkbox").forEach((cb) => {
+      cb.disabled = true;
+    });
+    // one delegated listener wires .internal-link clicks → workspace.openFile
+    const onClick = (evt: MouseEvent): void => {
+      const anchor = (evt.target as HTMLElement | null)?.closest?.(".internal-link");
+      if (!anchor) return;
+      evt.preventDefault();
+      const target = anchor.getAttribute("data-target");
+      const h = _getCompatHostHandle() ?? handle;
+      if (!target || !h) return;
+      const resolved = h.metadata.resolveLink(target, sourcePath);
+      if (resolved !== null) h.workspace.openFile(resolved);
+    };
+    el.addEventListener("click", onClick);
+    const comp = component as unknown as { register?: (cb: () => unknown) => void } | null;
+    if (typeof comp?.register === "function") {
+      comp.register(() => el.removeEventListener("click", onClick));
+    }
   }
 
-  /** @deprecated old signature, same plain-text behavior */
-  static async renderMarkdown(
+  /** @deprecated old 4-arg signature — delegates to {@link MarkdownRenderer.render}. */
+  static renderMarkdown(
     markdown: string,
     el: HTMLElement,
-    _sourcePath: string,
-    _component: unknown,
+    sourcePath: string,
+    component: Component,
   ): Promise<void> {
-    reportGap("module", "MarkdownRenderer.renderMarkdown", "renders plain text");
-    el.textContent = markdown;
+    return MarkdownRenderer.render(null as unknown as App, markdown, el, sourcePath, component);
   }
 }

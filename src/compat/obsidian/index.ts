@@ -94,7 +94,11 @@ export {
   parseFrontMatterStringArray,
   parseFrontMatterTags,
   Platform,
+  request,
   requestUrl,
   requireApiVersion,
   type Debouncer,
+  type RequestUrlParam,
+  type RequestUrlResponse,
+  type RequestUrlResponsePromise,
 } from "./util";

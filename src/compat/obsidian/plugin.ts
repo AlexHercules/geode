@@ -10,6 +10,7 @@ import type { FileRegistry } from "./files";
 import { reportGap } from "./gaps";
 import { getIconSvg, type IconName } from "./icons";
 import type { MetadataCache } from "./metadata";
+import type { EditorSuggest, EditorSuggestManager } from "./suggest";
 import { Scope } from "./ui";
 import type { Vault } from "./vault";
 import {
@@ -104,6 +105,8 @@ export class App {
   metadataCache: MetadataCache;
   /** @internal geode bridge — NOT part of the public obsidian surface */
   readonly _geode: GeodeBridge;
+  /** @internal EditorSuggest runtime — injected by context.ts after App is built */
+  _suggests: EditorSuggestManager | null = null;
   private _scopeStub: Scope | null = null;
 
   constructor(bridge: GeodeBridge, vault: Vault, workspace: Workspace, metadataCache: MetadataCache) {
@@ -126,7 +129,7 @@ export class App {
   }
 
   get scope(): Scope {
-    reportGap("App", "App.scope", "warn-stub Scope — register is a no-op");
+    reportGap("App", "App.scope", "detached Scope — the host never dispatches it");
     return (this._scopeStub ??= new Scope());
   }
 
@@ -380,6 +383,21 @@ export abstract class Plugin extends Component {
     });
   }
 
+  /**
+   * Register an EditorSuggest into the context's manager (real since R6).
+   * Triggering order = registration order; the unload disposer unregisters
+   * (and closes a popup the suggest still owns).
+   */
+  registerEditorSuggest(suggest: EditorSuggest<unknown>): void {
+    const manager = this.app._suggests;
+    if (!manager) {
+      // context wiring failure only — never the normal path
+      reportGap(this.manifest.id, "Plugin.registerEditorSuggest", "suggest manager not wired");
+      return;
+    }
+    this.register(manager.register(suggest));
+  }
+
   /* ----- out-of-tier APIs: warn-stubs, never a crash (T2/T3 gaps) ----- */
 
   registerExtensions(_extensions: string[], _viewType: string): void {
@@ -402,10 +420,6 @@ export abstract class Plugin extends Component {
 
   registerEditorExtension(_extension: unknown): void {
     reportGap(this.manifest.id, "Plugin.registerEditorExtension");
-  }
-
-  registerEditorSuggest(_suggest: unknown): void {
-    reportGap(this.manifest.id, "Plugin.registerEditorSuggest");
   }
 
   registerHoverLinkSource(_id: string, _info: unknown): void {

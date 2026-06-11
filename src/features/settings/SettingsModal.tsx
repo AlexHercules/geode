@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import { hotkeyFromEvent } from "@core/commands";
 import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
 
-type SectionId = "appearance" | "plugins" | "about";
+type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
   { id: "appearance", label: "Appearance", icon: "sun" },
   { id: "plugins", label: "Plugins", icon: "puzzle" },
+  { id: "hotkeys", label: "Hotkeys", icon: "command" },
   { id: "about", label: "About", icon: "book-open" },
 ];
 
@@ -67,6 +69,7 @@ export function SettingsModal() {
         <div className="settings-content" data-testid={`settings-section-${section}`}>
           {section === "appearance" && <AppearanceSection />}
           {section === "plugins" && <PluginsSection />}
+          {section === "hotkeys" && <HotkeysSection />}
           {section === "about" && <AboutSection />}
         </div>
       </div>
@@ -391,6 +394,132 @@ function PluginList({
         </div>
       ))}
     </div>
+  );
+}
+
+/* ---------------- Hotkeys ---------------- */
+
+function HotkeysSection() {
+  const app = useApp();
+  useStore(app.commands.revision); // re-render on (un)register and override changes
+  const [filter, setFilter] = useState("");
+  const [capturingId, setCapturingId] = useState<string | null>(null);
+
+  const q = filter.trim().toLowerCase();
+  const rows = app.commands
+    .list()
+    .filter((cmd) => !q || cmd.name.toLowerCase().includes(q) || cmd.id.toLowerCase().includes(q));
+
+  /* CAPTURE mode: a window-level capture-phase listener grabs the next keydown
+     before the global hotkey handler and the modal's Escape-to-close (both
+     bubble-phase on window) can react to it. */
+  useEffect(() => {
+    if (capturingId === null) return;
+    const id = capturingId;
+    const onKeydown = (e: KeyboardEvent) => {
+      // a captured chord must never trigger commands or close the settings modal
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (e.key === "Escape") {
+        setCapturingId(null); // cancel — keep the current binding
+        return;
+      }
+      if (e.key === "Backspace" || e.key === "Delete") {
+        app.commands.setHotkeyOverride(id, null); // explicitly unbound
+        setCapturingId(null);
+        return;
+      }
+      // hotkeyFromEvent (core) rejects chords that must not bind — modifier-only,
+      // Meta combos, bare printable keys (they would swallow normal typing),
+      // a literal "+" — by returning null: keep waiting for a real chord. It
+      // also normalizes shifted punctuation to the physical base character so
+      // the candidate compares equal to default bindings ("Ctrl+Shift+\").
+      const candidate = hotkeyFromEvent(e);
+      if (candidate === null) return;
+      app.commands.setHotkeyOverride(id, candidate);
+      setCapturingId(null);
+    };
+    window.addEventListener("keydown", onKeydown, true);
+    return () => window.removeEventListener("keydown", onKeydown, true);
+  }, [app, capturingId]);
+
+  return (
+    <section>
+      <h2 className="settings-heading">Hotkeys</h2>
+      <p className="settings-note">
+        Click <em>Customize</em>, then press the new key combination (must include{" "}
+        <code>Ctrl</code> or <code>Alt</code>, except function keys). Press{" "}
+        <code>Backspace</code> to remove a binding, <code>Escape</code> to cancel.
+      </p>
+
+      <input
+        className="hotkeys-filter"
+        type="text"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Filter commands…"
+        spellCheck={false}
+        aria-label="Filter commands"
+        data-testid="settings-hotkeys-filter"
+      />
+
+      {rows.length === 0 ? (
+        <div className="settings-empty" data-testid="settings-hotkeys-empty">
+          No matching commands.
+        </div>
+      ) : (
+        <div className="hotkey-list">
+          {rows.map((cmd) => {
+            const effective = app.commands.getEffectiveHotkey(cmd.id);
+            const capturing = capturingId === cmd.id;
+            /* re-derived every render: after a conflicting save BOTH rows show the badge */
+            const conflicts =
+              effective !== null ? app.commands.findHotkeyConflicts(effective, cmd.id) : [];
+            return (
+              <div className="hotkey-row" key={cmd.id} data-testid={`hotkey-row-${cmd.id}`}>
+                <div className="hotkey-info">
+                  <div className="hotkey-name">{cmd.name}</div>
+                  {conflicts.length > 0 && (
+                    <div className="hotkey-conflict" data-testid={`hotkey-conflict-${cmd.id}`}>
+                      Conflicts with {conflicts.map((c) => `"${c.name}"`).join(", ")}
+                    </div>
+                  )}
+                </div>
+                <div className="hotkey-controls">
+                  {capturing ? (
+                    <span className="hotkey-chip is-capturing">Press a key…</span>
+                  ) : effective !== null ? (
+                    <span className={`hotkey-chip${conflicts.length > 0 ? " has-conflict" : ""}`}>
+                      {effective}
+                    </span>
+                  ) : (
+                    <span className="hotkey-chip is-empty">Not set</span>
+                  )}
+                  {!capturing && app.commands.hasHotkeyOverride(cmd.id) && (
+                    <button
+                      className="hotkey-reset"
+                      title="Restore default hotkey"
+                      aria-label={`Restore default hotkey for ${cmd.name}`}
+                      data-testid={`hotkey-reset-${cmd.id}`}
+                      onClick={() => app.commands.clearHotkeyOverride(cmd.id)}
+                    >
+                      <Icon name="corner-up-left" size={12} />
+                    </button>
+                  )}
+                  <button
+                    className={`hotkey-edit${capturing ? " is-capturing" : ""}`}
+                    data-testid={`hotkey-edit-${cmd.id}`}
+                    onClick={() => setCapturingId(capturing ? null : cmd.id)}
+                  >
+                    {capturing ? "Cancel" : "Customize"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

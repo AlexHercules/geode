@@ -9,6 +9,8 @@ import "./palette.css";
 interface Row {
   cmd: Command;
   match: FuzzyMatch;
+  /** effective hotkey (user override wins over the command default) */
+  hotkey: string | null;
 }
 
 export function CommandPalette() {
@@ -21,10 +23,11 @@ export function CommandPalette() {
   const rows = useMemo<Row[]>(() => {
     // context-gated commands (available() === false) are hidden, like Obsidian
     const all = app.commands.list().filter((cmd) => cmd.available?.() !== false);
+    const hotkey = (cmd: Command) => app.commands.getEffectiveHotkey(cmd.id);
     const q = query.trim();
-    if (!q) return all.map((cmd) => ({ cmd, match: { score: 0, indices: [] } }));
+    if (!q) return all.map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
     return all
-      .map((cmd) => ({ cmd, match: fuzzyMatch(q, cmd.name) }))
+      .map((cmd) => ({ cmd, match: fuzzyMatch(q, cmd.name), hotkey: hotkey(cmd) }))
       .filter((r): r is Row => r.match !== null)
       .sort((a, b) => b.match.score - a.match.score);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +108,7 @@ export function CommandPalette() {
                     ),
                   )}
                 </span>
-                {row.cmd.hotkey && <span className="palette-hotkey">{row.cmd.hotkey}</span>}
+                {row.hotkey && <span className="palette-hotkey">{row.hotkey}</span>}
               </div>
             ))
           )}

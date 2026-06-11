@@ -8,18 +8,96 @@
 import { Component } from "./component";
 import { reportGap } from "./gaps";
 import { setIcon, type IconName } from "./icons";
-import type { App } from "./plugin";
+import type { App, Modifier } from "./plugin";
 import { moment } from "./util";
 import type { PaneType } from "./workspace";
 
-/* ---------------- Scope (minimal — keyboard scopes are host-handled) ---------------- */
+/* ---------------- Scope (real since R6 — EditorSuggest popup dispatch) ---------------- */
 
+export interface KeymapInfo {
+  /** canonical comma-joined modifier string, or null = any modifier state */
+  modifiers: string | null;
+  key: string | null;
+}
+
+export interface KeymapContext extends KeymapInfo {
+  /** interpreted virtual key */
+  vkey: string;
+}
+
+/** 'Return false to automatically preventDefault' (official d.ts). */
+export type KeymapEventListener = (evt: KeyboardEvent, ctx: KeymapContext) => false | unknown;
+
+export interface KeymapEventHandler extends KeymapInfo {
+  scope: Scope;
+}
+
+/** @internal stored handler — KeymapEventHandler plus the callback. */
+export interface ScopeKeymapHandler extends KeymapEventHandler {
+  func: KeymapEventListener;
+}
+
+/** Fixed canonical ordering so handler/event strings compare by equality. */
+const MODIFIER_ORDER = ["Alt", "Ctrl", "Meta", "Shift"] as const;
+
+/** Canonical modifier string; Mod maps to Ctrl on the host (non-macOS rule). */
+function normalizeModifiers(modifiers: Modifier[]): string {
+  const set = new Set(modifiers.map((m) => (m === "Mod" ? "Ctrl" : m)));
+  return MODIFIER_ORDER.filter((m) => set.has(m)).join(",");
+}
+
+/** @internal modifier string of a live KeyboardEvent (same canonical grammar). */
+export function _modifiersFromEvent(evt: KeyboardEvent): string {
+  const parts: string[] = [];
+  if (evt.altKey) parts.push("Alt");
+  if (evt.ctrlKey) parts.push("Ctrl");
+  if (evt.metaKey) parts.push("Meta");
+  if (evt.shiftKey) parts.push("Shift");
+  return parts.join(",");
+}
+
+/**
+ * 'A scope receives keyboard events and binds callbacks to given hotkeys.'
+ * The host never routes global keys through scopes — consumers (the
+ * EditorSuggest popup) dispatch against `_handlers` themselves.
+ */
 export class Scope {
-  constructor(_parent?: Scope) {}
-  register(_modifiers: unknown, _key: unknown, _func: unknown): unknown {
-    return null;
+  private readonly handlers: ScopeKeymapHandler[] = [];
+  private readonly parent: Scope | null;
+
+  constructor(parent?: Scope) {
+    this.parent = parent ?? null;
   }
-  unregister(_handler: unknown): void {}
+
+  /** @internal own handlers first, then the inherited parent chain. */
+  get _handlers(): readonly ScopeKeymapHandler[] {
+    return this.parent ? [...this.handlers, ...this.parent._handlers] : this.handlers;
+  }
+
+  /**
+   * 'Pass null to capture all events matching the key, regardless of
+   * modifiers.' A null key matches any key.
+   */
+  register(
+    modifiers: Modifier[] | null,
+    key: string | null,
+    func: KeymapEventListener,
+  ): KeymapEventHandler {
+    const handler: ScopeKeymapHandler = {
+      modifiers: modifiers === null ? null : normalizeModifiers(modifiers),
+      key,
+      func,
+      scope: this,
+    };
+    this.handlers.push(handler);
+    return handler;
+  }
+
+  /** Remove by identity (the exact object register returned). */
+  unregister(handler: KeymapEventHandler): void {
+    const idx = this.handlers.indexOf(handler as ScopeKeymapHandler);
+    if (idx >= 0) this.handlers.splice(idx, 1);
+  }
 }
 
 /* ---------------- Keymap ---------------- */
@@ -238,8 +316,14 @@ export abstract class SuggestModal<T> extends Modal {
     this.inputEl.placeholder = placeholder;
   }
 
-  /** Instruction hints are not rendered by the shim (visual nicety only). */
-  setInstructions(_instructions: unknown[]): void {}
+  /** Instruction hints are not rendered by the shim (recorded gap). */
+  setInstructions(_instructions: unknown[]): void {
+    reportGap(
+      "SuggestModal",
+      "setInstructions",
+      "instruction hints are not rendered (modal shows items only)",
+    );
+  }
 
   onNoSuggestion(): void {}
 

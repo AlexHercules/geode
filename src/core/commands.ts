@@ -1,20 +1,36 @@
 import type { Command } from "./types";
 import { Store } from "./store";
 
+const OVERRIDES_KEY = "geode.hotkeyOverrides";
+
 /**
  * CommandRegistry — every user-facing action registers here so the command
  * palette, hotkeys, and plugins all share one source of truth.
+ *
+ * R6: user hotkey overrides. An override maps a command id to a hotkey string
+ * (rebound) or null (explicitly unbound); absence means the command default
+ * applies. Overrides persist globally to localStorage (same pattern as the
+ * plugin enabled-set) and survive for commands that register later.
  */
 export class CommandRegistry {
-  /** bumped when commands are (un)registered */
+  /** bumped when commands are (un)registered or an override changes */
   readonly revision = new Store(0);
   private commands = new Map<string, Command>();
+  private overrides = new Map<string, string | null>();
+  /** hot-path cache: command id -> parsed effective hotkey (null = rebuild) */
+  private parsedCache: Map<string, ParsedHotkey> | null = null;
+
+  constructor() {
+    this.loadOverrides();
+  }
 
   register(command: Command): () => void {
     this.commands.set(command.id, command);
+    this.parsedCache = null;
     this.revision.update((n) => n + 1);
     return () => {
       this.commands.delete(command.id);
+      this.parsedCache = null;
       this.revision.update((n) => n + 1);
     };
   }
@@ -30,23 +46,152 @@ export class CommandRegistry {
     return [...this.commands.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /* ---------------- hotkey overrides (R6) ---------------- */
+
+  /** The hotkey that actually fires: override ?? command default ?? null. */
+  getEffectiveHotkey(id: string): string | null {
+    if (this.overrides.has(id)) return this.overrides.get(id) ?? null;
+    return this.commands.get(id)?.hotkey ?? null;
+  }
+
+  hasHotkeyOverride(id: string): boolean {
+    return this.overrides.has(id);
+  }
+
+  /** Rebind (string) or explicitly unbind (null) a command. Persists. */
+  setHotkeyOverride(id: string, hotkey: string | null): void {
+    this.overrides.set(id, hotkey === null ? null : normalizeHotkey(hotkey));
+    this.parsedCache = null;
+    this.saveOverrides();
+    this.revision.update((n) => n + 1);
+  }
+
+  /** Back to the command's default hotkey. Persists. */
+  clearHotkeyOverride(id: string): void {
+    if (!this.overrides.delete(id)) return;
+    this.parsedCache = null;
+    this.saveOverrides();
+    this.revision.update((n) => n + 1);
+  }
+
+  /** Registered commands whose EFFECTIVE hotkey equals `hotkey` (normalized). */
+  findHotkeyConflicts(hotkey: string, excludeId?: string): Command[] {
+    const wanted = normalizeHotkey(hotkey);
+    const out: Command[] = [];
+    for (const cmd of this.commands.values()) {
+      if (cmd.id === excludeId) continue;
+      const eff = this.getEffectiveHotkey(cmd.id);
+      if (eff !== null && normalizeHotkey(eff) === wanted) out.push(cmd);
+    }
+    return out;
+  }
+
   /**
-   * Match a KeyboardEvent against registered hotkeys.
+   * Match a KeyboardEvent against registered hotkeys (effective: overrides win).
    * Hotkey format: "Ctrl+Shift+P", "Ctrl+,", "F2" (Mod === Ctrl on Windows).
+   * Hotkeys are parsed once per registry change (hot path: every keystroke).
    */
   handleKeydown(e: KeyboardEvent): boolean {
-    for (const cmd of this.commands.values()) {
-      if (!cmd.hotkey) continue;
-      if (matchHotkey(cmd.hotkey, e)) {
-        if (cmd.available?.() === false) continue; // context-gated (e.g. needs an editor)
-        e.preventDefault();
-        e.stopPropagation();
-        cmd.callback();
-        return true;
-      }
+    if (e.metaKey) return false; // Meta is not part of the hotkey grammar
+    const editable = isEditableTarget(e.target);
+    for (const [id, parsed] of this.parsedHotkeys()) {
+      // a binding without Ctrl/Alt (bare key / Shift+key) would swallow
+      // normal typing — never fire those while an editable element has focus
+      if (editable && !parsed.wantCtrl && !parsed.wantAlt && !parsed.isFunctionKey) continue;
+      if (!matchParsedHotkey(parsed, e)) continue;
+      const cmd = this.commands.get(id);
+      if (!cmd) continue;
+      if (cmd.available?.() === false) continue; // context-gated (e.g. needs an editor)
+      e.preventDefault();
+      e.stopPropagation();
+      cmd.callback();
+      return true;
     }
     return false;
   }
+
+  /** command id -> parsed EFFECTIVE hotkey, rebuilt after registry changes. */
+  private parsedHotkeys(): Map<string, ParsedHotkey> {
+    if (this.parsedCache) return this.parsedCache;
+    const map = new Map<string, ParsedHotkey>();
+    for (const cmd of this.commands.values()) {
+      const hotkey = this.getEffectiveHotkey(cmd.id);
+      if (hotkey) map.set(cmd.id, parseHotkey(hotkey));
+    }
+    this.parsedCache = map;
+    return map;
+  }
+
+  private loadOverrides(): void {
+    try {
+      const parsed: unknown = JSON.parse(localStorage.getItem(OVERRIDES_KEY) ?? "{}");
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [id, value] of Object.entries(parsed as Record<string, unknown>)) {
+          if (value === null) this.overrides.set(id, null);
+          else if (typeof value === "string") this.overrides.set(id, normalizeHotkey(value));
+        }
+      }
+    } catch {
+      // corrupted storage — start clean
+    }
+  }
+
+  private saveOverrides(): void {
+    const map: Record<string, string | null> = {};
+    for (const [id, value] of this.overrides) map[id] = value;
+    try {
+      localStorage.setItem(OVERRIDES_KEY, JSON.stringify(map));
+    } catch {
+      // storage unavailable — overrides stay session-local
+    }
+  }
+}
+
+/**
+ * Canonical hotkey spelling: modifiers ordered Ctrl, Alt, Shift (Mod → Ctrl),
+ * key cased like KeyboardEvent.key for named keys and uppercased for single
+ * characters: "shift+ctrl+p" → "Ctrl+Shift+P", "ctrl+arrowright" → "Ctrl+ArrowRight".
+ */
+export function normalizeHotkey(hotkey: string): string {
+  const parts = hotkey.split("+").map((p) => p.trim()).filter((p) => p.length > 0);
+  if (parts.length === 0) return "";
+  const rawKey = parts[parts.length - 1];
+  const mods = new Set(parts.slice(0, -1).map((p) => p.toLowerCase()));
+  const out: string[] = [];
+  if (mods.has("ctrl") || mods.has("mod")) out.push("Ctrl");
+  if (mods.has("alt")) out.push("Alt");
+  if (mods.has("shift")) out.push("Shift");
+  out.push(normalizeKeyName(rawKey));
+  return out.join("+");
+}
+
+const NAMED_KEYS: Record<string, string> = {
+  arrowup: "ArrowUp",
+  arrowdown: "ArrowDown",
+  arrowleft: "ArrowLeft",
+  arrowright: "ArrowRight",
+  pageup: "PageUp",
+  pagedown: "PageDown",
+  home: "Home",
+  end: "End",
+  enter: "Enter",
+  tab: "Tab",
+  escape: "Escape",
+  backspace: "Backspace",
+  delete: "Delete",
+  insert: "Insert",
+  // a literal " " key would not survive split("+")+trim — use the name "Space"
+  space: "Space",
+  " ": "Space",
+};
+
+function normalizeKeyName(key: string): string {
+  const lower = key.toLowerCase();
+  if (NAMED_KEYS[lower]) return NAMED_KEYS[lower];
+  if (/^f\d{1,2}$/.test(lower)) return lower.toUpperCase(); // F1..F12
+  if (key.length === 1) return key.toUpperCase();
+  // unknown named key — keep caller's casing
+  return key;
 }
 
 /**
@@ -68,14 +213,81 @@ const PUNCT_CODES: Record<string, string> = {
   "=": "Equal",
 };
 
-export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean {
+interface ParsedHotkey {
+  wantCtrl: boolean;
+  wantShift: boolean;
+  wantAlt: boolean;
+  /** lowercased key name */
+  key: string;
+  isFunctionKey: boolean;
+}
+
+function parseHotkey(hotkey: string): ParsedHotkey {
   const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
   const key = parts[parts.length - 1];
   const mods = new Set(parts.slice(0, -1));
-  const wantCtrl = mods.has("ctrl") || mods.has("mod");
-  const wantShift = mods.has("shift");
-  const wantAlt = mods.has("alt");
-  if (e.ctrlKey !== wantCtrl || e.shiftKey !== wantShift || e.altKey !== wantAlt) return false;
-  if (e.key.toLowerCase() === key) return true;
-  return PUNCT_CODES[key] !== undefined && e.code === PUNCT_CODES[key];
+  return {
+    wantCtrl: mods.has("ctrl") || mods.has("mod"),
+    wantShift: mods.has("shift"),
+    wantAlt: mods.has("alt"),
+    key,
+    isFunctionKey: /^f\d{1,2}$/.test(key),
+  };
+}
+
+function matchParsedHotkey(p: ParsedHotkey, e: KeyboardEvent): boolean {
+  if (e.ctrlKey !== p.wantCtrl || e.shiftKey !== p.wantShift || e.altKey !== p.wantAlt) {
+    return false;
+  }
+  if (e.key.toLowerCase() === p.key) return true;
+  if (p.key === "space" && e.key === " ") return true;
+  return PUNCT_CODES[p.key] !== undefined && e.code === PUNCT_CODES[p.key];
+}
+
+export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean {
+  if (e.metaKey) return false; // Meta combos never match the Ctrl/Alt/Shift grammar
+  return matchParsedHotkey(parseHotkey(hotkey), e);
+}
+
+function isEditableTarget(t: EventTarget | null): boolean {
+  if (!(t instanceof HTMLElement)) return false;
+  if (t.isContentEditable) return true;
+  const tag = t.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+const MODIFIER_KEY_NAMES = new Set(["Control", "Shift", "Alt", "Meta"]);
+
+/** physical-code -> base character, the reverse of PUNCT_CODES: a captured
+ * Shift+punct event reports the shifted char in e.key ("\" -> "|"), which
+ * would never equal the default bindings' spelling. */
+const CODE_TO_BASE: Record<string, string> = Object.fromEntries(
+  Object.entries(PUNCT_CODES).map(([ch, code]) => [code, ch]),
+);
+
+/**
+ * Build a candidate hotkey from a captured KeyboardEvent (settings capture
+ * mode), or null when the event must NOT become a binding:
+ *  - Meta combos are outside the grammar (keep waiting for another chord)
+ *  - modifier-only chords never bind
+ *  - bare printable keys (no Ctrl/Alt) would swallow normal typing — only
+ *    function keys may bind without Ctrl/Alt
+ * Shifted punctuation is normalized back to the physical base character via
+ * e.code so the candidate matches default bindings (PUNCT_CODES grammar) and
+ * conflict detection compares like with like.
+ */
+export function hotkeyFromEvent(e: KeyboardEvent): string | null {
+  if (e.metaKey) return null;
+  if (MODIFIER_KEY_NAMES.has(e.key)) return null;
+  let key = e.key === " " ? "Space" : e.key;
+  const base = CODE_TO_BASE[e.code];
+  if (base !== undefined) key = base;
+  if (key === "+") return null; // not representable in the "+"-separated grammar
+  if (!e.ctrlKey && !e.altKey && !/^f\d{1,2}$/i.test(key)) return null;
+  const parts: string[] = [];
+  if (e.ctrlKey) parts.push("Ctrl");
+  if (e.altKey) parts.push("Alt");
+  if (e.shiftKey) parts.push("Shift");
+  parts.push(key);
+  return normalizeHotkey(parts.join("+"));
 }
