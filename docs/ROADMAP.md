@@ -236,15 +236,34 @@ fence 保留/live 隐藏 + fence 保留（修复验证）/套件 5/5 不回退�
 链接口径：`[[note#^id]]` 解析打开正常；**点击不滚动定位到块/标题**（scroll-to-subpath
 显式缺口，远期项）。
 
-## R14 候选 — 商业打磨（按优先级）
+### R14 — v0.14（2026-06-11）scroll-to-subpath 定位 + fence 排除统一
+
+P2 组合轮，引用体验闭环收尾。**点击 `[[note#Heading]]`/`[[note#^id]]` → 打开并滚动
+定位 + 居中 + 1.2s 闪烁高亮**：`metadata.resolveSubpath`（heading/block 解析统一，
+embeds 切片重构调用，14 用例复跑逐字一致）；`workspace.revealTarget` 一次性消费
+机制（preview 态挂起、切 live 即消费——显式口径）；internal-link 锚点 `data-subpath`
+透传（无 subpath 链接零字节变化，18 用例 diff）；四处点击路径全贯通（阅读视图委托/
+live 折叠链接/展开态 Ctrl+Click——评审唯一确认 minor，chief 修复/转写 header）；
+闪烁 = revealFlash StateField + `--accent` 透明度 CSS 动画。
+**fence 排除统一**（R13 债清偿）：live preview 的 wikilink/嵌入扫描跳过 fencedLines
+——fence 内 `[[x]]` 不再装饰，与阅读视图对称（行内 code 不对称保留，Obsidian 同样
+不装饰——远期）。
+评审 2 维 11 finding：1 确认 minor（Ctrl+Click 展开态漏接，已修）10 证伪。R13 的
+"agent 注释不能修订契约"教训生效：editor agent 把 flash effect 形状的契约/指令分歧
+如实上报而非自行偏离（按 {from} 收口，as-built 记录）。
+桌面实测：锚点 data-subpath ✓、preview 点击挂起→切 live 消费 ✓、heading 光标精确
+落位 `# Deep Section` + 滚动 + 闪烁 ✓、block 落位 ✓、闪烁 1.2s 自动淡出 ✓、
+套件 5/5 不回退 ✓。
+
+## R15 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
 | P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | 链接点击 scroll-to-subpath（#heading/#^block 定位+高亮） | R13 显式缺口，体验闭环收尾 |
 | P2 | 安装包瘦身 | moment locale 裁剪（R5 双副本坑注意）+ ureq 特性裁剪 |
+| P2 | 阅读视图内 reveal（同模式滚动定位） | R14 口径：preview 态挂起到切 live；Obsidian 在阅读视图同样定位 |
 | P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用） |
-| P2 | live preview 全扫描统一 fence 排除 | R13 记债：wikilink 正则扫描自 R1 不跳 fence（标记隐藏已修，wikilink 未动） |
+| P2 | PDF/音频嵌入、行内 code 装饰对称 | 体验长尾 |
 
 ## 已知技术债
 
@@ -263,8 +282,8 @@ fence 保留/live 隐藏 + fence 保留（修复验证）/套件 5/5 不回退�
 - ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片 + R12 笔记转写 +
   R13 `^block` 全落地；残留：PDF/音频嵌入降级链接、外部改图后已渲染 widget 显示旧图
   至重建（已知口径）、点击不滚动定位 subpath（R14 候选））
-- live preview 的 wikilink 正则扫描不跳 fence（R1 起既有；R13 新增的块标记隐藏已做
-  fence 排除，wikilink 扫描未动——fence 内 `[[x]]` 会被装饰，阅读视图不渲染，轻微不对称）
+- ~~live preview 的 wikilink 正则扫描不跳 fence~~（R14 统一排除；行内 code 不对称
+  保留——Obsidian 同样不装饰，远期）
 - parseNote 块范围为段落近似（表格/嵌套列表的复杂块不精确；标记行紧邻 fence 时段落
   扩进 fence 内容——与 Obsidian 行为近似，显式偏差）；列 0 的独立 `^id` 行不被识别
   （冻结正则要求前导空白，Obsidian 认——显式偏差）

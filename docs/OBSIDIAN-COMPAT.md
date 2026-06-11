@@ -150,6 +150,14 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R14 套件回归（2026-06-11，桌面 release v0.14.0 实测 `geode.exe compat-vault`）
+
+R14 为原生功能轮（scroll-to-subpath + fence 排除统一），compat 零改动；渲染管线仅
+含 subpath 的 internal-link 锚点新增 `data-subpath` 属性（compat MarkdownRenderer
+输出同样获得该惰性属性，无行为变化）。桌面逐项复测不回退：5/5 加载启用 ✓、nldates
+指令条+弹层 ✓、reload 幂等 + calendar 重挂载 ✓、回声计数正常 ✓。缺口口径：compat
+`workspace.openLinkText` 不接 reveal（按需求驱动）。
+
 ### R13 套件回归（2026-06-11，桌面 release v0.13.0 实测 `geode.exe compat-vault`）
 
 R13 compat 改动两件：`getFileCache().blocks`（官方 `Record<string, BlockCache>` 形状，

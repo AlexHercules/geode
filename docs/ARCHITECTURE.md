@@ -71,7 +71,106 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 13 additions (current) — `^block` 块引用（链接+嵌入）+ compat noteEmbeds 接通
+## Round 14 additions (current) — scroll-to-subpath 定位 + live preview fence 排除统一
+
+P2 组合轮（P1 渠道/证书继续等用户决策）。引用体验闭环收尾：点击 `[[note#Heading]]` /
+`[[note#^id]]` 打开笔记并**滚动定位到目标 + 居中 + 短暂闪烁高亮**（Obsidian 行为）。
+
+### Core: subpath 解析统一 — `core/metadata.ts`（core agent）
+
+```ts
+export interface SubpathSpan {
+  kind: "heading" | "block";
+  /** anchor start（heading 行首 / 块段落首） */
+  from: number;
+  /** 范围终点：heading = 节末（下一同级及以上标题前）；block = 块段落末 */
+  to: number;
+}
+/** `subpath` 不含 '#'。heading：精确（大小写不敏感）→ stripHeading 二次匹配；
+ *  `^` 开头按块 id（大小写不敏感）。未命中/无 subpath → null。 */
+resolveSubpath(path: string, subpath: string): SubpathSpan | null;
+```
+
+core/embeds.ts 的 heading/block 切片逻辑**重构为调用它**（行为不变——切片范围与现有
+逐字一致，stripHeading 逻辑随迁 metadata；embeds 保留警示牌分支）。
+
+### Core: reveal 机制 — `core/workspace.ts`（core agent）
+
+```ts
+/** One-shot reveal request: EditorPane consumes (scroll+flash) then clears.
+ *  Session-only. Set AFTER openFile so the consuming pane already targets path. */
+readonly revealTarget: Store<{ path: string; from: number; to: number } | null>;
+requestReveal(path: string, from: number, to: number): void; // set 即可，无副作用
+```
+
+### Core: 链接 subpath 透传 — `core/markdown.ts` + `core/embeds.ts`（core agent）
+
+- markdown.ts：`[[note#sub]]`/`[[note#^id]]` 的 internal-link 锚点增加
+  `data-subpath="<#后原文，转义>"`（无 subpath 的链接**零字节变化**——diff 验证义务：
+  仅含 subpath 链接的用例新增该属性，其余全字节一致）。
+- embeds.ts：转写 header 链接与降级链接牌同样带 data-subpath（指向被嵌入笔记的
+  subpath）。
+
+### Editor: 点击贯通 + 闪烁 + fence 排除 — `features/editor/`（editor agent）
+
+- `wikilinks.ts` openWikilink 增参 `subpath?: string`：openFile 后
+  `metadata.resolveSubpath(resolved, subpath)` 命中 → `workspace.requestReveal(...)`；
+  未命中/无 subpath → 现状。
+- 点击链路三处透传：阅读视图委托（EditorPane onPreviewClick 读 `data-subpath`）、
+  live preview wikilink 装饰（mark 增 `data-link-subpath` 属性 + click handler 读取——
+  装饰属性在 cmExtensions/livePreview 哪边建，按现状跟随）、NoteEmbedWidget 内部
+  委托（core 已在锚点带 data-subpath，读它）。
+- `EditorPane.tsx`：订阅 `revealTarget`——匹配当前 handle.path 且 CM 视图在（live/
+  source）→ `view.dispatch({ selection: { anchor: from }, effects:
+  EditorView.scrollIntoView(from, { y: "center" }) })` + 触发闪烁 → 清 store
+  （set(null)）。preview 模式或路径不匹配 → 不消费不清除（挂起到下次 CM 挂载——
+  openFile 默认 live，正常链路必达；preview 态点击自身锚点的场景记录口径）。
+- 闪烁：cmExtensions 新增 reveal-flash 扩展——`StateEffect<{from,to}>` → 行级
+  `Decoration.line({ class: "cm-reveal-flash" })`，~1200ms 后第二个 effect 清除
+  （setTimeout 持 view 引用，destroy 时清定时器，rAF/timer id 归零纪律）。css
+  动画淡出，颜色走 `--accent` 透明度变体。
+- **fence 排除统一（R13 债）**：livePreview 的 wikilink 正则扫描跳过
+  `fencedLines`（集合已存在）——fence 内 `[[x]]`/`![[x]]` 不再装饰/不再出 widget，
+  与阅读视图对齐。行内 code 的不对称保留（记录，Obsidian 行为是也不装饰——远期）。
+
+### 口径（零代码）
+
+compat `openLinkText` 不接 reveal（缺口记录，按需求驱动）；preview 阅读视图内
+锚点点击目标是当前笔记自身的 subpath（`[[#h]]` 同文跳转）——同文 reveal 走同一
+requestReveal 路径（openFile 同路径是 no-op，reveal 正常消费）；`[[#h]]` 形态
+target 为空 → resolve 按当前笔记处理（wikilinkTarget 返回空串——现状这类链接
+怎么渲染先查清，若现状不支持同文链接则整体出轮记缺口，不强做）。
+
+### As-built deltas (post-review — R14)
+
+Review: 2 dimensions, 11 findings → 1 confirmed minor (fixed), 10 refuted.
+
+- **FIXED — expanded-state Ctrl+Click carries the subpath too**: `wikilinkDecorations`
+  (cmExtensions) now emits `data-link-subpath` and `wikilinkClickHandler` forwards it —
+  the contract listed three pass-through sites; the reviewer correctly held the fourth
+  (Ctrl+Click on a revealed/source-mode link) in scope.
+- **Accepted shape delta**: the flash effect is `StateEffect<{from}>` (the contract block
+  said `{from,to}`; the line decoration only needs `from`). The editor agent FLAGGED the
+  divergence instead of silently deviating — the R13 lesson working as intended.
+- Recorded口径: reveal is consumed by EDITOR modes only — a click from reading view
+  opens the target in reading view (tab keeps its mode) and the request stays pending
+  until the user switches to live/source (verified end-to-end on desktop). In-preview
+  reveal is an R15 candidate. resolveSubpath trims its input (same as the embed path
+  always did); unresolved subpath-bearing links also carry data-subpath (inert).
+
+### Round 14 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/metadata.ts, core/workspace.ts, core/markdown.ts, core/embeds.ts |
+| editor | features/editor/{wikilinks.ts, cmExtensions.ts, EditorPane.tsx, livePreview.ts, editor.css} |
+
+Frozen surfaces：SubpathSpan/resolveSubpath、revealTarget/requestReveal、
+`data-subpath`/`data-link-subpath` 属性名、`cm-reveal-flash` 类。core agent diff
+验证义务（仅 subpath 链接新增属性）；embeds 重构后切片行为与 R13 逐字一致（用例复跑）。
+每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 compat/**、docs/。
+
+## Round 13 additions — `^block` 块引用（链接+嵌入）+ compat noteEmbeds 接通
 
 P2 组合轮（P1 渠道/证书继续等用户决策）。官方校准（.calibration/obsidian.d.ts:1283/1462）：
 `BlockCache extends CacheItem { id: string }`、`CachedMetadata.blocks?:
