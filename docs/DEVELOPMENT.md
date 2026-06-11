@@ -47,4 +47,8 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
   core/i18n/dict.*.ts 片段）；验证用设置页 `settings-language` 下拉 + localStorage
   `geode.locale`；watcher 回声口径：`window.__geodeWatchEcho` 计数器、浏览器
   `window.__geodeFireWatch(paths)` 模拟外部事件
+- 自动更新（R9）：发布/密钥/签名全流程见 docs/DISTRIBUTION.md；本地 E2E 口径——
+  `.update-test/server.mjs` 起 :17321 静态服务器 + 测试构建（conf 临时指 localhost +
+  `dangerousInsecureTransportProtocol`，不得提交），探针 `.calibration/r9-up1~3.js`
+  （检查/负向篡改签名/正向安装），负向必须含"合法编码错误签名"用例
 - demo vault 是回归夹具，测试痕迹要清理后再提交

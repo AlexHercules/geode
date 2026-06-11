@@ -132,21 +132,47 @@ calendar 重挂载）、export_write 真实落盘+相对路径拒绝。
 外部 PowerShell 改文件正常重载且 external 计数；中文 UI 截图。
 截图 docs/screenshots/r8-browser-zh-settings.png、r8-desktop-zh-suite.png。
 
-## R9 候选 — 商业打磨（按优先级）
+### R9 — v0.9（2026-06-11）自动更新链路 + compat suggest 余项
+
+**自动更新**（tauri-plugin-updater + plugin-process，HANDOFF 预授权备选路径——minisign
+更新签名与 Authenticode 证书无关，无证书也完整落地；Authenticode 留 `signCommand` 配置位，
+购证后填入即可，全流程见 **docs/DISTRIBUTION.md**）：密钥对 `.tauri-keys/`（gitignore，
+带密码——**Windows 无法表达空串环境变量，空密码密钥会让构建死等交互提示**，已踩坑入档）；
+`core/update.ts` 双端形状（check 持有 Update 于模块级、进度事件映射、浏览器全程降级）；
+设置页 About 更新区（检查/发现 v{x}/进度/错误行内全文）+ `app:check-updates` 命令；
+conf：`createUpdaterArtifacts` + pubkey + endpoint 占位 + NSIS `passive`。
+**compat suggest 余项**（R6 两缺口闭合）：`setInstructions` 真实渲染（官方
+`.prompt-instructions` 类名，EditorSuggest popup + SuggestModal；Instruction 两字段
+required 照官方）；**纯光标移动重评估 onTrigger**（core 新事件
+`document:selection-changed`——syncExtension 在 selectionSet 且非 sync 注解时 emit，
+compat 跑同一触发循环）。
+评审 5 维 8 finding：3 确认（全 minor：Instruction 类型偏差已修、契约文案已修、
+版本号中间态发布时收敛）5 证伪；安全/数据安全/分层三维零 finding。
+**桌面更新链路全 E2E**（本地 latest.json + 静态服务器）：0.8.5 运行中应用 → 检查发现
+0.9.0 → 下载 → minisign 验签 → NSIS 静默安装到 %LOCALAPPDATA%\Geode → 自动重启为
+v0.9.0 ✓；负向两例：篡改签名 "Invalid encoding"、合法编码错误签名
+"signature verification failed"，均行内报错且应用存活 ✓。
+套件 5/5 不回退；**nldates 指令条 "Shift / Keep text as alias" 真实渲染**（R6 缺口可视
+闭合）；光标移开弹层关闭 ✓（移回重开取决于插件 onTrigger 语义——nldates 锚点逐键建立，
+官方同行为；fixture 已证明移回重开机制本身工作）；逐键 `@tomorrow`→`[[2026-06-12]]` ✓。
+截图 docs/screenshots/r9-desktop-nldates-instructions.png。
+
+## R10 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P1 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提；**需购买代码签名证书（外部依赖，R8 因此改选 i18n）** |
-| P2 | compat：suggest 指令条渲染 + 光标移动重评估 | R6 两条显式缺口（见 OBSIDIAN-COMPAT 缺口表） |
-| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
+| P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
 | P2 | vault 切换后 stale tab 自动关闭 | R4 评审残留，R5 桌面演示再次撞见 |
 | P2 | GeodePlugin.name/description 可本地化 | 插件名在设置页不随语言切换（Command.name 已解决） |
+| P2 | 安装包瘦身 | moment locale 按需裁剪（主 chunk -~330KB min 前）+ ureq 特性裁剪 |
+| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
 
 ## 已知技术债
 
 - ~~图谱最大化窗口下居中偏移~~（R7 根治：fit-to-view + 布局后初测 + dpr resize 监听）
-- compat EditorSuggest：纯光标移动不重评估 onTrigger（逐事务驱动，显式偏差）；
-  setInstructions 指令条不渲染（gap 上报）；popup 不随窗口 resize/scroll 重定位
+- compat EditorSuggest：~~纯光标移动不重评估~~~~setInstructions 不渲染~~（R9 双双闭合：
+  `document:selection-changed` 事件 + 官方 `.prompt-instructions` 渲染）；
+  剩余：popup 不随窗口 resize/scroll 重定位（显式保留）
 - moment-with-locales + ureq：安装包体量随轮次缓涨，商业分发前可做按需裁剪
 - ~~自身写入回声触发 watcher~~（R8 根治：FNV-1a 指纹分流 + 全抑制快速路径。
   残留显式限制：未 await 的同路径并发写可能把首个回声判为外部——下游 dirty 守卫 +

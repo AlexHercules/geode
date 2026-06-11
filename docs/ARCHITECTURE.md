@@ -71,7 +71,142 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 8 additions (current) — i18n（中/英）+ watcher 回声抑制
+## Round 9 additions (current) — 自动更新链路（tauri-plugin-updater）+ compat suggest 余项
+
+P1 取 HANDOFF 预授权的备选路径：**无 Authenticode 证书也能完整落地的更新链路**——tauri
+自带 minisign 更新签名（本地生成密钥，与商业代码签名证书无关）；Windows Authenticode
+（防 SmartScreen）做成 `bundle.windows.signCommand` 配置位，购证后填入即可（见
+docs/DISTRIBUTION.md）。P2 清 R6 两条 compat 显式缺口：setInstructions 指令条渲染 +
+纯光标移动重评估 onTrigger。
+
+### One-time dep decisions (chief) — implementation agents must NOT add further deps
+
+- Cargo: `tauri-plugin-updater = "2"`, `tauri-plugin-process = "2"`；main.rs 注册两插件。
+- npm: `@tauri-apps/plugin-updater`, `@tauri-apps/plugin-process`。
+- capabilities/default.json 增加 `"updater:default"`, `"process:default"`。
+- tauri.conf.json：`bundle.createUpdaterArtifacts: true`；`plugins.updater = { pubkey,
+  endpoints: [GitHub latest.json 占位 URL], windows: { installMode: "passive" } }`。
+- 更新签名密钥：`tauri signer generate` → `.tauri-keys/geode.key`（**gitignore，仓库内
+  绝不提交私钥**；丢失即无法向已装机用户推送更新——备份责任在用户，DISTRIBUTION.md 写明）。
+  构建发布版时设 `TAURI_SIGNING_PRIVATE_KEY`(+`_PASSWORD`) 环境变量。
+
+### Core: update chain — `core/update.ts` (new, dual-end like core/net.ts)
+
+```ts
+export interface UpdateInfo { version: string; body: string }
+export type UpdateProgress =
+  | { kind: "started"; contentLength: number | null }
+  | { kind: "progress"; downloaded: number; contentLength: number | null }
+  | { kind: "finished" };
+/** Desktop only. Browser (`!isTauri()`): supported=false, check resolves null. */
+export function updateSupported(): boolean;
+/** null = up to date. Rejects on network/endpoint errors (caller shows the error). */
+export function checkForUpdate(): Promise<UpdateInfo | null>;
+/** Download + verify minisign signature + run NSIS passive install, then relaunch.
+ *  The returned promise only settles on failure paths (relaunch exits the app). */
+export function downloadAndInstallUpdate(
+  onProgress: (p: UpdateProgress) => void,
+): Promise<void>;
+```
+
+Implementation: static imports of `@tauri-apps/plugin-updater` / `plugin-process` are
+allowed (tree-shaken stubs are browser-safe); every call guarded by `updateSupported()`.
+The `Update` object from `check()` is held module-level between check and install
+(`downloadAndInstallUpdate` throws if no prior successful check).
+
+### Settings UI: update section — `features/settings/SettingsModal.tsx` (About section)
+
+About 节顶部新增 update 区（仅 `updateSupported()` 时渲染）：
+- 当前版本行 + 按钮 `data-testid="settings-check-updates"`（idle/checking/最新/可用）。
+- 可用时显示 `v{version}` + 按钮 `data-testid="settings-install-update"`（“更新并重启”），
+  点击后进度条（`data-testid="settings-update-progress"`，百分比文本；contentLength 缺失
+  时显示已下载字节数）。错误显示在行内 `data-testid="settings-update-error"`（完整错误
+  文案，不吞）。状态机 idle→checking→(none|available)→downloading→installing；组件卸载
+  不取消下载（插件不支持取消，重开设置页按钮态降级为 idle——已知限制）。
+- 命令 `app:check-updates`（name thunk `cmd.checkUpdates`，`available: updateSupported`）
+  打开设置页 About 节并触发检查（workspace.openModal("settings") + 节内自动 check 一次，
+  实现细节 agent 自定，testid 冻结）。
+- i18n：settings.update.* 键进 dict.views.ts，cmd.checkUpdates 进 dict.app.ts（本轮仅
+  updater agent 碰这两文件，无所有权冲突）。
+
+### Compat: setInstructions 指令条 — `suggest.ts` + `modal.ts`(SuggestModal) + `compat.css`
+
+Calibrated（obsidian.d.ts:2712/3556/6898 + nldates main.js:9280）：
+`setInstructions(instructions: Instruction[]): void`，`Instruction { command: string;
+purpose: string }`（两字段官方均 **required**（无 `?`）——shim 类型照抄 required，
+渲染时仍 `?? ""` 容空，因为运行时插件不受 TS 约束）。
+- `PopoverSuggest`（EditorSuggest 继承）与 `SuggestModal` 都存 `_instructions`；再次调用
+  整体替换；空数组/未调用 → 不渲染条。
+- EditorSuggest popup：列表底部 `.prompt-instructions` 条（每项 `.prompt-instruction` =
+  `<span class="prompt-instruction-command">{command}</span><span>{purpose}</span>`——
+  官方 CSS 类名，主题兼容）；popup 翻转到行上方时条仍在列表底部。`data-testid=
+  "editor-suggest-instructions"`。SuggestModal 同条渲染在 modal 底部。
+- 移除 setInstructions 的 gap 上报（两处）。样式进 compat.css，颜色走 CSS 变量。
+
+### Compat: 纯光标移动重评估 onTrigger — `core/documents.ts` + `core/events.ts` + compat `context.ts`/`suggest.ts`
+
+官方语义：onTrigger "very often (on each keypress)" 基于光标位置评估——R6 只在文档事务时
+驱动，纯光标移动不重评估（已记录偏差，本轮清除）。
+- `core/events.ts` EventMap 新增：
+  ```ts
+  /** the LOCAL selection moved without a doc change (cursor motion, mouse click) */
+  "document:selection-changed": { path: string };
+  ```
+  由 `DocumentHandle.syncExtension` 的 updateListener 在 `update.selectionSet &&
+  !update.docChanged` 且非远端 sync 事务时 emit（每 update 至多一次，在
+  document:changed 同一选择逻辑旁；setText/外部重载不触发）。
+- compat `EditorSuggestManager` 订阅之（active view only，同 document:changed 守卫），
+  跑与 document:changed 完全相同的触发循环（首个非 null 胜出；全 null → closeActive）。
+  注意：trigger 循环内部 replaceRange 等编辑引发的 selection 事件天然被"逐 update 至多
+  一次 + 内容判等"约束，无递归风险；评审重点核对。
+- 缺口表删除该偏差行；popup 不随窗口 resize/scroll 重定位的偏差保留。
+- fixture：FixtureSuggest `setInstructions([{command:"↵",purpose:"insert"}])`；浏览器
+  E2E 断言指令条渲染 + 光标移出触发区后 popup 关闭（ArrowLeft 数次 → popup 消失）。
+
+### As-built deltas (post-review + desktop E2E — R9)
+
+Review: 5 dimensions, 8 findings → 3 confirmed (ALL minor), 5 refuted; the
+updater-security / data-safety / contract-layering dimensions returned ZERO findings.
+
+- **FIXED — `Instruction` fields are REQUIRED** (obsidian.d.ts:3556 has no `?`): the shim
+  type now matches the official shape; rendering still `?? ""`-tolerates missing values
+  (runtime plugins are untyped). The contract text above originally said "officially
+  optional" — corrected; the error had propagated from contract → implementation.
+- **Version constant converged at release** (`APP_VERSION` 0.9.0 = package.json =
+  Cargo.toml = tauri.conf.json) — the mid-round mismatch was the documented release-flow
+  intermediate state, not a defect (adversarial verification refuted the duplicate
+  finding citing the R8 release commits as precedent).
+- **Ops lesson (cost: one hung build): Windows cannot express empty-string environment
+  variables** — PowerShell `$env:X = ""` DELETES the variable, and the tauri signer then
+  blocks forever on an interactive password prompt in a non-interactive shell. The
+  updater keypair therefore MUST have a password (regenerated; password in
+  DISTRIBUTION.md, rotate before public release).
+- Desktop E2E verified the FULL chain (running 0.8.5 app → check → download → minisign
+  verify → NSIS passive install to %LOCALAPPDATA%\Geode → auto-relaunch as v0.9.0) plus
+  two negative cases: corrupted-encoding signature and validly-encoded-but-wrong
+  signature both fail inline ("Invalid encoding in minisign data" / "The signature
+  verification failed") with the app alive.
+- Behavioral note: cursor-move re-evaluation CLOSES the popup when the cursor leaves the
+  trigger range (verified with nldates), but whether moving BACK re-opens it depends on
+  the plugin's own onTrigger (nldates builds its anchor per-keystroke and does not
+  re-match a completed phrase — official Obsidian behaves identically; the fixture
+  suggest proves the re-open path works).
+
+### Round 9 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| updater-ui | core/update.ts (new), features/settings/SettingsModal.tsx, app/App.tsx (command only), core/i18n/dict.views.ts, core/i18n/dict.app.ts |
+| compat-suggest | compat/obsidian/{suggest,modal,ui,plugin,context,fixture,gaps}.ts (按需), compat/obsidian/compat.css |
+
+Chief pre-phase（agent 起跑前已完成，tsc+cargo 常绿）：本节 + 全部依赖/conf/capabilities/
+main.rs 插件注册 + 密钥生成 + core/events.ts + core/documents.ts 的 selection 事件。
+Frozen surfaces：core/update.ts API 块、`document:selection-changed` 事件形状、三个
+settings testid、`editor-suggest-instructions` testid、Instruction 渲染 DOM 类名。
+每 agent 结束前 `npx tsc --noEmit`（updater-ui 另跑 `cargo check`——本轮其实 Rust 由
+chief 预改，agent 不碰 Rust）。不加任何新依赖。
+
+## Round 8 additions — i18n（中/英）+ watcher 回声抑制
 
 Native round（compat 表面零改动——套件只需不回退）。No new npm deps（i18n 手写，不引 i18next）。
 
