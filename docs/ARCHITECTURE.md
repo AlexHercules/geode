@@ -71,7 +71,99 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 12 additions (current) — 笔记转写嵌入 `![[note]]` + 导出 HTML 内联图片
+## Round 13 additions (current) — `^block` 块引用（链接+嵌入）+ compat noteEmbeds 接通
+
+P2 组合轮（P1 渠道/证书继续等用户决策）。官方校准（.calibration/obsidian.d.ts:1283/1462）：
+`BlockCache extends CacheItem { id: string }`、`CachedMetadata.blocks?:
+Record<string, BlockCache>`、CacheItem.position 为 Pos（line/col/offset 双端点）。
+
+### Core: 块索引 — `core/types.ts` + `core/metadata.ts`（core agent）
+
+```ts
+// types.ts
+export interface BlockRef {
+  /** block id WITHOUT the '^' */
+  id: string;
+  /** span of the whole block (paragraph approximation) INCLUDING the marker */
+  from: number;
+  to: number;
+}
+// NoteMetadata gains: blocks: BlockRef[];
+```
+
+parseNote：fence 外扫描行尾标记 `/\s\^([A-Za-z0-9-]+)\s*$/`；块范围 = 含标记行的
+**连续非空行段**（段落近似——表格/嵌套列表的复杂块按此近似，显式偏差记录）；同 id
+重复 → 后者胜（对齐官方 Record 覆盖语义）。
+
+### Core: 块嵌入切片 — `core/embeds.ts`（core agent）
+
+`subpath` 以 `^` 开头不再降级链接：在 `metadata.getMetadata(path).blocks` 中大小写
+不敏感匹配 id → 切 `[from, to)` 并**去掉切片尾部的 ` ^id` 标记**再渲染；未命中 →
+`.geode-embed-missing` 警示牌，新键 `t("editor.embedMissingBlock", { block, name })`
+（en `Block "^{block}" not found in {name}` / zh `在 {name} 中找不到块 "^{block}"`，
+键进 dict.views.ts，本轮 core agent 顺带写入——无其他 agent 碰该文件）。
+
+### Core: 阅读视图块标记隐藏 — `core/markdown.ts`（core agent，**有意的全调用方变更**）
+
+渲染前置步骤：fence/inline-code 外的行尾 ` ^id` 标记剥除（Obsidian 阅读视图行为）。
+这是**故意打破"字节级不变"的基管线变更**（compat MarkdownRenderer 同样受益——Obsidian
+本来就不渲染标记）；diff 验证义务改为：**除含行尾块标记的行外，全用例输出仍字节级一致**。
+
+### Editor: live preview 标记隐藏 — `features/editor/livePreview.ts`（editor agent）
+
+选区未触及该行时 `Decoration.replace` 隐藏行尾 ` ^id`（含前导空格），光标进入 →
+既有 reveal 规则还原。fence 内不处理（跟随既有 wikilink 正则的 fence 跳过结构）。
+
+### Compat: blocks + MarkdownRenderer noteEmbeds — `compat/obsidian/`（compat agent）
+
+- `getFileCache()` 返回值增加 `blocks: Record<string, BlockCache>`（按官方形状：键 =
+  id，值含 position——跟随既有 headings 的 offset→Pos 映射模式；无块时官方为
+  undefined/缺省——对照现有 headings 缺省行为保持一致）。
+- `MarkdownRenderer.render`：渲染改传 `resolveEmbed`（metadata.resolveAttachment 绑
+  sourcePath）+ `noteEmbeds: true`，innerHTML 后调 core `hydrateEmbeds`（compat 自带
+  极简 imageSrc：`vault.readBinary` → blob URL，模块级 Map 缓存即可，不订阅失效——
+  compat 渲染是一次性 fragment，记录口径）+ `ancestors = new Set([sourcePath])`。
+  内链点击委托已有（R6）。fixture.ts：`obsfixture-md-render` 命令的渲染源加
+  `![[Welcome]]` 与 `^block` 用例，探针可断言 `.geode-embed-note-content` 存在。
+- 缺口表删除"compat MarkdownRenderer 未接 noteEmbeds"口径（R12 记录的）。
+
+### 链接路径口径（零代码）
+
+`[[note#^id]]` 链接经既有 wikilinkTarget 剥 `#` 后正常解析/打开（已工作）；
+**点击后不滚动定位到块**——显式缺口记录（链接/嵌入的 scroll-to-subpath 是远期项）。
+
+### As-built deltas (post-review — R13)
+
+Review: 3 dimensions, 12 findings → 4 confirmed (3 = ONE root cause, major; 1 minor
+debt), 8 refuted.
+
+- **FIXED (contract violation) — live-preview marker hiding now EXCLUDES fences**: the
+  editor agent shipped the marker hide without fence exclusion, rationalizing it via the
+  in-file wikilink scan's parity — but the R13 contract mandated "fence 内不处理". Fixed
+  by collecting FencedCode line numbers during the existing syntaxTree pass and skipping
+  them in the marker loop. Lesson: an agent's inline comment cannot amend the contract;
+  reviewers correctly flagged the rationalization.
+- **Recorded debt (pre-existing, R1)**: the live-preview WIKILINK regex scan does not
+  skip fences either — out of this round's scope, listed in ROADMAP tech debt / R14.
+- Accepted deltas: duplicate block ids dedupe case-INsensitively with later-wins
+  (official Record overwrite is exact-key; chosen so embed matching can't hit a shadowed
+  entry); the frozen marker regex requires leading whitespace, so a column-0 standalone
+  `^id` line is not recognized (Obsidian does — recorded deviation); paragraph-approx
+  block spans may extend into an adjacent fence (Obsidian-like, recorded).
+
+### Round 13 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/types.ts, core/metadata.ts, core/markdown.ts, core/embeds.ts, core/i18n/dict.views.ts |
+| editor | features/editor/livePreview.ts ONLY |
+| compat | compat/obsidian/**（blocks 映射点、util.ts、fixture.ts 按需） |
+
+Frozen surfaces：BlockRef 形状、embedMissingBlock 键、标记正则
+`/\s\^([A-Za-z0-9-]+)\s*$/`、段落近似口径。每 agent 结束前 `npx tsc --noEmit`；
+不加依赖；不碰 docs/。core agent 跑 diff 验证（义务口径见上）。
+
+## Round 12 additions — 笔记转写嵌入 `![[note]]` + 导出 HTML 内联图片
 
 P2 组合轮（P1 渠道/证书继续等用户决策），同吃 R11 的 resolveEmbed/附件管线。
 官方校准（obsidian.md/help/embeds）：嵌入"内联显示内容、随源文件更新"；`#heading` 与

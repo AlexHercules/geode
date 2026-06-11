@@ -216,15 +216,35 @@ markdown-it/metadata 首行标题全失效——修在 Vault.read 唯一咽喉�
 桌面实测：全文嵌入/heading 精确切片/缺标题中文警示牌/循环护栏（两层渲染后触发）/
 live widget/导出 data URI 全过；套件 5/5 不回退。截图 r12-desktop-transclusion.png。
 
-## R13 候选 — 商业打磨（按优先级）
+### R13 — v0.13（2026-06-11）`^block` 块引用（链接+嵌入）+ compat noteEmbeds 接通
+
+P2 组合轮。官方校准（obsidian.d.ts:1283/1462）：`BlockCache { id, position }`、
+`CachedMetadata.blocks?: Record<string, BlockCache>`。
+**块索引**：parseNote 在 masked 串（fence/frontmatter 排除、偏移稳定）上扫行尾
+`/\s\^(id)\s*$/`；块范围 = 段落近似（连续非空行段，显式偏差）；同 id 大小写不敏感
+后者胜。**嵌入切片**：`![[note#^id]]` 切 [from,to) 并剥尾标记，缺块走
+`editor.embedMissingBlock` 警示牌。**阅读视图剥行尾标记**（有意的全调用方基管线变更，
+fence 外；48 用例 diff：仅标记行变化）。**live preview 标记隐藏**（行级 reveal，
+fence 排除——评审抓到 agent 实现违反契约"fence 内不处理"，3 finding 同根因 confirmed
+major，chief 修复：FencedCode 行集合排除）。**compat**：`getFileCache().blocks` 官方
+Record 形状；`MarkdownRenderer.render` 接通 resolveEmbed+noteEmbeds+hydrate（blob 缓存
+一次性 fragment 口径），R12 缺口闭合。
+评审 3 维 12 finding：4 确认（3 同根因 major 已修 + 1 minor 记债：live preview 的
+wikilink 扫描自 R1 起就不跳 fence——既有行为，见技术债）8 证伪。
+桌面实测：块切片干净（双行段落、零标记、零邻段）/缺块中文警示牌/阅读视图剥标记 +
+fence 保留/live 隐藏 + fence 保留（修复验证）/套件 5/5 不回退。
+链接口径：`[[note#^id]]` 解析打开正常；**点击不滚动定位到块/标题**（scroll-to-subpath
+显式缺口，远期项）。
+
+## R14 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
 | P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | `#^block` 块引用（链接+嵌入） | R12 出轮项；需要 metadata 索引 ^block-id |
+| P2 | 链接点击 scroll-to-subpath（#heading/#^block 定位+高亮） | R13 显式缺口，体验闭环收尾 |
 | P2 | 安装包瘦身 | moment locale 裁剪（R5 双副本坑注意）+ ureq 特性裁剪 |
 | P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用） |
-| P2 | compat MarkdownRenderer 接通 noteEmbeds | 插件渲染的 markdown 中转写仍为链接（按需求驱动） |
+| P2 | live preview 全扫描统一 fence 排除 | R13 记债：wikilink 正则扫描自 R1 不跳 fence（标记隐藏已修，wikilink 未动） |
 
 ## 已知技术债
 
@@ -240,9 +260,14 @@ live widget/导出 data URI 全过；套件 5/5 不回退。截图 r12-desktop-t
   复选框 aria-label、frontmatter 药丸 title）切语言后保持旧语言直到视图/widget 重建
   （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；~~GeodePlugin.name/description
   仍是纯字符串~~（R10 thunk 化根治，内置插件名随语言切换）
-- ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片 + R12 笔记转写
-  双双落地；残留：`#^block` 块引用、PDF/音频嵌入降级链接（R13 候选）、外部改图后
-  已渲染 widget 显示旧图至重建（已知口径）、compat MarkdownRenderer 未接 noteEmbeds）
+- ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片 + R12 笔记转写 +
+  R13 `^block` 全落地；残留：PDF/音频嵌入降级链接、外部改图后已渲染 widget 显示旧图
+  至重建（已知口径）、点击不滚动定位 subpath（R14 候选））
+- live preview 的 wikilink 正则扫描不跳 fence（R1 起既有；R13 新增的块标记隐藏已做
+  fence 排除，wikilink 扫描未动——fence 内 `[[x]]` 会被装饰，阅读视图不渲染，轻微不对称）
+- parseNote 块范围为段落近似（表格/嵌套列表的复杂块不精确；标记行紧邻 fence 时段落
+  扩进 fence 内容——与 Obsidian 行为近似，显式偏差）；列 0 的独立 `^id` 行不被识别
+  （冻结正则要求前导空白，Obsidian 认——显式偏差）
 - ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
   剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
