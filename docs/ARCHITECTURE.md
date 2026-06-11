@@ -71,7 +71,126 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 11 additions (current) — 模式切换保留选区/滚动 + 图片嵌入 `![[...]]`
+## Round 12 additions (current) — 笔记转写嵌入 `![[note]]` + 导出 HTML 内联图片
+
+P2 组合轮（P1 渠道/证书继续等用户决策），同吃 R11 的 resolveEmbed/附件管线。
+官方校准（obsidian.md/help/embeds）：嵌入"内联显示内容、随源文件更新"；`#heading` 与
+`#^block` 语法官方存在；嵌套/循环深度**官方无文档**——以下护栏为自定口径，显式记录：
+**深度上限 5、循环 → 警示牌**。范围出轮项（缺口表记录）：`#^block` 块引用、PDF/音频/
+canvas 嵌入（均按 R11 现状渲染为 "!"+链接）。compat 零改动；**无 noteEmbeds 的调用方
+渲染输出继续字节级不变**（R11 同款 diff 验证义务）。
+
+### Core: note-embed 占位 — `core/markdown.ts`（core agent）
+
+```ts
+export interface RenderMarkdownOptions {
+  resolveEmbed?: (target: string) => string | null;   // R11，不变
+  /** R12: present ⇒ `![[inner]]` 中 resolveEmbed 未命中图片、但 resolve(target)
+   *  命中 .md 笔记时，渲染 `<span class="geode-embed-note"
+   *  data-embed-note="<resolved>" data-embed-subpath="<#后子路径或空>"
+   *  data-embed-display="<alias|inner>"></span>`（空容器，调用方异步水合；
+   *  span+CSS display:block——div 在段落内会被浏览器破坏结构）。
+   *  absent ⇒ R11 行为；其余 fallback 路径全部不变。 */
+  noteEmbeds?: boolean;
+}
+```
+
+subpath 解析：`inner` 形如 `note#Heading|alias`——target 已有 wikilinkTarget 剥 `#`，
+本轮把 `#` 与 `|` 之间的原文存入 data-embed-subpath（HTML 转义；`^` 开头 = 块引用 →
+照常输出占位，由水合端降级为链接）。
+
+### Core: 嵌入水合引擎 — `core/embeds.ts`（新，core agent；编辑器与导出共用——features 互不 import 的合规解）
+
+```ts
+export interface HydrateContext {
+  vault: Vault; metadata: MetadataIndex;
+  /** image src provider — editor 给 blob URL，export 给 data URI */
+  imageSrc(path: string): Promise<string>;
+  depth?: number;                       // 默认 0
+  ancestors?: ReadonlySet<string>;      // 含当前根笔记路径
+}
+/** Walk root: fill img.geode-embed[data-embed-path] via imageSrc (failure →
+ *  .geode-embed-failed, never throws); expand span.geode-embed-note —
+ *  cycle (path ∈ ancestors) → .geode-embed-cycle 警示牌（文案 t("editor.embedCircular")）；
+ *  depth ≥ 5 → 仅渲染链接牌（a.internal-link + display 文本，点击走调用方既有委托）；
+ *  否则 vault.read → subpath 有值时按 heading 切片（metadata headings，大小写不敏感
+ *  精确文本匹配；未命中 → .geode-embed-missing 警示牌 t("editor.embedMissingHeading")；
+ *  `^` 开头 → 链接牌降级）→ renderMarkdownToHtml(切片, 以被嵌入笔记为 fromPath 的
+ *  resolve/resolveEmbed, {noteEmbeds:true}) → 容器内 = header（笔记名+subpath，
+ *  a.internal-link data-target 指向被嵌入笔记）+ .geode-embed-note-content innerHTML
+ *  → 递归 hydrateEmbeds(content, {...ctx, depth+1, ancestors+path})。全程不抛。 */
+export function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Promise<void>;
+```
+
+heading 切片规则：从命中 heading 行起，到下一个 level ≤ 它的 heading 前（不含），
+含 heading 行本身（Obsidian 行为）。core/embeds.ts 可 import markdown/i18n/vault/
+metadata 类型；不 import React/features。
+
+### Editor — `features/editor/`（editor agent）
+
+- `embeds.ts`：保留 getEmbedUrl（blob 缓存，R11 原样）；旧 `hydrateEmbeds(root, app)`
+  改为薄包装：调 core hydrateEmbeds，imageSrc=getEmbedUrl(app,·)、ancestors={当前笔记}
+  ——签名变为 `hydrateEmbeds(root, app, currentPath: string)`（EditorPane 调用点跟改）。
+- `livePreview.ts`：`NoteEmbedWidget`——`![[inner]]` 在 resolveAttachment 未命中图片但
+  resolveLink 命中 md 且选区未触及时 replace（eq 按 resolvedPath+subpath+display）；
+  toDOM 建容器，异步：构造与阅读视图同构的占位 span → core hydrateEmbeds（ancestors=
+  {宿主笔记}），完成后若 isConnected 挂载；容器上一个 click 委托：`a.internal-link`
+  → openWikilink（阻断 CM 选区副作用 preventDefault）。**display-only 红线不变**。
+  嵌入内容随源文件更新：不做实时刷新——widget 重建（光标动/编辑）时重渲染（已知口径，
+  与 R11 图片同款）。
+- `EditorPane.tsx`：preview 分支 hydrateEmbeds 调用点传 handle.path；renderPreview 的
+  opts 增 `noteEmbeds: true`。
+- css：`.geode-embed-note`（块、左边框 var(--border) 风格容器）、`-header`（小字、
+  hover 显链接色）、`-content`、`.geode-embed-cycle/.geode-embed-missing` 警示牌、
+  `.cm-live-embed-note` 同源样式。
+- dict.views.ts：editor.embedCircular / editor.embedMissingHeading（en/zh）。
+
+### Export 内联 — `features/export/export.ts`（export agent）
+
+- `exportActiveNoteHtml`：渲染时传 `resolveEmbed + noteEmbeds:true`；存盘前在
+  **detached container** 上跑 core hydrateEmbeds，imageSrc = readBinary → `data:`
+  URI（MIME 按扩展名，base64）；ancestors={笔记自身}；完成后取 innerHTML 进
+  buildStandaloneHtml。嵌入笔记的样式子集补进 export.css（自包含承诺不变：单文件、
+  无外链、无 JS）。打印路径（printActiveNote）同样水合后再 print。
+- 失败口径：单个图片/嵌入失败不阻断导出（警示牌/failed 类入文档），整体 IO 失败走
+  既有 toast。**不新增 UI 字符串**（警示牌文案来自 core 引擎的 t()）。
+
+### As-built deltas (post-review + desktop — R12)
+
+Review: 4 dimensions, ~16 findings → 2 confirmed (both downgraded major→minor, both
+fixed), rest refuted. Fixes & deltas:
+
+- **FIXED — heading match gets a stripHeading second pass**: exact raw-text match first,
+  then a markdown-stripped/space-collapsed comparison (Obsidian's stripHeading link
+  semantics) — `![[note#Bold]]` now matches `# **Bold**`.
+- **FIXED — note-branch display = alias ?? pre-pipe trim** (was alias ?? full inner):
+  aligns with the image branch and the live-preview widget; the contract text above
+  saying `<alias|inner>` is superseded by this delta.
+- **FIXED (pre-existing, exposed by transclusion testing) — UTF-8 BOM**: fixture files
+  written by PS5.1-era tooling carried a BOM that silently broke first-line headings in
+  BOTH markdown-it and metadata parsing. Stripped at the single choke point
+  (`Vault.read`); the three BOM'd demo-vault fixtures normalized on disk. Lesson: a
+  feature that points the render pipeline at arbitrary files is a latent-bug amplifier —
+  desktop verification must use real historical files.
+- Accepted agent deltas (recorded): embed header is an Obsidian-style breadcrumb
+  "Note > Subpath"; warning callouts REPLACE the container class (standalone styling);
+  generic read-failures reuse the missing-heading callout visuals with display text
+  (only two i18n keys were authorized); `noteEmbeds` technically activates without
+  `resolveEmbed` (unobservable — real callers always pass both).
+
+### Round 12 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/markdown.ts, core/embeds.ts (new) |
+| editor | features/editor/{embeds.ts, livePreview.ts, EditorPane.tsx, editor.css}, core/i18n/dict.views.ts |
+| export | features/export/export.ts, features/export/export.css |
+
+Frozen surfaces：上述代码块全部签名 + DOM 类名/data 属性契约 + 深度 5/循环护栏语义。
+每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 compat/**、docs/。core agent 必须
+重跑 R11 式无-opts 字节级 diff 验证（含 noteEmbeds 缺省用例）。
+
+## Round 11 additions — 模式切换保留选区/滚动 + 图片嵌入 `![[...]]`
 
 P2 组合轮（P1 渠道/证书继续等用户决策）。compat 表面零改动——套件只需不回退；
 阅读视图管线对无 resolveEmbed 的调用方必须**字节级保持现状**（compat MarkdownRenderer

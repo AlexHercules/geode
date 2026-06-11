@@ -150,6 +150,14 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R12 套件回归（2026-06-11，桌面 release v0.12.0 实测 `geode.exe compat-vault`）
+
+R12 为原生功能轮（笔记转写嵌入 + 导出内联），compat 零改动；渲染管线对无 noteEmbeds
+调用方继续字节级不变（20 用例 diff）。桌面逐项复测不回退：5/5 加载启用 ✓、nldates
+指令条+弹层 ✓、光标移出关弹层 ✓、reload 幂等 + calendar 重挂载 ✓、回声计数正常 ✓。
+缺口口径更新：compat `MarkdownRenderer.render` 仍不传 noteEmbeds——插件渲染的 markdown
+中 `![[note]]` 转写保持 "!"+链接（按需求驱动接线，R13 候选）。
+
 ### R11 套件回归（2026-06-11，桌面 release v0.11.0 实测 `geode.exe compat-vault`）
 
 R11 为原生功能轮（模式切换零重建 + 图片嵌入），compat 表面零改动；阅读视图管线对

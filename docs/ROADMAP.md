@@ -196,15 +196,35 @@ demo 夹具双端一致（磁盘 png + Memory DEMO_BINARY）。
 桌面实测：live img blob 加载 + 阅读视图 hydrate ✓、同 DOM 零重建 + undo 跨切换 ✓、
 套件 5/5 + nldates 指令条 + 回声抑制不回退 ✓。截图 r11-desktop-embed-live.png。
 
-## R12 候选 — 商业打磨（按优先级）
+### R12 — v0.12（2026-06-11）笔记转写嵌入 `![[note]]` + 导出内联
+
+P2 组合轮，同吃 R11 嵌入管线。官方校准（obsidian.md/help/embeds）：嵌套/循环深度无官方
+文档——自定护栏显式入档：**深度上限 5、循环 → 警示牌**；出轮项记缺口（`#^block` 块引用、
+PDF/音频/canvas 嵌入均降级链接）。
+**core/embeds.ts**（新）：编辑器与导出共用的水合引擎（features 互不 import 的合规解）——
+img 占位填充 + 笔记转写递归展开（heading 切片 = 命中行至下一同级标题；二次匹配走
+Obsidian stripHeading 语义；循环/超深/缺标题/读失败全降级警示牌或链接牌，全程不抛）。
+live preview `NoteEmbedWidget`（与阅读视图同构水合、点击委托导航、display-only 红线）；
+导出/打印 detached container 水合，**图片内联 data: URI**（导出文件零 blob:、自包含）。
+无 noteEmbeds 调用方（compat/export 旧形态）**字节级不变**（20 用例 diff 验证）。
+评审 4 维 ~16 finding：2 确认（均降 minor 已修：heading 匹配补 stripHeading 二次匹配、
+note 分支 display 与图片分支对齐）其余证伪。
+**桌面实测连带抓出一个预先存在的潜伏缺陷**：PS5.1 时代写入的夹具带 UTF-8 BOM，
+markdown-it/metadata 首行标题全失效——修在 Vault.read 唯一咽喉点（剥前导 BOM），
+三个夹具文件磁盘归一化。教训：**转写这种"把渲染管线指向任意文件"的特性是潜伏缺陷
+放大器，实测必须用真实历史文件**。
+桌面实测：全文嵌入/heading 精确切片/缺标题中文警示牌/循环护栏（两层渲染后触发）/
+live widget/导出 data URI 全过；套件 5/5 不回退。截图 r12-desktop-transclusion.png。
+
+## R13 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
 | P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | 笔记转写嵌入 `![[note]]`（transclusion） | R11 只做了图片；非图片嵌入按现状渲染为链接 |
-| P2 | 导出 HTML 内联图片（data URI） | R11 显式缺口：export 不传 resolveEmbed，导出文件中嵌入仍是链接 |
+| P2 | `#^block` 块引用（链接+嵌入） | R12 出轮项；需要 metadata 索引 ^block-id |
 | P2 | 安装包瘦身 | moment locale 裁剪（R5 双副本坑注意）+ ureq 特性裁剪 |
 | P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用） |
+| P2 | compat MarkdownRenderer 接通 noteEmbeds | 插件渲染的 markdown 中转写仍为链接（按需求驱动） |
 
 ## 已知技术债
 
@@ -220,9 +240,9 @@ demo 夹具双端一致（磁盘 png + Memory DEMO_BINARY）。
   复选框 aria-label、frontmatter 药丸 title）切语言后保持旧语言直到视图/widget 重建
   （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；~~GeodePlugin.name/description
   仍是纯字符串~~（R10 thunk 化根治，内置插件名随语言切换）
-- ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片双视图渲染；
-  残留：非图片嵌入（笔记转写）仍渲染为链接、导出 HTML 不内联图片、外部改图后
-  已渲染 widget 显示旧图至重建——均显式记录见 R12 候选）
+- ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片 + R12 笔记转写
+  双双落地；残留：`#^block` 块引用、PDF/音频嵌入降级链接（R13 候选）、外部改图后
+  已渲染 widget 显示旧图至重建（已知口径）、compat MarkdownRenderer 未接 noteEmbeds）
 - ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
   剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
