@@ -1,7 +1,7 @@
 {
   "name": "geode",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Geode 鈥?a local-first markdown knowledge base (Obsidian-style), built with Tauri 2 + React + CodeMirror 6",
   "type": "module",
   "scripts": {
@@ -23,6 +23,8 @@
     "@lezer/highlight": "^1.2.0",
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-dialog": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "d3-force": "^3.0.0",
     "markdown-it": "^14.1.0",
     "moment": "^2.30.1",

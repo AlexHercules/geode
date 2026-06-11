@@ -76,6 +76,7 @@ export {
   ToggleComponent,
   ValueComponent,
   type FuzzyMatch,
+  type Instruction,
   type SearchResult,
   type UserEvent,
 } from "./ui";

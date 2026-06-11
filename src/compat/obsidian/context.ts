@@ -10,6 +10,9 @@
  *  - active-file:changed                    -> workspace 'active-leaf-change' + 'file-open'
  *  - document:changed (active editor)       -> workspace 'editor-change'
  *                                              + EditorSuggest trigger loop (R6)
+ *  - document:selection-changed (active)    -> EditorSuggest trigger loop (R9 —
+ *                                              onTrigger re-evaluates on pure
+ *                                              cursor movement, official cadence)
  *  - workspace root identity change         -> workspace 'layout-change'
  *
  * Startup semantics (CREATE-ON-LOAD, API-REFERENCE area 2/3):
@@ -119,6 +122,21 @@ export function createCompatContext(
           workspace.trigger("editor-change", view.editor, view);
           void suggests.runTrigger(view.editor, view.file);
         }
+      }
+    }),
+  );
+
+  // pure cursor movement (R9): same active-view guard as document:changed,
+  // same trigger loop (first non-null onTrigger wins; all null -> closeActive)
+  // — but NO 'editor-change' (the document did not change). Edits made inside
+  // the loop fire document:changed synchronously; the manager's stale-token
+  // guard keeps the nested run authoritative, so there is no recursion.
+  disposers.push(
+    ev.on("document:selection-changed", ({ path }) => {
+      const active = handle.documents.getActiveView();
+      if (active && active.path === path) {
+        const view = makeActiveMarkdownView(handle, registry);
+        if (view) void suggests.runTrigger(view.editor, view.file);
       }
     }),
   );

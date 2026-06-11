@@ -7,6 +7,9 @@
  * ItemView opened via the recent-files leaf sequence, and a window.moment
  * assertion written into a status bar item. R6 adds an EditorSuggest ("@@"
  * trigger), a requestUrl data:-URL probe and a MarkdownRenderer.render probe.
+ * R9: the suggest calls setInstructions in its constructor so the browser E2E
+ * can assert the instructions bar (editor-suggest-instructions) renders, and
+ * cursor movement out of the trigger range (ArrowLeft) closes the popup.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -68,6 +71,11 @@ var FixtureView = class extends obsidian.ItemView {
 // R6: real EditorSuggest — typing "@@" pops static suggestions; selecting one
 // replaces the whole trigger range (start..end from the stored context).
 var FixtureSuggest = class extends obsidian.EditorSuggest {
+  constructor(app) {
+    super(app);
+    // R9: instructions bar set from the constructor (nldates' calling shape)
+    this.setInstructions([{ command: "\\u21B5", purpose: "insert" }]);
+  }
   onTrigger(cursor, editor, file) {
     var before = editor.getLine(cursor.line).slice(0, cursor.ch);
     var m = before.match(/@@([A-Za-z]*)$/);

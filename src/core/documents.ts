@@ -82,7 +82,18 @@ export class DocumentHandle {
    * schedules the single debounced auto-save for local (non-sync) changes.
    */
   private readonly syncExtension: Extension = EditorView.updateListener.of((update) => {
-    if (!update.docChanged) return;
+    if (!update.docChanged) {
+      // Pure cursor motion (R9): selection moved with no doc change. Sync-
+      // annotated transactions (setText / external reload / forwarded changes)
+      // never emit — only user-driven motion does. One emit per update.
+      if (
+        update.selectionSet &&
+        !update.transactions.some((tr) => tr.annotation(syncAnnotation))
+      ) {
+        this.events.emit("document:selection-changed", { path: this.currentPath });
+      }
+      return;
+    }
     let local = false;
     for (const tr of update.transactions) {
       if (tr.changes.empty || tr.annotation(syncAnnotation)) continue;

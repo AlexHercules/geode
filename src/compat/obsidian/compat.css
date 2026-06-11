@@ -393,6 +393,36 @@
   color: var(--text-normal);
 }
 
+/* ---------------- instructions bar (setInstructions, official class names) ---------------- */
+/* Shared by the EditorSuggest popup and SuggestModal — themes target these. */
+
+.prompt-instructions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 9px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.prompt-instruction {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.prompt-instruction-command {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+/* inside the compat modal the bar sits below the scrolling results */
+.geode-compat-prompt .prompt-instructions {
+  margin-top: 8px;
+}
+
 /* ---------------- custom view panels (registerView side leaves) ---------------- */
 
 .geode-compat-view-panel {

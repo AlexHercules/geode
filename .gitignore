@@ -8,3 +8,7 @@ src-tauri/gen/
 bench-vault/
 .calibration/
 compat-vault/
+# updater signing keypair — NEVER commit the private key
+.tauri-keys/
+# local update-server fixtures for desktop verification
+.update-test/

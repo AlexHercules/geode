@@ -609,6 +609,142 @@
   color: var(--accent);
 }
 
+/* ---------- updates (About section, desktop only) ---------- */
+
+.update-section {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+
+.update-section .setting-item {
+  border-bottom: none;
+  padding-bottom: 6px;
+}
+
+.update-check-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-input);
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.update-check-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.update-check-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.update-status {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.update-available {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-muted);
+  border-radius: 7px;
+  background: var(--accent-muted);
+}
+
+.update-available-info {
+  min-width: 0;
+}
+
+.update-available-version {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.update-notes {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.update-install-btn {
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.update-install-btn:hover {
+  background: var(--accent-hover);
+}
+
+.update-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+  min-width: 160px;
+}
+
+.update-progress-label {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.update-progress-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+}
+
+.update-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+
+.update-progress-fill.is-indeterminate {
+  width: 40%;
+  animation: update-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes update-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.update-error {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--danger);
+  word-break: break-word;
+}
+
 /* ---------- about ---------- */
 
 .about-card {

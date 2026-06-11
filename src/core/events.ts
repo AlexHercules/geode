@@ -22,6 +22,8 @@ export interface EventMap {
   "theme:changed": { theme: "dark" | "light" };
   /** a LOCAL editor transaction changed a document's text (pre-save, per keystroke) */
   "document:changed": { path: string };
+  /** the LOCAL selection moved without a doc change (cursor motion, mouse click) */
+  "document:selection-changed": { path: string };
 }
 
 export type EventName = keyof EventMap;

@@ -80,6 +80,20 @@ export const en = {
     "Geode is a local-first markdown knowledge base. Your notes are plain files on your own disk — link them with wikilinks, follow backlinks, and explore the connections between ideas in an interactive graph.",
   "settings.aboutStack": "Built with Tauri 2 · React 18 · TypeScript · Vite · CodeMirror 6",
 
+  // ---- settings: updates (R9, desktop only) ----
+  "settings.update.title": "Updates",
+  "settings.update.currentVersion": "Current version: {version}",
+  "settings.update.check": "Check for updates",
+  "settings.update.checking": "Checking…",
+  "settings.update.upToDate": "You're up to date.",
+  "settings.update.available": "New version v{version} available",
+  "settings.update.installRestart": "Update and restart",
+  "settings.update.downloadingPct": "Downloading… {pct}%",
+  "settings.update.downloadingBytes": "Downloading… {size}",
+  "settings.update.installing": "Installing update…",
+  "settings.update.checkFailed": "Update check failed: {error}",
+  "settings.update.installFailed": "Update failed: {error}",
+
   // ---- graph view ----
   "graph.global": "Global",
   "graph.local": "Local",
@@ -186,6 +200,20 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.aboutDesc":
     "Geode 是一个本地优先的 Markdown 知识库。你的笔记是存放在自己磁盘上的纯文本文件——用 wikilink 连接它们、追踪反向链接，并在交互式关系图谱中探索想法之间的关联。",
   "settings.aboutStack": "基于 Tauri 2 · React 18 · TypeScript · Vite · CodeMirror 6 构建",
+
+  // ---- settings: updates (R9, desktop only) ----
+  "settings.update.title": "更新",
+  "settings.update.currentVersion": "当前版本：{version}",
+  "settings.update.check": "检查更新",
+  "settings.update.checking": "正在检查…",
+  "settings.update.upToDate": "已是最新版本。",
+  "settings.update.available": "发现新版本 v{version}",
+  "settings.update.installRestart": "更新并重启",
+  "settings.update.downloadingPct": "下载中… {pct}%",
+  "settings.update.downloadingBytes": "下载中… {size}",
+  "settings.update.installing": "正在安装更新…",
+  "settings.update.checkFailed": "检查更新失败：{error}",
+  "settings.update.installFailed": "更新失败：{error}",
 
   // ---- graph view ----
   "graph.global": "全局",

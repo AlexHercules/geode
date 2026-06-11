@@ -51,6 +51,7 @@ export const en = {
   "cmd.exportHtml": "Export note as HTML…",
   "cmd.exportPdf": "Export note as PDF (print)…",
   "cmd.openVault": "Open another vault…",
+  "cmd.checkUpdates": "Check for updates…",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "Open today's daily note",
@@ -106,6 +107,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.exportHtml": "导出笔记为 HTML…",
   "cmd.exportPdf": "导出笔记为 PDF（打印）…",
   "cmd.openVault": "打开其他库…",
+  "cmd.checkUpdates": "检查更新…",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "打开今天的日记",

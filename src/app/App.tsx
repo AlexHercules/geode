@@ -13,9 +13,10 @@ import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
-import { SettingsModal } from "@features/settings/SettingsModal";
+import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { isTauri } from "@core/vault";
+import { updateSupported } from "@core/update";
 import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
@@ -218,6 +219,17 @@ export function App() {
         name: () => t("cmd.exportPdf"),
         callback: () => void printActiveNote(app),
         available: () => workspace.getActiveFile() !== null,
+      }),
+      commands.register({
+        id: "app:check-updates",
+        name: () => t("cmd.checkUpdates"),
+        available: () => updateSupported(),
+        callback: () => {
+          // flag first: the settings modal reads it on mount to land on the
+          // About section and run one update check automatically
+          requestUpdateAutoCheck();
+          workspace.openModal("settings");
+        },
       }),
     ];
     if (isTauri()) {

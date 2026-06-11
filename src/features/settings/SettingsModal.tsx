@@ -5,9 +5,30 @@ import { getCommandName, hotkeyFromEvent } from "@core/commands";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
 import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
+import {
+  checkForUpdate,
+  downloadAndInstallUpdate,
+  updateSupported,
+  type UpdateInfo,
+} from "@core/update";
 import "./settings.css";
 
+/** Current app version — single source for the About card and the update row. */
+const APP_VERSION = "0.9.0";
+
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
+
+/**
+ * Set by the `app:check-updates` command right before it opens the settings
+ * modal: the modal then opens on the About section and the update area runs
+ * one check automatically. Module-level on purpose — the command fires before
+ * the modal component exists.
+ */
+let pendingAutoCheck = false;
+
+export function requestUpdateAutoCheck(): void {
+  pendingAutoCheck = true;
+}
 
 /* labels are i18n keys, resolved at render time via useI18n() */
 const SECTIONS: Array<{ id: SectionId; labelKey: I18nKey; icon: string }> = [
@@ -20,7 +41,8 @@ const SECTIONS: Array<{ id: SectionId; labelKey: I18nKey; icon: string }> = [
 export function SettingsModal() {
   const app = useApp();
   const t = useI18n();
-  const [section, setSection] = useState<SectionId>("appearance");
+  /* peek (don't consume) the auto-check flag — UpdateSection consumes it on mount */
+  const [section, setSection] = useState<SectionId>(pendingAutoCheck ? "about" : "appearance");
   const close = () => app.workspace.closeModal();
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -582,14 +604,202 @@ function AboutSection() {
   return (
     <section>
       <h2 className="settings-heading">{t("settings.section.about")}</h2>
+      {updateSupported() && <UpdateSection />}
       <div className="about-card">
         <div className="about-logo">💎</div>
         <div className="about-title">
-          Geode <span className="about-version">0.8.0</span>
+          Geode <span className="about-version">{APP_VERSION}</span>
         </div>
         <p className="about-desc">{t("settings.aboutDesc")}</p>
         <p className="about-stack">{t("settings.aboutStack")}</p>
       </div>
     </section>
+  );
+}
+
+/* ---------------- Updates (desktop only) ---------------- */
+
+type UpdatePhase = "idle" | "checking" | "none" | "available" | "downloading" | "installing";
+
+interface UpdateProgressState {
+  downloaded: number;
+  contentLength: number | null;
+}
+
+interface UpdateErrorState {
+  stage: "check" | "install";
+  /** full error text — shown verbatim inside the localized wrapper */
+  message: string;
+}
+
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function formatBytes(n: number): string {
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(0, Math.round(n / 1024))} KB`;
+}
+
+/**
+ * Update area at the top of the About section. Rendered only when
+ * updateSupported(). State machine: idle→checking→(none|available)→
+ * downloading→installing. Unmounting does NOT cancel a download (the plugin
+ * cannot cancel); reopening the modal degrades the button back to idle —
+ * known limitation per the R9 contract.
+ */
+function UpdateSection() {
+  const t = useI18n();
+  const [phase, setPhase] = useState<UpdatePhase>("idle");
+  const [info, setInfo] = useState<UpdateInfo | null>(null);
+  const [progress, setProgress] = useState<UpdateProgressState | null>(null);
+  const [error, setError] = useState<UpdateErrorState | null>(null);
+  /* drop state updates from promises that settle after unmount */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  const runCheck = async () => {
+    setError(null);
+    setInfo(null);
+    setPhase("checking");
+    try {
+      const result = await checkForUpdate();
+      if (!aliveRef.current) return;
+      if (result !== null) {
+        setInfo(result);
+        setPhase("available");
+      } else {
+        setPhase("none");
+      }
+    } catch (err) {
+      if (!aliveRef.current) return;
+      setError({ stage: "check", message: errorText(err) });
+      setPhase("idle");
+    }
+  };
+
+  const runInstall = async () => {
+    setError(null);
+    setProgress(null);
+    setPhase("downloading");
+    try {
+      await downloadAndInstallUpdate((p) => {
+        if (!aliveRef.current) return;
+        if (p.kind === "finished") setPhase("installing");
+        else setProgress({ downloaded: p.kind === "progress" ? p.downloaded : 0, contentLength: p.contentLength });
+      });
+      // on success relaunch() exits the app — nothing to do here
+    } catch (err) {
+      if (!aliveRef.current) return;
+      setError({ stage: "install", message: errorText(err) });
+      setPhase("available"); // keep the install button so the user can retry
+    }
+  };
+
+  /* the app:check-updates command requested an automatic check on open */
+  useEffect(() => {
+    if (pendingAutoCheck) {
+      pendingAutoCheck = false;
+      void runCheck();
+    }
+    // mount-only: consume the command flag exactly once per modal open
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const progressLabel =
+    phase === "installing"
+      ? t("settings.update.installing")
+      : progress?.contentLength != null && progress.contentLength > 0
+        ? t("settings.update.downloadingPct", {
+            pct: Math.min(100, Math.round((progress.downloaded / progress.contentLength) * 100)),
+          })
+        : t("settings.update.downloadingBytes", {
+            size: formatBytes(progress?.downloaded ?? 0),
+          });
+
+  return (
+    <div className="update-section" data-testid="settings-update-section">
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.update.title")}</div>
+          <div className="setting-desc">
+            {t("settings.update.currentVersion", { version: APP_VERSION })}
+          </div>
+        </div>
+        <button
+          className="update-check-btn"
+          data-testid="settings-check-updates"
+          disabled={phase === "checking" || phase === "downloading" || phase === "installing"}
+          onClick={() => void runCheck()}
+        >
+          {phase === "checking" ? t("settings.update.checking") : t("settings.update.check")}
+        </button>
+      </div>
+
+      {phase === "none" && (
+        <div className="update-status" data-testid="settings-update-status">
+          {t("settings.update.upToDate")}
+        </div>
+      )}
+
+      {info !== null && (phase === "available" || phase === "downloading" || phase === "installing") && (
+        <div className="update-available">
+          <div className="update-available-info">
+            <div className="update-available-version">
+              {t("settings.update.available", { version: info.version })}
+            </div>
+            {info.body && <p className="update-notes">{info.body}</p>}
+          </div>
+          {phase === "available" ? (
+            <button
+              className="update-install-btn"
+              data-testid="settings-install-update"
+              onClick={() => void runInstall()}
+            >
+              {t("settings.update.installRestart")}
+            </button>
+          ) : (
+            <div className="update-progress" data-testid="settings-update-progress">
+              <span className="update-progress-label">{progressLabel}</span>
+              <div className="update-progress-track" aria-hidden="true">
+                <div
+                  className={`update-progress-fill${
+                    phase === "installing" || progress?.contentLength == null
+                      ? " is-indeterminate"
+                      : ""
+                  }`}
+                  style={
+                    phase !== "installing" && progress?.contentLength != null && progress.contentLength > 0
+                      ? {
+                          width: `${Math.min(
+                            100,
+                            (progress.downloaded / progress.contentLength) * 100,
+                          )}%`,
+                        }
+                      : undefined
+                  }
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {error !== null && (
+        <div className="update-error" data-testid="settings-update-error">
+          {t(
+            error.stage === "check"
+              ? "settings.update.checkFailed"
+              : "settings.update.installFailed",
+            { error: error.message },
+          )}
+        </div>
+      )}
+    </div>
   );
 }

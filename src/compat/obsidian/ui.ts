@@ -272,6 +272,38 @@ export class Modal {
   }
 }
 
+/* ---------------- instructions bar (setInstructions, real since R9) ---------------- */
+
+/** Official shape (obsidian.d.ts:3556): both fields REQUIRED. Rendering still
+ *  tolerates missing values (`?? ""`) — plugins are untyped at runtime. */
+export interface Instruction {
+  command: string;
+  purpose: string;
+}
+
+/**
+ * @internal Build the official `.prompt-instructions` bar (shared by the
+ * EditorSuggest popup and SuggestModal). Returns null for an empty list —
+ * callers render nothing in that case.
+ */
+export function _createInstructionsEl(instructions: Instruction[]): HTMLElement | null {
+  if (instructions.length === 0) return null;
+  const bar = document.createElement("div");
+  bar.className = "prompt-instructions";
+  for (const instruction of instructions) {
+    const item = document.createElement("div");
+    item.className = "prompt-instruction";
+    const command = document.createElement("span");
+    command.className = "prompt-instruction-command";
+    command.textContent = instruction.command ?? "";
+    const purpose = document.createElement("span");
+    purpose.textContent = instruction.purpose ?? "";
+    item.append(command, purpose);
+    bar.appendChild(item);
+  }
+  return bar;
+}
+
 /* ---------------- SuggestModal / FuzzySuggestModal (suite-driven R4) ---------------- */
 
 export abstract class SuggestModal<T> extends Modal {
@@ -283,6 +315,9 @@ export abstract class SuggestModal<T> extends Modal {
   private _selected = 0;
   private _itemEls: HTMLElement[] = [];
   private _queryToken = 0;
+  /** @internal stored Instruction[] — replaced wholesale by setInstructions */
+  _instructions: Instruction[] = [];
+  private _instructionsEl: HTMLElement | null = null;
 
   constructor(app: App) {
     super(app);
@@ -316,13 +351,17 @@ export abstract class SuggestModal<T> extends Modal {
     this.inputEl.placeholder = placeholder;
   }
 
-  /** Instruction hints are not rendered by the shim (recorded gap). */
-  setInstructions(_instructions: unknown[]): void {
-    reportGap(
-      "SuggestModal",
-      "setInstructions",
-      "instruction hints are not rendered (modal shows items only)",
-    );
+  /**
+   * Real since R9: stores the list (each call replaces it wholesale) and
+   * renders the bar at the bottom of the modal. The bar lives on modalEl, so
+   * calling before OR after open() both work — the modal DOM persists across
+   * open/close. An empty array removes the bar.
+   */
+  setInstructions(instructions: Instruction[]): void {
+    this._instructions = instructions;
+    this._instructionsEl?.remove();
+    this._instructionsEl = _createInstructionsEl(instructions);
+    if (this._instructionsEl) this.modalEl.appendChild(this._instructionsEl);
   }
 
   onNoSuggestion(): void {}

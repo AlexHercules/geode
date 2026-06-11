@@ -2,20 +2,23 @@
  * PopoverSuggest / EditorSuggest — REAL triggering since R6 (suite unlock:
  * nldates' DateSuggest). One EditorSuggestManager per compat context owns the
  * trigger loop and the popup; context.ts drives it from the core
- * `document:changed` event (active view only) and Plugin.registerEditorSuggest
- * registers instances in order.
- *
- * DEVIATION (recorded once as a gap, not per keystroke): obsidian re-runs
- * onTrigger "on each keypress" including pure cursor movement; we re-evaluate
- * only per LOCAL document transaction. The suite is unaffected — nldates
- * anchors on `this.context?.start` across keystrokes, which we preserve by
- * never clearing `context` before a re-trigger.
+ * `document:changed` AND `document:selection-changed` events (active view
+ * only — R9 closed the "pure cursor movement does not re-trigger" gap, so
+ * onTrigger now re-evaluates per keypress like the official runtime) and
+ * Plugin.registerEditorSuggest registers instances in order. nldates anchors
+ * on `this.context?.start` across keystrokes, which we preserve by never
+ * clearing `context` before a re-trigger.
  */
 import type { Editor, EditorPosition } from "./editor";
 import type { TFile } from "./files";
-import { reportGap } from "./gaps";
 import type { App } from "./plugin";
-import { Scope, _modifiersFromEvent, type ScopeKeymapHandler } from "./ui";
+import {
+  Scope,
+  _createInstructionsEl,
+  _modifiersFromEvent,
+  type Instruction,
+  type ScopeKeymapHandler,
+} from "./ui";
 
 export interface EditorSuggestTriggerInfo {
   /** The start position of the triggering text. */
@@ -34,10 +37,21 @@ export interface EditorSuggestContext extends EditorSuggestTriggerInfo {
 export abstract class PopoverSuggest<T> {
   app: App;
   scope: Scope;
+  /** @internal stored Instruction[] — read by the popup at every render */
+  _instructions: Instruction[] = [];
 
   constructor(app: App, scope?: Scope) {
     this.app = app;
     this.scope = scope ?? new Scope();
+  }
+
+  /**
+   * Real since R9: stores the list (each call replaces it wholesale); the
+   * popup renders the bar from the stored list on every open/render, so
+   * calling before OR after the popup opened both work.
+   */
+  setInstructions(instructions: Instruction[]): void {
+    this._instructions = instructions;
   }
 
   /** Overridden by EditorSuggest — the manager drives the real popup. */
@@ -67,13 +81,10 @@ export abstract class EditorSuggest<T> extends PopoverSuggest<T> {
     };
   }
 
-  /** Instruction hints are not rendered by the shim (recorded gap). */
-  setInstructions(_instructions: unknown[]): void {
-    reportGap(
-      "EditorSuggest",
-      "setInstructions",
-      "instruction hints are not rendered (popup shows items only)",
-    );
+  /** Stores via the base class, then live-updates an already-open popup. */
+  override setInstructions(instructions: Instruction[]): void {
+    super.setInstructions(instructions);
+    this._manager?._refreshInstructions(this as EditorSuggest<unknown>);
   }
 
   /** Show the popup for the current context (manager-rendered). */
@@ -133,12 +144,6 @@ export class EditorSuggestManager {
 
   /** Register a suggest (plugin.ts). Returns the per-plugin disposer. */
   register(suggest: AnySuggest): () => void {
-    // the cadence deviation is recorded once, when triggering becomes possible
-    reportGap(
-      "EditorSuggest",
-      "onTrigger cadence",
-      "re-evaluated per local document transaction; pure cursor movement does not re-trigger",
-    );
     this.suggests.push(suggest);
     suggest._manager = this;
     let disposed = false;
@@ -153,9 +158,13 @@ export class EditorSuggestManager {
   }
 
   /**
-   * Trigger loop — context.ts calls this per local document transaction on
-   * the active view. NOTE: an already-open suggest keeps its `context` while
-   * onTrigger runs (nldates reuses context.start as the anchor).
+   * Trigger loop — context.ts calls this per local document transaction AND
+   * per pure cursor movement (document:selection-changed, R9) on the active
+   * view. NOTE: an already-open suggest keeps its `context` while onTrigger
+   * runs (nldates reuses context.start as the anchor). Re-entrancy: an edit
+   * made inside the loop fires document:changed synchronously and re-enters
+   * runTrigger — the token bump makes the outer in-flight getSuggestions
+   * result stale, so only the innermost run ever opens the popup.
    */
   async runTrigger(editor: Editor, file: TFile | null): Promise<void> {
     const cursor = editor.getCursor();
@@ -289,6 +298,27 @@ export class EditorSuggestManager {
       popup.appendChild(el);
       this.itemEls.push(el);
     });
+    this.renderInstructions(popup, suggest);
+  }
+
+  /**
+   * (Re-)render the `.prompt-instructions` bar below the item list from the
+   * suggest's stored list. Reading at render time (not setInstructions time)
+   * keeps instructions set in plugin constructors — nldates — working, and
+   * the bar stays at the list bottom even when the popup flips above the line.
+   */
+  private renderInstructions(popup: HTMLElement, suggest: AnySuggest): void {
+    popup.querySelector(":scope > .prompt-instructions")?.remove();
+    const bar = _createInstructionsEl(suggest._instructions);
+    if (!bar) return;
+    bar.setAttribute("data-testid", "editor-suggest-instructions");
+    popup.appendChild(bar);
+  }
+
+  /** @internal setInstructions while this suggest's popup is already open. */
+  _refreshInstructions(suggest: AnySuggest): void {
+    if (this.active !== suggest || !this.popupEl) return;
+    this.renderInstructions(this.popupEl, suggest);
   }
 
   /** Fixed-position below the trigger start; flips above near the bottom. */
@@ -350,8 +380,10 @@ export class EditorSuggestManager {
       const target = evt.target;
       if (!(target instanceof Node)) return;
       if (this.popupEl?.contains(target)) return;
-      // clicks inside the editor only move the cursor (no re-trigger) — the
-      // popup stays anchored; anything else outside closes it
+      // clicks inside the editor move the cursor — the resulting
+      // document:selection-changed event re-runs the trigger loop, which
+      // keeps or closes the popup per onTrigger; anything else outside
+      // closes it immediately
       if (this.active?.context?.editor.cm.dom.contains(target)) return;
       this.closeActive();
     };
