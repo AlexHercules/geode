@@ -71,7 +71,156 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 6 additions (current) — compat 余项（EditorSuggest 真实触发 / MarkdownRenderer / requestUrl）+ 快捷键自定义
+## Round 7 additions (current) — 图谱打磨（fit/局部图谱/10k 性能）+ 导出 HTML/PDF
+
+Native round (no obsidian API surface change — compat suite must simply not regress).
+
+### Core: last-active-file tracking — `core/workspace.ts`
+
+```ts
+// Workspace addition:
+/** Most recent NON-NULL active file (survives switching to the graph tab / modals).
+ *  Session-only — not persisted. Seeded from the active tab on load. */
+readonly lastActiveFile: Store<string | null>;
+```
+
+Updated wherever `active-file:changed` is emitted with a non-null path (single choke point —
+find the emit site and tap it; do NOT add a second source of truth). Switching to a graph tab
+or closing the file does NOT clear it. The graph view's local mode subscribes to this store.
+
+### Graph view — `features/graph/` (GraphView.tsx + graph.css, feature-internal)
+
+**Toolbar** (`.graph-toolbar`, top-left, must not block canvas drag elsewhere):
+mode toggle Global/Local (`data-testid="graph-mode-global"` / `"graph-mode-local"`),
+depth select 1|2 shown in local mode (`data-testid="graph-depth"`),
+fit button (`data-testid="graph-fit"`). UI prefs persist to localStorage
+`"geode.graphPrefs"` as `{ mode: "global"|"local", depth: 1|2, showAll: boolean }`
+(corrupt/missing → defaults global/1/false).
+
+**Fit-to-view + centering fix (R3 debt)**:
+- `fitToView()` — bounding box over RENDERED node positions (+node radius + ~40px padding)
+  → transform centers the bbox in the viewport, `k` clamped to [MIN_ZOOM, 1.5].
+- Auto-fit triggers: once when the first simulation settles (sim "end") unless the user has
+  panned/zoomed since mount (interaction flag); after every local-mode re-anchor.
+- Root-cause the maximized-window offset (acceptance: open graph in a maximized window →
+  visually centered; maximize/restore AFTER open → still centered). The existing
+  keep-viewport-center resize compensation may stay, but the initial mount must measure the
+  real laid-out rect.
+
+**Local mode**:
+- Anchor = `workspace.lastActiveFile` resolved to a graph node id; BFS over the adjacency map
+  to depth ≤ N (1|2), unresolved neighbors included; simulation runs over the SUBGRAPH only.
+- Anchor node: accent ring + label always visible. Anchor change → existing 250ms debounced
+  rebuild path + auto-fit. No anchor (null / not in graph) → empty-state card
+  "Open a note to see its local graph." (`data-testid="graph-local-empty"`).
+
+**10k performance** (PERFORMANCE.md recommendations 1+2; targets measured at `?bench=10000`):
+- **Degree sampling**: `RENDER_CAP = 3000` nodes. `nodes > cap && !showAll` → keep top-cap by
+  degree (stable tie-break by id), edges among kept nodes only, simulation over the sample;
+  legend shows "top 3,000 of 10,212 nodes" + toggle button (`data-testid="graph-show-all"`).
+- **Draw batching**: all non-highlighted edges in ONE `beginPath`/`stroke`; nodes bucketed by
+  fill style; labels and nodes outside the viewport (±margin) are culled. Hover state may
+  redraw only via the batched path (no per-edge stroke loops).
+- **rAF coalescing**: every internal draw request goes through a dirty-flag +
+  `requestAnimationFrame` scheduler — at most one canvas draw per frame, zero draws when idle
+  (post-settle, no interaction).
+- Perf marks on `window.__geodePerf`: `graphDrawMs` (last full draw), `graphSettleMs`
+  (rebuild → sim end). PERFORMANCE.md gains a before/after table for bench=10000 and
+  bench=1000 (no regression at 1k: 60fps).
+
+### Export — `core/export.ts` (new) + `features/export/` (new) + Rust
+
+`core/export.ts` (mirrors core/net.ts dual-end pattern, uses `isTauri()` from core/vault):
+
+```ts
+export interface SaveTextFileOptions {
+  suggestedName: string;   // e.g. "Welcome.html"
+  filterName: string;      // e.g. "HTML"
+  extensions: string[];    // e.g. ["html"]
+}
+/** Desktop: native save dialog (@tauri-apps/plugin-dialog) + `export_write` command.
+ *  Browser: Blob + anchor download (always resolves "saved"). */
+export function saveTextFile(
+  content: string,
+  opts: SaveTextFileOptions,
+): Promise<"saved" | "cancelled">;
+```
+
+Rust `export_write` (src-tauri/src/main.rs):
+`#[tauri::command(async)]` (file IO off the main thread — R6 lesson)
+`fn export_write(path: String, content: String) -> CmdResult<()>` — ABSOLUTE path as returned
+by the save dialog; reject relative paths; write UTF-8; parent dir must already exist
+(the dialog guarantees it). No safe_join — exporting outside the vault is the point;
+the path always comes from a user-driven native dialog.
+
+`features/export/` (export.ts + export.css):
+- `buildStandaloneHtml({ title, bodyHtml }): string` — complete standalone document with an
+  INLINE `<style>` (self-contained reading-view subset: typography, headings, code, blockquote,
+  tables, tag pills, disabled task checkboxes, internal/external link colors — light,
+  print-friendly, independent of the app theme). Import the css as a string via Vite `?raw`.
+- `exportActiveNoteHtml(app)` — active file → `vault.read` → `renderMarkdownToHtml(content,
+  target => metadata.resolveLink(target, path))` → `saveTextFile`. Internal links become
+  non-navigating styled text (href="#", no JS in the export).
+- `printActiveNote(app)` — same html into a `#geode-print-root` div appended to body;
+  `@media print` hides `#root` and shows only the print root; `window.print()`;
+  cleanup on `afterprint` (and a safety timeout). Desktop WebView2 print dialog includes
+  "Microsoft Print to PDF" — that IS the PDF export path (documented, no extra dep).
+- Commands registered in App.tsx beside the existing ones:
+  `app:export-html` ("Export note as HTML…"), `app:export-pdf` ("Export note as PDF (print)…"),
+  both with `available: () => workspace.getActiveFile() !== null`.
+- Browser E2E hooks: the download anchor must carry `data-testid="export-download"` long
+  enough for Playwright's download event; print path exposes `window.__geodeLastPrintHtml`
+  (dev-only probe, set before `window.print()` and in browser E2E `print` may be stubbed).
+
+### As-built deltas (post-review + runtime verification — R7)
+
+Review: 5 dimensions, 18 findings confirmed (8 unique root causes), 0 refuted. Browser
+verification then caught 2 ADDITIONAL runtime bugs the static review missed. All fixed:
+
+- **`lastActiveFile` is remapped directly in `handleRenamed`** (equal path + folder-prefix
+  branches) — the emitActiveFile choke point can't see a rename while a non-markdown tab
+  (graph) is active: `getActiveFile()` is null and the non-null guard keeps the stale path,
+  blanking the local graph for a still-open note. `handleDeleted` clears a deleted anchor;
+  `openVaultFlow` resets the store before `vault.load()` (old-vault relative paths must
+  never anchor the local graph in a new vault).
+- **Export reads the LIVE document buffer first**
+  (`app.documents.get(path)?.getText() ?? await vault.read(path)`) — vault.read returns the
+  last *saved* content; with the 600ms save debounce an export right after typing silently
+  missed the latest edits.
+- **Export surfaces its outcome** — `exportActiveNoteHtml` never rejects: success/failure
+  shows a transient toast (`data-testid="export-notice"`, styles in `notice.css`, kept OUT
+  of export.css which ships inside every exported file). Previously a failed disk write
+  died as an unhandled rejection behind the already-closed save dialog.
+- **`export_write` writes a sibling temp file + rename** — `fs::write` truncates before
+  writing; a mid-write failure (disk full, kill) must never destroy the user-chosen
+  existing file.
+- **Print re-entry settles the previous print** via a module-level `pendingPrintCleanup`
+  (listener + timer + `document.title` restore), not just DOM removal — back-to-back prints
+  were cross-restoring titles when `afterprint` never fired.
+- GraphView: the full-graph adjacency is built only in the local branch (global built and
+  dropped an O(E) map per rebuild); user pan/zoom also cancels a PENDING re-anchor
+  settle-fit (not just the first-settle fit).
+- **[runtime-only] rAF id reset on unmount cleanup** — `cancelAnimationFrame` without
+  `rafRef.current = 0` left a stale truthy id after StrictMode's dev double-mount, making
+  every future `requestDraw` early-return: the canvas stayed BLANK forever in dev while
+  legend/toolbar looked alive. Static review missed it; only a screenshot caught it.
+- **[runtime-only] per-edge strokes, NOT a batched mega-`Path2D`** — one 6.5k-segment
+  stroked path rasterizes in ~197ms vs ~9ms for individual strokes (20x, compositor-side,
+  invisible to JS timing); plus label suppression while the sim is hot (a 3k `fillText`
+  pass throttled settle 43s → 5.8s). Numbers + "do not reintroduce" note in PERFORMANCE.md.
+
+### Round 7 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| graph | features/graph/GraphView.tsx, features/graph/graph.css, core/workspace.ts (lastActiveFile ONLY) |
+| export | core/export.ts (new), features/export/* (new), app/App.tsx (command registration ONLY), src-tauri/src/main.rs (export_write + invoke_handler list ONLY) |
+
+Frozen cross-agent surfaces: `Workspace.lastActiveFile`, `saveTextFile` signature, the two
+command ids. Neither agent touches the other's files; both run `npx tsc --noEmit` (and the
+export agent `cargo check`) before finishing.
+
+## Round 6 additions — compat 余项（EditorSuggest 真实触发 / MarkdownRenderer / requestUrl）+ 快捷键自定义
 
 Calibration source: **`.calibration/API-REFERENCE-R6.md`** (generated 2026-06-10 from official
 obsidian.d.ts + suite main.js call-site scans). Implement EXACTLY against it.

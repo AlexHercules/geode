@@ -1,6 +1,6 @@
 # Performance — 10k-note benchmark & optimizations
 
-Date: 2026-06-10 · Mode: browser dev server (`vite`, `MemoryVaultAdapter`) at `http://localhost:1420` · Machine: Windows 11, Chromium (Playwright).
+Date: 2026-06-10 (R3 core) / 2026-06-11 (R7 graph section below) · Mode: browser dev server (`vite`, `MemoryVaultAdapter`) at `http://localhost:1420` · Machine: Windows 11, Chromium (Playwright).
 
 ## Bench vault
 
@@ -48,7 +48,7 @@ in headless/occluded windows).
 | Explorer expand-all (100 → 10,100 rows) | **424 ms** (10,100 DOM nodes) | **10 ms** (~50 DOM nodes) |
 | Explorer collapse-all | 39 ms | 9 ms |
 | Graph build (`getGraph`, 10k nodes / ~40k links) | 149 ms | unchanged |
-| Graph view frame rate | ~12 fps | unchanged (out of scope, see below) |
+| Graph view frame rate | ~12 fps | **fixed in R7** — see "R7: Graph view" below |
 
 ## Results — bench=1000 (control)
 
@@ -94,16 +94,41 @@ cross-module API changed.
    - At 10k the index was already ~100 ms (parse-bound), so these are hygiene
      fixes that matter more as N grows; measured delta is within run noise.
 
-## Remaining bottlenecks & recommendations
+## R7: Graph view (2026-06-11) — recommendations 1+2 implemented
 
-- **Graph view at 10k nodes is the one unusable surface (~12 fps).** Build is fine
-  (149 ms); the cost is d3-force ticks + full Canvas2D redraw of 10k nodes /
-  ~40k edges every frame. `GraphView.tsx` was out of scope for this task.
-  Recommended, in order of value:
-  1. stop redrawing once the simulation alpha settles (render-on-demand);
-  2. degree-based sampling / "top N nodes" toggle above ~3k nodes;
-  3. move the simulation to a Web Worker;
-  4. WebGL renderer (regl / pixi) for the 10k+ tier — Canvas2D will not get there.
+Measured at `?bench=10000` (10,000 notes / ~40k links) and `?bench=1000` control.
+
+| Metric | R3 (before) | R7 (after) |
+|---|---|---|
+| 10k default view | 10,000 nodes, ~12 fps forever | **top 3,000 by degree** (sampled, "Show all" toggle) |
+| 10k settle (open → layout static) | never truly idle | **5.8 s** (`graphSettleMs` 5771) |
+| 10k settle-phase frame time | ~83 ms (12 fps) | **24 ms median** (~42 fps, sampled set) |
+| 10k post-settle idle redraws | every frame | **0** (rAF dirty-flag, render-on-demand) |
+| 10k single full draw (`graphDrawMs`) | n/a | **3.9 ms** (sampled) / 12.4 ms (Show all) |
+| 10k "Show all" settle frame time | — | ~109 ms (~9 fps, opt-in; static + on-demand after settle) |
+| 1k control | 60 fps | **60 fps, no sampling** (17 ms/frame settle, draw 2.3 ms) |
+
+What changed (`GraphView.tsx`):
+1. **Degree sampling** above `RENDER_CAP = 3000` nodes (stable tie-break by id; the
+   local-graph anchor is always kept). The simulation runs over the rendered subset only.
+2. **Render-on-demand**: every draw request goes through a dirty-flag + rAF scheduler —
+   at most one draw per frame, zero draws when idle.
+3. **Per-edge strokes, endpoint-culled** + per-style node buckets + viewport culling for
+   nodes/labels; labels are suppressed while the simulation is hot (alpha > 0.05).
+4. New perf marks: `graphDrawMs` (last full draw), `graphSettleMs` (rebuild → sim end).
+
+**Measured trap (do not reintroduce):** batching all edges into ONE `Path2D` and stroking
+it once *feels* like the textbook optimization but rasterizes ~20x SLOWER in Chromium —
+197 ms for a 6.5k-segment stroked path vs ~9 ms for 6.5k individual strokes (the compositor
+flattens/antialiases the giant path as a single unit, and `Path2D` gets no per-segment
+culling). JS-side timing won't show it: the cost lands on the raster thread and appears
+only as frame-gap inflation. Same trap nearly applies to labels: a 3k-label `fillText`
+pass throttled settle ticks ~10x (43 s → 5.8 s once suppressed while hot).
+
+Remaining (future tiers): Web Worker simulation; WebGL renderer (regl/pixi) for an
+unsampled 10k+ view — Canvas2D will not get there.
+
+## Remaining bottlenecks & recommendations (R3 list)
 - **Search debounce (250 ms) now dominates** perceived search latency (scan is
   53 ms at 10k). Could drop to ~150 ms, or make it adaptive to vault size.
 - **Full-text search re-reads the vault each query** through the content cache
@@ -123,7 +148,7 @@ cross-module API changed.
 ```text
 npm run dev
 # browser: http://localhost:1420/?bench=10000   (or ?bench=1000)
-# console: window.__geodePerf  → { benchSeedMs, metadataIndexMs, switcherFilterMs, searchScanMs, graphBuildMs }
+# console: window.__geodePerf  → { benchSeedMs, metadataIndexMs, switcherFilterMs, searchScanMs, graphBuildMs, graphDrawMs, graphSettleMs }
 ```
 
 Navigate back to `http://localhost:1420/` (no params) to return to the demo vault;

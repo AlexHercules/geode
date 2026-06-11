@@ -90,26 +90,45 @@ docs/screenshots/r6-desktop-nldates-autosuggest.png。
 教训：nldates 的 onTrigger 锚点是逐键增量建立的（首键 "@" 落锚、后续复用 context.start）
 ——探针一次性插入整串文本测不到触发，必须逐字符事务模拟真实输入。
 
-## R7 候选 — 商业打磨（按优先级）
+### R7 — v0.7（2026-06-10）图谱打磨 + 导出 HTML/PDF
+
+**图谱**（R3 两项债清偿）：fit-to-view（bbox+padding，首次 settle 自动、换锚自动、Fit 按钮）；
+最大化窗口居中偏移根因修复（初始 transform 锚定图原点而非内容包围盒 + 未布局 rect + dpr 盲区
+三因叠加；桌面实测最大化/还原循环偏移 ≤1%）；**局部图谱**（锚 = `workspace.lastActiveFile`
+新 Store，BFS 深度 1|2，仿真只跑子图，锚节点圆环高亮，prefs localStorage 持久化）；
+**10k 性能**：度数抽样 RENDER_CAP=3000（Show all 显式切换）+ rAF 合帧按需渲染（settle 后
+零重绘）+ 逐边描边/视口剔除/仿真热期标签抑制。bench=10000：settle 43s→**5.8s**、
+settle 期 24ms/帧（~42fps）、单帧 3.9ms、idle 0 draw；bench=1000 不回退（60fps 无抽样）。
+**导出**：`app:export-html`（自包含单文件，桌面存盘对话框+Rust `export_write` 原子写 /
+浏览器下载）+ `app:export-pdf`（print CSS + WebView2 打印对话框 = PDF 路径）；
+导出读活文档缓冲（不丢防抖中的编辑）；结果 toast 反馈。
+评审 5 维 18 finding（8 唯一根因）全确认 0 证伪，全修复；**浏览器实测另抓 2 个评审漏网的
+运行时缺陷**（StrictMode rAF id 未归零→画布永久空白；巨型 Path2D 边批量描边光栅比逐边慢
+20 倍——JS 计时不可见，教训：canvas 优化必须帧间隔实测，见 PERFORMANCE.md）。
+桌面实测：套件 5/5 不回退（nldates 逐键 `@tomorrow`→`[[2026-06-11]]`、reload 幂等、
+calendar 重挂载）、export_write 真实落盘+相对路径拒绝。
+截图 docs/screenshots/r7-desktop-graph-maximized.png、r7-bench10k-sampled.png。
+
+## R8 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P1 | 图谱打磨 | 最大化窗口居中偏移修复；局部图谱；10k 节点 settle 后按需渲染/抽样 |
-| P2 | 导出 PDF / HTML | 阅读视图渲染管线已提取到 core/markdown.ts，接打印/文件输出 |
-| P2 | i18n（中/英起步） | UI 字符串集中化 |
-| P2 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
+| P1 | i18n（中/英起步） | UI 字符串集中化 |
+| P1 | NSIS 签名 + 自动更新（tauri-plugin-updater） | 商业分发前提 |
 | P2 | watcher 回声抑制 | vault.modify 记录 (path, hash)，外部事件命中则跳过 |
 | P2 | compat：suggest 指令条渲染 + 光标移动重评估 | R6 两条显式缺口（见 OBSIDIAN-COMPAT 缺口表） |
+| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
 
 ## 已知技术债
 
-- 图谱最大化窗口下居中偏移（R3 P1）
+- ~~图谱最大化窗口下居中偏移~~（R7 根治：fit-to-view + 布局后初测 + dpr resize 监听）
 - compat EditorSuggest：纯光标移动不重评估 onTrigger（逐事务驱动，显式偏差）；
   setInstructions 指令条不渲染（gap 上报）；popup 不随窗口 resize/scroll 重定位
 - moment-with-locales + ureq：安装包体量随轮次缓涨，商业分发前可做按需裁剪
 - 自身写入回声触发 watcher（幂等无害，R3 P2）
 - 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口）
-- 图谱 10k 节点 ~12fps（基准结论：需 settle 后按需渲染/抽样/WebGL，见 docs/PERFORMANCE.md）
+- ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
+  剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
 - ~~重命名打开中的文件丢 undo/光标/滚动~~（R4 根治）
 - vault 切换后指向新 vault 不存在路径的 tab 不自动关闭（保存被 no-resurrect 守卫挡住，
