@@ -1,7 +1,7 @@
 {
   "name": "geode",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Geode 鈥?a local-first markdown knowledge base (Obsidian-style), built with Tauri 2 + React + CodeMirror 6",
   "type": "module",
   "scripts": {

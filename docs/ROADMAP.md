@@ -177,15 +177,34 @@ capture 相 scroll 监听，rAF 合帧调既有 position()，拆除时 rAF id �
 注：本轮浏览器端无独立 E2E（自动化工具会话内掉线），三项均为 webview 同一代码路径，
 桌面 release 全覆盖实测。
 
-## R11 候选 — 商业打磨（按优先级）
+### R11 — v0.11（2026-06-11）模式切换零重建 + 图片嵌入 `![[...]]`
+
+P2 组合轮（P1 渠道/证书继续等用户决策；安装包瘦身延后——12.4MB 收益边际 vs R5 双副本坑）。
+**live↔source 零重建**（R4 前视图重建债清偿）：mode 切片进 CM6 Compartment，切换 =
+`reconfigure` 而非销毁重建——选区/滚动/undo 天然保留（桌面实测同一 EditorView DOM +
+undo 跨切换）；preview 往返经 session map 尽力恢复（选区 clamp + 双向 scrollTop）。
+**图片嵌入**：`![[img.png]]` 在 live preview（EmbedWidget，选区感知 reveal 沿用）与
+阅读视图（`<img class="geode-embed">` 占位 + 异步 hydrate）双视图渲染；链路 =
+`VaultAdapter.readBinary`（Rust `vault_read_binary` async + base64）→
+`metadata.resolveAttachment`（非 md 附件索引，惰性建/树变失效）→ blob URL 模块缓存
+（文件事件失效 + revoke）；`renderMarkdownToHtml` 第三参 opts.resolveEmbed——
+**无 opts 调用方（compat/export）字节级保持现状**（agent 以 12 用例 diff 验证）；
+demo 夹具双端一致（磁盘 png + Memory DEMO_BINARY）。
+评审 4 维 11 finding：2 确认（同根因降级 minor：外部改图走 file:created 不失效 blob
+缓存——已修订阅）9 证伪；1 条 verify 网络故障未裁决，chief 直接推演记为已知限制
+（外部改图后已渲染的 EmbedWidget 显示旧图至 widget 重建，blob 撤销不清已解码位图）。
+桌面实测：live img blob 加载 + 阅读视图 hydrate ✓、同 DOM 零重建 + undo 跨切换 ✓、
+套件 5/5 + nldates 指令条 + 回声抑制不回退 ✓。截图 r11-desktop-embed-live.png。
+
+## R12 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
 | P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | 安装包瘦身 | moment locale 按需裁剪（主 chunk -~330KB min 前）+ ureq 特性裁剪；注意 R5 踩坑：独立 locale 入口在 Vite 预打包下注册到第二份副本 |
-| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
-| P2 | live↔source 模式切换保留选区/滚动 | R4 前已有的视图重建债 |
-| P2 | 图片/嵌入 `![[...]]` live preview 渲染 | 特性缺口 |
+| P2 | 笔记转写嵌入 `![[note]]`（transclusion） | R11 只做了图片；非图片嵌入按现状渲染为链接 |
+| P2 | 导出 HTML 内联图片（data URI） | R11 显式缺口：export 不传 resolveEmbed，导出文件中嵌入仍是链接 |
+| P2 | 安装包瘦身 | moment locale 裁剪（R5 双副本坑注意）+ ureq 特性裁剪 |
+| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用） |
 
 ## 已知技术债
 
@@ -201,7 +220,9 @@ capture 相 scroll 监听，rAF 合帧调既有 position()，拆除时 rAF id �
   复选框 aria-label、frontmatter 药丸 title）切语言后保持旧语言直到视图/widget 重建
   （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；~~GeodePlugin.name/description
   仍是纯字符串~~（R10 thunk 化根治，内置插件名随语言切换）
-- 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口）
+- ~~图片/嵌入 `![[...]]` 在 live preview 中保持原文~~（R11 图片双视图渲染；
+  残留：非图片嵌入（笔记转写）仍渲染为链接、导出 HTML 不内联图片、外部改图后
+  已渲染 widget 显示旧图至重建——均显式记录见 R12 候选）
 - ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
   剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
@@ -209,7 +230,8 @@ capture 相 scroll 监听，rAF 合帧调既有 position()，拆除时 rAF id �
 - ~~vault 切换后指向新 vault 不存在路径的 tab 不自动关闭~~（R10 根治：
   closeMissingFileTabs，切库+启动双调用点）
 - ~~compat `workspace.on('editor-change')` 按保存触发而非逐事务~~（R5 document:changed 根治）
-- live↔source 模式切换仍重建视图丢选区/滚动（R4 前已有，未恶化）
+- ~~live↔source 模式切换仍重建视图丢选区/滚动~~（R11 Compartment 重配置根治；
+  preview 往返为尽力恢复口径）
 - compat 自定义视图不随 workspace 持久化——重启后靠插件自身启动逻辑重建
   （calendar 的 layout-ready 路径可自愈；recent-files 需用户再开，官方行为是布局还原）
 - moment-with-locales 全量打包（主 chunk +~330KB min 前）；如需瘦身可改按需 locale 子集

@@ -71,7 +71,123 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 10 additions (current) — stale tab 清理 + 插件名本地化 + popup 重定位（缺口表清零）
+## Round 11 additions (current) — 模式切换保留选区/滚动 + 图片嵌入 `![[...]]`
+
+P2 组合轮（P1 渠道/证书继续等用户决策）。compat 表面零改动——套件只需不回退；
+阅读视图管线对无 resolveEmbed 的调用方必须**字节级保持现状**（compat MarkdownRenderer
+继续把 `![[x]]` 渲成 `!` 字面量 + internal-link，记录为已知偏差）。
+
+### Editor: live↔source 不重建视图 — `features/editor/EditorPane.tsx` + `cmExtensions.ts`
+
+- `cmExtensions.ts`：`buildEditorExtensions` 增参 `modeCompartment: Compartment`，
+  mode 相关切片改为 `modeCompartment.of(editorModeExtensions(app, getPath, mode))`；
+  新导出 `editorModeExtensions(app, getPath, mode: "live" | "source"): Extension`
+  （live = livePreview(...) 全套，source = []）。其余扩展不动。
+- `EditorPane.tsx`：CM 生命周期 effect 依赖去掉 `tab.mode`（→ `[app, tab.id, handle]`，
+  preview 态仍无 CM 视图）；每视图持一个 `Compartment` 实例（ref）；独立 effect 在
+  live↔source 间 `view.dispatch({ effects: modeCompartment.reconfigure(...) })`——
+  选区/滚动/undo 因视图不重建而天然保留（R4 时代债清偿）。
+- **live|source ↔ preview 往返（尽力恢复）**：模块级 session map（keyed by `tab.id`）：
+  CM 卸载时存 `{ anchor, head, scrollTop }`，重建时恢复（位置 clamp 到文档长度）；
+  preview 容器的 scrollTop 存独立槽位同样往返恢复。不持久化、不清理（量级 = 会话内
+  开过的 tab 数，记录即可）。
+
+### Core: 附件解析 + 二进制 IO（chief pre-phase 落地 vault/Rust，core-md agent 落地 metadata/markdown）
+
+```ts
+// VaultAdapter（chief）:
+readBinary(path: string): Promise<Uint8Array>;
+// Tauri → invoke("vault_read_binary") 返回 base64 再解码；
+// Rust：#[tauri::command(async)]（文件 IO 不占主线程，R6 教训）+ safe_join + fs::read + base64。
+// Memory → 内部 binaryFiles: Map<string, Uint8Array>（demo 种子图见下），缺失 reject。
+
+// MetadataIndex（core-md agent）:
+/** Resolve a NON-markdown attachment target（"img.png" / "assets/img.png"）。
+ *  规则镜像 resolveLink：含 "/" 先精确相对路径（大小写不敏感）；否则按 basename
+ *  匹配（多命中取排序后首个）。内部 map 从 vault.getFiles() 非 md 文件惰性构建，
+ *  vault:changed 失效重建。 */
+resolveAttachment(target: string, fromPath: string): string | null;
+```
+
+### Core: markdown 管线嵌入占位 — `core/markdown.ts`（core-md agent）
+
+```ts
+export interface RenderMarkdownOptions {
+  /** present ⇒ `![[target]]`（图片扩展名）渲染为
+   *  `<img class="geode-embed" data-embed-path="<resolved>" alt="<inner>">`（无 src，
+   *  由调用方异步 hydrate）。absent/解析失败/非图片 ⇒ 与现状字节级一致（"!" 字面量
+   *  + internal-link 占位走原路径）。 */
+  resolveEmbed?: (target: string) => string | null;
+}
+export function renderMarkdownToHtml(
+  source: string,
+  resolve: (target: string) => string | null,
+  opts?: RenderMarkdownOptions,
+): string;
+export const IMAGE_EXTS: ReadonlySet<string>; // png jpg jpeg gif svg webp bmp（小写比较）
+```
+
+`![[` 检测在 replaceWikilinks 内做（fence/inline-code 跳过规则沿用）；alias
+`![[img.png|alt]]` 的 alias 作 alt。导出的 HTML（features/export）走同一管线——
+导出文件里 img 无 src 不可用：export 路径**不传 resolveEmbed**（导出行为不变，
+缺口记录：导出含图待后续轮内联 data URI）。
+
+### Editor: 嵌入渲染 — `features/editor/`（editor agent）
+
+- `embeds.ts`（新）：`getEmbedUrl(app, path): Promise<string>`——blob URL 模块级缓存，
+  订阅 file:modified/renamed/deleted 失效并 `URL.revokeObjectURL`（惰性订阅一次）；
+  `hydrateEmbeds(root: HTMLElement, app): void`——查 `img.geode-embed[data-embed-path]`
+  异步填 src（加载失败加 `.geode-embed-failed` 类，不抛）。MIME 按扩展名映射。
+- `livePreview.ts`：`EmbedWidget`——整个 `![[...]]` 匹配在 **resolveAttachment 命中
+  图片** 且选区未触及时 replace 为 `<img class="cm-live-embed">`（src 经 getEmbedUrl
+  异步填充；eq 按 resolvedPath）；光标进入 → 现有 reveal 规则还原原文；未解析/非图片
+  → 维持现状（原文显示）。只处理 visibleRanges（bench 口径不回退）。
+- `preview.ts`/`EditorPane.tsx` 阅读视图：renderPreview 增透传 opts；EditorPane 的
+  preview 分支传 `resolveEmbed: (t) => app.metadata.resolveAttachment(t, path)` 并在
+  innerHTML 后调 `hydrateEmbeds`。
+- css：`.cm-live-embed`/`.geode-embed` max-width:100%、块级、圆角与 `--border` 变量。
+
+### Demo fixture（chief pre-phase）
+
+`demo-vault/assets/geode-dot.png`（1x1 真实 png 文件，仓库内）+ `Home.md` 增一行
+`![[geode-dot.png]]`；Memory demo vault 同步：DEMO_FILES 增同名引用 + `DEMO_BINARY`
+（同一 png 的 base64 → Uint8Array）。浏览器/桌面同一夹具口径。
+
+### As-built deltas (post-review — R11)
+
+Review: 4 dimensions, 11 findings → 2 confirmed (ONE root cause, both downgraded
+critical→minor), 9 refuted, 1 verification dropped to a network fault (chief-adjudicated).
+
+- **FIXED — blob cache subscribes `file:created`**: external edits to NON-md files
+  surface as `file:created` (the vault pipeline reserves `file:modified` for .md), so
+  the embed cache also invalidates on it. Without this an externally updated image
+  served a stale blob URL for the whole session.
+- **Recorded limitation** (chief-adjudicated after the verifier network fault): an
+  already-rendered EmbedWidget keeps showing the OLD decoded bitmap after an external
+  image edit until the widget rebuilds (cursor move/edit/reopen) — revoking a blob URL
+  does not clear decoded images, and `eq` compares by resolved path by design.
+- **Beyond contract letter (kept)**: `Vault.readBinary` facade added (chief) — embeds.ts
+  initially called `vault.adapter.readBinary` directly, contradicting the "use Vault,
+  never the adapter" rule.
+- resolveAttachment deliberately does NOT mirror resolveLink's same-folder preference
+  (lexicographic-first on basename collisions, frozen contract); flagged for future
+  revisit if vaults with duplicate attachment names surface.
+- Verified byte-identical no-opts rendering with a 12-case diff harness (fences, inline
+  code, aliases, double-bang, unresolved) — compat/export pipelines unchanged.
+
+### Round 11 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core-md | core/metadata.ts, core/markdown.ts |
+| editor | features/editor/**（EditorPane/cmExtensions/livePreview/preview/embeds.ts 新/css） |
+
+Chief pre-phase：本节 + core/vault.ts readBinary 全链 + src-tauri vault_read_binary +
+demo 夹具（磁盘 + Memory 种子）。Frozen surfaces：上述全部代码块签名 + IMAGE_EXTS +
+`.geode-embed`/`data-embed-path`/`.cm-live-embed` 类名契约。每 agent 结束前
+`npx tsc --noEmit`；不加依赖；不碰 compat/**、docs/。
+
+## Round 10 additions — stale tab 清理 + 插件名本地化 + popup 重定位（缺口表清零）
 
 R10 取 P2 组合（P1 发布渠道/证书等用户外部决策，HANDOFF 备选路径）。三项互不依赖。
 
