@@ -123,8 +123,10 @@ export interface TabState {
   title: string;
 }
 
-export type LeftPanelKind = "explorer" | "search";
-export type RightPanelKind = "backlinks" | "outline";
+/** Built-in panel ids plus dynamic sidebar-panel ids (plugin contributions, R5).
+ *  `(string & {})` keeps the literal autocomplete while accepting any string. */
+export type LeftPanelKind = "explorer" | "search" | (string & {});
+export type RightPanelKind = "backlinks" | "outline" | (string & {});
 export type ModalKind = "palette" | "switcher" | "settings" | null;
 export type ThemeKind = "dark" | "light";
 

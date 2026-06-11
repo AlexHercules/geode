@@ -1,9 +1,8 @@
 /**
- * View / ItemView / FileView skeletons (API-REFERENCE area 4) — suite-driven
- * R4 addition. A plugin class extending ItemView must EVALUATE and the plugin
- * must finish loading; views are never MOUNTED this round (registerView stays
- * a warn-stub and the gap is recorded), so onOpen/onClose never fire and
- * containerEl/contentEl stay detached.
+ * View / ItemView / FileView (API-REFERENCE area 4). Views registered via
+ * Plugin.registerView mount for real (R5): SidebarViewLeaf.setViewState runs
+ * the creator, load(), hosts containerEl in a sidebar panel and awaits
+ * onOpen(); detach runs onClose()/unload().
  */
 import { Component } from "./component";
 import type { TFile } from "./files";
@@ -18,7 +17,6 @@ export interface ViewStateResult {
 }
 
 export abstract class View extends Component {
-  /** Set by the host when a view is attached — never this round (views do not mount). */
   app!: App;
   icon: IconName = "";
   navigation = false;
@@ -29,6 +27,9 @@ export abstract class View extends Component {
   constructor(leaf: WorkspaceLeaf) {
     super();
     this.leaf = leaf;
+    // calendar's ItemView subclass touches this.app inside its own
+    // constructor — app must be set from the leaf before subclass code runs
+    if (leaf._app) this.app = leaf._app;
     this.containerEl = document.createElement("div");
     this.containerEl.className = "view-container geode-compat-view";
   }

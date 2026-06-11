@@ -1,6 +1,8 @@
 /**
  * Obsidian Workspace shim (API-REFERENCE area 4) over the Geode pane tree.
- * Minimal leaf surface: enough for T1 plugins (file-centric, command-driven).
+ * Two leaf kinds (R5): the active-pane facade (file-centric, command-driven
+ * plugins) and SidebarViewLeaf — a REAL mount point for registerView custom
+ * views, hosted as Geode sidebar panels (PluginManager.addSidebarPanel).
  */
 import type { AppHandle } from "@core/plugins";
 import { findActiveTab } from "@core/workspace";
@@ -8,35 +10,54 @@ import { Editor } from "./editor";
 import { Events, type EventRef } from "./events";
 import type { FileRegistry, TFile } from "./files";
 import { reportGap } from "./gaps";
+import { getIconSvg } from "./icons";
+import type { App } from "./plugin";
+// value import is safe: view.ts only imports type-only symbols from this file
+import { FileView, type View } from "./view";
 
 type Handle = Omit<AppHandle, "ui">;
 export type PaneType = "tab" | "split" | "window";
 export type SplitDirection = "vertical" | "horizontal";
 
-/** Minimal facade for editorCallback ctx / getActiveViewOfType(MarkdownView). */
-export class MarkdownView {
-  file: TFile | null;
+/** 'export type ViewCreator = (leaf: WorkspaceLeaf) => View;' (official d.ts) */
+export type ViewCreator = (leaf: WorkspaceLeaf) => View;
+
+/**
+ * Markdown view facade for editorCallback ctx / getActiveViewOfType. A real
+ * FileView (F8) so plugin checks like `view instanceof FileView/ItemView/View`
+ * hold; getDisplayText comes from FileView (file?.basename ?? "").
+ */
+export class MarkdownView extends FileView {
   editor: Editor;
 
-  constructor(editor: Editor, file: TFile | null) {
+  constructor(leaf: WorkspaceLeaf, editor: Editor, file: TFile | null) {
+    super(leaf);
     this.editor = editor;
     this.file = file;
   }
 
-  getViewType(): string {
+  override getViewType(): string {
     return "markdown";
-  }
-
-  getDisplayText(): string {
-    return this.file?.basename ?? "";
   }
 }
 
-/** Build a MarkdownView over the focused editor view, or null. */
-export function makeActiveMarkdownView(handle: Handle, registry: FileRegistry): MarkdownView | null {
+/**
+ * Build a MarkdownView over the focused editor view, or null. Callers pass
+ * their own leaf when they have one; otherwise a fresh active-pane facade
+ * leaf is created.
+ */
+export function makeActiveMarkdownView(
+  handle: Handle,
+  registry: FileRegistry,
+  leaf?: WorkspaceLeaf,
+): MarkdownView | null {
   const active = handle.documents.getActiveView();
   if (!active) return null;
-  return new MarkdownView(new Editor(active.view), registry.getFile(active.path));
+  return new MarkdownView(
+    leaf ?? new WorkspaceLeaf(handle, registry, false),
+    new Editor(active.view),
+    registry.getFile(active.path),
+  );
 }
 
 function wantsNewTab(newLeaf?: PaneType | boolean): boolean {
@@ -45,18 +66,30 @@ function wantsNewTab(newLeaf?: PaneType | boolean): boolean {
 
 /** Minimal WorkspaceLeaf facade over the ACTIVE Geode pane. */
 export class WorkspaceLeaf {
+  /** @internal compat App shim — View's constructor reads it (this.app). */
+  _app?: App;
+
   constructor(
-    private handle: Handle,
-    private registry: FileRegistry,
-    private newTab: boolean,
+    protected handle: Handle,
+    protected registry: FileRegistry,
+    protected newTab: boolean,
   ) {}
 
-  get view(): MarkdownView | null {
-    return makeActiveMarkdownView(this.handle, this.registry);
+  get view(): MarkdownView | View | null {
+    return makeActiveMarkdownView(this.handle, this.registry, this);
   }
 
-  async openFile(file: TFile, _openState?: unknown): Promise<void> {
+  async openFile(
+    file: TFile,
+    openState?: { mode?: string; state?: { mode?: string } },
+  ): Promise<void> {
     this.handle.workspace.openFile(file.path, { newTab: this.newTab });
+    // F10: honor an explicit source/preview mode (live stays the default)
+    const m = openState?.state?.mode ?? openState?.mode;
+    if (m === "source" || m === "preview") {
+      const tab = findActiveTab(this.handle.workspace.state.get());
+      if (tab) this.handle.workspace.setTabMode(tab.id, m);
+    }
   }
 
   getViewState(): { type: string } {
@@ -65,11 +98,11 @@ export class WorkspaceLeaf {
   }
 
   /**
-   * Custom view types are never mounted this round (registerView gap) — a
-   * markdown state with a file opens that file, anything else is a recorded
-   * no-op. Keeps plugin initLeaf() patterns (calendar, recent-files) alive.
+   * Active-pane facade: a markdown state with a file opens that file; custom
+   * view types belong on SidebarViewLeaf (below), so anything else is a
+   * recorded no-op.
    */
-  async setViewState(state: { type?: string; state?: { file?: string } }): Promise<void> {
+  async setViewState(state: { type?: string; active?: boolean; state?: { file?: string } }): Promise<void> {
     const file = state?.state?.file;
     if (state?.type === "markdown" && typeof file === "string") {
       this.handle.workspace.openFile(file, { newTab: this.newTab });
@@ -88,6 +121,132 @@ export class WorkspaceLeaf {
   }
 }
 
+/**
+ * A REAL leaf for sidebar custom views (registerView). setViewState mounts
+ * the registered View into a Geode sidebar panel; detach tears it down.
+ * Same class hierarchy as the active-pane facade so ViewCreator typing holds
+ * (the suite never does `instanceof WorkspaceLeaf` checks).
+ */
+export class SidebarViewLeaf extends WorkspaceLeaf {
+  /** @internal sidebar panel id while mounted — "obsidian:view:<type>" */
+  _panelId: string | null = null;
+  private mountedView: View | null = null;
+  private panelDispose: (() => void) | null = null;
+
+  constructor(
+    private ws: Workspace,
+    handle: Handle,
+    registry: FileRegistry,
+    readonly side: "left" | "right",
+  ) {
+    super(handle, registry, true);
+    if (ws._app) this._app = ws._app;
+  }
+
+  override get view(): View | null {
+    return this.mountedView;
+  }
+
+  /**
+   * Mount the registered view for `type`: creator(leaf) -> load() -> wrap
+   * containerEl -> addSidebarPanel -> await onOpen(). Unregistered types are
+   * a recorded no-op (gap report).
+   */
+  override async setViewState(state: { type?: string; active?: boolean; state?: { file?: string } }): Promise<void> {
+    const type = state?.type;
+    const entry = type ? this.ws._viewRegistry.get(type) : undefined;
+    if (!type || !entry) {
+      reportGap("WorkspaceLeaf", "setViewState", `view type "${type ?? "?"}" is not registered`);
+      return;
+    }
+    const app = this.ws._app;
+    if (!app) {
+      reportGap("WorkspaceLeaf", "setViewState", "compat App not wired — cannot mount views");
+      return;
+    }
+    this.detach(); // tear down any currently mounted view first
+    // F1/F11: clear stale leaves of the same type (panel-id collision zombies);
+    // this leaf is already out of _sideLeaves after detach(), so no re-entry.
+    this.ws.detachLeavesOfType(type);
+    const view = entry.creator(this);
+    this.mountedView = view;
+    view.load();
+    const wrapper = document.createElement("div");
+    wrapper.className = "geode-compat-view-panel";
+    wrapper.appendChild(view.containerEl);
+    this._panelId = `obsidian:view:${type}`;
+    this.panelDispose = app._geode.plugins.addSidebarPanel({
+      id: this._panelId,
+      side: this.side,
+      title: view.getDisplayText(),
+      iconSvg: getIconSvg(view.getIcon()) ?? undefined,
+      el: wrapper,
+    });
+    this.ws._sideLeaves.add(this);
+    try {
+      // onOpen is protected in the official d.ts — host-only cast
+      await (view as unknown as { onOpen(): Promise<void> }).onOpen();
+    } catch (err) {
+      // F2/F18: a throwing onOpen must not leak a half-mounted panel or
+      // propagate to the caller (symmetric with detach's onClose guard)
+      console.error("[obsidian-compat] view onOpen threw", err);
+      reportGap("WorkspaceLeaf", "setViewState", `view "${type}" onOpen failed — leaf detached`);
+      this.detach();
+      return;
+    }
+    if (state.active) await this.ws.revealLeaf(this);
+  }
+
+  /** Unmount: fire-and-forget onClose, unload, drop the panel. Idempotent. */
+  override detach(): void {
+    const view = this.mountedView;
+    if (!view) return;
+    this.mountedView = null;
+    this._panelId = null;
+    try {
+      // onClose is protected in the official d.ts — host-only cast
+      void Promise.resolve(
+        (view as unknown as { onClose(): Promise<void> }).onClose(),
+      ).catch((err) => console.error("[obsidian-compat] view onClose threw", err));
+    } catch (err) {
+      console.error("[obsidian-compat] view onClose threw", err);
+    }
+    try {
+      view.unload();
+    } catch (err) {
+      console.error("[obsidian-compat] view unload threw", err);
+    }
+    this.panelDispose?.();
+    this.panelDispose = null;
+    this.ws._sideLeaves.delete(this);
+  }
+
+  override getViewState(): { type: string } {
+    return { type: this.mountedView?.getViewType() ?? "empty" };
+  }
+
+  override getDisplayText(): string {
+    return this.mountedView?.getDisplayText() ?? "";
+  }
+
+  getIcon(): string {
+    return this.mountedView?.getIcon() ?? "";
+  }
+
+  override async openFile(
+    file: TFile,
+    openState?: { mode?: string; state?: { mode?: string } },
+  ): Promise<void> {
+    this.handle.workspace.openFile(file.path, { newTab: false });
+    // F10: honor an explicit source/preview mode (live stays the default)
+    const m = openState?.state?.mode ?? openState?.mode;
+    if (m === "source" || m === "preview") {
+      const tab = findActiveTab(this.handle.workspace.state.get());
+      if (tab) this.handle.workspace.setTabMode(tab.id, m);
+    }
+  }
+}
+
 export class Workspace extends Events {
   /**
    * false while the loader runs the plugin loop — onLayoutReady callbacks
@@ -99,6 +258,12 @@ export class Workspace extends Events {
   activeLeaf: WorkspaceLeaf | null;
   /** @internal MRU fallback for getActiveFile (graph tab focused etc.) */
   _lastFilePath: string | null = null;
+  /** @internal registerView registry (plugin.ts writes, side leaves read) */
+  _viewRegistry = new Map<string, { creator: ViewCreator; pluginId: string }>();
+  /** @internal every sidebar leaf with a mounted view */
+  _sideLeaves = new Set<SidebarViewLeaf>();
+  /** @internal compat App shim, injected by context.ts right after App is built */
+  _app: App | null = null;
 
   constructor(
     private handle: Handle,
@@ -106,6 +271,23 @@ export class Workspace extends Events {
   ) {
     super();
     this.activeLeaf = new WorkspaceLeaf(handle, registry, false);
+  }
+
+  /**
+   * @internal context wiring: the App shim is constructed AFTER Workspace, so
+   * the bridge (App._geode.plugins for addSidebarPanel) and leaf._app (View's
+   * constructor reads it) are injected here.
+   */
+  _setApp(app: App): void {
+    this._app = app;
+    if (this.activeLeaf) this.activeLeaf._app = app;
+  }
+
+  /** Active-pane facade carrying the compat App reference. */
+  private makePaneLeaf(newTab: boolean): WorkspaceLeaf {
+    const leaf = new WorkspaceLeaf(this.handle, this.registry, newTab);
+    if (this._app) leaf._app = this._app;
+    return leaf;
   }
 
   /** Active file, falling back to the most recently active file. */
@@ -127,7 +309,10 @@ export class Workspace extends Events {
     }
   }
 
-  /** @internal loader: mark layout ready and flush the queued callbacks. */
+  /**
+   * @internal loader: mark layout ready, flush the queued callbacks, then
+   * fire the LEGACY "layout-ready" event (calendar's startup path).
+   */
   _flushLayoutReady(): void {
     this.layoutReady = true;
     for (const cb of this._layoutReadyQueue.splice(0)) {
@@ -137,43 +322,55 @@ export class Workspace extends Events {
         console.error("[obsidian-compat] onLayoutReady callback threw", err);
       }
     }
+    this.trigger("layout-ready");
   }
 
   getLeaf(newLeaf?: "split", direction?: SplitDirection): WorkspaceLeaf;
   getLeaf(newLeaf?: PaneType | boolean): WorkspaceLeaf;
   getLeaf(newLeaf?: PaneType | boolean, _direction?: SplitDirection): WorkspaceLeaf {
-    return new WorkspaceLeaf(this.handle, this.registry, wantsNewTab(newLeaf));
-  }
-
-  /** Custom view types are T2 (registerView is a warn-stub) — always empty. */
-  getLeavesOfType(_viewType: string): WorkspaceLeaf[] {
-    return [];
+    return this.makePaneLeaf(wantsNewTab(newLeaf));
   }
 
   /**
-   * Sidebar leaves are not part of the pane tree this round — return a
-   * detached leaf facade so plugin initLeaf() code paths (e.g. calendar's
-   * getRightLeaf(false).setViewState(...)) run without crashing; the custom
-   * view simply never appears (registerView gap, recorded via setViewState).
+   * Mounted sidebar leaves of `viewType`. Built-in host types ("markdown"
+   * etc.) never live in _sideLeaves, so they keep returning [] — recorded
+   * deviation (the suite only queries its own custom types).
    */
-  getRightLeaf(_split: boolean): WorkspaceLeaf {
-    return new WorkspaceLeaf(this.handle, this.registry, true);
+  getLeavesOfType(viewType: string): WorkspaceLeaf[] {
+    return [...this._sideLeaves].filter((l) => l.view?.getViewType() === viewType);
   }
 
-  getLeftLeaf(_split: boolean): WorkspaceLeaf {
-    return new WorkspaceLeaf(this.handle, this.registry, true);
+  /**
+   * ALWAYS a fresh non-null leaf — calendar chains
+   * getRightLeaf(false).setViewState(...) without a null check.
+   */
+  getRightLeaf(_split: boolean): SidebarViewLeaf {
+    return new SidebarViewLeaf(this, this.handle, this.registry, "right");
   }
 
-  revealLeaf(_leaf: WorkspaceLeaf): void {
-    reportGap("Workspace", "revealLeaf");
+  getLeftLeaf(_split: boolean): SidebarViewLeaf {
+    return new SidebarViewLeaf(this, this.handle, this.registry, "left");
+  }
+
+  /**
+   * 'Bring a given leaf to the foreground.' Mounted sidebar leaf -> select
+   * its panel (setLeftPanel/setRightPanel also opens the sidebar); other
+   * leaves are a resolved no-op.
+   */
+  async revealLeaf(leaf: WorkspaceLeaf): Promise<void> {
+    if (leaf instanceof SidebarViewLeaf && leaf._panelId) {
+      if (leaf.side === "left") this.handle.workspace.setLeftPanel(leaf._panelId);
+      else this.handle.workspace.setRightPanel(leaf._panelId);
+    }
   }
 
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => unknown): void {
     if (this.activeLeaf) callback(this.activeLeaf);
+    for (const leaf of this._sideLeaves) callback(leaf);
   }
 
   getActiveViewOfType<T>(type: new (...args: never[]) => T): T | null {
-    const view = makeActiveMarkdownView(this.handle, this.registry);
+    const view = makeActiveMarkdownView(this.handle, this.registry, this.makePaneLeaf(false));
     if (view && view instanceof (type as unknown as new (...args: never[]) => object)) {
       return view as unknown as T;
     }
@@ -213,8 +410,37 @@ export class Workspace extends Events {
     this.handle.workspace.openFile(path, { newTab: wantsNewTab(newLeaf) });
   }
 
-  detachLeavesOfType(_viewType: string): void {
-    reportGap("Workspace", "detachLeavesOfType");
+  /** 'Remove all leaves of the given type.' */
+  detachLeavesOfType(viewType: string): void {
+    for (const leaf of [...this._sideLeaves]) {
+      if (leaf.view?.getViewType() === viewType) leaf.detach();
+    }
+  }
+
+  /** Existing mounted leaf for `type`, or create one on `side` and mount. */
+  async ensureSideLeaf(
+    type: string,
+    side: "left" | "right",
+    opts?: { reveal?: boolean },
+  ): Promise<WorkspaceLeaf> {
+    let leaf = [...this._sideLeaves].find((l) => l.view?.getViewType() === type);
+    if (!leaf) {
+      leaf = side === "left" ? this.getLeftLeaf(false) : this.getRightLeaf(false);
+      await leaf.setViewState({ type });
+    }
+    if (opts?.reveal) await this.revealLeaf(leaf);
+    return leaf;
+  }
+
+  /** @deprecated legacy API (calendar) — splits the active pane, returns a facade. */
+  splitActiveLeaf(_direction?: SplitDirection): WorkspaceLeaf {
+    this.handle.workspace.splitActivePane("row");
+    return this.makePaneLeaf(false);
+  }
+
+  /** @deprecated legacy API (calendar) — the active-pane facade. */
+  getUnpinnedLeaf(): WorkspaceLeaf {
+    return this.makePaneLeaf(false);
   }
 
   /* ----- typed event overloads ----- */
@@ -233,13 +459,6 @@ export class Workspace extends Events {
   ): EventRef;
   on(name: string, callback: (...data: never[]) => unknown, ctx?: unknown): EventRef;
   on(name: string, callback: (...data: never[]) => unknown, ctx?: unknown): EventRef {
-    if (name === "editor-change") {
-      reportGap(
-        "Workspace",
-        "on('editor-change')",
-        "DEVIATION: fires on saved modification (file:modified), not per editor transaction",
-      );
-    }
     return super.on(name, callback, ctx);
   }
 }

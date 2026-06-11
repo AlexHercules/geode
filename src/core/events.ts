@@ -20,6 +20,8 @@ export interface EventMap {
   "vault:external-changed": { paths: string[] };
   /** theme switched */
   "theme:changed": { theme: "dark" | "light" };
+  /** a LOCAL editor transaction changed a document's text (pre-save, per keystroke) */
+  "document:changed": { path: string };
 }
 
 export type EventName = keyof EventMap;

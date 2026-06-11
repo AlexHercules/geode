@@ -9,6 +9,8 @@ import { Component } from "./component";
 import { reportGap } from "./gaps";
 import { setIcon, type IconName } from "./icons";
 import type { App } from "./plugin";
+import { moment } from "./util";
+import type { PaneType } from "./workspace";
 
 /* ---------------- Scope (minimal — keyboard scopes are host-handled) ---------------- */
 
@@ -18,6 +20,18 @@ export class Scope {
     return null;
   }
   unregister(_handler: unknown): void {}
+}
+
+/* ---------------- Keymap ---------------- */
+
+/** Events Keymap can read modifier state from (per the official d.ts). */
+export type UserEvent = MouseEvent | KeyboardEvent | TouchEvent | PointerEvent;
+
+export class Keymap {
+  /** 'Translates an event into the type of pane that should open': mod -> "tab". */
+  static isModEvent(evt?: UserEvent | null): PaneType | boolean {
+    return evt && (evt.ctrlKey || evt.metaKey) ? "tab" : false;
+  }
 }
 
 /* ---------------- Notice ---------------- */
@@ -649,19 +663,25 @@ export class SearchComponent extends AbstractTextComponent<HTMLInputElement> {
 
 export class MomentFormatComponent extends TextComponent {
   sampleEl: HTMLElement = document.createElement("span");
+  private defaultFormat = "";
 
+  /** 'Sets the default format when input is cleared. Also used for placeholder.' */
   setDefaultFormat(defaultFormat: string): this {
+    this.defaultFormat = defaultFormat;
     this.inputEl.placeholder = defaultFormat;
+    this.updateSample();
     return this;
   }
 
   setSampleEl(sampleEl: HTMLElement): this {
     this.sampleEl = sampleEl;
+    this.updateSample();
     return this;
   }
 
   override setValue(value: string): this {
     super.setValue(value);
+    this.updateSample();
     return this;
   }
 
@@ -670,9 +690,9 @@ export class MomentFormatComponent extends TextComponent {
     this.updateSample();
   }
 
-  /** moment is a T2 gap — the live sample shows the raw format string. */
+  /** Live sample of the current format rendered with the real moment (R5). */
   updateSample(): void {
-    this.sampleEl.textContent = this.getValue();
+    this.sampleEl.textContent = moment().format(this.getValue() || this.defaultFormat);
   }
 }
 
@@ -1078,9 +1098,7 @@ export class Setting {
     return this.addControl(new SliderComponent(this.controlEl), cb);
   }
 
-  /** moment formats render as plain text inputs (moment is a T2 gap). */
   addMomentFormat(cb: (component: MomentFormatComponent) => unknown): this {
-    reportGap("Setting", "addMomentFormat", "plain text input substitute (no live preview)");
     return this.addControl(new MomentFormatComponent(this.controlEl), cb);
   }
 

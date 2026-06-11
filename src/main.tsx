@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
 import { AppContext, GeodeApp } from "@app/AppContext";
-import { loadObsidianPlugins } from "@compat/obsidian/loader";
+import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
 import { CommandRegistry } from "@core/commands";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
@@ -100,7 +100,18 @@ async function bootstrap() {
   const documents = new DocumentManager(vault, events);
   const plugins = new PluginManager({ vault, metadata, workspace, commands, events, documents });
 
-  const app: GeodeApp = { vault, metadata, workspace, commands, events, plugins, documents };
+  const app: GeodeApp = {
+    vault,
+    metadata,
+    workspace,
+    commands,
+    events,
+    plugins,
+    documents,
+    // app layer hands the compat load report to feature modules (no direct
+    // @compat imports below the app layer)
+    obsidianLoadReport,
+  };
 
   workspace.applyDocumentEffects();
   // close-time flushing covers every open document (single source of dirty state)

@@ -12,7 +12,12 @@ import { getIconSvg, type IconName } from "./icons";
 import type { MetadataCache } from "./metadata";
 import { Scope } from "./ui";
 import type { Vault } from "./vault";
-import { makeActiveMarkdownView, type MarkdownView, type Workspace } from "./workspace";
+import {
+  makeActiveMarkdownView,
+  type MarkdownView,
+  type ViewCreator,
+  type Workspace,
+} from "./workspace";
 
 export type Modifier = "Mod" | "Ctrl" | "Meta" | "Shift" | "Alt";
 
@@ -75,6 +80,24 @@ const keymapStub = {
   popScope(_scope: unknown): void {},
 };
 
+const dragManagerStub = {
+  dragFile: (): null => null,
+  onDragStart: (): void => {},
+};
+
+const internalPluginsStub = {
+  getEnabledPluginById: (): null => null,
+  getPluginById: (): null => null,
+  /** F6: calendar destructures app.internalPlugins.plugins["daily-notes"] */
+  plugins: {} as Record<string, unknown>,
+};
+
+const pluginsStub = {
+  getPlugin: (): null => null,
+  enabledPlugins: new Set<string>(),
+  plugins: {},
+};
+
 export class App {
   vault: Vault;
   workspace: Workspace;
@@ -105,6 +128,21 @@ export class App {
   get scope(): Scope {
     reportGap("App", "App.scope", "warn-stub Scope — register is a no-op");
     return (this._scopeStub ??= new Scope());
+  }
+
+  get dragManager(): typeof dragManagerStub {
+    reportGap("App", "App.dragManager", "warn-stub — dragFile/onDragStart are no-ops");
+    return dragManagerStub;
+  }
+
+  get internalPlugins(): typeof internalPluginsStub {
+    reportGap("App", "App.internalPlugins", "warn-stub — lookups always return null");
+    return internalPluginsStub;
+  }
+
+  get plugins(): typeof pluginsStub {
+    reportGap("App", "App.plugins", "warn-stub — getPlugin returns null, enabledPlugins is empty");
+    return pluginsStub;
   }
 
   /** Matches the official `UserEvent | null` — no user-event tracking (no gap). */
@@ -155,7 +193,9 @@ export abstract class Plugin extends Component {
    */
   addCommand(command: Command): Command {
     const bridge = this.app._geode;
-    const getView = () => makeActiveMarkdownView(bridge.handle, bridge.registry);
+    // active-pane facade leaf via the workspace so the view carries leaf._app
+    const getView = () =>
+      makeActiveMarkdownView(bridge.handle, bridge.registry, this.app.workspace.getLeaf(false));
     let callback: (() => void) | null = null;
     let available: (() => boolean) | undefined;
 
@@ -318,11 +358,29 @@ export abstract class Plugin extends Component {
     );
   }
 
-  /* ----- out-of-tier APIs: warn-stubs, never a crash (T2/T3 gaps) ----- */
+  /* ----- views (real since R5) ----- */
 
-  registerView(type: string, _viewCreator: unknown): void {
-    reportGap(this.manifest.id, "Plugin.registerView", `view type "${type}" will not render`);
+  /**
+   * Register a custom view type; SidebarViewLeaf.setViewState mounts it.
+   * Duplicate types warn + ignore. The unload disposer detaches every leaf
+   * of the type, then unregisters the creator.
+   */
+  registerView(type: string, viewCreator: ViewCreator): void {
+    const workspace = this.app.workspace;
+    if (workspace._viewRegistry.has(type)) {
+      console.warn(
+        `[obsidian-compat] ${this.manifest.id}: view type "${type}" is already registered — ignored`,
+      );
+      return;
+    }
+    workspace._viewRegistry.set(type, { creator: viewCreator, pluginId: this.manifest.id });
+    this.register(() => {
+      workspace.detachLeavesOfType(type);
+      workspace._viewRegistry.delete(type);
+    });
   }
+
+  /* ----- out-of-tier APIs: warn-stubs, never a crash (T2/T3 gaps) ----- */
 
   registerExtensions(_extensions: string[], _viewType: string): void {
     reportGap(this.manifest.id, "Plugin.registerExtensions");

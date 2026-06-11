@@ -241,6 +241,38 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* ============ plugin sidebar panels (compat registerView) ============ */
+
+/* hosts the plugin-owned panel element; fills the sidebar and scrolls itself */
+.sidebar-panel-host {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* selector icon wrapper (raw svg markup or first-letter fallback) */
+.sidebar-panel-icon {
+  display: grid;
+  place-items: center;
+}
+
+/* align injected svg with the built-in Icon sizes (.ribbon-btn 20px, .right-tab 15px) */
+.ribbon-btn .sidebar-panel-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.right-tab .sidebar-panel-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.sidebar-panel-icon-fallback {
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+}
+
 .main {
   flex: 1;
   display: flex;

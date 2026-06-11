@@ -7,6 +7,12 @@
  * Obsidian plugins) may USE these helpers.
  */
 
+/** The all-locales bundle has no own typings — it IS moment (same instance). */
+declare module "moment/min/moment-with-locales" {
+  import moment from "moment";
+  export = moment;
+}
+
 interface DomElementInfo {
   /** The class to be assigned. Can be a space-separated string or an array of strings. */
   cls?: string | string[];
@@ -156,3 +162,17 @@ declare function createSvg(
 ): SVGElement;
 declare function fish(selector: string): HTMLElement | null;
 declare function fishAll(selector: string): HTMLElement[];
+
+/** Alias of `document` (Geode is single-window; popout windows do not exist). */
+declare var activeDocument: Document;
+/** Alias of `window` (Geode is single-window; popout windows do not exist). */
+declare var activeWindow: Window;
+
+interface Window {
+  /** The compat App shim — reassigned by the loader on every plugin reload. */
+  app?: unknown;
+  /** The real moment.js — installed by the compat loader before any plugin runs. */
+  moment?: typeof import("moment");
+  /** calendar caches its locale week spec here (plain global; unused by Geode). */
+  _bundledLocaleWeekSpec?: unknown;
+}

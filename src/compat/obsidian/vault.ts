@@ -303,6 +303,17 @@ export class Vault extends Events {
     return file.path;
   }
 
+  /**
+   * NON-PUBLIC API that suite plugins call directly (calendar/nldates).
+   * Fixed defaults; every key is recorded as a gap once.
+   */
+  getConfig(key: string): unknown {
+    reportGap("Vault", `getConfig("${key}")`, "non-public API — fixed default returned");
+    if (key === "defaultViewMode") return "source";
+    if (key === "useMarkdownLinks") return false;
+    return undefined;
+  }
+
   /* ----- typed event overloads ----- */
 
   on(name: "create", callback: (file: TAbstractFile) => unknown, ctx?: unknown): EventRef;

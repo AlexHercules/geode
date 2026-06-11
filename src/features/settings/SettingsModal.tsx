@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
-import { obsidianLoadReport } from "@compat/obsidian/loader";
 import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
@@ -150,7 +149,7 @@ function PluginsSection() {
   const app = useApp();
   useStore(app.plugins.revision); // re-render on enable/disable/register
   const settingsSections = useStore(app.plugins.settingsSections);
-  const obsidianReport = useStore(obsidianLoadReport);
+  const obsidianReport = useStore(app.obsidianLoadReport);
   const entries = app.plugins.list();
   const builtin = entries.filter((e) => e.source === "builtin");
   const external = entries.filter((e) => e.source === "external");
@@ -384,7 +383,7 @@ function PluginList({
             data-testid={`plugin-toggle-${plugin.id}`}
             onClick={() => {
               if (enabled) app.plugins.disable(plugin.id);
-              else void app.plugins.enable(plugin.id);
+              else void app.plugins.enable(plugin.id, { userAction: true });
             }}
           >
             <span className="settings-toggle-thumb" />

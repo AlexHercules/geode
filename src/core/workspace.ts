@@ -811,8 +811,11 @@ function sanitizeState(saved: unknown): WorkspaceState {
   return {
     root,
     activePaneId,
-    leftPanel: s.leftPanel === "search" ? "search" : "explorer",
-    rightPanel: s.rightPanel === "outline" ? "outline" : "backlinks",
+    // any non-empty string is a valid panel id (dynamic sidebar panels, R5);
+    // unknown ids render the default panel in the shell WITHOUT mutating state
+    leftPanel: typeof s.leftPanel === "string" && s.leftPanel !== "" ? s.leftPanel : base.leftPanel,
+    rightPanel:
+      typeof s.rightPanel === "string" && s.rightPanel !== "" ? s.rightPanel : base.rightPanel,
     leftSidebarOpen: Boolean(s.leftSidebarOpen ?? base.leftSidebarOpen),
     rightSidebarOpen: Boolean(s.rightSidebarOpen ?? base.rightSidebarOpen),
     leftWidth: width(s.leftWidth, base.leftWidth),

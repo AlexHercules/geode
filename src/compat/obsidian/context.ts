@@ -8,7 +8,7 @@
  *  - file:created/deleted/renamed/modified  -> vault 'create'/'delete'/'rename'/'modify'
  *  - metadata:updated                       -> metadataCache 'changed'/'resolve'/'resolved'
  *  - active-file:changed                    -> workspace 'active-leaf-change' + 'file-open'
- *  - file:modified (active editor)          -> workspace 'editor-change'  [DEVIATION]
+ *  - document:changed (active editor)       -> workspace 'editor-change'
  *  - workspace root identity change         -> workspace 'layout-change'
  *
  * Startup semantics (CREATE-ON-LOAD, API-REFERENCE area 2/3):
@@ -51,6 +51,8 @@ export function createCompatContext(
   const metadataCache = new MetadataCache(handle, registry);
   const workspace = new Workspace(handle, registry);
   const app = new App({ handle, plugins, registry }, vault, workspace, metadataCache);
+  // the workspace shim (and its leaves) need the App bridge for view mounting
+  workspace._setApp(app);
 
   const disposers: Array<() => void> = [];
   const ev = handle.events;
@@ -93,8 +95,13 @@ export function createCompatContext(
         pendingChanged.add(path);
         metadataCache._markLinkSourceDirty(path);
       }
-      // DEVIATION: obsidian fires 'editor-change' per editor transaction;
-      // Geode surfaces saved modifications of the focused document instead.
+    }),
+  );
+
+  // per-transaction editor signal (R5): only the active document fires
+  // 'editor-change', matching obsidian's focused-editor semantics
+  disposers.push(
+    ev.on("document:changed", ({ path }) => {
       const active = handle.documents.getActiveView();
       if (active && active.path === path) {
         const view = makeActiveMarkdownView(handle, registry);

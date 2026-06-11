@@ -109,12 +109,17 @@ export class DocumentHandle {
       this.text = update.state.doc.toString();
       this.scheduleSave();
       this.revision.update((r) => r + 1);
+      // Per-transaction editor signal (R5): ONE emit per update with local doc
+      // changes, after forwarding to the other views. Sync-annotated replaces
+      // (setText / external reload) keep `local` false and never emit.
+      this.events.emit("document:changed", { path: this.currentPath });
     }
   });
 
   constructor(
     private manager: DocumentManager,
     private vault: Vault,
+    private events: EventBus,
     path: string,
     text: string,
   ) {
@@ -426,7 +431,7 @@ export class DocumentManager {
           }
           let handle = this.handles.get(path);
           if (!handle) {
-            handle = new DocumentHandle(this, this.vault, path, text);
+            handle = new DocumentHandle(this, this.vault, this.events, path, text);
             this.handles.set(path, handle);
           }
           return handle;

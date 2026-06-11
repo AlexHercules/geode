@@ -119,6 +119,84 @@ export function installDomAugmentation(): void {
   if (g[MARKER]) return;
   g[MARKER] = true;
 
+  /* ----- Array / Object / Math / String / Number statics & prototypes
+   * (the official d.ts `declare global` block, lines 10-48 — suite plugins
+   * call these on arbitrary values, e.g. recent-files'
+   * `getEnabledFeatures().contains("explorer")`) ----- */
+  define(Array.prototype, {
+    first<T>(this: T[]): T | undefined {
+      return this.length > 0 ? this[0] : undefined;
+    },
+    last<T>(this: T[]): T | undefined {
+      return this.length > 0 ? this[this.length - 1] : undefined;
+    },
+    contains<T>(this: T[], target: T): boolean {
+      return this.includes(target);
+    },
+    remove<T>(this: T[], target: T): void {
+      for (let i = this.indexOf(target); i >= 0; i = this.indexOf(target)) this.splice(i, 1);
+    },
+    shuffle<T>(this: T[]): T[] {
+      for (let i = this.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [this[i], this[j]] = [this[j], this[i]];
+      }
+      return this;
+    },
+    unique<T>(this: T[]): T[] {
+      return [...new Set(this)];
+    },
+  });
+  define(Array as unknown as object, {
+    combine<T>(arrays: T[][]): T[] {
+      return ([] as T[]).concat(...arrays);
+    },
+  });
+  define(Object, {
+    isEmpty(object: Record<string, unknown>): boolean {
+      for (const key in object) {
+        if (Object.prototype.hasOwnProperty.call(object, key)) return false;
+      }
+      return true;
+    },
+    each<T>(
+      object: Record<string, T>,
+      callback: (value: T, key?: string) => boolean | void,
+      context?: unknown,
+    ): boolean {
+      for (const [key, value] of Object.entries(object)) {
+        if (callback.call(context, value, key) === false) return false;
+      }
+      return true;
+    },
+  });
+  define(Math, {
+    clamp(value: number, min: number, max: number): number {
+      return Math.min(Math.max(value, min), max);
+    },
+    square(value: number): number {
+      return value * value;
+    },
+  });
+  define(String as unknown as object, {
+    isString(obj: unknown): boolean {
+      return typeof obj === "string";
+    },
+  });
+  define(String.prototype, {
+    contains(this: string, target: string): boolean {
+      return this.includes(target);
+    },
+    format(this: string, ...args: string[]): string {
+      return this.replace(/\{(\d+)\}/g, (m, i: string) => args[Number(i)] ?? m);
+    },
+  });
+  define(Number as unknown as object, {
+    isNumber(obj: unknown): boolean {
+      return typeof obj === "number" && !Number.isNaN(obj);
+    },
+  });
+
   /* ----- Node ----- */
   define(Node.prototype, {
     detach(this: Node): void {
@@ -383,4 +461,10 @@ export function installDomAugmentation(): void {
   g.fish = (selector: string): HTMLElement | null => document.querySelector(selector);
   g.fishAll = (selector: string): HTMLElement[] =>
     Array.from(document.querySelectorAll(selector));
+
+  /* ----- global window/document aliases (single-window host, no popouts) ----- */
+  defineGetters(g, {
+    activeDocument: () => document,
+    activeWindow: () => window,
+  });
 }

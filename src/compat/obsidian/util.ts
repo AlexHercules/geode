@@ -1,8 +1,12 @@
 /**
  * Module-level obsidian exports: normalizePath, apiVersion/requireApiVersion,
- * frontmatter/tag helpers, debounce, Platform, and the T2 warn-stubs
- * (moment / htmlToMarkdown / MarkdownRenderer / requestUrl).
+ * frontmatter/tag helpers, debounce, Platform, the real moment (R5), and the
+ * remaining T2 warn-stubs (htmlToMarkdown / MarkdownRenderer / requestUrl).
  */
+// The with-locales bundle keeps everything on ONE instance — a separate
+// "moment/min/locales" entry registers against a second copy under Vite's
+// dep optimizer. Defining locales switches the global one; restored below.
+import momentImpl from "moment/min/moment-with-locales";
 import { reportGap } from "./gaps";
 import type { CachedMetadata, FrontMatterCache } from "./metadata";
 
@@ -183,30 +187,19 @@ export const Platform = {
   isSafari: false,
 } as const;
 
-/* ---------------- T2 warn-stubs ---------------- */
-
-const MOMENT_HINT =
-  "moment is not bundled with Geode's Obsidian compat layer (T2 decision, docs/OBSIDIAN-COMPAT.md)";
+/* ---------------- moment (real, R5 T2 decision) ---------------- */
 
 /**
- * Property access is tolerated (returns undefined); CALLING moment throws a
- * descriptive gap error so plugins fail loudly only where they truly need it.
+ * The official module exposes `export const moment: typeof Moment` — we hand
+ * out the real bundled moment.js. The loader also installs this exact instance
+ * as `window.moment` (suite plugins consume it exclusively from there).
  */
-export const moment: unknown = new Proxy(function momentUnavailable() {}, {
-  apply(): never {
-    throw new Error(MOMENT_HINT);
-  },
-  construct(): never {
-    throw new Error(MOMENT_HINT);
-  },
-  get(target, prop, receiver): unknown {
-    if (typeof prop === "string" && prop !== "toString" && prop !== "name" && prop !== "length") {
-      reportGap("module", `moment.${prop}`, MOMENT_HINT);
-      return undefined;
-    }
-    return Reflect.get(target, prop, receiver) as unknown;
-  },
-});
+// the locale-pack import above leaves the LAST registered locale active —
+// restore the default before anything consumes moment
+momentImpl.locale("en");
+export const moment = momentImpl;
+
+/* ---------------- T2 warn-stubs ---------------- */
 
 /** Warn-stub: best-effort plain-text extraction instead of real conversion. */
 export function htmlToMarkdown(html: string | HTMLElement | Document | DocumentFragment): string {

@@ -3,7 +3,9 @@
  * CommonJS bundle STRING exercising the T0+T1+T1.5 surface — commands
  * (plain + editorCallback), status bar, ribbon icon, settings tab (Setting
  * DSL), Notice, vault.on("modify"), metadataCache.getFileCache headings,
- * loadData/saveData and normalizePath.
+ * loadData/saveData and normalizePath. R5 adds the T2 surface: a registered
+ * ItemView opened via the recent-files leaf sequence, and a window.moment
+ * assertion written into a status bar item.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -25,6 +27,41 @@ var obsidian = require("obsidian");
 var DEFAULT_SETTINGS = {
   greeting: "hello",
   enabled: true
+};
+
+var FIXTURE_VIEW_TYPE = "fixture-view";
+
+var FixtureView = class extends obsidian.ItemView {
+  getViewType() {
+    return FIXTURE_VIEW_TYPE;
+  }
+  getDisplayText() {
+    return "Fixture View";
+  }
+  getIcon() {
+    return "clock";
+  }
+  async onOpen() {
+    this.contentEl.empty();
+    this.contentEl.createDiv({
+      text: "fixture view is open",
+      attr: { "data-testid": "obsfixture-view-body" }
+    });
+    // R5: regression probe for window.app injection (F5)
+    var probe = "missing";
+    try {
+      if (window.app && window.app.plugins && typeof window.app.plugins.getPlugin === "function") {
+        window.app.plugins.getPlugin("x");
+        probe = "ok";
+      }
+    } catch (e) {
+      probe = "missing";
+    }
+    this.contentEl.createDiv({
+      text: probe,
+      attr: { "data-testid": "obsfixture-app-probe" }
+    });
+  }
 };
 
 var FixtureSettingTab = class extends obsidian.PluginSettingTab {
@@ -93,6 +130,36 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
         var cache = file ? self.app.metadataCache.getFileCache(file) : null;
         var count = cache && cache.headings ? cache.headings.length : 0;
         editor.replaceSelection("[fixture: " + count + " headings]");
+      }
+    });
+
+    // R5: real registerView + the recent-files open sequence
+    this.registerView(FIXTURE_VIEW_TYPE, (leaf) => new FixtureView(leaf));
+
+    this.addCommand({
+      id: "open-view",
+      name: "Open view",
+      callback: async () => {
+        var workspace = self.app.workspace;
+        var leaf;
+        [leaf] = workspace.getLeavesOfType(FIXTURE_VIEW_TYPE);
+        if (!leaf) {
+          leaf = workspace.getRightLeaf(false);
+          await leaf.setViewState({ type: FIXTURE_VIEW_TYPE });
+        }
+        await workspace.revealLeaf(leaf);
+      }
+    });
+
+    // R5: window.moment assertion surfaced in the status bar
+    var momentEl = this.addStatusBarItem();
+    momentEl.setText("moment: pending");
+    momentEl.setAttr("data-testid", "fixture-moment");
+    this.addCommand({
+      id: "moment-today",
+      name: "Write moment date to status bar",
+      callback: () => {
+        momentEl.setText("moment: " + window.moment().format("YYYY-MM-DD"));
       }
     });
 

@@ -39,6 +39,8 @@ export interface GeodePlugin {
   version?: string;
   onload(app: AppHandle): void | Promise<void>;
   onunload?(): void;
+  /** called only when the user explicitly enables the plugin (settings toggle), after onload */
+  onUserEnable?(): void;
 }
 
 /**
@@ -56,6 +58,22 @@ export interface RegisterOptions {
    * When given, localStorage persistence is skipped for this record.
    */
   persistEnabled?: (enabled: boolean) => void;
+}
+
+/** A sidebar panel contributed by a plugin (compat registerView); App shell hosts it. */
+export interface SidebarPanelContribution {
+  /** unique, e.g. "obsidian:view:recent-files" */
+  id: string;
+  side: "left" | "right";
+  title: string;
+  /**
+   * Raw <svg> markup for the selector button. MUST come from a trusted source:
+   * it is rendered via dangerouslySetInnerHTML (the shell only validates that
+   * the markup is a single <svg> root element).
+   */
+  iconSvg?: string;
+  /** panel body, owned by the contributor */
+  el: HTMLElement;
 }
 
 /** A plugin settings UI section (compat PluginSettingTab); SettingsModal hosts it. */
@@ -102,6 +120,8 @@ export class PluginManager {
   readonly ribbonItems = new Store<ReadonlyArray<{ id: string; el: HTMLElement }>>([]);
   /** plugin settings sections (compat PluginSettingTab) rendered by SettingsModal */
   readonly settingsSections = new Store<ReadonlyArray<PluginSettingsSection>>([]);
+  /** sidebar panels (compat registerView custom views) hosted by the App shell */
+  readonly sidebarPanels = new Store<ReadonlyArray<SidebarPanelContribution>>([]);
 
   private records = new Map<string, PluginRecord>();
   /** ids of plugins loaded from <vault>/.geode/plugins — unloaded on every reload */
@@ -178,7 +198,7 @@ export class PluginManager {
     }
   }
 
-  async enable(id: string): Promise<void> {
+  async enable(id: string, opts?: { userAction?: boolean }): Promise<void> {
     const record = this.records.get(id);
     if (!record || record.enabled) return;
     try {
@@ -186,6 +206,13 @@ export class PluginManager {
       record.enabled = true;
       this.persistRecord(record);
       this.revision.update((n) => n + 1);
+      if (opts?.userAction) {
+        try {
+          record.plugin.onUserEnable?.();
+        } catch (err) {
+          console.error(`[plugins] ${id} onUserEnable threw`, err);
+        }
+      }
     } catch (err) {
       console.error(`[plugins] ${id} failed to load`, err);
       record.disposers.forEach((d) => d());
@@ -340,6 +367,13 @@ export class PluginManager {
   addRibbonElement(id: string, el: HTMLElement): () => void {
     this.ribbonItems.update((arr) => [...arr.filter((x) => x.id !== id), { id, el }]);
     return () => this.ribbonItems.update((arr) => arr.filter((x) => x.id !== id));
+  }
+
+  addSidebarPanel(panel: SidebarPanelContribution): () => void {
+    this.sidebarPanels.update((arr) => [...arr.filter((x) => x.id !== panel.id), panel]);
+    // dispose by object identity, so a later same-id registration is not torn
+    // down by a stale disposer
+    return () => this.sidebarPanels.update((arr) => arr.filter((x) => x !== panel));
   }
 
   addSettingsSection(section: PluginSettingsSection): () => void {

@@ -361,6 +361,16 @@
   line-height: 14px;
 }
 
+/* ---------------- custom view panels (registerView side leaves) ---------------- */
+
+.geode-compat-view-panel {
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
 /* ---------------- ribbon / status bar contributions ---------------- */
 
 .geode-compat-ribbon {

@@ -28,7 +28,7 @@ import { drainGaps, resetGaps } from "./gaps";
 import * as obsidianModule from "./index";
 import { pathShim } from "./path-shim";
 import type { Plugin as ObsidianPlugin, PluginManifest } from "./plugin";
-import { apiVersion, semverCompare } from "./util";
+import { apiVersion, moment, semverCompare } from "./util";
 
 /* ---------------- host require map ---------------- */
 
@@ -157,11 +157,21 @@ async function runLoad(
 
   installDomAugmentation();
 
+  // suite plugins (nldates, calendar) consume moment exclusively via the
+  // global — expose it BEFORE any main.js evaluates (desktop and browser/
+  // fixture paths both come through here). Never overwrite an existing one.
+  window.moment ??= moment;
+
   // idempotent: unload the previous round first (does NOT persist enabled:false)
   for (const id of loadedIds.splice(0)) plugins.unregister(id);
   previousContext?.dispose();
   resetGaps(); // warn-once + report state is per load
   const ctx = (previousContext = createCompatContext(app, plugins, vault));
+
+  // F5: real Obsidian exposes the App instance as window.app — plugins read it
+  // outside their onload args. Plain assignment (NOT ??=): every reload must
+  // point at the NEW context's App shim, before any plugin main.js evaluates.
+  window.app = ctx.app;
 
   let sources: ObsidianPluginSource[] = [];
   try {
@@ -338,6 +348,11 @@ async function runLoad(
           instance = null;
           removeStyles();
         }
+      },
+      // F3: forward the host's explicit-user-enable signal to the obsidian
+      // Plugin instance (optional calls — no dependency on core's new typing)
+      onUserEnable: () => {
+        instance?.onUserEnable?.();
       },
     };
 

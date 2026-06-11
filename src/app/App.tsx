@@ -3,6 +3,7 @@ import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
 import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
+import type { SidebarPanelContribution } from "@core/plugins";
 import { Icon } from "./icons";
 import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
@@ -58,6 +59,28 @@ export function App() {
   const statusItems = useStore(app.plugins.statusBarItems);
   const statusBarElements = useStore(app.plugins.statusBarElements);
   const ribbonItems = useStore(app.plugins.ribbonItems);
+  const sidebarPanels = useStore(app.plugins.sidebarPanels);
+
+  /* plugin-contributed sidebar panels (compat registerView custom views) */
+  const leftPanels = sidebarPanels.filter((p) => p.side === "left");
+  const rightPanels = sidebarPanels.filter((p) => p.side === "right");
+  /* an unknown persisted id (e.g. the panel unregistered) falls back to the
+     default panel WITHOUT mutating workspace state, so a panel that registers
+     later wins again */
+  const activeLeftPanel = leftPanels.find((p) => p.id === ws.leftPanel) ?? null;
+  const activeRightPanel = rightPanels.find((p) => p.id === ws.rightPanel) ?? null;
+  /* effective panel ids AFTER fallback — selection highlights must agree with
+     what is actually rendered, even when the persisted id is stale */
+  const effectiveLeft = activeLeftPanel
+    ? activeLeftPanel.id
+    : ws.leftPanel === "search"
+      ? "search"
+      : "explorer";
+  const effectiveRight = activeRightPanel
+    ? activeRightPanel.id
+    : ws.rightPanel === "outline"
+      ? "outline"
+      : "backlinks";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -253,9 +276,9 @@ export function App() {
           <RibbonButton
             icon="files"
             title="File explorer"
-            active={ws.leftSidebarOpen && ws.leftPanel === "explorer"}
+            active={ws.leftSidebarOpen && effectiveLeft === "explorer"}
             onClick={() =>
-              ws.leftPanel === "explorer" && ws.leftSidebarOpen
+              effectiveLeft === "explorer" && ws.leftSidebarOpen
                 ? app.workspace.toggleLeftSidebar()
                 : app.workspace.setLeftPanel("explorer")
             }
@@ -263,9 +286,9 @@ export function App() {
           <RibbonButton
             icon="search"
             title="Search"
-            active={ws.leftSidebarOpen && ws.leftPanel === "search"}
+            active={ws.leftSidebarOpen && effectiveLeft === "search"}
             onClick={() =>
-              ws.leftPanel === "search" && ws.leftSidebarOpen
+              effectiveLeft === "search" && ws.leftSidebarOpen
                 ? app.workspace.toggleLeftSidebar()
                 : app.workspace.setLeftPanel("search")
             }
@@ -276,6 +299,23 @@ export function App() {
             title="Command palette (Ctrl+P)"
             onClick={() => app.workspace.openModal("palette")}
           />
+          {/* plugin-contributed sidebar panels (compat registerView): one selector button each */}
+          {leftPanels.map((p) => (
+            <button
+              key={p.id}
+              className={`ribbon-btn${ws.leftSidebarOpen && effectiveLeft === p.id ? " is-active" : ""}`}
+              title={p.title}
+              aria-label={p.title}
+              data-testid={`sidebar-panel-btn-${p.id}`}
+              onClick={() =>
+                effectiveLeft === p.id && ws.leftSidebarOpen
+                  ? app.workspace.toggleLeftSidebar()
+                  : app.workspace.setLeftPanel(p.id)
+              }
+            >
+              <SidebarPanelIcon panel={p} />
+            </button>
+          ))}
           {/* plugin-contributed ribbon icons (compat addRibbonIcon); els own their handlers */}
           <PluginElementHost
             items={ribbonItems}
@@ -298,7 +338,13 @@ export function App() {
             style={{ width: ws.leftWidth }}
             data-testid="left-sidebar"
           >
-            {ws.leftPanel === "explorer" ? <Explorer /> : <SearchPanel />}
+            {activeLeftPanel ? (
+              <SidebarPanelHost key={activeLeftPanel.id} panel={activeLeftPanel} />
+            ) : ws.leftPanel === "search" ? (
+              <SearchPanel />
+            ) : (
+              <Explorer />
+            )}
             <SidebarResizer side="left" />
           </aside>
         )}
@@ -321,8 +367,8 @@ export function App() {
             <div className="right-tabs" role="tablist" aria-label="Right panel">
               <button
                 role="tab"
-                aria-selected={ws.rightPanel === "backlinks"}
-                className={`right-tab${ws.rightPanel === "backlinks" ? " is-active" : ""}`}
+                aria-selected={effectiveRight === "backlinks"}
+                className={`right-tab${effectiveRight === "backlinks" ? " is-active" : ""}`}
                 title="Backlinks"
                 data-testid="right-tab-backlinks"
                 onClick={() => app.workspace.setRightPanel("backlinks")}
@@ -331,17 +377,37 @@ export function App() {
               </button>
               <button
                 role="tab"
-                aria-selected={ws.rightPanel === "outline"}
-                className={`right-tab${ws.rightPanel === "outline" ? " is-active" : ""}`}
+                aria-selected={effectiveRight === "outline"}
+                className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
                 title="Outline"
                 data-testid="right-tab-outline"
                 onClick={() => app.workspace.setRightPanel("outline")}
               >
                 <Icon name="list" size={15} />
               </button>
+              {/* plugin-contributed sidebar panels (compat registerView): one tab each */}
+              {rightPanels.map((p) => (
+                <button
+                  key={p.id}
+                  role="tab"
+                  aria-selected={effectiveRight === p.id}
+                  className={`right-tab${effectiveRight === p.id ? " is-active" : ""}`}
+                  title={p.title}
+                  data-testid={`sidebar-panel-tab-${p.id}`}
+                  onClick={() => app.workspace.setRightPanel(p.id)}
+                >
+                  <SidebarPanelIcon panel={p} />
+                </button>
+              ))}
             </div>
             <div className="right-panel-body">
-              {ws.rightPanel === "backlinks" ? <BacklinksPanel /> : <OutlinePanel />}
+              {activeRightPanel ? (
+                <SidebarPanelHost key={activeRightPanel.id} panel={activeRightPanel} />
+              ) : ws.rightPanel === "outline" ? (
+                <OutlinePanel />
+              ) : (
+                <BacklinksPanel />
+              )}
             </div>
           </aside>
         )}
@@ -440,6 +506,62 @@ function PluginElementHost({
     };
   }, [items, elClassName]);
   return <div ref={hostRef} style={{ display: "contents" }} data-testid={testid} />;
+}
+
+/**
+ * Hosts a plugin-owned sidebar panel body (compat registerView custom views).
+ * Same append/remove pattern as PluginElementHost; keyed by panel id so a
+ * panel switch unmounts the old element before the new one is appended.
+ */
+function SidebarPanelHost({ panel }: { panel: SidebarPanelContribution }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    host.appendChild(panel.el);
+    return () => {
+      if (panel.el.parentNode === host) host.removeChild(panel.el);
+    };
+  }, [panel]);
+  return (
+    <div ref={hostRef} className="sidebar-panel-host" data-testid={`sidebar-panel-${panel.id}`} />
+  );
+}
+
+/**
+ * True when the markup parses to exactly one root element and that element is
+ * an <svg> (no siblings). Anything else falls back to the letter icon instead
+ * of being injected via dangerouslySetInnerHTML.
+ */
+function isSingleSvgMarkup(markup: string): boolean {
+  try {
+    const body = new DOMParser().parseFromString(markup, "text/html").body;
+    const nodes = Array.from(body.childNodes).filter(
+      (n) => !(n.nodeType === Node.TEXT_NODE && !(n.textContent ?? "").trim()),
+    );
+    const root = nodes[0];
+    return nodes.length === 1 && root instanceof Element && root.tagName.toLowerCase() === "svg";
+  } catch {
+    return false;
+  }
+}
+
+/** Selector icon for a plugin sidebar panel: raw svg markup, or the title's first letter. */
+function SidebarPanelIcon({ panel }: { panel: SidebarPanelContribution }) {
+  if (panel.iconSvg && isSingleSvgMarkup(panel.iconSvg)) {
+    return (
+      <span
+        className="sidebar-panel-icon"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: panel.iconSvg }}
+      />
+    );
+  }
+  return (
+    <span className="sidebar-panel-icon sidebar-panel-icon-fallback" aria-hidden="true">
+      {panel.title.charAt(0).toUpperCase()}
+    </span>
+  );
 }
 
 function RibbonButton(props: { icon: string; title: string; active?: boolean; onClick: () => void }) {

@@ -57,6 +57,12 @@ export function getIconSvg(iconId: string): string | null {
   return builtin !== undefined ? wrap(builtin, "0 0 24 24") : null;
 }
 
+/** Sets a tooltip via aria-label + title (Geode has no custom tooltip popup). */
+export function setTooltip(el: HTMLElement, tooltip: string, _options?: unknown): void {
+  el.setAttribute("aria-label", tooltip);
+  el.title = tooltip;
+}
+
 /** Inserts the SVG for iconId into parent (clearing it first). */
 export function setIcon(parent: HTMLElement, iconId: IconName): void {
   parent.textContent = "";

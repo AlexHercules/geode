@@ -60,6 +60,7 @@ export {
   DropdownComponent,
   ExtraButtonComponent,
   FuzzySuggestModal,
+  Keymap,
   Menu,
   MenuItem,
   Modal,
@@ -76,8 +77,9 @@ export {
   ValueComponent,
   type FuzzyMatch,
   type SearchResult,
+  type UserEvent,
 } from "./ui";
-export { addIcon, setIcon, type IconName } from "./icons";
+export { addIcon, setIcon, setTooltip, type IconName } from "./icons";
 export {
   apiVersion,
   debounce,
