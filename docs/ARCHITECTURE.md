@@ -71,7 +71,85 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 9 additions (current) — 自动更新链路（tauri-plugin-updater）+ compat suggest 余项
+## Round 10 additions (current) — stale tab 清理 + 插件名本地化 + popup 重定位（缺口表清零）
+
+R10 取 P2 组合（P1 发布渠道/证书等用户外部决策，HANDOFF 备选路径）。三项互不依赖。
+
+### Core: stale tab cleanup — `core/workspace.ts` + `app/App.tsx` + `src/main.tsx`
+
+R4 残留债：workspace state 是全局 localStorage（不按 vault 键控），切库后旧库 tab 残留。
+
+```ts
+// Workspace addition:
+/** Close every markdown tab whose filePath no longer exists. One batched state
+ *  update (normalize once), preserves graph tabs and the active-pane invariants.
+ *  Returns the number of tabs closed. */
+closeMissingFileTabs(exists: (path: string) => boolean): number;
+```
+
+- 调用点两个：`openVaultFlow`（App.tsx，`await vault.load()` 之后、插件重载之前）与
+  bootstrap 初始加载（main.tsx，vault.load 后同一位置——上轮会话期间被外部删除的文件
+  同样适用）。调用形态 `workspace.closeMissingFileTabs((p) => vault.fileExists(p))`。
+- 行为：只动 `viewType === "markdown"` 且 `filePath !== null` 且 `!exists(filePath)` 的
+  tab；graph tab 与空路径 tab 不动；每 leaf 的 activeTabId 按 closeTab 同规则修正；
+  normalize 一次（空 leaf 塌缩；全空时保底单 leaf）；activePaneId 失效时退到首 leaf；
+  结束 `emitActiveFile()`。静默清理（console.info 一条计数即可，不弹 toast）。
+
+### Core: plugin name/description 本地化 — `core/plugins.ts` + `src/plugins/*` + SettingsModal
+
+与 R8 Command.name 同模式：
+
+```ts
+// GeodePlugin:
+name: string | (() => string);
+description?: string | (() => string);
+// core/plugins.ts exports:
+export function getPluginName(p: GeodePlugin): string;
+export function getPluginDescription(p: GeodePlugin): string | undefined;
+```
+
+- `isGeodePlugin` 校验放宽为 string|function；compat（manifest.name）与外部插件传
+  字符串不受影响。显示点全部改经 getter：SettingsModal 插件名/描述/设置块标题/
+  toggle aria-label（grep `plugin.name` 全仓确认无残留直读）。
+- 内置三插件 name/description 改 thunk，键 `plugin.*` 进 dict.app.ts（en/zh，
+  术语表口径：daily note=日记、word count=字数统计、random note=随机笔记）。
+
+### Compat: suggest popup 重定位 — `compat/obsidian/suggest.ts` ONLY（缺口表最后一条）
+
+- popup 打开期间增挂 `window` resize 监听 + `document` capture 相 scroll 监听
+  （scroll 不冒泡，capture 才能抓到编辑器 scroller）；回调经 rAF 合帧（一帧至多一次）
+  调既有 `position(this.active)`（其 coordsAtPos 失败回退编辑器盒的逻辑保持不变）。
+- 监听与 rAF 在 popup 关闭/manager dispose 时全部拆除（id 归零——R7 StrictMode 教训）。
+- OBSIDIAN-COMPAT 缺口表删除该行（**表清零**）。fixture 不需新增（桌面实测：弹层开着
+  滚动编辑器，popup 跟随）。
+
+### As-built deltas (post-review — R10)
+
+Review: 3 dimensions, 6 findings → **ALL 6 refuted by adversarial verification (zero
+confirmed)** — one verifier ran an exhaustive 1,793-case simulation of the
+closeMissingFileTabs activeTabId repair rule. Notes:
+
+- Beyond the contract letter (kept): `closeMissingFileTabs` also clears
+  `lastActiveFile` when it points at a missing file (mirrors `handleDeleted` — a
+  stale anchor must not drive the local graph after a vault switch).
+- A refutation surfaced that R9's `tauri.conf.json` updater config never made it into
+  the R9 feat commit (work-tree only) — it lands with the R10 release commit.
+- Browser note: this round had no independent browser E2E (the automation tooling
+  disconnected mid-session); all three features are webview-identical code paths and
+  were fully verified on the desktop release build.
+
+### Round 10 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| workspace-tabs | core/workspace.ts, app/App.tsx (openVaultFlow only), src/main.tsx (bootstrap call only) |
+| plugins-i18n | core/plugins.ts, src/plugins/*.ts, features/settings/SettingsModal.tsx, core/i18n/dict.app.ts |
+| compat-popup | compat/obsidian/suggest.ts ONLY |
+
+Frozen surfaces：`closeMissingFileTabs` 签名、`getPluginName/getPluginDescription` 签名。
+每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 docs/。
+
+## Round 9 additions — 自动更新链路（tauri-plugin-updater）+ compat suggest 余项
 
 P1 取 HANDOFF 预授权的备选路径：**无 Authenticode 证书也能完整落地的更新链路**——tauri
 自带 minisign 更新签名（本地生成密钥，与商业代码签名证书无关）；Windows Authenticode

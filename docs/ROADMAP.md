@@ -157,15 +157,35 @@ v0.9.0 ✓；负向两例：篡改签名 "Invalid encoding"、合法编码错误
 官方同行为；fixture 已证明移回重开机制本身工作）；逐键 `@tomorrow`→`[[2026-06-12]]` ✓。
 截图 docs/screenshots/r9-desktop-nldates-instructions.png。
 
-## R10 候选 — 商业打磨（按优先级）
+### R10 — v0.10（2026-06-11）stale tab 清理 + 插件名本地化 + popup 重定位（compat 缺口表清零）
+
+P1（发布渠道+证书）等用户外部决策未到位，按 HANDOFF 备选取 P2 组合三项：
+**stale tab 自动关闭**（R4 残留债清偿）：`workspace.closeMissingFileTabs(exists)`——单次
+批量 update、逐 leaf 按 closeTab 邻近规则修 activeTabId、normalize 一次、顺带清理指向
+失踪文件的 lastActiveFile（镜像 handleDeleted）；openVaultFlow 与 bootstrap 两个调用点
+（后者覆盖"上次会话期间文件被外部删除"）。桌面实测：compat-vault 三 tab → 切 demo-vault
+→ 不存在的两个关闭、存在的 Ideas.md 与 graph tab 保留、零残留。
+**GeodePlugin.name/description 本地化**（与 R8 Command.name 同模式 thunk 化 +
+getPluginName/getPluginDescription；compat manifest 字符串名不受影响）。桌面实测：
+设置页插件区"字数统计/日记/随机笔记"。
+**compat popup resize/scroll 重定位**（缺口表最后一条清零）：window resize + document
+capture 相 scroll 监听，rAF 合帧调既有 position()，拆除时 rAF id 归零（R7 教训沿用）。
+桌面实测：弹层开启上滚 80px → popup 精确跟随 80px。
+评审 3 维 6 finding **全部被对抗验证证伪（0 确认）**——其一验证者对 activeTabId 规则跑了
+1793 用例穷举模拟；一条证伪揭出 R9 的 tauri.conf.json 未入 feat 提交（随 R10 落账）。
+套件 5/5 + nldates 指令条/插入 + reload 幂等 + 回声抑制全不回退。
+注：本轮浏览器端无独立 E2E（自动化工具会话内掉线），三项均为 webview 同一代码路径，
+桌面 release 全覆盖实测。
+
+## R11 候选 — 商业打磨（按优先级）
 
 | P | 功能 | 备注 |
 |---|---|---|
 | P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | vault 切换后 stale tab 自动关闭 | R4 评审残留，R5 桌面演示再次撞见 |
-| P2 | GeodePlugin.name/description 可本地化 | 插件名在设置页不随语言切换（Command.name 已解决） |
-| P2 | 安装包瘦身 | moment locale 按需裁剪（主 chunk -~330KB min 前）+ ureq 特性裁剪 |
+| P2 | 安装包瘦身 | moment locale 按需裁剪（主 chunk -~330KB min 前）+ ureq 特性裁剪；注意 R5 踩坑：独立 locale 入口在 Vite 预打包下注册到第二份副本 |
 | P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用，settle 后静止） |
+| P2 | live↔source 模式切换保留选区/滚动 | R4 前已有的视图重建债 |
+| P2 | 图片/嵌入 `![[...]]` live preview 渲染 | 特性缺口 |
 
 ## 已知技术债
 
@@ -179,15 +199,15 @@ v0.9.0 ✓；负向两例：篡改签名 "Invalid encoding"、合法编码错误
   内容相等 no-op 全兜住，失败方向安全，仅多一次冗余刷新）
 - i18n 已知限制（R8，有意取舍）：CM6 构建期解析的字符串（编辑器 placeholder、任务
   复选框 aria-label、frontmatter 药丸 title）切语言后保持旧语言直到视图/widget 重建
-  （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；GeodePlugin.name/description
-  仍是纯字符串（见 R9 候选）
+  （模式切换/重开 tab/编辑该行即自愈；代码内已注释）；~~GeodePlugin.name/description
+  仍是纯字符串~~（R10 thunk 化根治，内置插件名随语言切换）
 - 图片/嵌入 `![[...]]` 在 live preview 中保持原文（特性缺口）
 - ~~图谱 10k 节点 ~12fps~~（R7 实现按需渲染+抽样：settle 5.8s/42fps、idle 0 draw；
   剩余：Show all 不抽样 10k settle 期 ~9fps，opt-in 可用，WebGL/Worker 远期）
 - ~~同文件双 pane 双脏 last-writer-wins~~（R4 共享文档模型根治）
 - ~~重命名打开中的文件丢 undo/光标/滚动~~（R4 根治）
-- vault 切换后指向新 vault 不存在路径的 tab 不自动关闭（保存被 no-resurrect 守卫挡住，
-  数据安全无虞，但 UX 上应关闭/标记，R4 评审 A 残留项；R5 桌面演示再次撞见）
+- ~~vault 切换后指向新 vault 不存在路径的 tab 不自动关闭~~（R10 根治：
+  closeMissingFileTabs，切库+启动双调用点）
 - ~~compat `workspace.on('editor-change')` 按保存触发而非逐事务~~（R5 document:changed 根治）
 - live↔source 模式切换仍重建视图丢选区/滚动（R4 前已有，未恶化）
 - compat 自定义视图不随 workspace 持久化——重启后靠插件自身启动逻辑重建
