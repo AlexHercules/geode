@@ -159,7 +159,21 @@ fn vault_read_binary(vault: String, path: String) -> CmdResult<String> {
 #[tauri::command]
 fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
     let abs = safe_join(&vault, &path)?;
-    fs::write(&abs, content).map_err(|e| format!("write {path}: {e}"))
+    // R16: atomic write — sibling temp + rename (export_write precedent), so a
+    // mid-write failure (disk full, crash) never leaves a note truncated. The
+    // temp name is DOT-prefixed on purpose: the watcher's noise filter
+    // (to_vault_relative) drops dotfile segments, so the temp file's
+    // create/rename events never reach the frontend.
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(abs.file_name().map(|n| n.to_os_string()).unwrap_or_default());
+    tmp_name.push(".geode-tmp");
+    let tmp = abs.with_file_name(tmp_name);
+    fs::write(&tmp, content)
+        .and_then(|_| fs::rename(&tmp, &abs))
+        .map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            format!("write {path}: {e}")
+        })
 }
 
 #[tauri::command]
@@ -208,6 +222,31 @@ fn strip_verbatim(s: &str) -> &str {
     s.trim_start_matches(r"\\?\")
 }
 
+/// Best-effort removal of orphaned atomic-write temp files
+/// (".{name}.geode-tmp"). Skips the same noise directories as vault_list, but
+/// deliberately looks INSIDE dot-prefixed file names (the temps are dotfiles
+/// by design so the watcher ignores them). Depth-capped, never fatal.
+fn sweep_geode_tmp(dir: &Path, depth: u32) {
+    if depth > 32 {
+        return;
+    }
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+        if path.is_dir() {
+            if name.starts_with('.') || name == "node_modules" || name == "target" {
+                continue;
+            }
+            sweep_geode_tmp(&path, depth + 1);
+        } else if name.starts_with('.') && name.ends_with(".geode-tmp") {
+            if let Err(e) = fs::remove_file(&path) {
+                eprintln!("[geode] failed to sweep temp file {}: {e}", path.display());
+            }
+        }
+    }
+}
+
 /// Convert an absolute event path into a vault-relative, forward-slash path.
 /// Returns None for paths outside the vault, the vault root itself, or paths
 /// containing noise segments (dotfiles, node_modules, target) — same filter
@@ -244,6 +283,12 @@ fn vault_watch(
     }
     let canonical = fs::canonicalize(root_path).map_err(|e| format!("canonicalize {vault}: {e}"))?;
     let root = strip_verbatim(&canonical.to_string_lossy()).to_string();
+
+    // R16: best-effort sweep of atomic-write temp residue (".{name}.geode-tmp"
+    // left by a crash between write and rename). Once per vault open — the
+    // naming pattern is app-exclusive, so deletion is safe; errors are logged
+    // and never fatal. Runs before the watcher is installed.
+    sweep_geode_tmp(&canonical, 0);
 
     let (tx, rx) = mpsc::channel::<Vec<PathBuf>>();
     let mut watcher = notify::recommended_watcher(

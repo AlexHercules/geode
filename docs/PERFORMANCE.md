@@ -146,6 +146,14 @@ bench=1000 控制组：graphDrawMs 2.6ms（60fps 余量充足）、metadataIndex
 `cdp-run-url.mjs <expr> <port> <urlSubstring>`（headless Edge：
 `msedge --headless=new --remote-debugging-port=93xx --user-data-dir=<tmp> <url>`）。
 
+## R16 抽查（2026-06-11，headless Edge，v0.16.0）
+
+vault.read 咽喉点新增 CRLF→LF 归一化（索引热路径）——复测 bench=10000：
+metadataIndexMs **151ms**（优于 R15 基线 185，零回归）；归一化 `includes("\r")` 扫描
+隔离测量 ~1.9ms/10k 文件，可忽略。改写引擎只在重命名时运行，不在任何热路径。
+**测量教训**：同机后台跑着 release 编译/多个浏览器实例时测出过 321ms 假回归——
+立案排查前先在干净负载下复测（隔离探针 `.calibration/r16-bench2.js`）。
+
 ## Remaining bottlenecks & recommendations (R3 list)
 - **Search debounce (250 ms) now dominates** perceived search latency (scan is
   53 ms at 10k). Could drop to ~150 ms, or make it adaptive to vault size.

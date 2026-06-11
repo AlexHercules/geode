@@ -279,6 +279,18 @@ export class Vault {
     if (entry && entry.hash === fnv1a32(content)) this.recentSelfWrites.delete(path);
   }
 
+  /** BOM strip + CRLF→LF, applied to every string entering the app (R16).
+   *  CodeMirror normalizes documents to "\n" internally, so a CRLF canonical
+   *  text would put DocumentHandle offsets and CM doc offsets in DIFFERENT
+   *  coordinate spaces — the R16 review reproduced silent mid-file corruption
+   *  from exactly that. Pre-R16 behaviour already converted CRLF files to LF
+   *  on the first keystroke; normalizing at the choke point makes it
+   *  consistent (recorded deviation: Obsidian preserves CRLF on disk). */
+  private static normalizeContent(raw: string): string {
+    const noBom = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    return noBom.includes("\r") ? noBom.replace(/\r\n?/g, "\n") : noBom;
+  }
+
   async read(path: string): Promise<string> {
     const cached = this.contentCache.get(path);
     if (cached !== undefined) {
@@ -290,7 +302,18 @@ export class Vault {
     // markdown-it AND metadata parsing. Single choke point: every consumer
     // (editor buffer, preview, embeds, compat) reads through here.
     const raw = await this.adapter.readFile(path);
-    const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    const content = Vault.normalizeContent(raw);
+    this.cacheSet(path, content);
+    return content;
+  }
+
+  /** Read BYPASSING the content cache (R16 review fix): the rewrite engine
+   *  must never derive edits for a closed file from a cached snapshot — an
+   *  external change inside the watcher's debounce window would be invisible
+   *  and silently overwritten. Refreshes the cache with what disk holds NOW. */
+  async readFresh(path: string): Promise<string> {
+    const raw = await this.adapter.readFile(path);
+    const content = Vault.normalizeContent(raw);
     this.cacheSet(path, content);
     return content;
   }
@@ -306,7 +329,10 @@ export class Vault {
   }
 
   async modify(path: string, content: string): Promise<void> {
-    // record BEFORE awaiting the write — the echo can arrive mid-write
+    // record BEFORE awaiting the write — the echo can arrive mid-write.
+    // The fingerprint hashes the RAW bytes (echo suppression re-reads the
+    // adapter); the cache stores the NORMALIZED form so it always mirrors
+    // what read() would return (a compat plugin may pass CRLF content).
     this.recordSelfWrite(path, content);
     try {
       await this.adapter.writeFile(path, content);
@@ -316,7 +342,7 @@ export class Vault {
       this.clearSelfWrite(path, content);
       throw err;
     }
-    this.cacheSet(path, content);
+    this.cacheSet(path, Vault.normalizeContent(content));
     this.events.emit("file:modified", { path });
     this.events.emit("vault:changed", { reason: "modify" });
   }
@@ -331,7 +357,7 @@ export class Vault {
       this.clearSelfWrite(path, content);
       throw err;
     }
-    this.cacheSet(path, content);
+    this.cacheSet(path, Vault.normalizeContent(content));
     await this.refreshTree();
     this.events.emit("file:created", { path });
     this.events.emit("vault:changed", { reason: "create" });

@@ -458,9 +458,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
       if (internal) {
         e.preventDefault();
         const target = internal.dataset.target;
+        const subpath = internal.dataset.subpath;
         // data-subpath rides on subpath-bearing anchors (core pipeline) so
-        // [[note#Heading]] / [[note#^id]] clicks reveal the target span (R14)
-        if (target) void openWikilink(app, target, handle.path, internal.dataset.subpath);
+        // [[note#Heading]] / [[note#^id]] clicks reveal the target span (R14);
+        // R16: an empty data-target + data-subpath is a [[#h]] self-link —
+        // opens this note and reveals the span
+        if (target !== undefined && (target !== "" || subpath)) {
+          void openWikilink(app, target, handle.path, subpath);
+        }
         return;
       }
 

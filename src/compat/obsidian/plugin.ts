@@ -2,6 +2,7 @@
  * Obsidian Plugin base class + App shim + SettingTab/PluginSettingTab
  * (API-REFERENCE area 1).
  */
+import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
 import type { Command as GeodeCommand } from "@core/types";
 import { Component } from "./component";
@@ -12,6 +13,7 @@ import { getIconSvg, type IconName } from "./icons";
 import type { MetadataCache } from "./metadata";
 import type { EditorSuggest, EditorSuggestManager } from "./suggest";
 import { Scope } from "./ui";
+import { normalizePath } from "./util";
 import type { Vault } from "./vault";
 import {
   makeActiveMarkdownView,
@@ -61,20 +63,32 @@ export interface GeodeBridge {
 }
 
 /**
- * fileManager warn-stub: every method access records a gap and resolves to
- * undefined, so chains like `app.fileManager.processFrontMatter(...)` do not
- * crash. `then` is excluded so the proxy is not accidentally thenable.
+ * fileManager shim: `renameFile` is real since R16 (rename + link rewrite via
+ * the core engine, matching the official "update all links" semantics — the
+ * official Vault.rename stays a bare rename by design). Every OTHER method
+ * access records a gap and resolves to undefined, so chains like
+ * `app.fileManager.processFrontMatter(...)` do not crash. `then` is excluded
+ * so the proxy is not accidentally thenable.
  */
-const fileManagerStub: unknown = new Proxy(
-  {},
-  {
-    get(_target, prop): unknown {
-      if (typeof prop !== "string" || prop === "then") return undefined;
-      reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
-      return async () => undefined;
+function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
+  // Official signature returns Promise<void>; the rewrite report is dropped.
+  // `file` is duck-typed: any TAbstractFile-shaped object with a vault path.
+  const renameFile = async (file: { path: string }, newPath: string): Promise<void> => {
+    const { vault, metadata, documents } = handle;
+    await renameWithLinkUpdate({ vault, metadata, documents }, file.path, normalizePath(newPath));
+  };
+  return new Proxy(
+    {},
+    {
+      get(_target, prop): unknown {
+        if (typeof prop !== "string" || prop === "then") return undefined;
+        if (prop === "renameFile") return renameFile;
+        reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
+        return async () => undefined;
+      },
     },
-  },
-);
+  );
+}
 
 const keymapStub = {
   pushScope(_scope: unknown): void {},
@@ -108,6 +122,7 @@ export class App {
   /** @internal EditorSuggest runtime — injected by context.ts after App is built */
   _suggests: EditorSuggestManager | null = null;
   private _scopeStub: Scope | null = null;
+  private _fileManager: unknown = null;
 
   constructor(bridge: GeodeBridge, vault: Vault, workspace: Workspace, metadataCache: MetadataCache) {
     this._geode = bridge;
@@ -118,9 +133,9 @@ export class App {
 
   /* ----- out-of-tier App members: warn-stubs, never a crash (T2 gaps) ----- */
 
+  /** renameFile is real (R16); other methods gap per access in the proxy. */
   get fileManager(): unknown {
-    reportGap("App", "App.fileManager", "warn-stub — methods are recorded no-ops");
-    return fileManagerStub;
+    return (this._fileManager ??= makeFileManager(this._geode.handle));
   }
 
   get keymap(): typeof keymapStub {

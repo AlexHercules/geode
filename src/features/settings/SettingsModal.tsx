@@ -3,6 +3,7 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { getCommandName, hotkeyFromEvent } from "@core/commands";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
+import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
 import {
   getPluginDescription,
   getPluginName,
@@ -20,7 +21,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.15.0";
+const APP_VERSION = "0.16.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -115,6 +116,7 @@ function AppearanceSection() {
   const t = useI18n();
   const ws = useStore(app.workspace.state);
   const currentLocale = useStore(locale);
+  const autoUpdate = useStore(autoUpdateLinks);
 
   return (
     <section>
@@ -185,6 +187,25 @@ function AppearanceSection() {
           <option value="en">English</option>
           <option value="zh">中文</option>
         </select>
+      </div>
+
+      <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.autoUpdateLinks")}</div>
+          <div className="setting-desc">{t("settings.autoUpdateLinksDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${autoUpdate ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={autoUpdate}
+          aria-label={t("settings.autoUpdateLinks")}
+          data-testid="settings-auto-update-links"
+          onClick={() => setAutoUpdateLinks(!autoUpdate)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
     </section>
   );

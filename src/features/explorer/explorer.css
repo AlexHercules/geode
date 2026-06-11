@@ -166,6 +166,25 @@
   margin: 4px 6px;
 }
 
+/* ---- link update notice (R16, transient warning toast) ---- */
+
+.link-update-notice {
+  position: fixed;
+  top: 44px;
+  right: 16px;
+  z-index: 1000;
+  max-width: 420px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--danger);
+  background: var(--bg-panel);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  box-shadow: var(--shadow-modal);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ---- empty state ---- */
 
 .explorer-empty {

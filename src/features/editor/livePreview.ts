@@ -216,7 +216,12 @@ class NoteEmbedWidget extends WidgetType {
       if (!link || !container.contains(link)) return;
       e.preventDefault();
       const target = link.dataset.target;
-      if (target) void openWikilink(this.app, target, this.getPath(), link.dataset.subpath);
+      const subpath = link.dataset.subpath;
+      // R16: an empty data-target with a data-subpath is a [[#h]] self-link —
+      // still navigable (opens the host note and reveals the span)
+      if (target !== undefined && (target !== "" || subpath)) {
+        void openWikilink(this.app, target, this.getPath(), subpath);
+      }
     });
     return container;
   }
@@ -508,8 +513,16 @@ function computeDecorations(
       // not decorate there either; future work).
       if (fencedLines.has(doc.lineAt(start).number)) continue;
       const target = wikilinkTarget(m[1]);
-      if (!target) continue;
-      if (doc.sliceString(Math.max(0, start - 1), start) === "!") {
+      const isEmbed = doc.sliceString(Math.max(0, start - 1), start) === "!";
+      if (!target) {
+        // R16: [[#h]] self-link — falls through to the collapse branch below
+        // with data-link-target="" (the click handler routes empty targets
+        // back to this note). ![[#h]] embeds (out of scope) and subpath-less
+        // empty targets keep the raw text, as before.
+        const selfBody = m[1].split("|")[0];
+        const selfHash = selfBody.indexOf("#");
+        if (isEmbed || selfHash < 0 || !selfBody.slice(selfHash + 1)) continue;
+      } else if (isEmbed) {
         // ![[...]] embed: replace the WHOLE match (incl. the "!") when the
         // selection does not touch it. Image attachments take precedence
         // (R11); otherwise a resolveLink hit means a note transclusion (R12);
@@ -652,10 +665,12 @@ function liveClickHandler(app: GeodeApp, getPath: () => string): Extension {
       const wl = el.closest(".cm-live-wikilink");
       if (wl && !event.ctrlKey && !event.metaKey) {
         const target = wl.getAttribute("data-link-target");
-        if (target) {
+        // subpath rides along so [[note#Heading]] reveals the span (R14);
+        // R16: an empty target is a [[#h]] self-link — valid only when the
+        // subpath attribute is present (defensive against stray marks)
+        const subpath = wl.getAttribute("data-link-subpath");
+        if (target !== null && (target !== "" || subpath)) {
           event.preventDefault();
-          // subpath rides along so [[note#Heading]] reveals the span (R14)
-          const subpath = wl.getAttribute("data-link-subpath");
           void openWikilink(app, target, getPath(), subpath ?? undefined);
           return true;
         }

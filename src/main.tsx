@@ -7,6 +7,7 @@ import { CommandRegistry } from "@core/commands";
 import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
+import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
 import { isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
@@ -122,6 +123,14 @@ async function bootstrap() {
     app,
     registerPlugin: (p: Parameters<PluginManager["register"]>[0]) => plugins.register(p),
   };
+
+  // always-on rename probe: lets browser/desktop E2E drive the R16 link
+  // rewrite engine directly (same pattern as __geodeFireWatch / __geodeWatchEcho)
+  const probeHost = globalThis as unknown as {
+    __geodeRename?: (oldPath: string, newPath: string) => Promise<LinkRewriteResult>;
+  };
+  probeHost.__geodeRename = (oldPath, newPath) =>
+    renameWithLinkUpdate({ vault, metadata, documents }, oldPath, newPath);
 
   // load vault: memory adapter is always ready; desktop restores the last vault
   if (adapter.kind === "memory") {

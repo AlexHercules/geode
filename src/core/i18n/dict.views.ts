@@ -23,6 +23,12 @@ export const en = {
   "settings.language": "Language",
   "settings.languageDesc": "Choose the interface language.",
 
+  // ---- settings: files & links (R16) ----
+  "settings.filesAndLinks": "Files & links",
+  "settings.autoUpdateLinks": "Automatically update internal links",
+  "settings.autoUpdateLinksDesc":
+    "When a file is renamed or moved, automatically rewrite the links that point to it.",
+
   // ---- settings: plugins ----
   // note split around the inline <code> element (word order differs per locale)
   "settings.pluginsNotePre":
@@ -154,6 +160,11 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.fontSizeDesc": "Markdown 编辑器与预览所使用的字号。",
   "settings.language": "语言",
   "settings.languageDesc": "选择界面语言。",
+
+  // ---- settings: files & links (R16) ----
+  "settings.filesAndLinks": "文件与链接",
+  "settings.autoUpdateLinks": "自动更新内部链接",
+  "settings.autoUpdateLinksDesc": "重命名或移动文件时，自动改写指向它的链接。",
 
   // ---- settings: plugins ----
   "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",

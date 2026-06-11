@@ -153,12 +153,21 @@ function wikilinkDecorations(app: GeodeApp, getPath: () => string): Extension {
     regexp: WIKILINK_DECO_RE,
     decoration: (m) => {
       const target = wikilinkTarget(m[1]);
-      if (!target) return null;
-      const resolved = app.metadata.resolveLink(target, getPath()) !== null;
       // raw text between '#' and '|' — Ctrl+Click reveal (R14) needs it too
       const rawBody = m[1].split("|")[0];
       const hashIdx = rawBody.indexOf("#");
       const subpath = hashIdx >= 0 ? rawBody.slice(hashIdx + 1) : "";
+      if (!target) {
+        // R16: [[#h]] self-link — always styled resolved (the note itself
+        // exists; subpath validity is checked on click, like Obsidian).
+        // Subpath-less empty targets stay undecorated.
+        if (!subpath) return null;
+        return Decoration.mark({
+          class: "cm-wikilink",
+          attributes: { "data-link-target": "", "data-link-subpath": subpath },
+        });
+      }
+      const resolved = app.metadata.resolveLink(target, getPath()) !== null;
       return Decoration.mark({
         class: resolved ? "cm-wikilink" : "cm-wikilink cm-wikilink-unresolved",
         attributes: subpath
@@ -217,9 +226,13 @@ function wikilinkClickHandler(app: GeodeApp, getPath: () => string): Extension {
       const el =
         event.target instanceof HTMLElement ? event.target.closest(".cm-wikilink") : null;
       const target = el?.getAttribute("data-link-target");
-      if (!target) return false;
+      if (target === null || target === undefined) return false;
+      const subpath = el?.getAttribute("data-link-subpath");
+      // R16: an empty target is a [[#h]] self-link — only navigable when the
+      // subpath attribute rides along (defensive against stray marks)
+      if (target === "" && !subpath) return false;
       event.preventDefault();
-      void openWikilink(app, target, getPath(), el?.getAttribute("data-link-subpath") ?? undefined);
+      void openWikilink(app, target, getPath(), subpath ?? undefined);
       return true;
     },
   });

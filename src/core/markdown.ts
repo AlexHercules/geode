@@ -27,6 +27,10 @@ interface WikiLinkInfo {
    *  as noteSubpath); undefined when absent/empty — rendered as data-subpath
    *  on the anchor, so subpath-less links stay byte-identical */
   subpath?: string;
+  /** R16: set ⇒ `[[#h]]` / `[[#^id]]` — empty target linking to the current
+   *  note. The anchor renders with data-target="" and is always styled
+   *  resolved; resolve() must never be called with the empty target. */
+  selfLink?: boolean;
 }
 
 /** Image extensions (lowercase) that `![[...]]` embeds may render as <img>. */
@@ -126,7 +130,6 @@ function replaceWikilinks(
         if (i % 2 === 1) return seg;
         return seg.replace(WIKILINK_RE, (raw, bang: string, inner: string) => {
           const target = wikilinkTarget(inner);
-          if (!target) return raw;
           const pipe = inner.indexOf("|");
           const alias = pipe >= 0 ? inner.slice(pipe + 1).trim() : "";
           const display = alias || inner.split("|")[0].trim();
@@ -135,6 +138,17 @@ function replaceWikilinks(
           const pre = pipe >= 0 ? inner.slice(0, pipe) : inner;
           const hash = pre.indexOf("#");
           const subpath = hash >= 0 ? pre.slice(hash + 1) : "";
+          if (!target) {
+            // R16: [[#h]] / [[#^id]] — empty target + subpath links to the
+            // current note. Display keeps the inner text incl. "#" (same as
+            // [[note#h]] showing "note#h"). Subpath existence is checked on
+            // click, not at render time (Obsidian behaviour). The embed form
+            // ![[#h]] (out of scope this round) and pathological subpath-less
+            // [[...]] keep the raw text, byte-identical to before.
+            if (bang || !subpath) return raw;
+            links.push({ target: "", display, subpath, selfLink: true });
+            return `@@GEODELINK${links.length - 1}@@`;
+          }
           if (bang && resolveEmbed) {
             const resolved = resolveEmbed(target);
             const ext = resolved?.split(".").pop()?.toLowerCase() ?? "";
@@ -321,7 +335,9 @@ md.core.ruler.push("geode-wikilinks", (state) => {
           span.level = child.level;
           next.push(span);
         } else {
-          const resolved = resolve(info.target) !== null;
+          // R16: a self-link ([[#h]], empty target) always renders resolved —
+          // it points at the rendering note itself; never call resolve("")
+          const resolved = info.selfLink === true || resolve(info.target) !== null;
           const cls = resolved ? "internal-link" : "internal-link is-unresolved";
           // R14: subpath links carry the raw text after '#' (escaped);
           // links without a subpath stay byte-identical

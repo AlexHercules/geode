@@ -3,6 +3,7 @@ import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath } from "@core/vault";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
+import { renameWithLinkUpdate } from "@core/linkRewrite";
 import { findActiveTab } from "@core/workspace";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -90,6 +91,19 @@ function remapPaths(set: Set<string>, oldPath: string, newPath: string): Set<str
     else out.add(p);
   }
   return out;
+}
+
+/** Transient warning toast — skipped files during a link update must be
+ *  visible to the user (details live in the console). Same pattern as the
+ *  export-notice toast; re-triggering replaces the previous one. */
+function showLinkUpdateNotice(message: string): void {
+  document.querySelector(".link-update-notice")?.remove();
+  const el = document.createElement("div");
+  el.className = "link-update-notice";
+  el.textContent = message;
+  el.setAttribute("data-testid", "link-update-notice");
+  document.body.appendChild(el);
+  window.setTimeout(() => el.remove(), 4000);
 }
 
 function loadExpanded(): Set<string> {
@@ -374,7 +388,21 @@ export function Explorer() {
     const newPath = parent ? `${parent}/${fullName}` : fullName;
     if (newPath === node.path) return;
     try {
-      await app.vault.rename(node.path, newPath);
+      // R16: every rename (file / folder / attachment) goes through the link
+      // rewrite engine — it degrades to a bare rename when autoUpdateLinks is off
+      const result = await renameWithLinkUpdate(
+        { vault: app.vault, metadata: app.metadata, documents: app.documents },
+        node.path,
+        newPath,
+      );
+      if (result.linksRewritten > 0) {
+        console.info(
+          `[explorer] updated ${result.linksRewritten} link(s) in ${result.filesChanged} file(s)`,
+        );
+      }
+      if (result.skipped.length > 0) {
+        showLinkUpdateNotice(t("explorer.linkUpdateSkipped", { count: result.skipped.length }));
+      }
     } catch (err) {
       console.error("[explorer] rename failed", err);
       return;

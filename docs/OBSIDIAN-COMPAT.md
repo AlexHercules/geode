@@ -137,7 +137,8 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `vault.getConfig`（非公开 API） | 固定值：defaultViewMode→"source"、useMarkdownLinks→false，其余 undefined（每 key 记缺口） |
 | `App.dragManager` / `App.internalPlugins` / `App.plugins` | warn-stub 形状（dragFile→null、getEnabledPluginById→null、plugins:{} 空字典）——recent-files 拖拽降级、daily-notes 探测返回"未启用" |
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
-| `App.fileManager` / `App.keymap` / `App.scope` | getter warn-stub：fileManager 方法为记录缺口的 async no-op，keymap/scope 为惰性 no-op 对象 |
+| `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**（core 改写引擎，rename + 全库链接更新）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
+| `getFileCache().links` 缺 `[[#h]]` 条目 | 偏差（R16 记录）：同文链接不进 links 索引（官方含 `link: "#h"` 形态条目） |
 | `DataAdapter.appendBinary`（及 readBinary/writeBinary/stat/trash*） | warn-stub + 说明性 throw；append/process/rmdir/copy 已用字符串 IO 真实实现 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 
@@ -149,6 +150,19 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
    每轮记录每个插件：加载✓/命令✓/设置页✓/核心功能✓/缺口列表。
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
+
+### R16 套件回归（2026-06-11，桌面 release v0.16.0 实测 `geode.exe compat-vault`）
+
+R16 compat 改动一件：`app.fileManager.renameFile` 从 warn-stub 升级为真实现（接 core
+renameWithLinkUpdate——rename + 全库链接改写，对齐官方 "update all links depending on
+the user's preferences" 语义；`Vault.rename` 保持裸 rename **是官方对齐项非缺口**，
+d.ts:7451 明示 "To ensure links are automatically renamed, use FileManager.renameFile
+instead"）。桌面逐项复测不回退：5/5 加载启用 ✓、nldates 指令条 + 逐键
+`@tomorrow`→`[[2026-06-12]]` ✓、reload 幂等 + calendar 重挂载 ✓、回声计数正常 ✓；
+r12（转写/导出 data URI）/r13（块）/r14（定位）探针全绿。新增形状偏差记录：
+`getFileCache().links` 不含 `[[#h]]` 同文链接条目（Geode 的 links 索引不收空 target
+——官方含 `link: "#h"` 形态）。fileManager 其余方法仍为按访问记录缺口的 no-op stub
+（getter 级 reportGap 移除——按方法粒度报告更诚实）。
 
 ### R15 套件回归（2026-06-11，桌面 release v0.15.0 实测 `geode.exe compat-vault`）
 

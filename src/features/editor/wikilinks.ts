@@ -12,6 +12,9 @@ export { wikilinkTarget };
  *   openFile so the consuming pane already targets the path (R14).
  * - Unresolved link → create a new note at the vault root (unique name,
  *   "# <name>" seed content) and open it — Obsidian behaviour.
+ * - Empty target + subpath (`[[#Heading]]` / `[[#^id]]`, R16) → the link
+ *   points at the source note itself: open fromPath (a no-op when already
+ *   active) and reveal the subpath span. NEVER the create-note branch.
  */
 export async function openWikilink(
   app: GeodeApp,
@@ -19,6 +22,13 @@ export async function openWikilink(
   fromPath: string,
   subpath?: string,
 ): Promise<void> {
+  if (target === "") {
+    if (!subpath) return; // defensive: an empty link never navigates/creates
+    app.workspace.openFile(fromPath);
+    const span = app.metadata.resolveSubpath(fromPath, subpath);
+    if (span) app.workspace.requestReveal(fromPath, span.from, span.to);
+    return;
+  }
   const resolved = app.metadata.resolveLink(target, fromPath);
   if (resolved) {
     app.workspace.openFile(resolved);

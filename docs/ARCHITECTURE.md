@@ -71,7 +71,234 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 15 additions (current) — 整固轮：阅读视图 reveal + 性能基线刷新 + 全量回归
+## Round 16 additions (current) — 重命名自动更新引用 + `[[#h]]` 同文链接
+
+迁移体验路线图第一轮（ROADMAP R16-R18，2026-06-11 与用户对齐）。**数据安全等级最高的
+一轮**：批量改写用户文件。官方校准（obsidian.md/help + obsidian.d.ts）：
+
+- 设置项 "Automatically update internal links"（Files and links 节，默认开；关闭时
+  Obsidian 改为弹询问——本轮口径：关闭 = 纯 rename 不改写，不做询问对话框，记录偏差）。
+- `FileManager.renameFile`（d.ts:2896）："Rename or move a file safely, and update all
+  links to it depending on the user's preferences."；官方 `Vault.rename`（d.ts:7451）
+  **不**更新链接（"To ensure links are automatically renamed, use FileManager.renameFile
+  instead."）——compat 的 Vault.rename 保持裸 rename 是官方对齐而非缺口。
+- `MetadataCache.fileToLinktext`（d.ts:4425）："If file name is unique, use the
+  filename. If not unique, use full path." —— 新名歧义时的消歧权威规则。
+
+### 一次性决策（chief，agent 不得加依赖/不碰 Rust）
+
+- Rust `vault_write` 升级为**原子写**：同目录 sibling temp（命名 `.{name}.geode-tmp`，
+  **点前缀使其落在 watcher 噪声过滤里**——to_vault_relative 跳过 dotfile 段，tmp 的
+  create/rename 事件不会进前端）+ `fs::rename` 替换（Windows MoveFileEx 语义，
+  export_write 先例）。失败清 tmp 并报错。自动保存与本轮批量改写同享 crash 安全。
+- 改写引擎走 `Vault.modify`（未打开文件）/ DocumentHandle（打开文件），**自动获得
+  R8 回声指纹抑制**——引擎自身不直接碰 adapter。
+
+### Core: 改写引擎 — `core/linkRewrite.ts`（新，core agent）
+
+```ts
+/** localStorage "geode.autoUpdateLinks"，默认 true。 */
+export const autoUpdateLinks: Store<boolean>;
+export function setAutoUpdateLinks(on: boolean): void; // set + persist
+
+export interface LinkRewriteSkip { path: string; reason: string }
+export interface LinkRewriteResult {
+  filesChanged: number;     // 实际写入/改缓冲的引用方文件数
+  linksRewritten: number;   // 改写的链接处数
+  skipped: LinkRewriteSkip[]; // 校验不过而跳过的文件（绝不盲写）
+}
+export interface LinkRewriteDeps {
+  vault: Vault; metadata: MetadataIndex; documents: DocumentManager;
+}
+/** Rename oldPath→newPath（文件或文件夹）并改写全库指向它的链接/嵌入。
+ *  autoUpdateLinks 关闭时退化为 vault.rename + 空结果。绝不抛出改写阶段的
+ *  错误（rename 本身的错误照常向上抛——调用方既有 catch）。 */
+export async function renameWithLinkUpdate(
+  deps: LinkRewriteDeps, oldPath: string, newPath: string,
+): Promise<LinkRewriteResult>;
+```
+
+**算法（冻结——评审按此逐条对抗）**：
+
+1. **capture（rename 前）**：`await documents.flushAll()` →
+   `await metadata.ensureFresh(documents.getOpenPaths())`（索引与缓冲收敛——防抖窗口
+   内刚敲的链接也进发现）。受影响文件表 = oldPath 为 .md 文件时一项；为文件夹时
+   getMarkdownFiles() 中 oldPath+"/" 前缀的全部（old→new 路径映射）。**附件同表**：
+   文件夹下非 md 文件、或 oldPath 自身是非 md 文件时，同样参与（链接经
+   resolveAttachment 解析）。引用方发现 = 遍历 metadata.getAll()（含被改名文件自身
+   ——自引用 `[[A]]` in A.md 也要更新，getBacklinks 排除自身故不直接用它）：对每个
+   引用方 R 的每条 LinkRef，`resolveLink(target, R.path)`（md）或
+   `resolveAttachment(target, R.path)`（非 md，按 target 扩展名分流）命中受影响
+   oldFilePath → 记录 `R.path → Map<targetLower, {oldFile, newFile}>`。
+2. `await vault.rename(oldPath, newPath)`（documents 自动重 key、metadata 自动重索引）。
+3. `await metadata.ensureFresh(全部 new 路径)`——消歧校验前索引必须已含新名。
+4. **rewrite（逐引用方 R，路径经文件夹重映射）**：
+   - 当前内容：`documents.get(R)?.getText() ?? await vault.read(R)`。
+   - **fresh parse**：`parseNote(R, content).links` 重新定位（偏移按当前内容构造性
+     正确，fence/inline-code/frontmatter 天然排除）；逐条按 targetLower 查 capture 映射。
+   - **only-fix-broken**：若该 target 在 rename 后仍解析到 newFile（basename 链接随
+     文件夹移动不破、alias 链接随 frontmatter 走）→ **不改写**（最小 diff 原则）。
+     **修订（chief，浏览器实测发现）**：判定按 target 形态走严格语义——含 "/" 的
+     path-form target 仅当与 newFile **精确路径相等**（大小写不敏感）才算存活；
+     resolveLink 的 basename 兜底会掩盖过期路径前缀（字节错了、Obsidian 打开即断，
+     虽然 Geode 导航碰巧能走）。basename-form 维持 lenient 判定。
+   - **新 target 文本（风格保持 + fileToLinktext 消歧）**：原 target 含 "/" → 新全
+     路径（md 去 .md 后缀，附件含扩展名）；否则新 basename。生成后**消歧校验**：
+     resolve(新 target, R) === newFile 不成立 → 退全路径再校验；仍不成立 → 该文件
+     skip + reason。
+   - **splice 校验（绝不盲写）**：`content.slice(link.from, link.to)` 必须形如
+     `[[原inner]]`，且 inner 重新拆解出的 target 与 capture 一致；新 inner = 新
+     target + 原 subpath 原文 + 原 alias 原文逐字节保留（`#`/`|` 分隔符还原）。
+     任何不一致 → 整文件 skip + reason，不写。
+   - 应用：打开中 → `handle.applyExternalEdits(edits)`（CM 单事务、undo 进历史、
+     标脏 + 调度自动保存）；未打开 → `vault.modify(R, 新内容)`（回声指纹）。
+   - 改写后断言（探针级口径）：新内容 parseNote 后这些链接 resolve 到 newFile。
+5. 聚合 LinkRewriteResult 返回。skip 一律 console.warn 全文原因。
+
+### Core: 配套 API — `core/metadata.ts` + `core/documents.ts`（core agent）
+
+```ts
+// MetadataIndex
+/** Re-parse the given paths from CURRENT vault content right now (missing or
+ *  unreadable paths are DROPPED from the index — delete-event parity), rebuild
+ *  the name map, bump once (unconditionally). Deterministic alternative to
+ *  waiting for async event-driven reindex. `readText`（评审修复）：可选的
+ *  内存源——live buffer 必须赢过磁盘，flush 失败时发现阶段仍收敛。 */
+ensureFresh(paths: string[], readText?: (path: string) => string | undefined): Promise<void>;
+
+// DocumentManager
+getOpenPaths(): string[];   // 现存 handle 的路径快照
+
+// DocumentHandle
+/** Apply programmatic edits AS A LOCAL EDIT: single CM transaction on an
+ *  attached view (sync glue forwards to others, marks dirty, schedules the
+ *  debounced save, undo lands in the shared history). Zero attached views
+ *  (preview-only/backgroundtab) → splice text directly + mark dirty +
+ *  schedule save + bump revision. edits 按 from 升序、互不重叠（调用方保证）。 */
+applyExternalEdits(edits: Array<{ from: number; to: number; insert: string }>): void;
+```
+
+### UI: 触发点 + 设置 + 通知 — `features/explorer/Explorer.tsx` + `features/settings/SettingsModal.tsx`（ui agent）
+
+- Explorer `commitRename` 改调 `renameWithLinkUpdate({vault, metadata, documents}, …)`
+  （任何 kind——文件夹/md/附件统一走引擎；引擎内部 autoUpdateLinks 关闭时退化）。
+  结果处理：linksRewritten>0 → console.info 计数；skipped.length>0 → explorer 本地
+  transient notice（仿 export-notice 模式，自有 css，`data-testid="link-update-notice"`，
+  文案 `t("explorer.linkUpdateSkipped", { count })`，警示色，4s 自动消失）。
+- SettingsModal：通用节新增 "Files & links" 组——toggle
+  `data-testid="settings-auto-update-links"` 绑 autoUpdateLinks store。
+- i18n：`explorer.linkUpdateSkipped`（dict.panels.ts）、
+  `settings.autoUpdateLinks` + `settings.autoUpdateLinksDesc` + `settings.filesAndLinks`
+  （dict.views.ts），en/zh 双语，术语：链接自动更新。
+- `src/main.tsx`：bootstrap 处挂常驻探针
+  `window.__geodeRename = (o, n) => renameWithLinkUpdate({vault, metadata, documents}, o, n)`
+  （返回 Promise<LinkRewriteResult>，浏览器/桌面双端可驱动——R8 __geodeFireWatch 同模式）。
+
+### Editor + 管线: `[[#h]]` 同文链接 — editor agent（含 core/markdown.ts，本轮唯一触碰者）
+
+R14 记录的缺口：target 为空的 `[[#Heading]]`/`[[#^id]]` 解析为当前笔记。
+
+- `core/markdown.ts` replaceWikilinks：`!target` 分支拆细——**空 target 且 subpath
+  非空且非 embed（bang 为空）**→ 走 internal-link 占位（`data-target=""` +
+  `data-subpath`，class 恒为 "internal-link" 不带 is-unresolved——subpath 存在性
+  点击时校验，Obsidian 同样不在渲染期校验）；显示文本 = alias else inner 原文
+  （含 "#"，与 `[[note#h]]` 显示 "note#h" 的现状一致）。`![[#h]]` 同文嵌入**出轮**
+  （保持原文渲染，缺口记录）。**diff 验证义务**：除 `[[#...]]` 用例外全字节一致。
+- `features/editor/wikilinks.ts` openWikilink：`target === ""` 且 subpath 有值 →
+  resolved = fromPath（**绝不走创建新笔记分支**），openFile(fromPath) 为 no-op 后
+  requestReveal 照常（R14 同文 reveal 路径已验证）。
+- `features/editor/livePreview.ts` 扫描：`!target` 时若 subpath 非空且非 embed →
+  照常折叠装饰（data-link-target=""、data-link-subpath）；embed/无 subpath → 现状跳过。
+- `features/editor/cmExtensions.ts` wikilinkDecorations：同上放行空 target；样式按
+  resolved（cm-wikilink 不带 unresolved 变体）。**click 链路三处守卫放宽**：
+  `wikilinkClickHandler`（`data-link-target` 为空串但元素有 `data-link-subpath` →
+  仍触发，target 传 ""）、livePreview 内两处委托同规则、EditorPane onPreviewClick
+  （`data-target` 空串 + `data-subpath` → openWikilink(app, "", handle.path, subpath)）。
+
+### Compat: fileManager.renameFile 接通 — `compat/obsidian/`（compat agent）
+
+- `app.fileManager` 从全量 warn-stub 升级：**renameFile(file, newPath) 真实现**——
+  归一化路径后调 core `renameWithLinkUpdate`（deps 经 compat ctx 取 geode 单例），
+  返回 Promise<void>（结果丢弃，Obsidian 签名无返回值）；其余方法保持记录缺口的
+  no-op stub（Proxy 结构保留，renameFile 特判）。
+- `Vault.rename` **保持裸 rename**（官方语义校准——本轮起这是对齐项非缺口）。
+- gaps 口径 + OBSIDIAN-COMPAT 缺口表由 chief 收尾时更新文档，compat agent 只改代码注释。
+
+### 口径（零代码，记录）
+
+- 改写只针对 wikilink `[[...]]`/`![[...]]` 形态；markdown 标准链接 `[text](note.md)`
+  不在 Geode 解析面内（R1 起现状），不改写——缺口表记录。
+- `[[A.md]]` 带扩展名形态被改写后统一为不带 .md 的新形态（Obsidian linktext 规则）。
+- 重命名导致**其他文件的** basename 链接被新文件"劫持"（同名优先级变化）不处理
+  ——Obsidian 同样不处理（basename 链接固有语义）。
+- autoUpdateLinks 关闭时 Obsidian 弹确认对话框，本轮不做（纯不改写），记录偏差。
+- 改写不触发 `[[#h]]` 同文链接（target 为空不指向被改名文件）；同文链接不进
+  links 索引（parseNote 正则不变——graph 无自环边，与 Obsidian 行为一致；
+  getFileCache().links 含 `#h` 条目的官方形状偏差记录进缺口表）。
+- `[[#` 的 heading 自动补全不在本轮（缺口表）。
+
+### As-built deltas (post-review — R16)
+
+Review: 4 dimensions (data-safety / correctness / races / layering), 22 findings →
+12 confirmed (1 critical + 4 major + minors/adjudications), 10 refuted by adversarial
+verification. All confirmed code defects FIXED by chief; integration re-verified.
+
+- **FIXED (critical) — CRLF offset-basis mismatch**: `handle.getText()` kept raw
+  CRLF while the CM doc is LF-normalized (`@codemirror/state` DefaultSplit), so
+  applyExternalEdits dispatched CRLF-space offsets into an LF doc — silent mid-file
+  corruption of an open-but-unedited CRLF referrer (verifier reproduced it against
+  the real package). Root fix: **Vault.read 咽喉点统一 CRLF→LF**（BOM 剥除旁；
+  modify/create 的 cacheSet 同步归一化，回声指纹仍按原始字节）。记录口径：保存即
+  LF 化——R16 前首次击键本就如此转换，现在全路径一致（Obsidian 保留 CRLF，显式
+  偏差）。Belt-and-braces：applyExternalEdits 视图分支前 `doc.toString() !==
+  this.text` 即 throw → 上游 skip+报告，错切位永不可能静默。
+- **FIXED (major) — closed-referrer 不再读缓存**：新增 `Vault.readFresh(path)`
+  （绕过 contentCache 直读磁盘 + 归一化 + 刷新缓存）；引擎 step 4 未打开文件一律
+  readFresh——watcher 防抖窗口（~400ms）内落地的外部修改不再被陈旧快照覆盖（且
+  自写指纹不再吞掉信号）。残余 read→write 毫秒级 TOCTOU 记录为已知限制。
+- **FIXED (major) — flush() JOIN 在飞行的保存**：`saving: boolean` →
+  `savePromise: Promise|null`，flush 先循环 join 再判脏——flushAll 的"缓冲已落盘"
+  保证此前对防抖定时器刚触发的文档是空话（capture 会建立在未写完的磁盘态上）。
+- **FIXED (major) — type-then-close 竞态**：release() 的微任务改为 flush 完成后
+  才 drop——句柄在最终 flush 期间保持可发现，引擎走同步缓冲路径而非陈旧缓存；
+  期间的并发 acquire 复活句柄（refs 守卫保留）。
+- **FIXED (minor) — 引擎运行串行化**：模块级 promise 链——Explorer / compat
+  renameFile / __geodeRename 三入口重叠时按序执行（每轮起手 flushAll+ensureFresh，
+  次序无关）；前一轮失败不毒化队列。
+- **FIXED (minor) — capture 在 flush 失败时仍收敛**：ensureFresh 增 `readText`
+  缓冲提供者（见上方签名修订），capture 传 `documents.get(p)?.getText()`。
+- **FIXED (minor) — Rust .geode-tmp 残留清扫**：vault_watch 起表前递归 best-effort
+  删除 `.{name}.geode-tmp`（写后崩溃残留；点前缀对 vault_list/watcher 不可见，
+  必须主动扫）。
+- **契约修订（chief）— capture 统一解析优先级**：实现为 resolveLink 命中即胜
+  （遮蔽 resolveAttachment——与点击导航一致，capture 与校验共用同一优先级），
+  取代契约原文的"按扩展名分流"。已知后果入口径：与附件 basename 撞名的 md
+  alias / `X.ext.md` 会在 capture 期遮蔽该附件——重命名该附件时其 `![[...]]`
+  嵌入漏改（嵌入渲染是 attachment-first），方向安全（漏改非误写，消歧校验
+  fail-closed）。
+- **卫生（pre-existing）**：metadata.ts getGraph 边键里 R3 时代的字面 NUL 字节
+  改为 ` ` 转义（运行时字符串等价）——该字节让 ripgrep 把整个文件按二进制
+  跳过，本轮评审两次被它绊倒。
+- Accepted（agent 上报已采纳）：根目录改名且 basename 撞车时双形态消歧均败 →
+  skip+报告（安全方向）；整文件 skip 粒度（契约原文）；`[[ A ]]` 内空白不保留；
+  零视图 applyExternalEdits 不 emit document:changed（revision store 已覆盖
+  preview 重渲染）。
+
+### Round 16 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/linkRewrite.ts (new), core/metadata.ts, core/documents.ts |
+| ui | features/explorer/Explorer.tsx + explorer.css, features/settings/SettingsModal.tsx, core/i18n/dict.panels.ts, core/i18n/dict.views.ts, src/main.tsx |
+| editor | core/markdown.ts, features/editor/{wikilinks.ts, livePreview.ts, cmExtensions.ts, EditorPane.tsx} |
+| compat | compat/obsidian/plugin.ts（fileManager 特判）, compat/obsidian/gaps.ts 按需 |
+
+Chief pre-phase：本节契约 + src-tauri vault_write 原子化。Frozen surfaces：上述全部
+代码块签名、`geode.autoUpdateLinks` key、两个 testid、改写算法五步、`[[#h]]` 守卫
+放宽规则。每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 docs/；editor agent
+跑无-`[[#...]]` 用例字节级 diff 验证；agent 行内注释不得修订契约（R13 教训）。
+
+## Round 15 additions — 整固轮：阅读视图 reveal + 性能基线刷新 + 全量回归
 
 P2 池见底 + P1 仍无用户输入 → HANDOFF 预授权的整固轮。**安装包瘦身显式不做**（决策
 记录：R5 的 moment-with-locales 全 locale 单实例是 compat 正确性选择——calendar/nldates

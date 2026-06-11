@@ -54,8 +54,9 @@ export class DocumentHandle {
   /* one dirty flag + one debounced save per FILE, regardless of pane count */
   private dirtyFlag = false;
   private timer: number | null = null;
-  /** true while a vault.modify is in flight — reloads must treat this as dirty */
-  private saving = false;
+  /** non-null while a vault.modify is in flight — reloads treat it as dirty,
+   *  and flush() JOINS it so "flushed" really means "on disk" (R16 fix) */
+  private savePromise: Promise<void> | null = null;
 
   /** Bumped on every text change (local edit, sync, external reload). Preview
    *  panes (no CM view) subscribe to re-render from getText(). */
@@ -145,7 +146,7 @@ export class DocumentHandle {
 
   /** true while unsaved changes exist OR a save is in flight */
   get dirty(): boolean {
-    return this.dirtyFlag || this.saving;
+    return this.dirtyFlag || this.savePromise !== null;
   }
 
   getText(): string {
@@ -198,11 +199,63 @@ export class DocumentHandle {
     this.applyReplace(text);
   }
 
-  /** Flush any pending edit. Awaitable so close-time flushing covers IPC. */
+  /**
+   * Apply programmatic edits AS A LOCAL EDIT (R16 link rewrite): single CM
+   * transaction on an attached view — NOT sync-annotated, so the sync glue
+   * treats it exactly like typing (forwards to the other views, materializes
+   * the canonical text, marks dirty, schedules the debounced save, lands the
+   * undo step in the shared history and emits document:changed). Zero
+   * attached views (preview-only / background tab) → splice text directly +
+   * mark dirty + schedule save + bump revision. `edits` are sorted ascending
+   * by `from` and non-overlapping (caller guarantee).
+   */
+  applyExternalEdits(edits: Array<{ from: number; to: number; insert: string }>): void {
+    if (edits.length === 0) return;
+    const view = this.views.values().next().value as EditorView | undefined;
+    if (view) {
+      // Offset-basis guard (R16 review, critical): edit offsets were computed
+      // against getText() — they are only valid for the view if the canonical
+      // text and the CM doc are byte-identical. Vault.read normalizes CRLF→LF
+      // so they always should be; if they ever diverge (unknown future path),
+      // throwing here turns a silent mis-splice into a skip+report upstream.
+      if (view.state.doc.toString() !== this.text) {
+        throw new Error(
+          `canonical text / editor buffer mismatch for "${this.currentPath}" — refusing to splice`,
+        );
+      }
+      // one transaction: CM resolves every change position against the
+      // PRE-transaction doc, so ascending offsets need no manual shifting
+      view.dispatch({ changes: edits });
+      return;
+    }
+    // no views to dispatch on — splice in reverse so earlier offsets never drift
+    let text = this.text;
+    for (let i = edits.length - 1; i >= 0; i--) {
+      const e = edits[i];
+      text = text.slice(0, e.from) + e.insert + text.slice(e.to);
+    }
+    this.text = text;
+    this.scheduleSave();
+    this.revision.update((r) => r + 1);
+  }
+
+  /** Flush any pending edit. Awaitable so close-time flushing covers IPC.
+   *  R16 review fix: JOINS an in-flight save before deciding there is nothing
+   *  to do — without that, flushAll()'s "buffers are on disk now" guarantee
+   *  was void for a document whose debounce timer had just fired (flush saw
+   *  dirtyFlag already false and returned while the write was mid-IPC). */
   async flush(): Promise<void> {
     if (this.timer !== null) {
       window.clearTimeout(this.timer);
       this.timer = null;
+    }
+    // join the in-flight save (loop: a newer save may start while we await)
+    while (this.savePromise !== null) {
+      try {
+        await this.savePromise;
+      } catch {
+        /* the saver logs its own failure */
+      }
     }
     if (!this.dirtyFlag) return;
     this.dirtyFlag = false;
@@ -212,17 +265,24 @@ export class DocumentHandle {
     // handler retargets it, so late flushes hit the live path
     const path = this.currentPath;
     const written = this.text;
-    this.saving = true;
-    try {
-      await this.vault.modify(path, written);
-    } catch (err) {
-      console.error(`[documents] failed to save ${path}`, err);
-      // write failed and the user hasn't typed since (no newer pending
-      // content) — restore dirty so the next flush/auto-save retries
-      if (this.text === written) this.dirtyFlag = true;
-    } finally {
-      this.saving = false;
-    }
+    // definite-assignment assertion: the finally only runs after the first
+    // await inside the IIFE, by which time `save` is assigned
+    let save!: Promise<void>;
+    save = (async () => {
+      try {
+        await this.vault.modify(path, written);
+      } catch (err) {
+        console.error(`[documents] failed to save ${path}`, err);
+        // write failed and the user hasn't typed since (no newer pending
+        // content) — restore dirty so the next flush/auto-save retries
+        if (this.text === written) this.dirtyFlag = true;
+      } finally {
+        // identity-guarded: never clear a NEWER save's promise
+        if (this.savePromise === save) this.savePromise = null;
+      }
+    })();
+    this.savePromise = save;
+    await save;
   }
 
   /** internal — refcounting used by the manager */
@@ -238,8 +298,13 @@ export class DocumentHandle {
     // its attached views, undo history, cursor and scroll — alive.
     queueMicrotask(() => {
       if (this.refs > 0) return;
-      this.manager.drop(this.currentPath, this);
-      void this.flush(); // last holder gone — persist any pending edit now
+      // R16 review fix (type-then-close race): the handle must stay
+      // DISCOVERABLE until its final flush settles. Dropping first opened a
+      // window where the rewrite engine saw documents.get() === null, read a
+      // stale cache snapshot and raced the close-flush last-writer-wins.
+      void this.flush().finally(() => {
+        if (this.refs <= 0) this.manager.drop(this.currentPath, this);
+      });
     });
   }
 
@@ -291,7 +356,7 @@ export class DocumentHandle {
    * are worth logging.
    */
   reloadFromDisk(source: "external" | "modified"): void {
-    if (this.dirtyFlag || this.timer !== null || this.saving) {
+    if (this.dirtyFlag || this.timer !== null || this.savePromise !== null) {
       // local edits pending — last writer wins, our save will overwrite
       if (source === "external") {
         console.warn(
@@ -306,7 +371,7 @@ export class DocumentHandle {
         if (path !== this.currentPath) return; // renamed during the read — stale
         // re-check with FRESH state: keystrokes may have arrived during the
         // async read — never revert them with stale disk content
-        if (this.dirtyFlag || this.timer !== null || this.saving) {
+        if (this.dirtyFlag || this.timer !== null || this.savePromise !== null) {
           if (source === "external") {
             console.warn(
               `[documents] external reload of "${path}" skipped: local edits arrived during read`,
@@ -465,6 +530,11 @@ export class DocumentManager {
   /** The live handle for a path, if any (sync). */
   get(path: string): DocumentHandle | null {
     return this.handles.get(path) ?? null;
+  }
+
+  /** Snapshot of every path that currently has a live handle. */
+  getOpenPaths(): string[] {
+    return [...this.handles.keys()];
   }
 
   /** Editor panes report the focused CM view (active markdown tab). */

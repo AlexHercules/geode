@@ -19,6 +19,7 @@ export const en = {
   "explorer.delete": "Delete",
   "explorer.deleteConfirmFile": 'Delete "{name}"?',
   "explorer.deleteConfirmFolder": 'Delete folder "{name}" and all its contents?',
+  "explorer.linkUpdateSkipped": "{count} file(s) skipped during link update — see console",
 
   // ---- search ----
   "search.title": "Search",
@@ -89,6 +90,7 @@ export const zh: Record<keyof typeof en, string> = {
   "explorer.delete": "删除",
   "explorer.deleteConfirmFile": "删除“{name}”？",
   "explorer.deleteConfirmFolder": "删除文件夹“{name}”及其全部内容？",
+  "explorer.linkUpdateSkipped": "链接更新跳过 {count} 个文件——详见控制台",
 
   // ---- search ----
   "search.title": "搜索",

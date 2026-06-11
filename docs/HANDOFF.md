@@ -1,43 +1,44 @@
 # 续接提示词（重开对话时直接粘贴）
 
 ```
-继续开发 Geode（C:\Users\16778\Desktop\开发\rock，Obsidian 复刻桌面应用，当前 v0.15.0）。
+继续开发 Geode（C:\Users\16778\Desktop\开发\rock，Obsidian 复刻桌面应用，当前 v0.16.0）。
 启用 workflows。远端：https://github.com/AlexHercules/geode（私有，origin/master）——
 每轮收尾提交后 git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证书决策。
 
 按顺序读这五个文档再动手：
-1. docs/ROADMAP.md      — 核心使命（不变项）、四条底线、R15 完成记录、R16 候选
-2. docs/OBSIDIAN-COMPAT.md — Tier 表、R15 套件回归、缺口表
+1. docs/ROADMAP.md      — 核心使命（不变项）、四条底线、R16 完成记录、迁移路线图
+2. docs/OBSIDIAN-COMPAT.md — Tier 表、R16 套件回归、缺口表
 3. docs/DEVELOPMENT.md  — 每轮编排节奏、数据安全回归清单、验证手段
-4. docs/ARCHITECTURE.md — 分层规则与核心 API 契约（R15 节含瘦身不做的决策记录）
+4. docs/ARCHITECTURE.md — 分层规则与核心 API 契约（R16 节含改写引擎全算法 + 评审修复）
 5. docs/DISTRIBUTION.md — 发布流程/密钥管理/签名配置位
 
-本轮目标（R16）按 ROADMAP「迁移体验路线图（R16-R18）」执行（2026-06-11 与用户对齐，
-取代旧的 P2 池逻辑）：**R16 = 重命名自动更新引用 + [[#h]] 同文链接**。这是数据安全
-等级最高的一轮（批量改写用户文件）——契约前先用 WebFetch 校准 Obsidian 的链接更新
-语义（basename 歧义、设置项），改写必须经共享文档模型（打开中文件不丢 undo）+
-磁盘原子写 + watcher 自写指纹协同，评审对抗验证不可省，双端实测要含"改写前后链接
-解析等价"断言。后续：R17 附件摄入+折叠、R18 方言长尾（见 ROADMAP）。
-完成标准沿用四条底线 + OBSIDIAN-COMPAT.md 套件矩阵不回退。
+本轮目标（R17）按 ROADMAP「迁移体验路线图」执行：**R17 = 附件摄入（粘贴/拖拽图片
+入库）+ 标题/列表折叠**。前者需要 VaultAdapter.writeBinary + Rust 命令（readBinary
+镜像，#[tauri::command(async)] + safe_join + 原子写先例）、附件目录设置项（校准
+Obsidian 的 attachment folder 语义）、命名冲突 uniquePath、Memory 适配器同步实现
+（浏览器 E2E 用 DataTransfer 注入）；后者是 CM6 folding 接线，live preview 装饰
+共存性是评审重点。完成标准沿用四条底线 + OBSIDIAN-COMPAT 套件矩阵不回退。
+后续：R18 方言长尾（callouts/高亮/脚注/%%注释%% + KaTeX/mermaid 一次性依赖决策）。
 ```
 
 ## 给接续者的三句话背景
 
-- 开发模式已验证十五轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维评审 +
-  逐条对抗验证 + 双端运行时实测**。R1-R15 共确认 128 处缺陷全处置。R15 是整固轮：
-  性能基线七轮欠账已清（bench=10000 零回归，graphSettle 反而 5771→3958ms；基线表在
-  PERFORMANCE.md R15 节），全量回归探针（r12/r13/r14）+ 套件全绿。瘦身决策：**不做**，
-  理由与重开条件入档 ARCHITECTURE R15 节——别在没有体积硬指标时重开这个坑。
+- 开发模式已验证十六轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维评审 +
+  逐条对抗验证 + 双端运行时实测**。R16 是数据安全重轮（重命名自动改写引用 + [[#h]]）：
+  评审 22 finding 确认 12（1 critical：CRLF/LF 偏移基准错位切错字节——根治 = vault.read
+  咽喉点 CRLF→LF 统一；3 major 竞态全修），浏览器实测另抓 1 个（only-fix-broken 被
+  resolveLink 的 basename 兜底骗过）。改写引擎五步算法 + 全部修复细节在 ARCHITECTURE
+  R16 节，**动 vault/documents/改写路径前必读它的 As-built deltas**。
 - 验收套件在 `compat-vault/`（gitignore）；桌面 release 实测
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 起
-  `geode.exe <vault>`（env 与 Start-Process 同一条命令）；浏览器性能口径用
-  headless Edge：`msedge --headless=new --remote-debugging-port=93xx
-  --user-data-dir=<tmp> "http://localhost:1420/?bench=10000"` + `.calibration/
-  cdp-run-url.mjs <expr> <port> <urlSub>`（**杀 Edge 按 PID 别按进程名**——
-  会误杀用户自己的浏览器，R15 踩过）。reveal 口径：R15 起 preview 态直接消费
-  （heading 序号定位需排除嵌入笔记内的 heading——已实现）。
-- PowerShell 5.1 改源码 mojibake+BOM——只用 Read/Edit/Write 工具碰文件；Windows 无
-  空串 env 变量（签名密钥必须带密码，见 DISTRIBUTION.md）。UI 字符串走 t()/useI18n()；
-  命令/插件 name 是 thunk；live↔source 走 modeCompartment；live preview 新增扫描默认
-  fence 排除；阅读视图管线改动先重读"字节级承诺"口径；图谱不要把边批进单个 Path2D；
-  compat 对照 .calibration 官方 d.ts；agent 的行内注释不能修订契约。
+  `geode.exe <vault>`（env 与 Start-Process 同一条命令）；探针
+  `.calibration/cdp-run.mjs <expr文件> [port]`、桌面截图 `cdp-shot.mjs <png>`；
+  浏览器性能口径 headless Edge + `cdp-run-url.mjs <expr> <port> <urlSub>`（**杀 Edge
+  按 PID**；**测性能前确认机器空载**——R16 在 release 编译同机时测出过 321ms 假回归，
+  干净复测 151ms 优于基线）。r16 全套探针/清理脚本在 .calibration/r16-*.js。
+- PowerShell 5.1 改源码 mojibake+BOM——**只用 Read/Edit/Write 工具碰文件，版本号 bump
+  也是**（R16 用 Set-Content 烧过 package.json 的 em-dash，靠 git checkout 救回）；
+  Windows 无空串 env 变量。UI 字符串走 t()/useI18n()；命令/插件 name 是 thunk；
+  live↔source 走 modeCompartment；阅读视图管线改动先重读"字节级承诺"口径；图谱不要
+  把边批进单个 Path2D；agent 行内注释不能修订契约；ripgrep 在含 NUL 字节的文件上
+  静默跳过（R3 的字面 NUL 已转义根治，新代码别再写字面控制字符）。

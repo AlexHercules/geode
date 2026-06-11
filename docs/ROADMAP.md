@@ -271,26 +271,46 @@ graphSettle 3958ms（R7 5771 更优）、graphDraw 2.9ms、metadataIndex 185ms�
 preview 直接消费新口径）探针全绿 + 套件 5/5 + nldates 全链路不回退。
 更新链路（r9-up*）自 R9 零改动跳过（记录）。
 
+### R16 — v0.16（2026-06-11）重命名自动更新引用 + `[[#h]]` 同文链接（迁移体验 #1，数据安全重轮）
+
+官方校准（obsidian.md/help + obsidian.d.ts）：设置项 "Automatically update internal
+links"、`fileToLinktext` 消歧规则（basename 唯一用 basename，否则全路径）、官方
+`Vault.rename` 不更新链接（FileManager.renameFile 才更新——compat 对齐项非缺口）。
+**改写引擎**（core/linkRewrite.ts，五步冻结算法）：capture（flushAll + ensureFresh
+带缓冲提供者 + 受影响表含文件夹级联/附件/自引用）→ rename → ensureFresh → 逐引用方
+verified rewrite（fresh parse 偏移构造性正确、only-fix-broken 按 target 形态严格判定
+——path-form 仅精确路径算存活、风格保持 + fileToLinktext 消歧、splice 校验 + 改写前
+全量 reparse 断言，**任何不一致 skip+报告绝不盲写**）→ 报告。双路径：打开中文件走
+DocumentHandle.applyExternalEdits（CM 单事务，undo 进共享历史、标脏 + 防抖保存）；
+未打开走 vault.readFresh + vault.modify（回声指纹）。Rust `vault_write` 原子化（点
+前缀 sibling tmp + rename，watcher 噪声过滤天然不见 tmp；崩溃残留启动清扫）。
+设置页 "文件与链接" toggle（默认开）+ Explorer skip notice + `__geodeRename` 常驻探针。
+**`[[#h]]` 同文链接**（R14 缺口闭合）：四视图守卫放宽（阅读视图锚点 data-target=""、
+live 折叠装饰、source 装饰、四处点击链路），openWikilink 空 target → 当前笔记 +
+reveal；22 用例 diff 非 `[[#...]]` 字节级一致。compat `fileManager.renameFile` 接通
+核心引擎（warn-stub → 真实现）。
+评审 4 维 22 finding → **12 确认（1 critical + 4 major）+ 10 证伪**，全修复：
+critical = CRLF/LF 偏移基准错位（开着未编辑的 CRLF 引用方会被切错字节——根治 =
+vault.read 咽喉点 CRLF→LF 统一 + applyExternalEdits 失配即抛；验证者用真实 CM 包
+复现过）；major = 关闭文件读缓存盲写（readFresh）、flush 不 join 在飞行保存
+（savePromise）、type-then-close 竞态（句柄活到 flush 完成）；浏览器实测另抓 1 个
+评审前缺陷（only-fix-broken 被 resolveLink 的 basename 兜底骗过——path-form 过期
+前缀漏改，Obsidian 打开即断）。顺带：metadata.ts R3 时代字面 NUL 字节（ripgrep 把
+全文件当二进制跳过）转义根治。
+浏览器 E2E：改写前后链接解析等价断言 13 步 + `[[#h]]` 4 步 + toggle 往返 + 开缓冲
+Ctrl+Z 回退 + CRLF 触发场景 + 并发改名串行化全绿。桌面 release（v0.16.0
+compat-vault 真实文件系统）：磁盘改写（subpath/alias/嵌入保留）✓、文件夹级联 ✓、
+开缓冲改写 ✓、引擎写回声全抑制 ✓、零 tmp 残留 ✓、`[[#h]]` live+preview ✓、套件
+5/5 + nldates 全链路 + r12/r13/r14 探针全绿不回退。性能：metadataIndexMs 151ms
+（优于 R15 基线 185，归一化扫描 ~2ms/10k）。
+截图 docs/screenshots/r16-desktop-settings-toggle.png。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
 > 老用户立刻撞墙的四件。用户口径：发布暂缓（渠道/证书不催），先补迁移体验。
 
-### R16 — 重命名自动更新引用（第一梯队 #1，数据安全重轮）
-
-- 重命名/移动文件（含文件夹级联）时，自动改写全库所有指向它的 `[[链接]]` 与
-  `![[嵌入]]`（含 `#subpath`/`|alias` 形态保留、大小写/路径式/basename 式引用全覆盖）。
-- **改写基于索引而非全库扫描**（与 Obsidian MetadataCache 同构）：
-  `getBacklinks(oldPath)` 给出引用方清单 + LinkRef 精确偏移。**核心陷阱**：索引偏移
-  基于已保存内容——打开中且脏的引用方（防抖窗口内）按旧偏移改写会切错位置。双路径：
-  打开中文件走 DocumentHandle 在当前缓冲重新定位（保 undo/光标）；未打开文件改写前
-  偏移处 slice 必须等于预期链接原文，不等则现场重 parse 再定位，**校验不过宁可跳过
-  并报告，绝不盲写**。
-- **数据安全等级最高的一轮**：批量改写用户文件——必须走完整节奏（契约/并行/评审/
-  对抗验证/双端），未打开文件磁盘原子写（sibling temp + rename，export_write 先例）、
-  与 watcher 回声抑制协同（自写指纹）、改写前后链接解析等价断言（probe 级验证）。
-  Obsidian 行为校准：仅 basename 引用且新名冲突时的歧义处理、设置项（自动更新开关）。
-- 顺带小件：`[[#h]]` 同文链接（target 空 → 解析为当前笔记，R14 记录的缺口）。
+### ~~R16 — 重命名自动更新引用（第一梯队 #1，数据安全重轮）~~ → **已完成（v0.16，见上）**
 
 ### R17 — 附件摄入 + 折叠
 
@@ -322,6 +342,14 @@ preview 直接消费新口径）探针全绿 + 套件 5/5 + nldates 全链路不
 | 图谱 WebGL/Worker、倒排索引 | 性能远期 |
 
 ## 已知技术债
+
+- R16 改写引擎显式口径（fail-safe 方向，详见 ARCHITECTURE R16 节）：markdown 标准
+  链接 `[text](note.md)` 不在解析面、不改写；`[[#h]]` 不进 links 索引（graph 无自环；
+  官方 getFileCache().links 含 `#h` 条目——形状偏差）；`![[#h]]` 同文嵌入保持原文；
+  `[[#` 无 heading 自动补全；与附件 basename 撞名的 md alias 会在 capture 期遮蔽该
+  附件（改名漏改嵌入，绝不误写）；根目录改名且 basename 撞车双形态消歧均败 →
+  skip+报告；CRLF 文件打开/保存即 LF 化（咽喉点统一，Obsidian 保留 CRLF——偏差）；
+  关闭文件 read→write 间毫秒级 TOCTOU 残留。
 
 - ~~图谱最大化窗口下居中偏移~~（R7 根治：fit-to-view + 布局后初测 + dpr resize 监听）
 - compat EditorSuggest：~~纯光标移动不重评估~~~~setInstructions 不渲染~~（R9 双双闭合：

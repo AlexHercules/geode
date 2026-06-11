@@ -318,6 +318,41 @@ export class MetadataIndex {
     this.bump();
   }
 
+  /** Re-parse the given paths from CURRENT vault content right now (missing
+   *  paths skipped and dropped from the index), rebuild the name map, bump
+   *  once. Deterministic alternative to waiting for the async event-driven
+   *  reindex (R16 link-rewrite capture/verify phases). Non-.md paths ignored.
+   *  `readText` (R16 review fix): optional in-memory source — a live editor
+   *  buffer must win over disk so capture-phase discovery still converges
+   *  when a flush failed (locked/read-only file); persistence may lag, the
+   *  index must not. */
+  async ensureFresh(
+    paths: string[],
+    readText?: (path: string) => string | undefined,
+  ): Promise<void> {
+    for (const path of paths) {
+      if (!path.toLowerCase().endsWith(".md")) continue;
+      const buffered = readText?.(path);
+      if (buffered !== undefined) {
+        this.byPath.set(path, parseNote(path, buffered));
+        continue;
+      }
+      if (!this.vault.fileExists(path)) {
+        this.byPath.delete(path);
+        continue;
+      }
+      try {
+        const content = await this.vault.read(path);
+        this.byPath.set(path, parseNote(path, content));
+      } catch (err) {
+        console.warn(`[metadata] ensureFresh failed to read ${path}`, err);
+        this.byPath.delete(path);
+      }
+    }
+    this.rebuildNameMap();
+    this.bump();
+  }
+
   private dropPath(path: string, bump = true) {
     // path may be a folder: drop everything under it
     for (const key of [...this.byPath.keys()]) {
@@ -522,7 +557,7 @@ export class MetadataIndex {
         if (!resolved && !nodes.has(targetId)) {
           nodes.set(targetId, { id: targetId, label: link.target, resolved: false, degree: 0 });
         }
-        const key = `${meta.path} ${targetId}`;
+        const key = `${meta.path}\u0000${targetId}`;
         if (edgeSeen.has(key) || meta.path === targetId) continue;
         edgeSeen.add(key);
         edges.push({ source: meta.path, target: targetId });
