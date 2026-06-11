@@ -147,6 +147,15 @@ fn vault_read(vault: String, path: String) -> CmdResult<String> {
     fs::read_to_string(&abs).map_err(|e| format!("read {path}: {e}"))
 }
 
+// async — file IO must stay off the main thread (R6 lesson); images can be MBs
+#[tauri::command(async)]
+fn vault_read_binary(vault: String, path: String) -> CmdResult<String> {
+    use base64::Engine as _;
+    let abs = safe_join(&vault, &path)?;
+    let bytes = fs::read(&abs).map_err(|e| format!("read {path}: {e}"))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 #[tauri::command]
 fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
     let abs = safe_join(&vault, &path)?;
@@ -533,6 +542,7 @@ fn main() {
             initial_vault,
             vault_list,
             vault_read,
+            vault_read_binary,
             vault_write,
             vault_create,
             vault_mkdir,

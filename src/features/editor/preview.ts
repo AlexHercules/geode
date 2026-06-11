@@ -3,13 +3,14 @@
  * core/markdown.ts in R6 (the compat MarkdownRenderer shares it); this module
  * keeps the feature-facing surface (renderPreview + task toggling).
  */
-import { renderMarkdownToHtml } from "@core/markdown";
+import { renderMarkdownToHtml, type RenderMarkdownOptions } from "@core/markdown";
 
 export function renderPreview(
   source: string,
   resolve: (target: string) => string | null,
+  opts?: RenderMarkdownOptions,
 ): string {
-  return renderMarkdownToHtml(source, resolve);
+  return renderMarkdownToHtml(source, resolve, opts);
 }
 
 /** Toggle the "[ ]"/"[x]" marker on a given 0-based line. Returns null if not a task line. */

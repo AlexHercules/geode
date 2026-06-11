@@ -10,7 +10,9 @@
  * The frontmatter "Properties" pill is a block replace decoration spanning
  * line breaks, which CM6 forbids from view plugins — it lives in a StateField.
  *
- * TODO: images and ![[embeds]] are intentionally left as raw text this round.
+ * R11: `![[img]]` embeds that resolve to a vault image are replaced with an
+ * <img> widget (EmbedWidget); cursor contact reveals the raw text as usual.
+ * Unresolved / non-image embed targets stay raw text.
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
@@ -24,7 +26,9 @@ import {
 } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { t } from "@core/i18n";
+import { IMAGE_EXTS } from "@core/markdown";
 import { parseFrontmatter } from "@core/metadata";
+import { getEmbedUrl } from "./embeds";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /* ================= helpers ================= */
@@ -110,6 +114,38 @@ class HrWidget extends WidgetType {
   }
 }
 
+/**
+ * Inline image embed for `![[img.png]]` (R11). toDOM returns synchronously;
+ * the blob URL resolves async and is only applied if the img is still in the
+ * document. NEVER writes document content — display only.
+ */
+class EmbedWidget extends WidgetType {
+  constructor(
+    readonly app: GeodeApp,
+    readonly resolvedPath: string,
+  ) {
+    super();
+  }
+  override eq(other: EmbedWidget): boolean {
+    return other.resolvedPath === this.resolvedPath;
+  }
+  override toDOM(): HTMLElement {
+    const img = document.createElement("img");
+    img.className = "cm-live-embed";
+    img.alt = this.resolvedPath;
+    // a blob URL revoked while loading surfaces as an error event
+    img.addEventListener("error", () => img.classList.add("geode-embed-failed"), { once: true });
+    getEmbedUrl(this.app, this.resolvedPath).then(
+      (url) => {
+        // the widget may have been dropped while the binary read was in flight
+        if (img.isConnected) img.src = url;
+      },
+      () => img.classList.add("geode-embed-failed"),
+    );
+    return img;
+  }
+}
+
 class FrontmatterWidget extends WidgetType {
   constructor(
     readonly count: number,
@@ -187,7 +223,11 @@ interface Spec {
 
 const lineDeco = (cls: string) => Decoration.line({ class: cls });
 
-function computeDecorations(view: EditorView): DecorationSet {
+function computeDecorations(
+  view: EditorView,
+  app: GeodeApp,
+  getPath: () => string,
+): DecorationSet {
   const { state } = view;
   const doc = state.doc;
   const fmEnd = frontmatterEnd(state);
@@ -370,7 +410,7 @@ function computeDecorations(view: EditorView): DecorationSet {
       },
     });
 
-    /* ---- wikilinks [[target|alias]] (regex — not a lezer node) ---- */
+    /* ---- wikilinks [[target|alias]] + ![[embeds]] (regex — not a lezer node) ---- */
     const text = doc.sliceString(range.from, range.to);
     WIKILINK_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
@@ -378,11 +418,25 @@ function computeDecorations(view: EditorView): DecorationSet {
       const start = range.from + m.index;
       const end = start + m[0].length;
       if (m[0].includes("\n")) continue; // plugins may not hide line breaks
-      // TODO: ![[embeds]] render as raw text this round — skip them here
-      if (doc.sliceString(Math.max(0, start - 1), start) === "!") continue;
       if (start < fmEnd) continue;
       const target = wikilinkTarget(m[1]);
       if (!target) continue;
+      if (doc.sliceString(Math.max(0, start - 1), start) === "!") {
+        // ![[...]] embed (R11): replace the WHOLE match (incl. the "!") with
+        // an image widget when the target resolves to a vault image and the
+        // selection does not touch it; otherwise keep the raw text.
+        const embedFrom = start - 1;
+        const resolved = app.metadata.resolveAttachment(target, getPath());
+        const ext = resolved ? resolved.slice(resolved.lastIndexOf(".") + 1).toLowerCase() : "";
+        if (!resolved || !IMAGE_EXTS.has(ext)) continue; // unresolved/non-image: raw text
+        if (selectionTouches(state, embedFrom, end)) continue; // revealed for editing
+        replaces.push({
+          from: embedFrom,
+          to: end,
+          deco: Decoration.replace({ widget: new EmbedWidget(app, resolved) }),
+        });
+        continue;
+      }
       if (selectionTouches(state, start, end)) continue; // revealed: raw text
       const pipe = m[1].indexOf("|");
       hide(start, start + 2); // "[["
@@ -421,20 +475,22 @@ function computeDecorations(view: EditorView): DecorationSet {
 
 /* ================= plugin + click navigation ================= */
 
-const livePreviewPlugin = ViewPlugin.fromClass(
-  class {
-    decorations: DecorationSet;
-    constructor(view: EditorView) {
-      this.decorations = computeDecorations(view);
-    }
-    update(update: ViewUpdate) {
-      if (update.docChanged || update.selectionSet || update.viewportChanged) {
-        this.decorations = computeDecorations(update.view);
+function livePreviewPlugin(app: GeodeApp, getPath: () => string): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      decorations: DecorationSet;
+      constructor(view: EditorView) {
+        this.decorations = computeDecorations(view, app, getPath);
       }
-    }
-  },
-  { decorations: (v) => v.decorations },
-);
+      update(update: ViewUpdate) {
+        if (update.docChanged || update.selectionSet || update.viewportChanged) {
+          this.decorations = computeDecorations(update.view, app, getPath);
+        }
+      }
+    },
+    { decorations: (v) => v.decorations },
+  );
+}
 
 /**
  * Plain click on a *collapsed* wikilink navigates (the cm-live-wikilink class
@@ -482,5 +538,5 @@ const liveTheme = EditorView.theme({
 /** The full live-preview extension set (only included when mode === "live").
  *  `getPath` is a live accessor — file:renamed retargets without a rebuild. */
 export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
-  return [frontmatterField, livePreviewPlugin, liveClickHandler(app, getPath), liveTheme];
+  return [frontmatterField, livePreviewPlugin(app, getPath), liveClickHandler(app, getPath), liveTheme];
 }

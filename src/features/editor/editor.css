@@ -361,6 +361,14 @@
   text-decoration: line-through;
 }
 
+/* image embed widget replacing ![[img]] (R11) */
+.cm-live-embed {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 /* frontmatter "Properties · n fields" pill (block widget) */
 .cm-live-frontmatter {
   display: inline-flex;
@@ -507,6 +515,19 @@
 
 .preview-content img {
   max-width: 100%;
+}
+
+/* image embeds from ![[img]] (R11) — hydrated asynchronously by embeds.ts */
+.preview-content img.geode-embed {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+/* binary read / image decode failed (class set by embeds.ts) */
+.geode-embed-failed {
+  opacity: 0.45;
 }
 
 .preview-content a {

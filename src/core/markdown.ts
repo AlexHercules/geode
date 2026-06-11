@@ -16,9 +16,33 @@ export function wikilinkTarget(inner: string): string {
 interface WikiLinkInfo {
   target: string;
   display: string;
+  /** set ⇒ render an image embed placeholder instead of an internal-link anchor */
+  embedPath?: string;
 }
 
-const WIKILINK_RE = /\[\[([^\[\]]+?)\]\]/g;
+/** Image extensions (lowercase) that `![[...]]` embeds may render as <img>. */
+export const IMAGE_EXTS: ReadonlySet<string> = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "svg",
+  "webp",
+  "bmp",
+]);
+
+export interface RenderMarkdownOptions {
+  /**
+   * present ⇒ `![[target]]` whose resolved path has an image extension renders
+   * as `<img class="geode-embed" data-embed-path="<resolved>" alt="<inner>">`
+   * (no src — the caller hydrates it asynchronously). absent / unresolved /
+   * non-image ⇒ output is byte-identical to the legacy pipeline ("!" stays
+   * literal text and [[inner]] takes the internal-link placeholder path).
+   */
+  resolveEmbed?: (target: string) => string | null;
+}
+
+const WIKILINK_RE = /(!?)\[\[([^\[\]]+?)\]\]/g;
 const PLACEHOLDER_RE = /@@GEODELINK(\d+)@@/g;
 const PLACEHOLDER_TEST = /@@GEODELINK\d+@@/;
 const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
@@ -43,7 +67,11 @@ function escapeHtml(s: string): string {
  * Replacements are inline-only so source line numbers stay stable (the task
  * checkbox toggle relies on that).
  */
-function replaceWikilinks(source: string, links: WikiLinkInfo[]): string {
+function replaceWikilinks(
+  source: string,
+  links: WikiLinkInfo[],
+  resolveEmbed?: (target: string) => string | null,
+): string {
   const lines = source.split("\n");
   let inFence = false;
   let fenceChar = "";
@@ -64,13 +92,24 @@ function replaceWikilinks(source: string, links: WikiLinkInfo[]): string {
       .split(/(`+[^`]*`+)/g)
       .map((seg, i) => {
         if (i % 2 === 1) return seg;
-        return seg.replace(WIKILINK_RE, (raw, inner: string) => {
+        return seg.replace(WIKILINK_RE, (raw, bang: string, inner: string) => {
           const target = wikilinkTarget(inner);
           if (!target) return raw;
           const pipe = inner.indexOf("|");
           const alias = pipe >= 0 ? inner.slice(pipe + 1).trim() : "";
-          links.push({ target, display: alias || inner.split("|")[0].trim() });
-          return `@@GEODELINK${links.length - 1}@@`;
+          const display = alias || inner.split("|")[0].trim();
+          if (bang && resolveEmbed) {
+            const resolved = resolveEmbed(target);
+            const ext = resolved?.split(".").pop()?.toLowerCase() ?? "";
+            if (resolved !== null && IMAGE_EXTS.has(ext)) {
+              // the whole `![[...]]` becomes the embed placeholder
+              links.push({ target, display, embedPath: resolved });
+              return `@@GEODELINK${links.length - 1}@@`;
+            }
+          }
+          // legacy path: a leading "!" stays as literal text before the link
+          links.push({ target, display });
+          return `${bang}@@GEODELINK${links.length - 1}@@`;
         });
       })
       .join("");
@@ -214,6 +253,12 @@ md.core.ruler.push("geode-wikilinks", (state) => {
           raw.content = m[0];
           raw.level = child.level;
           next.push(raw);
+        } else if (info.embedPath !== undefined) {
+          // image embed: src is hydrated asynchronously by the caller
+          const img = new state.Token("html_inline", "", 0);
+          img.content = `<img class="geode-embed" data-embed-path="${escapeHtml(info.embedPath)}" alt="${escapeHtml(info.display)}">`;
+          img.level = child.level;
+          next.push(img);
         } else {
           const resolved = resolve(info.target) !== null;
           const cls = resolved ? "internal-link" : "internal-link is-unresolved";
@@ -240,9 +285,10 @@ md.core.ruler.push("geode-wikilinks", (state) => {
 export function renderMarkdownToHtml(
   source: string,
   resolve: (target: string) => string | null,
+  opts?: RenderMarkdownOptions,
 ): string {
   const links: WikiLinkInfo[] = [];
-  const pre = replaceWikilinks(source, links);
+  const pre = replaceWikilinks(source, links, opts?.resolveEmbed);
   const env: PreviewEnv = { geodeLinks: links, geodeResolve: resolve };
   return md.render(pre, env);
 }

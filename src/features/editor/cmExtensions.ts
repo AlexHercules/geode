@@ -17,7 +17,7 @@ import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { StateEffect, type Extension } from "@codemirror/state";
+import { type Compartment, StateEffect, type Extension } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -220,16 +220,32 @@ function wikilinkCompletionSource(app: GeodeApp) {
 
 /* ---------------- the full stack ---------------- */
 
+/**
+ * The mode-dependent slice of the editor stack (R11): live preview decorations
+ * for "live", nothing for "source". Lives in a Compartment so EditorPane can
+ * swap live↔source via reconfigure WITHOUT rebuilding the view (selection,
+ * scroll and undo history survive untouched).
+ */
+export function editorModeExtensions(
+  app: GeodeApp,
+  getPath: () => string,
+  mode: "live" | "source",
+): Extension {
+  return mode === "live" ? livePreview(app, getPath) : [];
+}
+
 export function buildEditorExtensions(opts: {
   app: GeodeApp;
   /** live path accessor — file:renamed retargets without a view rebuild */
   getPath: () => string;
   /** "live" = Obsidian-style live preview (default), "source" = raw markdown */
   mode: "live" | "source";
+  /** owned by EditorPane — live↔source reconfigures this slice in place */
+  modeCompartment: Compartment;
 }): Extension[] {
-  const { app, getPath, mode } = opts;
+  const { app, getPath, mode, modeCompartment } = opts;
   return [
-    ...(mode === "live" ? livePreview(app, getPath) : []),
+    modeCompartment.of(editorModeExtensions(app, getPath, mode)),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(mdHighlight),
     EditorView.lineWrapping,

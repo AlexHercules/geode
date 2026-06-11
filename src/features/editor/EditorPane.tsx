@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { DocumentHandle } from "@core/documents";
 import type { TabState, ViewMode } from "@core/types";
@@ -6,10 +7,40 @@ import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
-import { buildEditorExtensions, refreshWikilinks } from "./cmExtensions";
+import { buildEditorExtensions, editorModeExtensions, refreshWikilinks } from "./cmExtensions";
+import { hydrateEmbeds } from "./embeds";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { openWikilink } from "./wikilinks";
 import "./editor.css";
+
+/**
+ * Best-effort selection/scroll restoration across live|source ↔ preview (R11).
+ * The CM view is destroyed when entering reading view (no CM there) — its
+ * selection + scrollTop are stashed here (keyed by tab id) and re-applied,
+ * clamped to the document length, when the editor view is rebuilt. The
+ * preview container's scrollTop gets its own slot for the reverse trip.
+ * Session-scoped by design: never persisted, never pruned (bounded by the
+ * number of tabs opened this session).
+ */
+interface PaneSession {
+  anchor: number;
+  head: number;
+  scrollTop: number;
+  previewScrollTop: number;
+}
+
+const paneSessions = new Map<string, PaneSession>();
+
+function saveSession(tabId: string, patch: Partial<PaneSession>): void {
+  const prev = paneSessions.get(tabId);
+  paneSessions.set(tabId, {
+    anchor: prev?.anchor ?? 0,
+    head: prev?.head ?? 0,
+    scrollTop: prev?.scrollTop ?? 0,
+    previewScrollTop: prev?.previewScrollTop ?? 0,
+    ...patch,
+  });
+}
 
 /**
  * EditorPane — markdown editing (CodeMirror 6) + reading view for one tab.
@@ -39,6 +70,17 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const viewRef = useRef<EditorView | null>(null);
   /** ref mirror of `handle` so event handlers can compare outside render */
   const handleRef = useRef<DocumentHandle | null>(null);
+  /** preview scroll container + content (embed hydration / scroll restore) */
+  const previewScrollRef = useRef<HTMLDivElement | null>(null);
+  const previewContentRef = useRef<HTMLDivElement | null>(null);
+  /** compartment owned by the CURRENT view — live↔source reconfigures it */
+  const modeCompartmentRef = useRef<Compartment | null>(null);
+  /** the editor mode the current view's compartment is configured with */
+  const appliedModeRef = useRef<"live" | "source">("live");
+  /** render-time mirror of tab.mode — the CM effect reads it without depending
+   *  on it (live↔source must NOT rebuild the view) */
+  const latestModeRef = useRef<ViewMode>(tab.mode);
+  latestModeRef.current = tab.mode;
 
   const setHandle = useCallback((h: DocumentHandle | null) => {
     handleRef.current = h;
@@ -93,8 +135,17 @@ export function EditorPane({ tab }: { tab: TabState }) {
 
   /* ---------- CodeMirror lifecycle (live / source modes) ---------- */
 
+  // R11: live↔source must NOT rebuild the view (a Compartment reconfigures the
+  // mode slice in place, below), so tab.mode is NOT a dependency — only the
+  // preview ↔ editor transition (this derived boolean) tears down / remounts.
+  const isPreview = tab.mode === "preview";
+
   useEffect(() => {
-    if (tab.mode === "preview" || !handle || !hostRef.current) return;
+    if (isPreview || !handle || !hostRef.current) return;
+    const mode = latestModeRef.current === "source" ? "source" : "live";
+    const modeCompartment = new Compartment();
+    modeCompartmentRef.current = modeCompartment;
+    appliedModeRef.current = mode;
     const view = new EditorView({
       // per-view state seeded with the shared doc + the handle's sync glue;
       // undo history is managed by the handle (one history per FILE)
@@ -103,13 +154,27 @@ export function EditorPane({ tab }: { tab: TabState }) {
           app,
           // live accessor: rename retargets the handle without a rebuild
           getPath: () => handle.path,
-          mode: tab.mode === "source" ? "source" : "live",
+          mode,
+          modeCompartment,
         }),
       ),
       parent: hostRef.current,
     });
     viewRef.current = view;
     const detach = handle.attachView(view);
+    // best-effort restore after a preview round-trip (clamped — the document
+    // may have changed length while the editor view was gone)
+    const saved = paneSessions.get(tab.id);
+    if (saved) {
+      const len = view.state.doc.length;
+      view.dispatch({
+        selection: {
+          anchor: Math.min(Math.max(0, saved.anchor), len),
+          head: Math.min(Math.max(0, saved.head), len),
+        },
+      });
+      view.scrollDOM.scrollTop = saved.scrollTop;
+    }
     // report the focused view — the compat Editor shim consumes it
     const onFocusIn = () => app.documents.setActiveView(view, handle.path);
     view.dom.addEventListener("focusin", onFocusIn);
@@ -128,13 +193,38 @@ export function EditorPane({ tab }: { tab: TabState }) {
       if (app.documents.getActiveView()?.view === view) {
         app.documents.setActiveView(null, null);
       }
+      // stash selection + scroll for the preview → editor return trip
+      const sel = view.state.selection.main;
+      saveSession(tab.id, {
+        anchor: sel.anchor,
+        head: sel.head,
+        scrollTop: view.scrollDOM.scrollTop,
+      });
       detach();
       viewRef.current = null;
+      modeCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
       // view (other panes / the manager's deferred-drop flush / flushAll)
     };
-  }, [app, tab.mode, tab.id, handle]);
+  }, [app, tab.id, handle, isPreview]);
+
+  /* ---------- live ↔ source: reconfigure in place (no rebuild) ---------- */
+
+  useEffect(() => {
+    if (tab.mode === "preview" || !handle) return;
+    const view = viewRef.current;
+    const modeCompartment = modeCompartmentRef.current;
+    if (!view || !modeCompartment) return;
+    const mode = tab.mode === "source" ? "source" : "live";
+    if (appliedModeRef.current === mode) return; // fresh build already matches
+    appliedModeRef.current = mode;
+    // swaps ONLY the mode slice — selection, scroll and the handle-owned
+    // history compartment (promoteHistoryHost) are untouched by design
+    view.dispatch({
+      effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode)),
+    });
+  }, [app, handle, tab.mode]);
 
   /* ---------- report the active view when this tab becomes active ---------- */
 
@@ -159,6 +249,19 @@ export function EditorPane({ tab }: { tab: TabState }) {
     // same file — the reading view re-renders from handle.getText()
     return handle.revision.subscribe(() => setPreviewBump((b) => b + 1));
   }, [handle, tab.mode]);
+
+  /* ---------- preview scroll round-trip (R11, best effort) ---------- */
+
+  useEffect(() => {
+    if (tab.mode !== "preview" || !handle) return;
+    const el = previewScrollRef.current;
+    if (!el) return;
+    const saved = paneSessions.get(tab.id);
+    if (saved) el.scrollTop = saved.previewScrollTop;
+    return () => {
+      saveSession(tab.id, { previewScrollTop: el.scrollTop });
+    };
+  }, [tab.id, tab.mode, handle]);
 
   /* ---------- outline navigation (geode:scroll-to-heading) ---------- */
 
@@ -203,12 +306,24 @@ export function EditorPane({ tab }: { tab: TabState }) {
 
   const previewHtml = useMemo(() => {
     if (tab.mode !== "preview" || !handle) return "";
-    return renderPreview(handle.getText(), (target) =>
-      app.metadata.resolveLink(target, handle.path),
+    return renderPreview(
+      handle.getText(),
+      (target) => app.metadata.resolveLink(target, handle.path),
+      // image embeds render as src-less <img class="geode-embed"> placeholders,
+      // hydrated asynchronously after the innerHTML lands (effect below)
+      { resolveEmbed: (target) => app.metadata.resolveAttachment(target, handle.path) },
     );
     // metaRevision/previewBump are render triggers, not direct inputs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app, tab.mode, handle, metaRevision, previewBump]);
+
+  /* ---------- fill embed image srcs after each preview render ---------- */
+
+  useEffect(() => {
+    if (tab.mode !== "preview") return;
+    const el = previewContentRef.current;
+    if (el) hydrateEmbeds(el, app);
+  }, [app, tab.mode, previewHtml]);
 
   const onPreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -286,10 +401,11 @@ export function EditorPane({ tab }: { tab: TabState }) {
     body = <div className="editor-cm-host" data-testid="cm-editor" ref={hostRef} />;
   } else {
     body = (
-      <div className="editor-preview" onClick={onPreviewClick}>
+      <div className="editor-preview" onClick={onPreviewClick} ref={previewScrollRef}>
         <div
           className="preview-content"
           data-testid="preview"
+          ref={previewContentRef}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
       </div>

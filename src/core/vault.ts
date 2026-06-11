@@ -27,6 +27,8 @@ export interface VaultAdapter {
   getVaultPath(): string | null;
   listTree(): Promise<FolderNode>;
   readFile(path: string): Promise<string>;
+  /** Read a file's raw bytes (image embeds, R11). Rejects when missing. */
+  readBinary(path: string): Promise<Uint8Array>;
   writeFile(path: string, content: string): Promise<void>;
   createFile(path: string, content: string): Promise<void>;
   createFolder(path: string): Promise<void>;
@@ -288,6 +290,11 @@ export class Vault {
     return content;
   }
 
+  /** Read raw bytes (image embeds, R11). Uncached — callers cache at their level. */
+  async readBinary(path: string): Promise<Uint8Array> {
+    return this.adapter.readBinary(path);
+  }
+
   /** read from cache only (sync) — may be undefined if never read */
   readCached(path: string): string | undefined {
     return this.contentCache.get(path);
@@ -397,6 +404,20 @@ export class Vault {
 
 /* ---------------- Memory adapter (browser dev + E2E) ---------------- */
 
+/** Binary fixtures for the demo vault (path → base64). Mirrors demo-vault/ on disk. */
+const DEMO_BINARY: Record<string, string> = {
+  // 1x1 png — the same bytes as demo-vault/assets/geode-dot.png
+  "assets/geode-dot.png":
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+};
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 const DEMO_FILES: Record<string, string> = {
   "Welcome.md": `# Welcome to Geode 💎
 
@@ -407,6 +428,8 @@ Geode is a **local-first** markdown knowledge base.
 - Press \`Ctrl+P\` for the command palette, \`Ctrl+O\` to quick-switch notes
 
 Start with [[Getting Started]] or read about [[Daily Notes]].
+
+Image embeds render inline: ![[geode-dot.png]]
 
 #welcome #intro
 `,
@@ -582,10 +605,12 @@ export function makeBenchSeed(count: number): Record<string, string> {
 export class MemoryVaultAdapter implements VaultAdapter {
   readonly kind = "memory" as const;
   private files = new Map<string, string>();
+  private binaryFiles = new Map<string, Uint8Array>();
   private folders = new Set<string>();
 
   constructor(seed?: Record<string, string>) {
     let actual = seed;
+    let seedBinaries = false;
     if (actual === undefined) {
       const bench = benchCountFromUrl();
       if (bench > 0) {
@@ -595,6 +620,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
         g.__geodePerf = { ...g.__geodePerf, benchCount: bench, benchSeedMs: performance.now() - t0 };
       } else {
         actual = DEMO_FILES;
+        seedBinaries = true;
       }
     }
     for (const [path, content] of Object.entries(actual)) {
@@ -603,6 +629,16 @@ export class MemoryVaultAdapter implements VaultAdapter {
       while (parent) {
         this.folders.add(parent);
         parent = parentPath(parent);
+      }
+    }
+    if (seedBinaries) {
+      for (const [path, b64] of Object.entries(DEMO_BINARY)) {
+        this.binaryFiles.set(path, base64ToBytes(b64));
+        let parent = parentPath(path);
+        while (parent) {
+          this.folders.add(parent);
+          parent = parentPath(parent);
+        }
       }
     }
   }
@@ -660,6 +696,9 @@ export class MemoryVaultAdapter implements VaultAdapter {
     for (const path of this.files.keys()) {
       ensureFolder(parentPath(path)).children.push(makeFileNode(path));
     }
+    for (const path of this.binaryFiles.keys()) {
+      ensureFolder(parentPath(path)).children.push(makeFileNode(path));
+    }
     return root;
   }
 
@@ -667,6 +706,14 @@ export class MemoryVaultAdapter implements VaultAdapter {
     const c = this.files.get(path);
     if (c === undefined) throw new Error(`File not found: ${path}`);
     return c;
+  }
+
+  async readBinary(path: string): Promise<Uint8Array> {
+    const b = this.binaryFiles.get(path);
+    if (b !== undefined) return b;
+    const text = this.files.get(path);
+    if (text !== undefined) return new TextEncoder().encode(text);
+    throw new Error(`File not found: ${path}`);
   }
 
   async writeFile(path: string, content: string): Promise<void> {
@@ -784,6 +831,14 @@ export class TauriVaultAdapter implements VaultAdapter {
 
   async readFile(path: string): Promise<string> {
     return this.invoke<string>("vault_read", { vault: this.root, path });
+  }
+
+  async readBinary(path: string): Promise<Uint8Array> {
+    const b64 = await this.invoke<string>("vault_read_binary", { vault: this.root, path });
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
   }
 
   async writeFile(path: string, content: string): Promise<void> {

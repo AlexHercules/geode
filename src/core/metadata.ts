@@ -150,12 +150,20 @@ export class MetadataIndex {
   private nameToPaths = new Map<string, Set<string>>();
   /** lowercase full path -> canonical path (O(1) exact-path link resolution) */
   private lowerPathToPath = new Map<string, string>();
+  /** lazily built non-markdown attachment lookup; null = stale (rebuild on demand) */
+  private attachmentMaps: {
+    lowerPathToPath: Map<string, string>;
+    lowerBasenameToPaths: Map<string, string[]>;
+  } | null = null;
 
   constructor(
     private vault: Vault,
     private events: EventBus,
   ) {
     events.on("vault:changed", ({ reason }) => {
+      // any tree mutation (load/create/rename/delete/external) may add or remove
+      // attachments — drop the lazy maps and rebuild on next resolveAttachment()
+      this.attachmentMaps = null;
       if (reason === "load") void this.rebuildAll();
     });
     events.on("file:modified", ({ path }) => void this.reindexFile(path));
@@ -301,6 +309,46 @@ export class MetadataIndex {
       return folder === fromFolder;
     });
     return sameFolder ?? [...candidates].sort()[0];
+  }
+
+  /**
+   * Resolve a NON-markdown attachment target ("img.png" / "assets/img.png").
+   * Mirrors resolveLink: a target containing "/" tries an exact relative-path
+   * match first (case-insensitive); otherwise it matches by basename including
+   * extension (multiple hits resolve to the lexicographically first path).
+   * Lookup maps are built lazily from vault.getFiles() non-md files and are
+   * invalidated whenever the vault tree changes ("vault:changed").
+   */
+  resolveAttachment(target: string, fromPath: string): string | null {
+    void fromPath; // part of the frozen signature; current rules do not use it
+    const clean = target.trim();
+    if (!clean) return null;
+    const maps = this.getAttachmentMaps();
+    if (clean.includes("/")) {
+      const exact = maps.lowerPathToPath.get(clean.toLowerCase());
+      if (exact) return exact;
+    }
+    const candidates = maps.lowerBasenameToPaths.get(clean.split("/").pop()!.toLowerCase());
+    if (!candidates || candidates.length === 0) return null;
+    return candidates[0];
+  }
+
+  private getAttachmentMaps(): NonNullable<MetadataIndex["attachmentMaps"]> {
+    if (this.attachmentMaps) return this.attachmentMaps;
+    const lowerPathToPath = new Map<string, string>();
+    const lowerBasenameToPaths = new Map<string, string[]>();
+    for (const f of this.vault.getFiles()) {
+      if (f.extension.toLowerCase() === "md") continue;
+      lowerPathToPath.set(f.path.toLowerCase(), f.path);
+      const key = f.name.toLowerCase();
+      const list = lowerBasenameToPaths.get(key);
+      if (list) list.push(f.path);
+      else lowerBasenameToPaths.set(key, [f.path]);
+    }
+    // deterministic "first" pick for duplicate basenames
+    for (const list of lowerBasenameToPaths.values()) list.sort();
+    this.attachmentMaps = { lowerPathToPath, lowerBasenameToPaths };
+    return this.attachmentMaps;
   }
 
   /** Backlinks: every file that links to `path`, with context snippets. */
