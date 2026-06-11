@@ -175,6 +175,28 @@
   color: var(--text-on-accent);
 }
 
+/* ---------- select (language picker) ---------- */
+
+.settings-select {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-select:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-select:focus-visible {
+  border-color: var(--accent);
+}
+
 /* ---------- font size slider ---------- */
 
 .settings-slider {

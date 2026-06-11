@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
+import { useI18n } from "@core/i18n";
 import type { FileNode } from "@core/types";
 import { allTabs } from "@core/workspace";
 import { fuzzyMatch, toSegments } from "./fuzzy";
@@ -32,6 +33,7 @@ function folderOf(path: string): string {
 
 export function QuickSwitcher() {
   const app = useApp();
+  const t = useI18n();
   const tree = useStore(app.vault.tree);
   const ws = useStore(app.workspace.state);
   const [query, setQuery] = useState("");
@@ -146,7 +148,7 @@ export function QuickSwitcher() {
 
   return (
     <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="quick-switcher">
-      <div className="modal-panel" role="dialog" aria-label="Quick switcher">
+      <div className="modal-panel" role="dialog" aria-label={t("switcher.aria")}>
         <div className="palette-input-wrap">
           <input
             className="palette-input"
@@ -154,18 +156,21 @@ export function QuickSwitcher() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Find or create a note…"
+            placeholder={t("switcher.placeholder")}
             spellCheck={false}
             data-testid="switcher-input"
           />
         </div>
         <div className="palette-list" ref={listRef} role="listbox">
           {rows.length === 0 ? (
-            <div className="palette-empty">No notes in vault</div>
+            <div className="palette-empty">{t("switcher.empty")}</div>
           ) : (
             rows.map((row, i) => {
               const isSel = i === sel;
               if (row.kind === "create") {
+                // dict shape is "Create note: {name}" — keep the literal
+                // placeholder and split on it so the name keeps its <b>
+                const [before, after] = t("switcher.create", { name: "{name}" }).split("{name}");
                 return (
                   <div
                     key="__create__"
@@ -180,7 +185,9 @@ export function QuickSwitcher() {
                       <Icon name="file-plus" size={15} />
                     </span>
                     <span className="palette-create-name">
-                      Create note: <b>{row.name}</b>
+                      {before}
+                      <b>{row.name}</b>
+                      {after}
                     </span>
                     <span className="palette-hotkey">Enter</span>
                   </div>

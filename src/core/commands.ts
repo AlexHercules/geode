@@ -43,7 +43,9 @@ export class CommandRegistry {
   }
 
   list(): Command[] {
-    return [...this.commands.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return [...this.commands.values()].sort((a, b) =>
+      getCommandName(a).localeCompare(getCommandName(b)),
+    );
   }
 
   /* ---------------- hotkey overrides (R6) ---------------- */
@@ -145,6 +147,11 @@ export class CommandRegistry {
       // storage unavailable — overrides stay session-local
     }
   }
+}
+
+/** Resolve a command's display name (R8: names may be locale-aware thunks). */
+export function getCommandName(cmd: Command): string {
+  return typeof cmd.name === "function" ? cmd.name() : cmd.name;
 }
 
 /**

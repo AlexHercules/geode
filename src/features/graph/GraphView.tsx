@@ -11,6 +11,7 @@ import {
 } from "d3-force";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import type { GraphEdge, GraphNode } from "@core/types";
 import "./graph.css";
@@ -206,6 +207,7 @@ function buildAdjacency(edges: GraphEdge[]): Map<string, Set<string>> {
 
 export function GraphView() {
   const app = useApp();
+  const t = useI18n();
   const rev = useStore(app.metadata.revision);
   const lastActiveFile = useStore(app.workspace.lastActiveFile);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -798,7 +800,7 @@ export function GraphView() {
             data-testid="graph-mode-global"
             onClick={() => setMode("global")}
           >
-            Global
+            {t("graph.global")}
           </button>
           <button
             type="button"
@@ -806,7 +808,7 @@ export function GraphView() {
             data-testid="graph-mode-local"
             onClick={() => setMode("local")}
           >
-            Local
+            {t("graph.local")}
           </button>
         </div>
         {prefs.mode === "local" && (
@@ -818,8 +820,8 @@ export function GraphView() {
               setPrefs((p) => ({ ...p, depth: e.target.value === "2" ? 2 : 1 }))
             }
           >
-            <option value={1}>Depth 1</option>
-            <option value={2}>Depth 2</option>
+            <option value={1}>{t("graph.depth1")}</option>
+            <option value={2}>{t("graph.depth2")}</option>
           </select>
         )}
         <button
@@ -827,25 +829,29 @@ export function GraphView() {
           className="graph-fit-btn"
           data-testid="graph-fit"
           onClick={fitToView}
-          title="Fit graph to view"
+          title={t("graph.fitTitle")}
         >
-          Fit
+          {t("graph.fit")}
         </button>
       </div>
       {info.nodes > 0 && (
         <div className="graph-legend" data-testid="graph-legend">
           {info.capped ? (
             <span>
-              top {fmt(info.nodes)} of {fmt(info.totalNodes)} nodes
+              {t("graph.legendTop", { shown: fmt(info.nodes), total: fmt(info.totalNodes) })}
             </span>
           ) : (
             <span>
-              {fmt(info.nodes)} {info.nodes === 1 ? "node" : "nodes"}
+              {t(info.nodes === 1 ? "graph.nodesOne" : "graph.nodesMany", {
+                count: fmt(info.nodes),
+              })}
             </span>
           )}
           <span className="graph-legend-sep">·</span>
           <span>
-            {fmt(info.edges)} {info.edges === 1 ? "link" : "links"}
+            {t(info.edges === 1 ? "graph.linksOne" : "graph.linksMany", {
+              count: fmt(info.edges),
+            })}
           </span>
           {info.totalNodes > RENDER_CAP && (
             <button
@@ -854,7 +860,7 @@ export function GraphView() {
               data-testid="graph-show-all"
               onClick={() => setPrefs((p) => ({ ...p, showAll: !p.showAll }))}
             >
-              {prefs.showAll ? `Show top ${fmt(RENDER_CAP)}` : "Show all"}
+              {prefs.showAll ? t("graph.showTop", { cap: fmt(RENDER_CAP) }) : t("graph.showAll")}
             </button>
           )}
         </div>
@@ -863,7 +869,7 @@ export function GraphView() {
         <div className="graph-empty" data-testid="graph-local-empty">
           <div className="graph-empty-card">
             <Icon name="graph" size={30} />
-            <div className="graph-empty-title">Open a note to see its local graph.</div>
+            <div className="graph-empty-title">{t("graph.localEmpty")}</div>
           </div>
         </div>
       )}
@@ -871,10 +877,8 @@ export function GraphView() {
         <div className="graph-empty" data-testid="graph-empty">
           <div className="graph-empty-card">
             <Icon name="graph" size={30} />
-            <div className="graph-empty-title">No notes to graph yet</div>
-            <div className="graph-empty-hint">
-              Create a note and add [[wiki links]] to see connections.
-            </div>
+            <div className="graph-empty-title">{t("graph.emptyTitle")}</div>
+            <div className="graph-empty-hint">{t("graph.emptyHint")}</div>
           </div>
         </div>
       )}

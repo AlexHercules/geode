@@ -9,6 +9,7 @@
  */
 import type { GeodeApp } from "@app/AppContext";
 import { saveTextFile } from "@core/export";
+import { t } from "@core/i18n";
 import { renderMarkdownToHtml } from "@core/markdown";
 import exportCss from "./export.css?raw";
 import "./notice.css";
@@ -108,10 +109,10 @@ export async function exportActiveNoteHtml(app: GeodeApp): Promise<void> {
       filterName: "HTML",
       extensions: ["html"],
     });
-    if (result === "saved") showExportNotice(`Exported "${note.title}.html"`);
+    if (result === "saved") showExportNotice(t("export.success", { name: `${note.title}.html` }));
   } catch (err) {
     console.error("[export] HTML export failed", err);
-    showExportNotice(`Export failed: ${String(err)}`, true);
+    showExportNotice(t("export.failed", { error: String(err) }), true);
   }
 }
 
@@ -132,7 +133,7 @@ export async function printActiveNote(app: GeodeApp): Promise<void> {
     note = await renderActiveNote(app);
   } catch (err) {
     console.error("[export] print render failed", err);
-    showExportNotice(`Print failed: ${String(err)}`, true);
+    showExportNotice(t("export.printFailed", { error: String(err) }), true);
     return;
   }
   if (!note) return;

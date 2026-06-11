@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { useApp } from "@app/AppContext";
 import { useStore } from "@core/store";
+import { locale, useI18n } from "@core/i18n";
+import { getCommandName } from "@core/commands";
 import type { Command } from "@core/types";
 import { fuzzyMatch, toSegments, type FuzzyMatch } from "./fuzzy";
 import "./palette.css";
@@ -15,6 +17,9 @@ interface Row {
 
 export function CommandPalette() {
   const app = useApp();
+  const t = useI18n();
+  // command names resolve per-locale — the rows memo must recompute on switch
+  const loc = useStore(locale);
   const rev = useStore(app.commands.revision);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
@@ -27,11 +32,11 @@ export function CommandPalette() {
     const q = query.trim();
     if (!q) return all.map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
     return all
-      .map((cmd) => ({ cmd, match: fuzzyMatch(q, cmd.name), hotkey: hotkey(cmd) }))
+      .map((cmd) => ({ cmd, match: fuzzyMatch(q, getCommandName(cmd)), hotkey: hotkey(cmd) }))
       .filter((r): r is Row => r.match !== null)
       .sort((a, b) => b.match.score - a.match.score);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.commands, query, rev]);
+  }, [app.commands, query, rev, loc]);
 
   const sel = rows.length === 0 ? -1 : Math.min(selected, rows.length - 1);
 
@@ -70,7 +75,7 @@ export function CommandPalette() {
 
   return (
     <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="command-palette">
-      <div className="modal-panel" role="dialog" aria-label="Command palette">
+      <div className="modal-panel" role="dialog" aria-label={t("palette.aria")}>
         <div className="palette-input-wrap">
           <input
             className="palette-input"
@@ -78,14 +83,14 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Type a command…"
+            placeholder={t("palette.placeholder")}
             spellCheck={false}
             data-testid="palette-input"
           />
         </div>
         <div className="palette-list" ref={listRef} role="listbox">
           {rows.length === 0 ? (
-            <div className="palette-empty">No matching commands</div>
+            <div className="palette-empty">{t("palette.empty")}</div>
           ) : (
             rows.map((row, i) => (
               <div
@@ -98,7 +103,7 @@ export function CommandPalette() {
                 data-testid="palette-item"
               >
                 <span className="palette-item-name">
-                  {toSegments(row.cmd.name, row.match.indices).map((seg, j) =>
+                  {toSegments(getCommandName(row.cmd), row.match.indices).map((seg, j) =>
                     seg.hit ? (
                       <span key={j} className="fz-hit">
                         {seg.text}

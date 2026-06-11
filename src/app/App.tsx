@@ -16,6 +16,7 @@ import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { SettingsModal } from "@features/settings/SettingsModal";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { isTauri } from "@core/vault";
+import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
@@ -55,6 +56,7 @@ function zoneFromEvent(e: React.DragEvent<HTMLElement>): DropZone {
 
 export function App() {
   const app = useApp();
+  const t = useI18n();
   const ws = useStore(app.workspace.state);
   const tree = useStore(app.vault.tree);
   const statusItems = useStore(app.plugins.statusBarItems);
@@ -101,19 +103,19 @@ export function App() {
     const disposers = [
       commands.register({
         id: "app:command-palette",
-        name: "Open command palette",
+        name: () => t("cmd.commandPalette"),
         hotkey: "Ctrl+P",
         callback: () => workspace.openModal("palette"),
       }),
       commands.register({
         id: "app:quick-switcher",
-        name: "Quick switcher: open note",
+        name: () => t("cmd.quickSwitcher"),
         hotkey: "Ctrl+O",
         callback: () => workspace.openModal("switcher"),
       }),
       commands.register({
         id: "app:new-note",
-        name: "Create new note",
+        name: () => t("cmd.newNote"),
         hotkey: "Ctrl+N",
         callback: () => {
           void (async () => {
@@ -125,19 +127,19 @@ export function App() {
       }),
       commands.register({
         id: "app:toggle-mode",
-        name: "Toggle editing / reading view",
+        name: () => t("cmd.toggleMode"),
         hotkey: "Ctrl+E",
         callback: () => workspace.toggleActiveTabMode(),
       }),
       commands.register({
         id: "app:toggle-source",
-        name: "Toggle live preview / source mode",
+        name: () => t("cmd.toggleSource"),
         hotkey: "Ctrl+Shift+E",
         callback: () => workspace.toggleActiveSourceMode(),
       }),
       commands.register({
         id: "app:reload-plugins",
-        name: "Reload external plugins",
+        name: () => t("cmd.reloadPlugins"),
         callback: () =>
           void (async () => {
             // sequential: external first, then the Obsidian compat layer
@@ -147,34 +149,34 @@ export function App() {
       }),
       commands.register({
         id: "app:open-graph",
-        name: "Open graph view",
+        name: () => t("cmd.openGraph"),
         hotkey: "Ctrl+G",
         callback: () => workspace.openGraph(),
       }),
       commands.register({
         id: "app:toggle-theme",
-        name: "Toggle dark / light theme",
+        name: () => t("cmd.toggleTheme"),
         callback: () => workspace.toggleTheme(),
       }),
       commands.register({
         id: "app:open-settings",
-        name: "Open settings",
+        name: () => t("cmd.openSettings"),
         hotkey: "Ctrl+,",
         callback: () => workspace.openModal("settings"),
       }),
       commands.register({
         id: "app:toggle-left-sidebar",
-        name: "Toggle left sidebar",
+        name: () => t("cmd.toggleLeftSidebar"),
         callback: () => workspace.toggleLeftSidebar(),
       }),
       commands.register({
         id: "app:toggle-right-sidebar",
-        name: "Toggle right sidebar",
+        name: () => t("cmd.toggleRightSidebar"),
         callback: () => workspace.toggleRightSidebar(),
       }),
       commands.register({
         id: "app:close-tab",
-        name: "Close current tab",
+        name: () => t("cmd.closeTab"),
         hotkey: "Ctrl+W",
         callback: () => {
           const tab = workspace.getActiveTab();
@@ -183,37 +185,37 @@ export function App() {
       }),
       commands.register({
         id: "app:split-right",
-        name: "Split pane right",
+        name: () => t("cmd.splitRight"),
         hotkey: "Ctrl+\\",
         callback: () => void workspace.splitActivePane("row"),
       }),
       commands.register({
         id: "app:split-down",
-        name: "Split pane down",
+        name: () => t("cmd.splitDown"),
         hotkey: "Ctrl+Shift+\\",
         callback: () => void workspace.splitActivePane("column"),
       }),
       commands.register({
         id: "app:focus-next-pane",
-        name: "Focus next pane",
+        name: () => t("cmd.focusNextPane"),
         hotkey: "Ctrl+Alt+ArrowRight",
         callback: () => workspace.focusAdjacentPane(1),
       }),
       commands.register({
         id: "app:focus-previous-pane",
-        name: "Focus previous pane",
+        name: () => t("cmd.focusPreviousPane"),
         hotkey: "Ctrl+Alt+ArrowLeft",
         callback: () => workspace.focusAdjacentPane(-1),
       }),
       commands.register({
         id: "app:export-html",
-        name: "Export note as HTML…",
+        name: () => t("cmd.exportHtml"),
         callback: () => void exportActiveNoteHtml(app),
         available: () => workspace.getActiveFile() !== null,
       }),
       commands.register({
         id: "app:export-pdf",
-        name: "Export note as PDF (print)…",
+        name: () => t("cmd.exportPdf"),
         callback: () => void printActiveNote(app),
         available: () => workspace.getActiveFile() !== null,
       }),
@@ -222,7 +224,7 @@ export function App() {
       disposers.push(
         commands.register({
           id: "app:open-vault",
-          name: "Open another vault…",
+          name: () => t("cmd.openVault"),
           callback: () => void openVaultFlow(app),
         }),
       );
@@ -285,10 +287,10 @@ export function App() {
     <div className="app" data-testid="app-root">
       <div className="app-body">
         {/* ribbon */}
-        <nav className="ribbon" aria-label="Primary">
+        <nav className="ribbon" aria-label={t("app.ribbonAria")}>
           <RibbonButton
             icon="files"
-            title="File explorer"
+            title={t("app.ribbonExplorer")}
             active={ws.leftSidebarOpen && effectiveLeft === "explorer"}
             onClick={() =>
               effectiveLeft === "explorer" && ws.leftSidebarOpen
@@ -298,7 +300,7 @@ export function App() {
           />
           <RibbonButton
             icon="search"
-            title="Search"
+            title={t("app.ribbonSearch")}
             active={ws.leftSidebarOpen && effectiveLeft === "search"}
             onClick={() =>
               effectiveLeft === "search" && ws.leftSidebarOpen
@@ -306,10 +308,10 @@ export function App() {
                 : app.workspace.setLeftPanel("search")
             }
           />
-          <RibbonButton icon="graph" title="Graph view (Ctrl+G)" onClick={() => app.workspace.openGraph()} />
+          <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />
           <RibbonButton
             icon="command"
-            title="Command palette (Ctrl+P)"
+            title={t("app.ribbonPalette")}
             onClick={() => app.workspace.openModal("palette")}
           />
           {/* plugin-contributed sidebar panels (compat registerView): one selector button each */}
@@ -338,10 +340,10 @@ export function App() {
           <div className="ribbon-spacer" />
           <RibbonButton
             icon={ws.theme === "dark" ? "sun" : "moon"}
-            title="Toggle theme"
+            title={t("app.ribbonTheme")}
             onClick={() => app.workspace.toggleTheme()}
           />
-          <RibbonButton icon="settings" title="Settings (Ctrl+,)" onClick={() => app.workspace.openModal("settings")} />
+          <RibbonButton icon="settings" title={t("app.ribbonSettings")} onClick={() => app.workspace.openModal("settings")} />
         </nav>
 
         {/* left sidebar */}
@@ -377,12 +379,12 @@ export function App() {
             data-testid="right-sidebar"
           >
             <SidebarResizer side="right" />
-            <div className="right-tabs" role="tablist" aria-label="Right panel">
+            <div className="right-tabs" role="tablist" aria-label={t("app.rightPanelAria")}>
               <button
                 role="tab"
                 aria-selected={effectiveRight === "backlinks"}
                 className={`right-tab${effectiveRight === "backlinks" ? " is-active" : ""}`}
-                title="Backlinks"
+                title={t("app.tabBacklinks")}
                 data-testid="right-tab-backlinks"
                 onClick={() => app.workspace.setRightPanel("backlinks")}
               >
@@ -392,7 +394,7 @@ export function App() {
                 role="tab"
                 aria-selected={effectiveRight === "outline"}
                 className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
-                title="Outline"
+                title={t("app.tabOutline")}
                 data-testid="right-tab-outline"
                 onClick={() => app.workspace.setRightPanel("outline")}
               >
@@ -752,6 +754,7 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
 
 function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
+  const t = useI18n();
   const { setDraggingTabId } = useContext(TabDragContext);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
 
@@ -792,7 +795,12 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         if (tabId) app.workspace.moveTab(tabId, leaf.id, idx);
       }}
     >
-      {leaf.tabs.map((tab, i) => (
+      {leaf.tabs.map((tab, i) => {
+        /* the graph tab's stored title is persisted in workspace state —
+           ignore it at render time so the label follows the UI locale;
+           file tabs keep the basename verbatim */
+        const title = tab.viewType === "graph" ? t("app.graphTab") : tab.title;
+        return (
         <div
           key={tab.id}
           role="tab"
@@ -810,13 +818,13 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           onDragEnd={() => setDraggingTabId(null)}
           onClick={() => app.workspace.setActiveTab(tab.id)}
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
-          title={tab.filePath ?? tab.title}
+          title={tab.filePath ?? title}
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
-          <span className="tab-title">{tab.title}</span>
+          <span className="tab-title">{title}</span>
           <button
             className="tab-close"
-            aria-label={`Close ${tab.title}`}
+            aria-label={t("app.closeTab", { title })}
             onClick={(e) => {
               e.stopPropagation();
               app.workspace.closeTab(tab.id);
@@ -825,11 +833,12 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
             <Icon name="x" size={13} />
           </button>
         </div>
-      ))}
+        );
+      })}
       <button
         className="tab-new"
-        title="New note (Ctrl+N)"
-        aria-label="New note"
+        title={t("app.newNoteTitle")}
+        aria-label={t("app.newNote")}
         onClick={() => app.commands.execute("app:new-note")}
       >
         <Icon name="plus" size={16} />
@@ -840,14 +849,15 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
 
 function EmptyState() {
   const app = useApp();
+  const t = useI18n();
   return (
     <div className="empty-state" data-testid="empty-state">
       <div className="empty-state-card">
-        <h2>No file is open</h2>
+        <h2>{t("app.emptyTitle")}</h2>
         <div className="empty-actions">
-          <button onClick={() => app.commands.execute("app:new-note")}>Create new note (Ctrl+N)</button>
-          <button onClick={() => app.workspace.openModal("switcher")}>Open quick switcher (Ctrl+O)</button>
-          <button onClick={() => app.workspace.openGraph()}>Open graph view (Ctrl+G)</button>
+          <button onClick={() => app.commands.execute("app:new-note")}>{t("app.emptyNewNote")}</button>
+          <button onClick={() => app.workspace.openModal("switcher")}>{t("app.emptySwitcher")}</button>
+          <button onClick={() => app.workspace.openGraph()}>{t("app.emptyGraph")}</button>
         </div>
       </div>
     </div>
@@ -856,13 +866,14 @@ function EmptyState() {
 
 function VaultPicker() {
   const app = useApp();
+  const t = useI18n();
   return (
     <div className="vault-picker" data-testid="vault-picker">
       <div className="vault-picker-card">
         <h1>💎 Geode</h1>
-        <p>Your local-first markdown knowledge base.</p>
+        <p>{t("app.vaultTagline")}</p>
         <button className="btn-accent" onClick={() => void openVaultFlow(app)}>
-          Open folder as vault
+          {t("app.openVaultButton")}
         </button>
       </div>
     </div>

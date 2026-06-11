@@ -172,7 +172,10 @@ export interface WorkspaceState {
 
 export interface Command {
   id: string;
-  name: string;
+  /** Display name. A thunk (R8) resolves through the i18n layer at render time —
+   *  use `getCommandName(cmd)` from core/commands to read it. Plain strings stay
+   *  valid (compat plugins register strings). */
+  name: string | (() => string);
   /** e.g. "Ctrl+P" — display + matching key, Mod = Ctrl on Windows */
   hotkey?: string;
   callback: () => void;

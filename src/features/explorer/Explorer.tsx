@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath } from "@core/vault";
 import { useStore } from "@core/store";
+import { useI18n } from "@core/i18n";
 import { findActiveTab } from "@core/workspace";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -162,6 +163,7 @@ function RenameInput(props: {
 
 export function Explorer() {
   const app = useApp();
+  const t = useI18n();
   const tree = useStore(app.vault.tree);
   const ws = useStore(app.workspace.state);
   const activeFile = useMemo(() => {
@@ -331,14 +333,15 @@ export function Explorer() {
   };
 
   const deleteNode = async (node: VaultNode) => {
-    const what =
-      node.kind === "folder" ? `folder "${node.name}" and all its contents` : `"${node.name}"`;
-    const message = `Delete ${what}?`;
+    const message =
+      node.kind === "folder"
+        ? t("explorer.deleteConfirmFolder", { name: node.name })
+        : t("explorer.deleteConfirmFile", { name: node.name });
     let ok: boolean;
     if (isTauri()) {
       // window.confirm is unreliable in wry webviews — use the native dialog
       const { ask } = await import("@tauri-apps/plugin-dialog");
-      ok = await ask(message, { title: "Delete", kind: "warning" });
+      ok = await ask(message, { title: t("explorer.delete"), kind: "warning" });
     } else {
       ok = window.confirm(message);
     }
@@ -494,24 +497,24 @@ export function Explorer() {
         </span>
         <div className="panel-actions">
           <button
-            title="New note"
-            aria-label="New note"
+            title={t("explorer.newNote")}
+            aria-label={t("explorer.newNote")}
             data-testid="explorer-new-note"
             onClick={() => void newNote()}
           >
             <Icon name="file-plus" size={16} />
           </button>
           <button
-            title="New folder"
-            aria-label="New folder"
+            title={t("explorer.newFolder")}
+            aria-label={t("explorer.newFolder")}
             data-testid="explorer-new-folder"
             onClick={() => void newFolder()}
           >
             <Icon name="folder-plus" size={16} />
           </button>
           <button
-            title={anyExpanded ? "Collapse all" : "Expand all"}
-            aria-label={anyExpanded ? "Collapse all" : "Expand all"}
+            title={anyExpanded ? t("explorer.collapseAll") : t("explorer.expandAll")}
+            aria-label={anyExpanded ? t("explorer.collapseAll") : t("explorer.expandAll")}
             data-testid="explorer-collapse-all"
             onClick={collapseOrExpandAll}
           >
@@ -529,12 +532,12 @@ export function Explorer() {
         onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
       >
         {tree === null ? (
-          <div className="explorer-empty">No vault open</div>
+          <div className="explorer-empty">{t("explorer.noVault")}</div>
         ) : isEmpty ? (
           <div className="explorer-empty" data-testid="explorer-empty">
-            <p>This vault is empty.</p>
+            <p>{t("explorer.emptyVault")}</p>
             <button className="explorer-empty-btn" onClick={() => void newNote("")}>
-              Create your first note
+              {t("explorer.createFirstNote")}
             </button>
           </div>
         ) : virtual ? (
@@ -590,7 +593,7 @@ export function Explorer() {
                 }}
               >
                 <Icon name="file-plus" size={14} />
-                New note here
+                {t("explorer.newNoteHere")}
               </button>
               <button
                 onClick={() => {
@@ -599,7 +602,7 @@ export function Explorer() {
                 }}
               >
                 <Icon name="folder-plus" size={14} />
-                New folder here
+                {t("explorer.newFolderHere")}
               </button>
               <div className="explorer-menu-sep" />
             </>
@@ -611,7 +614,7 @@ export function Explorer() {
             }}
           >
             <Icon name="pencil" size={14} />
-            Rename
+            {t("explorer.rename")}
           </button>
           <button
             className="is-danger"
@@ -621,7 +624,7 @@ export function Explorer() {
             }}
           >
             <Icon name="x" size={14} />
-            Delete
+            {t("explorer.delete")}
           </button>
         </div>
       )}

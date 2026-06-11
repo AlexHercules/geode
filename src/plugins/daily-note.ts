@@ -1,4 +1,5 @@
 import type { AppHandle, GeodePlugin } from "@core/plugins";
+import { t } from "@core/i18n";
 
 const FOLDER = "Daily Notes";
 
@@ -44,7 +45,7 @@ export const dailyNotePlugin: GeodePlugin = {
     // commands.register via the plugin handle auto-tracks the disposer
     app.commands.register({
       id: "daily-note:open-today",
-      name: "Open today's daily note",
+      name: () => t("cmd.dailyNote"),
       hotkey: "Ctrl+D",
       callback: () => void openToday(app),
     });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
+import { useI18n } from "@core/i18n";
 import type { HeadingRef } from "@core/types";
 import { findActiveTab } from "@core/workspace";
 import "./outline.css";
@@ -45,6 +46,7 @@ function visibleRows(rows: OutlineRow[], collapsed: ReadonlySet<number>): Outlin
 
 export function OutlinePanel() {
   const app = useApp();
+  const t = useI18n();
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
 
@@ -93,7 +95,7 @@ export function OutlinePanel() {
   return (
     <div className="outline-panel" data-testid="outline-panel">
       <div className="panel-header">
-        <span>Outline</span>
+        <span>{t("outline.title")}</span>
         {activePath !== null && (
           <span className="outline-count" data-testid="outline-count">
             {rows.length}
@@ -103,14 +105,14 @@ export function OutlinePanel() {
 
       {!activePath ? (
         <div className="outline-empty" data-testid="outline-empty">
-          Open a note to see its outline
+          {t("outline.empty")}
         </div>
       ) : rows.length === 0 ? (
         <div className="outline-empty" data-testid="outline-empty">
-          No headings in this note
+          {t("outline.noHeadings")}
         </div>
       ) : (
-        <div className="outline-scroll" role="tree" aria-label="Document outline">
+        <div className="outline-scroll" role="tree" aria-label={t("outline.ariaTree")}>
           {shown.map((row) => (
             <div
               key={row.index}
@@ -126,7 +128,11 @@ export function OutlinePanel() {
                 <button
                   className="outline-chevron"
                   data-testid="outline-chevron"
-                  aria-label={collapsed.has(row.index) ? "Expand section" : "Collapse section"}
+                  aria-label={
+                    collapsed.has(row.index)
+                      ? t("outline.expandSection")
+                      : t("outline.collapseSection")
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     toggleCollapse(row.index);

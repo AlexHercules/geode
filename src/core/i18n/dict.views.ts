@@ -1,0 +1,226 @@
+/**
+ * i18n dictionary fragment — settings / graph / editor / export strings (R8).
+ * Owner: sweep-views agent. Namespaces: settings.* / graph.* / editor.* / export.*
+ * `zh` is keyed against `en` so a missing translation is a type error.
+ */
+export const en = {
+  // ---- settings: shell ----
+  "settings.title": "Settings",
+  "settings.close": "Close settings",
+  "settings.navAria": "Settings sections",
+  "settings.section.appearance": "Appearance",
+  "settings.section.plugins": "Plugins",
+  "settings.section.hotkeys": "Hotkeys",
+  "settings.section.about": "About",
+
+  // ---- settings: appearance ----
+  "settings.theme": "Theme",
+  "settings.themeDesc": "Choose the base color scheme for the app.",
+  "settings.themeDark": "Dark",
+  "settings.themeLight": "Light",
+  "settings.fontSize": "Editor font size",
+  "settings.fontSizeDesc": "Font size used by the markdown editor and preview.",
+  "settings.language": "Language",
+  "settings.languageDesc": "Choose the interface language.",
+
+  // ---- settings: plugins ----
+  // note split around the inline <code> element (word order differs per locale)
+  "settings.pluginsNotePre":
+    "Built-in plugins extend Geode with commands, status bar items and more. Plugins can also be registered at runtime via ",
+  "settings.pluginsNotePost": ".",
+  "settings.pluginGroupBuiltin": "Built-in",
+  "settings.pluginGroupExternal": "External",
+  "settings.pluginGroupObsidian": "Obsidian",
+  "settings.reloadPlugins": "Reload external plugins",
+  "settings.reloadPluginsTitle": "Re-scan .geode/plugins and reload all external plugins",
+  // "Drop <.js> files into <path> — see <doc> for the authoring guide."
+  "settings.pluginPathHint1": "Drop ",
+  "settings.pluginPathHint2": " files into ",
+  "settings.pluginPathHint3": " — see ",
+  "settings.pluginPathHint4": " for the authoring guide.",
+  // "Obsidian community plugins from <path>, loaded through the compatibility layer."
+  "settings.obsidianHintPre": "Obsidian community plugins from ",
+  "settings.obsidianHintPost": ", loaded through the compatibility layer.",
+  "settings.sourceBadgeBuiltin": "core",
+  "settings.sourceBadgeExternal": "external",
+  "settings.sourceBadgeObsidian": "obsidian",
+  "settings.pluginFailed": "failed to load",
+  "settings.pluginSkipped": "skipped",
+  "settings.pluginNoDetail": "no detail recorded",
+  "settings.pluginSettingsGroup": "Plugin settings",
+  "settings.pluginEmptyBuiltin": "No built-in plugins registered.",
+  "settings.pluginEmptyExternal": "No external plugins found.",
+  "settings.pluginEmptyObsidian": "No Obsidian plugins found.",
+  "settings.enablePlugin": "Enable {name}",
+  "settings.disablePlugin": "Disable {name}",
+
+  // ---- settings: hotkeys ----
+  // instruction note split around inline <em>/<code> elements:
+  // "Click <Customize>, then press the new key combination (must include
+  //  <Ctrl> or <Alt>, except function keys). Press <Backspace> to remove a
+  //  binding, <Escape> to cancel."
+  "settings.hotkeysNote1": "Click ",
+  "settings.hotkeysNote2": ", then press the new key combination (must include ",
+  "settings.hotkeysNote3": " or ",
+  "settings.hotkeysNote4": ", except function keys). Press ",
+  "settings.hotkeysNote5": " to remove a binding, ",
+  "settings.hotkeysNote6": " to cancel.",
+  "settings.hotkeysFilter": "Filter commands…",
+  "settings.hotkeysEmpty": "No matching commands.",
+  "settings.hotkeyConflict": "Conflicts with {names}",
+  "settings.hotkeyCapture": "Press a key…",
+  "settings.hotkeyNotSet": "Not set",
+  "settings.hotkeyResetTitle": "Restore default hotkey",
+  "settings.hotkeyResetAria": "Restore default hotkey for {name}",
+  "settings.customize": "Customize",
+  "settings.cancel": "Cancel",
+
+  // ---- settings: about ----
+  "settings.aboutDesc":
+    "Geode is a local-first markdown knowledge base. Your notes are plain files on your own disk — link them with wikilinks, follow backlinks, and explore the connections between ideas in an interactive graph.",
+  "settings.aboutStack": "Built with Tauri 2 · React 18 · TypeScript · Vite · CodeMirror 6",
+
+  // ---- graph view ----
+  "graph.global": "Global",
+  "graph.local": "Local",
+  "graph.depth1": "Depth 1",
+  "graph.depth2": "Depth 2",
+  "graph.fit": "Fit",
+  "graph.fitTitle": "Fit graph to view",
+  "graph.legendTop": "top {shown} of {total} nodes",
+  "graph.nodesOne": "{count} node",
+  "graph.nodesMany": "{count} nodes",
+  "graph.linksOne": "{count} link",
+  "graph.linksMany": "{count} links",
+  "graph.showAll": "Show all",
+  "graph.showTop": "Show top {cap}",
+  "graph.localEmpty": "Open a note to see its local graph.",
+  "graph.emptyTitle": "No notes to graph yet",
+  "graph.emptyHint": "Create a note and add [[wiki links]] to see connections.",
+
+  // ---- editor ----
+  "editor.noFile": "No file is open",
+  "editor.openFailed": 'Couldn\'t open "{name}"',
+  "editor.viewModeAria": "View mode",
+  "editor.livePreview": "Live preview",
+  "editor.sourceMode": "Source mode",
+  "editor.readingView": "Reading view",
+  "editor.placeholder": "Start writing…",
+  "editor.taskMarkComplete": "Mark task complete",
+  "editor.taskMarkIncomplete": "Mark task incomplete",
+  "editor.propertiesOne": "Properties · {count} field",
+  "editor.propertiesMany": "Properties · {count} fields",
+  "editor.editProperties": "Edit properties",
+
+  // ---- export ----
+  "export.success": 'Exported "{name}"',
+  "export.failed": "Export failed: {error}",
+  "export.printFailed": "Print failed: {error}",
+} as const;
+
+export const zh: Record<keyof typeof en, string> = {
+  // ---- settings: shell ----
+  "settings.title": "设置",
+  "settings.close": "关闭设置",
+  "settings.navAria": "设置分区",
+  "settings.section.appearance": "外观",
+  "settings.section.plugins": "插件",
+  "settings.section.hotkeys": "快捷键",
+  "settings.section.about": "关于",
+
+  // ---- settings: appearance ----
+  "settings.theme": "主题",
+  "settings.themeDesc": "选择应用的基础配色方案。",
+  "settings.themeDark": "深色",
+  "settings.themeLight": "浅色",
+  "settings.fontSize": "编辑器字号",
+  "settings.fontSizeDesc": "Markdown 编辑器与预览所使用的字号。",
+  "settings.language": "语言",
+  "settings.languageDesc": "选择界面语言。",
+
+  // ---- settings: plugins ----
+  "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",
+  "settings.pluginsNotePost": " 注册插件。",
+  "settings.pluginGroupBuiltin": "内置",
+  "settings.pluginGroupExternal": "外部",
+  "settings.pluginGroupObsidian": "Obsidian",
+  "settings.reloadPlugins": "重新加载外部插件",
+  "settings.reloadPluginsTitle": "重新扫描 .geode/plugins 并重新加载全部外部插件",
+  "settings.pluginPathHint1": "将 ",
+  "settings.pluginPathHint2": " 文件放入 ",
+  "settings.pluginPathHint3": "，编写指南见 ",
+  "settings.pluginPathHint4": "。",
+  "settings.obsidianHintPre": "来自 ",
+  "settings.obsidianHintPost": " 的 Obsidian 社区插件，经兼容层加载。",
+  "settings.sourceBadgeBuiltin": "核心",
+  "settings.sourceBadgeExternal": "外部",
+  "settings.sourceBadgeObsidian": "obsidian",
+  "settings.pluginFailed": "加载失败",
+  "settings.pluginSkipped": "已跳过",
+  "settings.pluginNoDetail": "未记录详细信息",
+  "settings.pluginSettingsGroup": "插件设置",
+  "settings.pluginEmptyBuiltin": "未注册任何内置插件。",
+  "settings.pluginEmptyExternal": "未发现外部插件。",
+  "settings.pluginEmptyObsidian": "未发现 Obsidian 插件。",
+  "settings.enablePlugin": "启用 {name}",
+  "settings.disablePlugin": "停用 {name}",
+
+  // ---- settings: hotkeys ----
+  "settings.hotkeysNote1": "点击 ",
+  "settings.hotkeysNote2": "，然后按下新的按键组合（须包含 ",
+  "settings.hotkeysNote3": " 或 ",
+  "settings.hotkeysNote4": "，功能键除外）。按 ",
+  "settings.hotkeysNote5": " 移除绑定，按 ",
+  "settings.hotkeysNote6": " 取消。",
+  "settings.hotkeysFilter": "筛选命令…",
+  "settings.hotkeysEmpty": "没有匹配的命令。",
+  "settings.hotkeyConflict": "与 {names} 冲突",
+  "settings.hotkeyCapture": "请按下按键…",
+  "settings.hotkeyNotSet": "未设置",
+  "settings.hotkeyResetTitle": "恢复默认快捷键",
+  "settings.hotkeyResetAria": "恢复 {name} 的默认快捷键",
+  "settings.customize": "自定义",
+  "settings.cancel": "取消",
+
+  // ---- settings: about ----
+  "settings.aboutDesc":
+    "Geode 是一个本地优先的 Markdown 知识库。你的笔记是存放在自己磁盘上的纯文本文件——用 wikilink 连接它们、追踪反向链接，并在交互式关系图谱中探索想法之间的关联。",
+  "settings.aboutStack": "基于 Tauri 2 · React 18 · TypeScript · Vite · CodeMirror 6 构建",
+
+  // ---- graph view ----
+  "graph.global": "全局",
+  "graph.local": "局部",
+  "graph.depth1": "深度 1",
+  "graph.depth2": "深度 2",
+  "graph.fit": "适应",
+  "graph.fitTitle": "缩放图谱以适应视图",
+  "graph.legendTop": "显示前 {shown} 个节点（共 {total} 个）",
+  "graph.nodesOne": "{count} 个节点",
+  "graph.nodesMany": "{count} 个节点",
+  "graph.linksOne": "{count} 条连接",
+  "graph.linksMany": "{count} 条连接",
+  "graph.showAll": "显示全部",
+  "graph.showTop": "仅显示前 {cap} 个",
+  "graph.localEmpty": "打开笔记以查看其局部图谱。",
+  "graph.emptyTitle": "还没有可生成图谱的笔记",
+  "graph.emptyHint": "新建笔记并添加 [[wiki 链接]] 即可看到关联。",
+
+  // ---- editor ----
+  "editor.noFile": "没有打开的文件",
+  "editor.openFailed": "无法打开“{name}”",
+  "editor.viewModeAria": "视图模式",
+  "editor.livePreview": "实时预览",
+  "editor.sourceMode": "源码模式",
+  "editor.readingView": "阅读视图",
+  "editor.placeholder": "开始书写…",
+  "editor.taskMarkComplete": "标记任务为已完成",
+  "editor.taskMarkIncomplete": "标记任务为未完成",
+  "editor.propertiesOne": "属性 · {count} 个字段",
+  "editor.propertiesMany": "属性 · {count} 个字段",
+  "editor.editProperties": "编辑属性",
+
+  // ---- export ----
+  "export.success": "已导出“{name}”",
+  "export.failed": "导出失败：{error}",
+  "export.printFailed": "打印失败：{error}",
+};

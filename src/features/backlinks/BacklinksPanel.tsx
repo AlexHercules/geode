@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
+import { useI18n } from "@core/i18n";
 import type { BacklinkEntry, LinkRef } from "@core/types";
 import { findActiveTab } from "@core/workspace";
 import "./backlinks.css";
@@ -63,6 +64,7 @@ function Section({
 
 export function BacklinksPanel() {
   const app = useApp();
+  const t = useI18n();
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
 
@@ -102,22 +104,22 @@ export function BacklinksPanel() {
 
   return (
     <div className="backlinks-panel" data-testid="backlinks-panel">
-      <div className="panel-header">Backlinks</div>
+      <div className="panel-header">{t("backlinks.title")}</div>
       {!activePath ? (
         <div className="bl-empty" data-testid="bl-empty">
-          Open a note to see its backlinks
+          {t("backlinks.empty")}
         </div>
       ) : (
         <div className="bl-scroll">
           <Section
-            title="Linked mentions"
+            title={t("backlinks.linkedMentions")}
             count={data.mentionCount}
             collapsed={!!collapsed.mentions}
             onToggle={() => toggle("mentions")}
             testid="bl-section-mentions"
           >
             {data.backlinks.length === 0 ? (
-              <div className="bl-empty-sub">No backlinks yet</div>
+              <div className="bl-empty-sub">{t("backlinks.noBacklinks")}</div>
             ) : (
               data.backlinks.map((b) => (
                 <div className="bl-source" key={b.sourcePath}>
@@ -149,21 +151,21 @@ export function BacklinksPanel() {
           </Section>
 
           <Section
-            title="Outgoing links"
+            title={t("backlinks.outgoingLinks")}
             count={data.outgoing.length}
             collapsed={!!collapsed.outgoing}
             onToggle={() => toggle("outgoing")}
             testid="bl-section-outgoing"
           >
             {data.outgoing.length === 0 ? (
-              <div className="bl-empty-sub">No outgoing links</div>
+              <div className="bl-empty-sub">{t("backlinks.noOutgoing")}</div>
             ) : (
               <div className="bl-out-list">
                 {data.outgoing.map(({ link, resolvedPath }) => (
                   <button
                     key={resolvedPath ?? `unresolved:${link.target.toLowerCase()}`}
                     className={"bl-out" + (resolvedPath ? "" : " is-unresolved")}
-                    title={resolvedPath ?? `Create "${link.target}"`}
+                    title={resolvedPath ?? t("backlinks.createTitle", { name: link.target })}
                     data-testid="bl-outgoing"
                     onClick={() =>
                       resolvedPath
@@ -173,7 +175,7 @@ export function BacklinksPanel() {
                   >
                     <Icon name="link" size={13} />
                     <span className="bl-ellipsis">{link.target}</span>
-                    {!resolvedPath && <span className="bl-new">new</span>}
+                    {!resolvedPath && <span className="bl-new">{t("backlinks.newBadge")}</span>}
                   </button>
                 ))}
               </div>
@@ -181,14 +183,14 @@ export function BacklinksPanel() {
           </Section>
 
           <Section
-            title="Tags"
+            title={t("backlinks.tags")}
             count={data.tags.length}
             collapsed={!!collapsed.tags}
             onToggle={() => toggle("tags")}
             testid="bl-section-tags"
           >
             {data.tags.length === 0 ? (
-              <div className="bl-empty-sub">No tags</div>
+              <div className="bl-empty-sub">{t("backlinks.noTags")}</div>
             ) : (
               <div className="bl-tags">
                 {data.tags.map((t) => (

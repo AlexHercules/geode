@@ -23,6 +23,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
+import { t } from "@core/i18n";
 import { parseFrontmatter } from "@core/metadata";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -65,7 +66,10 @@ class CheckboxWidget extends WidgetType {
     box.className = "cm-live-checkbox";
     box.checked = this.checked;
     box.setAttribute("data-testid", "live-task-checkbox");
-    box.setAttribute("aria-label", this.checked ? "Mark task incomplete" : "Mark task complete");
+    box.setAttribute(
+      "aria-label",
+      this.checked ? t("editor.taskMarkIncomplete") : t("editor.taskMarkComplete"),
+    );
     // mousedown would move the cursor into the line and reveal the raw syntax
     box.addEventListener("mousedown", (e) => e.preventDefault());
     box.addEventListener("click", (e) => {
@@ -121,8 +125,10 @@ class FrontmatterWidget extends WidgetType {
     pill.type = "button";
     pill.className = "cm-live-frontmatter";
     pill.setAttribute("data-testid", "live-frontmatter-pill");
-    pill.title = "Edit properties";
-    pill.textContent = `Properties · ${this.count} ${this.count === 1 ? "field" : "fields"}`;
+    pill.title = t("editor.editProperties");
+    pill.textContent = t(this.count === 1 ? "editor.propertiesOne" : "editor.propertiesMany", {
+      count: this.count,
+    });
     pill.addEventListener("mousedown", (e) => e.preventDefault());
     pill.addEventListener("click", (e) => {
       e.preventDefault();

@@ -1,6 +1,10 @@
 import type { AppHandle, GeodePlugin } from "@core/plugins";
+import { locale, t } from "@core/i18n";
 
 const ITEM_ID = "word-count";
+
+/** Disposer for the locale subscription (set in onload, released in onunload). */
+let unsubscribeLocale: (() => void) | null = null;
 
 function countWords(text: string): number {
   const matches = text.match(/\S+/g);
@@ -39,7 +43,10 @@ export const wordCountPlugin: GeodePlugin = {
         // a newer update started (or the active file changed) while we awaited
         if (token !== requestToken || path !== app.workspace.getActiveFile()) return;
       }
-      app.ui.setStatusBarItem(ITEM_ID, `${countWords(content)} words · ${content.length} chars`);
+      app.ui.setStatusBarItem(
+        ITEM_ID,
+        t("plugin.wordCount", { words: countWords(content), chars: content.length }),
+      );
     };
 
     // events.on via the plugin handle auto-tracks disposers
@@ -48,10 +55,17 @@ export const wordCountPlugin: GeodePlugin = {
       if (path === app.workspace.getActiveFile()) void update();
     });
 
+    // the status bar text is plain (re-rendered only on update) — refresh it on
+    // locale switch so it does not keep the old language until the next edit
+    unsubscribeLocale = locale.subscribe(() => void update());
+
     void update();
   },
 
   onunload() {
-    // event listeners and the status bar item are disposed by the plugin manager
+    // event listeners and the status bar item are disposed by the plugin
+    // manager; the locale subscription is ours to release
+    unsubscribeLocale?.();
+    unsubscribeLocale = null;
   },
 };

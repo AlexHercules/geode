@@ -1,4 +1,5 @@
 import type { AppHandle, GeodePlugin } from "@core/plugins";
+import { t } from "@core/i18n";
 
 /**
  * Random note — jump to a random markdown file in the vault. Great for
@@ -14,7 +15,7 @@ export const randomNotePlugin: GeodePlugin = {
     // commands.register via the plugin handle auto-tracks the disposer
     app.commands.register({
       id: "random-note:open",
-      name: "Open random note",
+      name: () => t("cmd.randomNote"),
       callback: () => {
         const files = app.vault.getMarkdownFiles();
         if (files.length === 0) return;

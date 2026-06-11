@@ -1,0 +1,114 @@
+/**
+ * i18n dictionary fragment — app shell strings (R8).
+ * Owner: sweep-app agent. Namespaces: app.* / cmd.* / plugin.*
+ * `zh` is keyed against `en` so a missing translation is a type error.
+ */
+export const en = {
+  // ---- app shell (App.tsx / main.tsx) ----
+  "app.graphTab": "Graph view",
+  "app.ribbonAria": "Primary",
+  "app.ribbonExplorer": "File explorer",
+  "app.ribbonSearch": "Search",
+  "app.ribbonGraph": "Graph view (Ctrl+G)",
+  "app.ribbonPalette": "Command palette (Ctrl+P)",
+  "app.ribbonTheme": "Toggle theme",
+  "app.ribbonSettings": "Settings (Ctrl+,)",
+  "app.rightPanelAria": "Right panel",
+  "app.tabBacklinks": "Backlinks",
+  "app.tabOutline": "Outline",
+  "app.closeTab": "Close {title}",
+  "app.newNoteTitle": "New note (Ctrl+N)",
+  "app.newNote": "New note",
+  "app.emptyTitle": "No file is open",
+  "app.emptyNewNote": "Create new note (Ctrl+N)",
+  "app.emptySwitcher": "Open quick switcher (Ctrl+O)",
+  "app.emptyGraph": "Open graph view (Ctrl+G)",
+  "app.vaultTagline": "Your local-first markdown knowledge base.",
+  "app.openVaultButton": "Open folder as vault",
+  "app.errorTitle": "Something went wrong",
+  "app.errorBody":
+    "Geode hit an unexpected error. Your notes are plain files on disk and are safe. Reloading usually fixes it; if it keeps happening, clear the saved state below.",
+  "app.errorClear": "Clear saved state & reload",
+  "app.bootFailed": "Geode failed to start",
+
+  // ---- command names (App.tsx registrations) ----
+  "cmd.commandPalette": "Open command palette",
+  "cmd.quickSwitcher": "Quick switcher: open note",
+  "cmd.newNote": "Create new note",
+  "cmd.toggleMode": "Toggle editing / reading view",
+  "cmd.toggleSource": "Toggle live preview / source mode",
+  "cmd.reloadPlugins": "Reload external plugins",
+  "cmd.openGraph": "Open graph view",
+  "cmd.toggleTheme": "Toggle dark / light theme",
+  "cmd.openSettings": "Open settings",
+  "cmd.toggleLeftSidebar": "Toggle left sidebar",
+  "cmd.toggleRightSidebar": "Toggle right sidebar",
+  "cmd.closeTab": "Close current tab",
+  "cmd.splitRight": "Split pane right",
+  "cmd.splitDown": "Split pane down",
+  "cmd.focusNextPane": "Focus next pane",
+  "cmd.focusPreviousPane": "Focus previous pane",
+  "cmd.exportHtml": "Export note as HTML…",
+  "cmd.exportPdf": "Export note as PDF (print)…",
+  "cmd.openVault": "Open another vault…",
+
+  // ---- built-in plugins (src/plugins) ----
+  "cmd.dailyNote": "Open today's daily note",
+  "cmd.randomNote": "Open random note",
+  "plugin.wordCount": "{words} words · {chars} chars",
+} as const;
+
+export const zh: Record<keyof typeof en, string> = {
+  // ---- app shell (App.tsx / main.tsx) ----
+  "app.graphTab": "关系图谱",
+  "app.ribbonAria": "主功能区",
+  "app.ribbonExplorer": "文件列表",
+  "app.ribbonSearch": "搜索",
+  "app.ribbonGraph": "关系图谱 (Ctrl+G)",
+  "app.ribbonPalette": "命令面板 (Ctrl+P)",
+  "app.ribbonTheme": "切换主题",
+  "app.ribbonSettings": "设置 (Ctrl+,)",
+  "app.rightPanelAria": "右侧面板",
+  "app.tabBacklinks": "反向链接",
+  "app.tabOutline": "大纲",
+  "app.closeTab": "关闭 {title}",
+  "app.newNoteTitle": "新建笔记 (Ctrl+N)",
+  "app.newNote": "新建笔记",
+  "app.emptyTitle": "当前没有打开的文件。",
+  "app.emptyNewNote": "新建笔记 (Ctrl+N)",
+  "app.emptySwitcher": "打开快速切换 (Ctrl+O)",
+  "app.emptyGraph": "打开关系图谱 (Ctrl+G)",
+  "app.vaultTagline": "本地优先的 Markdown 知识库。",
+  "app.openVaultButton": "打开文件夹作为库",
+  "app.errorTitle": "出错了",
+  "app.errorBody":
+    "Geode 遇到了意外错误。你的笔记是磁盘上的纯文本文件，安全无虞。重新加载通常即可修复；若问题反复出现，请清除下方保存的状态。",
+  "app.errorClear": "清除已保存状态并重新加载",
+  "app.bootFailed": "Geode 启动失败",
+
+  // ---- command names (App.tsx registrations) ----
+  "cmd.commandPalette": "打开命令面板",
+  "cmd.quickSwitcher": "快速切换：打开笔记",
+  "cmd.newNote": "新建笔记",
+  "cmd.toggleMode": "切换编辑 / 阅读视图",
+  "cmd.toggleSource": "切换实时预览 / 源码模式",
+  "cmd.reloadPlugins": "重新加载外部插件",
+  "cmd.openGraph": "打开关系图谱",
+  "cmd.toggleTheme": "切换深色 / 浅色主题",
+  "cmd.openSettings": "打开设置",
+  "cmd.toggleLeftSidebar": "切换左侧边栏",
+  "cmd.toggleRightSidebar": "切换右侧边栏",
+  "cmd.closeTab": "关闭当前标签页",
+  "cmd.splitRight": "向右拆分窗格",
+  "cmd.splitDown": "向下拆分窗格",
+  "cmd.focusNextPane": "聚焦下一个窗格",
+  "cmd.focusPreviousPane": "聚焦上一个窗格",
+  "cmd.exportHtml": "导出笔记为 HTML…",
+  "cmd.exportPdf": "导出笔记为 PDF（打印）…",
+  "cmd.openVault": "打开其他库…",
+
+  // ---- built-in plugins (src/plugins) ----
+  "cmd.dailyNote": "打开今天的日记",
+  "cmd.randomNote": "打开随机笔记",
+  "plugin.wordCount": "{words} 词 · {chars} 字符",
+};

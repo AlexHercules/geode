@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorView } from "@codemirror/view";
 import type { DocumentHandle } from "@core/documents";
 import type { TabState, ViewMode } from "@core/types";
+import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -25,6 +26,7 @@ import "./editor.css";
  */
 export function EditorPane({ tab }: { tab: TabState }) {
   const app = useApp();
+  const t = useI18n();
   const metaRevision = useStore(app.metadata.revision);
 
   /** the shared document handle for tab.filePath (null while loading) */
@@ -261,14 +263,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
   if (!tab.filePath) {
     body = (
       <div className="editor-empty" data-testid="editor-empty">
-        <div>No file is open</div>
+        <div>{t("editor.noFile")}</div>
       </div>
     );
   } else if (loadError) {
     body = (
       <div className="editor-error" data-testid="editor-error">
         <Icon name="file-text" size={28} />
-        <div className="editor-error-title">Couldn&apos;t open &quot;{tab.title}&quot;</div>
+        <div className="editor-error-title">{t("editor.openFailed", { name: tab.title })}</div>
         <div className="editor-error-detail">{loadError}</div>
       </div>
     );
@@ -301,12 +303,17 @@ export function EditorPane({ tab }: { tab: TabState }) {
           {tab.title}
         </div>
         <div className="editor-header-spacer" />
-        <div className="editor-mode-group" role="group" aria-label="View mode" data-testid="mode-group">
+        <div
+          className="editor-mode-group"
+          role="group"
+          aria-label={t("editor.viewModeAria")}
+          data-testid="mode-group"
+        >
           <button
             className={"editor-mode-btn" + (tab.mode === "live" ? " is-active" : "")}
             data-testid="mode-live"
-            title="Live preview (Ctrl+E)"
-            aria-label="Live preview"
+            title={`${t("editor.livePreview")} (Ctrl+E)`}
+            aria-label={t("editor.livePreview")}
             aria-pressed={tab.mode === "live"}
             onClick={() => setMode("live")}
           >
@@ -315,8 +322,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
           <button
             className={"editor-mode-btn" + (tab.mode === "source" ? " is-active" : "")}
             data-testid="mode-source"
-            title="Source mode (Ctrl+Shift+E)"
-            aria-label="Source mode"
+            title={`${t("editor.sourceMode")} (Ctrl+Shift+E)`}
+            aria-label={t("editor.sourceMode")}
             aria-pressed={tab.mode === "source"}
             onClick={() => setMode("source")}
           >
@@ -338,8 +345,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
           <button
             className={"editor-mode-btn" + (tab.mode === "preview" ? " is-active" : "")}
             data-testid="mode-preview"
-            title="Reading view (Ctrl+E)"
-            aria-label="Reading view"
+            title={`${t("editor.readingView")} (Ctrl+E)`}
+            aria-label={t("editor.readingView")}
             aria-pressed={tab.mode === "preview"}
             onClick={() => setMode("preview")}
           >

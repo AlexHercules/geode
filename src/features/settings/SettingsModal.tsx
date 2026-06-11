@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
-import { hotkeyFromEvent } from "@core/commands";
+import { getCommandName, hotkeyFromEvent } from "@core/commands";
+import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
 import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
 import { useStore } from "@core/store";
 import "./settings.css";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
-const SECTIONS: Array<{ id: SectionId; label: string; icon: string }> = [
-  { id: "appearance", label: "Appearance", icon: "sun" },
-  { id: "plugins", label: "Plugins", icon: "puzzle" },
-  { id: "hotkeys", label: "Hotkeys", icon: "command" },
-  { id: "about", label: "About", icon: "book-open" },
+/* labels are i18n keys, resolved at render time via useI18n() */
+const SECTIONS: Array<{ id: SectionId; labelKey: I18nKey; icon: string }> = [
+  { id: "appearance", labelKey: "settings.section.appearance", icon: "sun" },
+  { id: "plugins", labelKey: "settings.section.plugins", icon: "puzzle" },
+  { id: "hotkeys", labelKey: "settings.section.hotkeys", icon: "command" },
+  { id: "about", labelKey: "settings.section.about", icon: "book-open" },
 ];
 
 export function SettingsModal() {
   const app = useApp();
+  const t = useI18n();
   const [section, setSection] = useState<SectionId>("appearance");
   const close = () => app.workspace.closeModal();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -39,20 +42,20 @@ export function SettingsModal() {
         tabIndex={-1}
         className="modal-panel settings-panel"
         role="dialog"
-        aria-label="Settings"
+        aria-label={t("settings.title")}
         data-testid="settings-modal"
       >
         <button
           className="settings-close"
-          aria-label="Close settings"
+          aria-label={t("settings.close")}
           data-testid="settings-close"
           onClick={close}
         >
           <Icon name="x" size={16} />
         </button>
 
-        <nav className="settings-nav" aria-label="Settings sections">
-          <div className="settings-nav-title">Settings</div>
+        <nav className="settings-nav" aria-label={t("settings.navAria")}>
+          <div className="settings-nav-title">{t("settings.title")}</div>
           {SECTIONS.map((s) => (
             <button
               key={s.id}
@@ -61,7 +64,7 @@ export function SettingsModal() {
               onClick={() => setSection(s.id)}
             >
               <Icon name={s.icon} size={15} />
-              <span>{s.label}</span>
+              <span>{t(s.labelKey)}</span>
             </button>
           ))}
         </nav>
@@ -81,18 +84,20 @@ export function SettingsModal() {
 
 function AppearanceSection() {
   const app = useApp();
+  const t = useI18n();
   const ws = useStore(app.workspace.state);
+  const currentLocale = useStore(locale);
 
   return (
     <section>
-      <h2 className="settings-heading">Appearance</h2>
+      <h2 className="settings-heading">{t("settings.section.appearance")}</h2>
 
       <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">Theme</div>
-          <div className="setting-desc">Choose the base color scheme for the app.</div>
+          <div className="setting-name">{t("settings.theme")}</div>
+          <div className="setting-desc">{t("settings.themeDesc")}</div>
         </div>
-        <div className="settings-segmented" role="group" aria-label="Theme">
+        <div className="settings-segmented" role="group" aria-label={t("settings.theme")}>
           <button
             className={ws.theme === "dark" ? "is-active" : ""}
             aria-pressed={ws.theme === "dark"}
@@ -100,7 +105,7 @@ function AppearanceSection() {
             onClick={() => app.workspace.setTheme("dark")}
           >
             <Icon name="moon" size={13} />
-            Dark
+            {t("settings.themeDark")}
           </button>
           <button
             className={ws.theme === "light" ? "is-active" : ""}
@@ -109,15 +114,15 @@ function AppearanceSection() {
             onClick={() => app.workspace.setTheme("light")}
           >
             <Icon name="sun" size={13} />
-            Light
+            {t("settings.themeLight")}
           </button>
         </div>
       </div>
 
       <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">Editor font size</div>
-          <div className="setting-desc">Font size used by the markdown editor and preview.</div>
+          <div className="setting-name">{t("settings.fontSize")}</div>
+          <div className="setting-desc">{t("settings.fontSizeDesc")}</div>
         </div>
         <div className="settings-slider">
           <input
@@ -126,7 +131,7 @@ function AppearanceSection() {
             max={28}
             step={1}
             value={ws.fontSize}
-            aria-label="Editor font size"
+            aria-label={t("settings.fontSize")}
             data-testid="settings-font-size"
             onChange={(e) => app.workspace.setFontSize(Number(e.target.value))}
           />
@@ -135,21 +140,40 @@ function AppearanceSection() {
           </span>
         </div>
       </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.language")}</div>
+          <div className="setting-desc">{t("settings.languageDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-language"
+          value={currentLocale}
+          aria-label={t("settings.language")}
+          onChange={(e) => setLocale(e.target.value === "zh" ? "zh" : "en")}
+        >
+          {/* option labels are self-named — never translated */}
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
+      </div>
     </section>
   );
 }
 
 /* ---------------- Plugins ---------------- */
 
-/** Badge label per plugin source ("builtin" reads as "core" in the UI). */
-const SOURCE_LABEL: Record<PluginSource, string> = {
-  builtin: "core",
-  external: "external",
-  obsidian: "obsidian",
+/** Badge label key per plugin source ("builtin" reads as "core" in the UI). */
+const SOURCE_LABEL_KEY: Record<PluginSource, I18nKey> = {
+  builtin: "settings.sourceBadgeBuiltin",
+  external: "settings.sourceBadgeExternal",
+  obsidian: "settings.sourceBadgeObsidian",
 };
 
 function PluginsSection() {
   const app = useApp();
+  const t = useI18n();
   useStore(app.plugins.revision); // re-render on enable/disable/register
   const settingsSections = useStore(app.plugins.settingsSections);
   const obsidianReport = useStore(app.obsidianLoadReport);
@@ -179,23 +203,24 @@ function PluginsSection() {
 
   return (
     <section>
-      <h2 className="settings-heading">Plugins</h2>
+      <h2 className="settings-heading">{t("settings.section.plugins")}</h2>
       <p className="settings-note">
-        Built-in plugins extend Geode with commands, status bar items and more. Plugins can
-        also be registered at runtime via <code>window.geode.registerPlugin</code>.
+        {t("settings.pluginsNotePre")}
+        <code>window.geode.registerPlugin</code>
+        {t("settings.pluginsNotePost")}
       </p>
 
       <div className="plugin-group-header">
-        <h3 className="plugin-group-title">Built-in</h3>
+        <h3 className="plugin-group-title">{t("settings.pluginGroupBuiltin")}</h3>
       </div>
       <PluginList entries={builtin} group="builtin" />
 
       <div className="plugin-group-header">
-        <h3 className="plugin-group-title">External</h3>
+        <h3 className="plugin-group-title">{t("settings.pluginGroupExternal")}</h3>
         <button
           className="plugin-reload-btn"
           data-testid="settings-reload-plugins"
-          title="Re-scan .geode/plugins and reload all external plugins"
+          title={t("settings.reloadPluginsTitle")}
           onClick={() => void app.commands.execute("app:reload-plugins")}
         >
           {/* lucide refresh-cw (not in the shared icon set) */}
@@ -215,21 +240,27 @@ function PluginsSection() {
             <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
             <path d="M3 21v-5h5" />
           </svg>
-          Reload external plugins
+          {t("settings.reloadPlugins")}
         </button>
       </div>
       <p className="settings-note plugin-path-hint" data-testid="settings-plugin-path-hint">
-        Drop <code>.js</code> files into <code>&lt;vault&gt;/.geode/plugins/</code> — see{" "}
-        <code>docs/PLUGINS.md</code> for the authoring guide.
+        {t("settings.pluginPathHint1")}
+        <code>.js</code>
+        {t("settings.pluginPathHint2")}
+        <code>&lt;vault&gt;/.geode/plugins/</code>
+        {t("settings.pluginPathHint3")}
+        <code>docs/PLUGINS.md</code>
+        {t("settings.pluginPathHint4")}
       </p>
       <PluginList entries={external} group="external" />
 
       <div className="plugin-group-header">
-        <h3 className="plugin-group-title">Obsidian</h3>
+        <h3 className="plugin-group-title">{t("settings.pluginGroupObsidian")}</h3>
       </div>
       <p className="settings-note plugin-path-hint" data-testid="settings-obsidian-path-hint">
-        Obsidian community plugins from <code>&lt;vault&gt;/.obsidian/plugins/</code>, loaded
-        through the compatibility layer.
+        {t("settings.obsidianHintPre")}
+        <code>&lt;vault&gt;/.obsidian/plugins/</code>
+        {t("settings.obsidianHintPost")}
       </p>
       <PluginList entries={obsidian} group="obsidian" warnings={obsidianWarnings} />
 
@@ -244,12 +275,14 @@ function PluginsSection() {
               <div className="plugin-info">
                 <div className="plugin-name">
                   {r.id}
-                  <span className="plugin-source-badge plugin-source-obsidian">obsidian</span>
+                  <span className="plugin-source-badge plugin-source-obsidian">
+                    {t("settings.sourceBadgeObsidian")}
+                  </span>
                   <span className="plugin-error-status">
-                    {r.status === "failed" ? "failed to load" : "skipped"}
+                    {r.status === "failed" ? t("settings.pluginFailed") : t("settings.pluginSkipped")}
                   </span>
                 </div>
-                <div className="plugin-error-reason">{r.detail ?? "no detail recorded"}</div>
+                <div className="plugin-error-reason">{r.detail ?? t("settings.pluginNoDetail")}</div>
               </div>
             </div>
           ))}
@@ -259,7 +292,7 @@ function PluginsSection() {
       {activeSections.length > 0 && (
         <>
           <div className="plugin-group-header">
-            <h3 className="plugin-group-title">Plugin settings</h3>
+            <h3 className="plugin-group-title">{t("settings.pluginSettingsGroup")}</h3>
           </div>
           {activeSections.map(({ section, plugin }) => (
             <PluginSettingsBlock key={section.id} section={section} pluginName={plugin.name} />
@@ -327,10 +360,10 @@ function PluginSettingsBody({ section }: { section: PluginSettingsSection }) {
   return <div ref={hostRef} className="plugin-settings-body" />;
 }
 
-const EMPTY_GROUP_TEXT: Record<PluginSource, string> = {
-  builtin: "No built-in plugins registered.",
-  external: "No external plugins found.",
-  obsidian: "No Obsidian plugins found.",
+const EMPTY_GROUP_KEY: Record<PluginSource, I18nKey> = {
+  builtin: "settings.pluginEmptyBuiltin",
+  external: "settings.pluginEmptyExternal",
+  obsidian: "settings.pluginEmptyObsidian",
 };
 
 function PluginList({
@@ -344,11 +377,12 @@ function PluginList({
   warnings?: ReadonlyMap<string, string>;
 }) {
   const app = useApp();
+  const t = useI18n();
 
   if (entries.length === 0) {
     return (
       <div className="settings-empty" data-testid={`settings-plugin-empty-${group}`}>
-        {EMPTY_GROUP_TEXT[group]}
+        {t(EMPTY_GROUP_KEY[group])}
       </div>
     );
   }
@@ -365,7 +399,7 @@ function PluginList({
                 className={`plugin-source-badge plugin-source-${source}`}
                 data-testid="plugin-source-badge"
               >
-                {SOURCE_LABEL[source]}
+                {t(SOURCE_LABEL_KEY[source])}
               </span>
             </div>
             {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
@@ -382,7 +416,9 @@ function PluginList({
             className={`settings-toggle${enabled ? " is-on" : ""}`}
             role="switch"
             aria-checked={enabled}
-            aria-label={`${enabled ? "Disable" : "Enable"} ${plugin.name}`}
+            aria-label={t(enabled ? "settings.disablePlugin" : "settings.enablePlugin", {
+              name: plugin.name,
+            })}
             data-testid={`plugin-toggle-${plugin.id}`}
             onClick={() => {
               if (enabled) app.plugins.disable(plugin.id);
@@ -401,6 +437,7 @@ function PluginList({
 
 function HotkeysSection() {
   const app = useApp();
+  const t = useI18n();
   useStore(app.commands.revision); // re-render on (un)register and override changes
   const [filter, setFilter] = useState("");
   const [capturingId, setCapturingId] = useState<string | null>(null);
@@ -408,7 +445,12 @@ function HotkeysSection() {
   const q = filter.trim().toLowerCase();
   const rows = app.commands
     .list()
-    .filter((cmd) => !q || cmd.name.toLowerCase().includes(q) || cmd.id.toLowerCase().includes(q));
+    .filter(
+      (cmd) =>
+        !q ||
+        getCommandName(cmd).toLowerCase().includes(q) ||
+        cmd.id.toLowerCase().includes(q),
+    );
 
   /* CAPTURE mode: a window-level capture-phase listener grabs the next keydown
      before the global hotkey handler and the modal's Escape-to-close (both
@@ -445,11 +487,19 @@ function HotkeysSection() {
 
   return (
     <section>
-      <h2 className="settings-heading">Hotkeys</h2>
+      <h2 className="settings-heading">{t("settings.section.hotkeys")}</h2>
       <p className="settings-note">
-        Click <em>Customize</em>, then press the new key combination (must include{" "}
-        <code>Ctrl</code> or <code>Alt</code>, except function keys). Press{" "}
-        <code>Backspace</code> to remove a binding, <code>Escape</code> to cancel.
+        {t("settings.hotkeysNote1")}
+        <em>{t("settings.customize")}</em>
+        {t("settings.hotkeysNote2")}
+        <code>Ctrl</code>
+        {t("settings.hotkeysNote3")}
+        <code>Alt</code>
+        {t("settings.hotkeysNote4")}
+        <code>Backspace</code>
+        {t("settings.hotkeysNote5")}
+        <code>Escape</code>
+        {t("settings.hotkeysNote6")}
       </p>
 
       <input
@@ -457,15 +507,15 @@ function HotkeysSection() {
         type="text"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filter commands…"
+        placeholder={t("settings.hotkeysFilter")}
         spellCheck={false}
-        aria-label="Filter commands"
+        aria-label={t("settings.hotkeysFilter")}
         data-testid="settings-hotkeys-filter"
       />
 
       {rows.length === 0 ? (
         <div className="settings-empty" data-testid="settings-hotkeys-empty">
-          No matching commands.
+          {t("settings.hotkeysEmpty")}
         </div>
       ) : (
         <div className="hotkey-list">
@@ -478,28 +528,30 @@ function HotkeysSection() {
             return (
               <div className="hotkey-row" key={cmd.id} data-testid={`hotkey-row-${cmd.id}`}>
                 <div className="hotkey-info">
-                  <div className="hotkey-name">{cmd.name}</div>
+                  <div className="hotkey-name">{getCommandName(cmd)}</div>
                   {conflicts.length > 0 && (
                     <div className="hotkey-conflict" data-testid={`hotkey-conflict-${cmd.id}`}>
-                      Conflicts with {conflicts.map((c) => `"${c.name}"`).join(", ")}
+                      {t("settings.hotkeyConflict", {
+                        names: conflicts.map((c) => `"${getCommandName(c)}"`).join(", "),
+                      })}
                     </div>
                   )}
                 </div>
                 <div className="hotkey-controls">
                   {capturing ? (
-                    <span className="hotkey-chip is-capturing">Press a key…</span>
+                    <span className="hotkey-chip is-capturing">{t("settings.hotkeyCapture")}</span>
                   ) : effective !== null ? (
                     <span className={`hotkey-chip${conflicts.length > 0 ? " has-conflict" : ""}`}>
                       {effective}
                     </span>
                   ) : (
-                    <span className="hotkey-chip is-empty">Not set</span>
+                    <span className="hotkey-chip is-empty">{t("settings.hotkeyNotSet")}</span>
                   )}
                   {!capturing && app.commands.hasHotkeyOverride(cmd.id) && (
                     <button
                       className="hotkey-reset"
-                      title="Restore default hotkey"
-                      aria-label={`Restore default hotkey for ${cmd.name}`}
+                      title={t("settings.hotkeyResetTitle")}
+                      aria-label={t("settings.hotkeyResetAria", { name: getCommandName(cmd) })}
                       data-testid={`hotkey-reset-${cmd.id}`}
                       onClick={() => app.commands.clearHotkeyOverride(cmd.id)}
                     >
@@ -511,7 +563,7 @@ function HotkeysSection() {
                     data-testid={`hotkey-edit-${cmd.id}`}
                     onClick={() => setCapturingId(capturing ? null : cmd.id)}
                   >
-                    {capturing ? "Cancel" : "Customize"}
+                    {capturing ? t("settings.cancel") : t("settings.customize")}
                   </button>
                 </div>
               </div>
@@ -526,22 +578,17 @@ function HotkeysSection() {
 /* ---------------- About ---------------- */
 
 function AboutSection() {
+  const t = useI18n();
   return (
     <section>
-      <h2 className="settings-heading">About</h2>
+      <h2 className="settings-heading">{t("settings.section.about")}</h2>
       <div className="about-card">
         <div className="about-logo">💎</div>
         <div className="about-title">
-          Geode <span className="about-version">0.3.0</span>
+          Geode <span className="about-version">0.8.0</span>
         </div>
-        <p className="about-desc">
-          Geode is a local-first markdown knowledge base. Your notes are plain files on your
-          own disk — link them with wikilinks, follow backlinks, and explore the connections
-          between ideas in an interactive graph.
-        </p>
-        <p className="about-stack">
-          Built with Tauri 2 · React 18 · TypeScript · Vite · CodeMirror 6
-        </p>
+        <p className="about-desc">{t("settings.aboutDesc")}</p>
+        <p className="about-stack">{t("settings.aboutStack")}</p>
       </div>
     </section>
   );

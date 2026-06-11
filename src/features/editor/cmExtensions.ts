@@ -30,6 +30,8 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
+// aliased: `t` is taken by @lezer/highlight tags in this file
+import { t as tr } from "@core/i18n";
 import { livePreview } from "./livePreview";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -231,7 +233,8 @@ export function buildEditorExtensions(opts: {
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(mdHighlight),
     EditorView.lineWrapping,
-    placeholder("Start writing…"),
+    // resolved at view build time — a locale switch applies to views built after it
+    placeholder(tr("editor.placeholder")),
     editorTheme,
     keymap.of([...defaultKeymap, indentWithTab]),
     autocompletion({ override: [wikilinkCompletionSource(app)], icons: false }),

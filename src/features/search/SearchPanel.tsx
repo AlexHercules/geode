@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
+import { useI18n } from "@core/i18n";
 import "./search.css";
 
 interface LineHit {
@@ -66,6 +67,7 @@ function highlight(text: string, query: string): ReactNode {
 
 export function SearchPanel() {
   const app = useApp();
+  const t = useI18n();
   const rev = useStore(app.metadata.revision);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -180,19 +182,23 @@ export function SearchPanel() {
   if (!trimmed) {
     body = (
       <div className="search-hint">
-        Type to search all notes.
+        {t("search.hintType")}
         <br />
-        Start with <code>#</code> to search tags.
+        {t("search.hintTagsBefore")}
+        <code>#</code>
+        {t("search.hintTagsAfter")}
       </div>
     );
   } else if (tagMode) {
     body =
       tagEntries.length === 0 ? (
-        <div className="search-hint">No tags matching “#{tagQuery}”</div>
+        <div className="search-hint">{t("search.noTags", { query: tagQuery })}</div>
       ) : (
         <>
           <div className="search-meta">
-            {tagEntries.length} {tagEntries.length === 1 ? "tag" : "tags"}
+            {t(tagEntries.length === 1 ? "search.tagsOne" : "search.tagsMany", {
+              count: tagEntries.length,
+            })}
           </div>
           {tagEntries.map(([tag, paths]) => {
             const expanded = tag.toLowerCase() === tagQuery;
@@ -227,16 +233,22 @@ export function SearchPanel() {
         </>
       );
   } else if (searching && results.length === 0) {
-    body = <div className="search-hint">Searching…</div>;
+    body = <div className="search-hint">{t("search.searching")}</div>;
   } else if (results.length === 0) {
-    body = <div className="search-hint">No results for “{trimmed}”</div>;
+    body = <div className="search-hint">{t("search.noResults", { query: trimmed })}</div>;
   } else {
     body = (
       <>
         <div className="search-meta">
-          {totalMatches} {totalMatches === 1 ? "result" : "results"} in {totalFiles}{" "}
-          {totalFiles === 1 ? "note" : "notes"}
-          {hiddenFiles > 0 && ` · showing top ${results.length}`}
+          {t("search.meta", {
+            results: t(totalMatches === 1 ? "search.resultsOne" : "search.resultsMany", {
+              count: totalMatches,
+            }),
+            notes: t(totalFiles === 1 ? "search.notesOne" : "search.notesMany", {
+              count: totalFiles,
+            }),
+          })}
+          {hiddenFiles > 0 && ` · ${t("search.showingTop", { count: results.length })}`}
         </div>
         {results.map((r) => (
           <div className="search-file" key={r.path} data-testid="search-result">
@@ -253,7 +265,7 @@ export function SearchPanel() {
                 key={line.lineNo}
                 className="search-line"
                 onClick={() => openFile(r.path)}
-                title={`Line ${line.lineNo}`}
+                title={t("search.lineTooltip", { line: line.lineNo })}
               >
                 {highlight(line.text, trimmed)}
               </div>
@@ -266,7 +278,7 @@ export function SearchPanel() {
 
   return (
     <div className="search-panel" data-testid="search-panel">
-      <div className="panel-header">Search</div>
+      <div className="panel-header">{t("search.title")}</div>
       <div className="search-input-wrap">
         <input
           ref={inputRef}
@@ -274,7 +286,7 @@ export function SearchPanel() {
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search notes…"
+          placeholder={t("search.placeholder")}
           spellCheck={false}
           data-testid="search-input"
         />
@@ -282,7 +294,7 @@ export function SearchPanel() {
           <button
             className="search-clear"
             onClick={clear}
-            aria-label="Clear search"
+            aria-label={t("search.clear")}
             data-testid="search-clear"
           >
             <Icon name="x" size={13} />

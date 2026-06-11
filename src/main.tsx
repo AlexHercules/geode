@@ -4,6 +4,7 @@ import { App, LAST_VAULT_KEY } from "@app/App";
 import { AppContext, GeodeApp } from "@app/AppContext";
 import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
 import { CommandRegistry } from "@core/commands";
+import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { MetadataIndex } from "@core/metadata";
@@ -63,10 +64,9 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, Error
             color: "var(--text-normal, #ddd)",
           }}
         >
-          <h1 style={{ margin: 0, fontSize: "20px" }}>Something went wrong</h1>
+          <h1 style={{ margin: 0, fontSize: "20px" }}>{t("app.errorTitle")}</h1>
           <p style={{ margin: 0, color: "var(--text-muted, #999)", maxWidth: "48ch" }}>
-            Geode hit an unexpected error. Your notes are plain files on disk and are safe.
-            Reloading usually fixes it; if it keeps happening, clear the saved state below.
+            {t("app.errorBody")}
           </p>
           <pre
             style={{
@@ -82,7 +82,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, Error
           >
             {this.state.error.message}
           </pre>
-          <button onClick={this.clearAndReload}>Clear saved state &amp; reload</button>
+          <button onClick={this.clearAndReload}>{t("app.errorClear")}</button>
         </div>
       );
     }
@@ -192,7 +192,7 @@ bootstrap().catch((err: unknown) => {
   box.style.fontFamily = "system-ui, sans-serif";
   const title = document.createElement("h1");
   title.style.fontSize = "18px";
-  title.textContent = "Geode failed to start";
+  title.textContent = t("app.bootFailed");
   const detail = document.createElement("pre");
   detail.style.whiteSpace = "pre-wrap";
   detail.textContent = err instanceof Error ? err.message : String(err);

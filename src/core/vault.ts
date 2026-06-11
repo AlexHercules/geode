@@ -101,6 +101,28 @@ function sortChildren(folder: FolderNode) {
 /** Total characters the content cache may hold before evicting oldest entries. */
 const CONTENT_CACHE_BUDGET = 30_000_000;
 
+/** How long a self-write fingerprint stays valid for watcher echo suppression. */
+const SELF_WRITE_TTL_MS = 10_000;
+
+/** FNV-1a 32-bit hash over a string (self-write fingerprints, cheap + local). */
+function fnv1a32(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/** Always-on watcher echo probe counters on window.__geodeWatchEcho (both ends). */
+const watchEchoCounters = (() => {
+  const g = globalThis as unknown as {
+    __geodeWatchEcho?: { suppressed: number; external: number };
+  };
+  g.__geodeWatchEcho ??= { suppressed: 0, external: 0 };
+  return g.__geodeWatchEcho;
+})();
+
 /**
  * Vault wraps an adapter with caching + events. Feature modules should use
  * this class (via AppContext), never the adapter directly.
@@ -115,6 +137,10 @@ export class Vault {
    *  else, so the sets can never drift from this.tree. */
   private filePaths = new Set<string>();
   private folderPaths = new Set<string>();
+  /** Fingerprints of our own recent writes, so watcher echoes can be told
+   *  apart from real external changes. Entries live for SELF_WRITE_TTL_MS
+   *  (one write may echo back as several notify batches). */
+  private recentSelfWrites = new Map<string, { hash: number; at: number }>();
 
   constructor(
     readonly adapter: VaultAdapter,
@@ -188,11 +214,37 @@ export class Vault {
    */
   private async handleExternalChanges(paths: string[]): Promise<void> {
     if (paths.length === 0) return;
-    await this.refreshTree();
+    // Echo suppression: a path we recently wrote ourselves is re-read and
+    // hash-compared. Match -> it's our own write echoing back through the
+    // watcher: keep the cache (it IS the written content), emit nothing.
+    // Mismatch or read error -> someone really changed it externally; drop
+    // the fingerprint and let it through (never mis-suppress real changes).
+    const now = Date.now();
+    const survivors: string[] = [];
     for (const path of paths) {
+      const entry = this.recentSelfWrites.get(path);
+      if (entry && now - entry.at <= SELF_WRITE_TTL_MS) {
+        let matched = false;
+        try {
+          matched = fnv1a32(await this.adapter.readFile(path)) === entry.hash;
+        } catch {
+          matched = false; // unreadable -> cannot verify, treat as external
+        }
+        if (matched) {
+          watchEchoCounters.suppressed++;
+          continue; // suppressed: no cache delete, no events for this path
+        }
+        this.recentSelfWrites.delete(path);
+      }
+      watchEchoCounters.external++;
+      survivors.push(path);
+    }
+    if (survivors.length === 0) return; // pure echo batch: zero work
+    await this.refreshTree();
+    for (const path of survivors) {
       if (this.contentCache.has(path)) this.cacheDelete(path);
     }
-    for (const path of paths) {
+    for (const path of survivors) {
       if (path.toLowerCase().endsWith(".md") && this.fileExists(path)) {
         this.events.emit("file:external-modified", { path });
         this.events.emit("file:modified", { path }); // reuse reindex pipeline
@@ -205,8 +257,24 @@ export class Vault {
         this.events.emit("file:deleted", { path });
       }
     }
-    this.events.emit("vault:external-changed", { paths });
+    this.events.emit("vault:external-changed", { paths: survivors });
     this.events.emit("vault:changed", { reason: "modify" });
+  }
+
+  /** Remember a self-write fingerprint (and opportunistically prune expired ones). */
+  private recordSelfWrite(path: string, content: string): void {
+    const now = Date.now();
+    for (const [p, e] of this.recentSelfWrites) {
+      if (now - e.at > SELF_WRITE_TTL_MS) this.recentSelfWrites.delete(p);
+    }
+    this.recentSelfWrites.set(path, { hash: fnv1a32(content), at: now });
+  }
+
+  /** Drop a fingerprint after a FAILED write — but only if it still belongs to
+   *  that write (a newer concurrent write to the same path must keep its own). */
+  private clearSelfWrite(path: string, content: string): void {
+    const entry = this.recentSelfWrites.get(path);
+    if (entry && entry.hash === fnv1a32(content)) this.recentSelfWrites.delete(path);
   }
 
   async read(path: string): Promise<string> {
@@ -226,7 +294,16 @@ export class Vault {
   }
 
   async modify(path: string, content: string): Promise<void> {
-    await this.adapter.writeFile(path, content);
+    // record BEFORE awaiting the write — the echo can arrive mid-write
+    this.recordSelfWrite(path, content);
+    try {
+      await this.adapter.writeFile(path, content);
+    } catch (err) {
+      // a failed write must not leave its fingerprint behind: a real external
+      // change with the same bytes within the TTL would be mis-suppressed
+      this.clearSelfWrite(path, content);
+      throw err;
+    }
     this.cacheSet(path, content);
     this.events.emit("file:modified", { path });
     this.events.emit("vault:changed", { reason: "modify" });
@@ -234,7 +311,14 @@ export class Vault {
 
   /** Create a file; auto-creates "Untitled n.md" style unique names upstream. */
   async create(path: string, content = ""): Promise<void> {
-    await this.adapter.createFile(path, content);
+    // record BEFORE awaiting the write — the echo can arrive mid-write
+    this.recordSelfWrite(path, content);
+    try {
+      await this.adapter.createFile(path, content);
+    } catch (err) {
+      this.clearSelfWrite(path, content);
+      throw err;
+    }
     this.cacheSet(path, content);
     await this.refreshTree();
     this.events.emit("file:created", { path });
@@ -533,8 +617,11 @@ export class MemoryVaultAdapter implements VaultAdapter {
     return null;
   }
 
-  async startWatch(_onChange: (paths: string[]) => void): Promise<void> {
-    // nothing external can change an in-memory vault
+  async startWatch(onChange: (paths: string[]) => void): Promise<void> {
+    // nothing external can change an in-memory vault, but browser E2E can
+    // simulate watcher events via window.__geodeFireWatch(paths)
+    const g = globalThis as unknown as { __geodeFireWatch?: (paths: string[]) => void };
+    g.__geodeFireWatch = (paths: string[]) => onChange(paths);
   }
 
   async listPluginFiles(): Promise<Array<{ name: string; content: string }>> {
