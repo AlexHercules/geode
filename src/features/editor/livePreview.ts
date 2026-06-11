@@ -12,7 +12,11 @@
  *
  * R11: `![[img]]` embeds that resolve to a vault image are replaced with an
  * <img> widget (EmbedWidget); cursor contact reveals the raw text as usual.
- * Unresolved / non-image embed targets stay raw text.
+ *
+ * R12: `![[note]]` embeds that miss the image path but resolve to a markdown
+ * note are replaced with a NoteEmbedWidget — a reading-view-isomorphic
+ * placeholder hydrated by the shared core engine. Image check runs FIRST;
+ * unresolved targets stay raw text. Display only: never writes the document.
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
@@ -25,6 +29,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
+import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
 import { t } from "@core/i18n";
 import { IMAGE_EXTS } from "@core/markdown";
 import { parseFrontmatter } from "@core/metadata";
@@ -143,6 +148,68 @@ class EmbedWidget extends WidgetType {
       () => img.classList.add("geode-embed-failed"),
     );
     return img;
+  }
+}
+
+/**
+ * Inline note transclusion for `![[note]]` / `![[note#Heading]]` (R12).
+ * toDOM returns a synchronous container; a reading-view-isomorphic
+ * placeholder span is hydrated off-DOM by the shared core engine and mounted
+ * only if the container is still in the document. Internal links inside the
+ * hydrated content navigate through the shared wikilink opener. NEVER writes
+ * document content — display only.
+ */
+class NoteEmbedWidget extends WidgetType {
+  constructor(
+    readonly app: GeodeApp,
+    readonly getPath: () => string,
+    readonly resolvedPath: string,
+    readonly subpath: string,
+    readonly display: string,
+  ) {
+    super();
+  }
+  override eq(other: NoteEmbedWidget): boolean {
+    return (
+      other.resolvedPath === this.resolvedPath &&
+      other.subpath === this.subpath &&
+      other.display === this.display
+    );
+  }
+  override toDOM(): HTMLElement {
+    const container = document.createElement("span");
+    container.className = "cm-live-embed-note";
+    // placeholder isomorphic to the reading-view pipeline output — the core
+    // engine expands span.geode-embed-note in place on a detached host, and
+    // the result is mounted only if the widget is still in the document
+    const placeholder = document.createElement("span");
+    placeholder.className = "geode-embed-note";
+    placeholder.dataset.embedNote = this.resolvedPath;
+    placeholder.dataset.embedSubpath = this.subpath;
+    placeholder.dataset.embedDisplay = this.display;
+    const host = document.createElement("span");
+    host.appendChild(placeholder);
+    void coreHydrateEmbeds(host, {
+      vault: this.app.vault,
+      metadata: this.app.metadata,
+      imageSrc: (p: string) => getEmbedUrl(this.app, p),
+      ancestors: new Set([this.getPath()]),
+    }).then(() => {
+      // the widget may have been dropped while the vault reads were in flight
+      if (!container.isConnected) return;
+      while (host.firstChild) container.appendChild(host.firstChild);
+    });
+    // click delegation: internal links open through the shared wikilink
+    // opener; preventDefault blocks CM selection side effects on the click
+    container.addEventListener("click", (e) => {
+      const el = e.target instanceof HTMLElement ? e.target : null;
+      const link = el?.closest<HTMLAnchorElement>("a.internal-link");
+      if (!link || !container.contains(link)) return;
+      e.preventDefault();
+      const target = link.dataset.target;
+      if (target) void openWikilink(this.app, target, this.getPath());
+    });
+    return container;
   }
 }
 
@@ -422,18 +489,38 @@ function computeDecorations(
       const target = wikilinkTarget(m[1]);
       if (!target) continue;
       if (doc.sliceString(Math.max(0, start - 1), start) === "!") {
-        // ![[...]] embed (R11): replace the WHOLE match (incl. the "!") with
-        // an image widget when the target resolves to a vault image and the
-        // selection does not touch it; otherwise keep the raw text.
+        // ![[...]] embed: replace the WHOLE match (incl. the "!") when the
+        // selection does not touch it. Image attachments take precedence
+        // (R11); otherwise a resolveLink hit means a note transclusion (R12);
+        // unresolved / other targets keep the raw text.
         const embedFrom = start - 1;
+        if (selectionTouches(state, embedFrom, end)) continue; // revealed for editing
         const resolved = app.metadata.resolveAttachment(target, getPath());
         const ext = resolved ? resolved.slice(resolved.lastIndexOf(".") + 1).toLowerCase() : "";
-        if (!resolved || !IMAGE_EXTS.has(ext)) continue; // unresolved/non-image: raw text
-        if (selectionTouches(state, embedFrom, end)) continue; // revealed for editing
+        if (resolved && IMAGE_EXTS.has(ext)) {
+          replaces.push({
+            from: embedFrom,
+            to: end,
+            deco: Decoration.replace({ widget: new EmbedWidget(app, resolved) }),
+          });
+          continue;
+        }
+        const note = app.metadata.resolveLink(target, getPath());
+        if (!note) continue; // unresolved: raw text
+        // subpath = raw text between "#" and "|"; display = alias, else the
+        // pre-pipe inner text (mirrors the reading-view placeholder contract)
+        const rawBody = m[1].split("|")[0];
+        const hashIdx = rawBody.indexOf("#");
+        const subpath = hashIdx >= 0 ? rawBody.slice(hashIdx + 1) : "";
+        const pipeIdx = m[1].indexOf("|");
+        const alias = pipeIdx >= 0 ? m[1].slice(pipeIdx + 1).trim() : "";
+        const display = alias || rawBody.trim();
         replaces.push({
           from: embedFrom,
           to: end,
-          deco: Decoration.replace({ widget: new EmbedWidget(app, resolved) }),
+          deco: Decoration.replace({
+            widget: new NoteEmbedWidget(app, getPath, note, subpath, display),
+          }),
         });
         continue;
       }

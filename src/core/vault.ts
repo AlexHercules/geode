@@ -285,7 +285,12 @@ export class Vault {
       this.cacheSet(path, cached); // refresh LRU recency
       return cached;
     }
-    const content = await this.adapter.readFile(path);
+    // strip a leading UTF-8 BOM (common in files written by Windows tools —
+    // PowerShell 5.1 "utf8" is BOM'd): it breaks first-line headings in
+    // markdown-it AND metadata parsing. Single choke point: every consumer
+    // (editor buffer, preview, embeds, compat) reads through here.
+    const raw = await this.adapter.readFile(path);
+    const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
     this.cacheSet(path, content);
     return content;
   }

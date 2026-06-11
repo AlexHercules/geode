@@ -530,6 +530,83 @@
   opacity: 0.45;
 }
 
+/* ============ note transclusion ![[note]] (R12, core/embeds.ts) ============ */
+
+/* embed container — Obsidian style: left border + indent. The placeholder is
+   an (empty) span so paragraphs survive; display:block once hydrated. */
+.geode-embed-note {
+  display: block;
+  margin: 0.6em 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--border);
+}
+
+.geode-embed-note:hover {
+  border-left-color: var(--border-strong);
+}
+
+/* pre-hydration placeholder is an empty span — render nothing until filled */
+.geode-embed-note:empty {
+  margin: 0;
+  padding: 0;
+  border-left: none;
+}
+
+/* header: note name (+ #subpath), small + muted; link color on hover */
+.geode-embed-note-header {
+  display: block;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-bottom: 0.25em;
+}
+
+.geode-embed-note-header a.internal-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.geode-embed-note-header a.internal-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.geode-embed-note-content {
+  display: block;
+}
+
+.geode-embed-note-content > :first-child {
+  margin-top: 0;
+}
+
+.geode-embed-note-content > :last-child {
+  margin-bottom: 0;
+}
+
+/* warning plates: circular embed / missing heading */
+.geode-embed-cycle,
+.geode-embed-missing {
+  display: block;
+  margin: 0.6em 0;
+  padding: 4px 10px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+  background: var(--bg-panel-alt);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+/* live-preview widget container — same look as the reading view */
+.cm-live-embed-note {
+  display: block;
+  cursor: default;
+}
+
+.cm-live-embed-note .geode-embed-note {
+  margin: 2px 0;
+}
+
 .preview-content a {
   color: var(--accent);
   text-decoration: none;

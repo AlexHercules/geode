@@ -309,21 +309,25 @@ export function EditorPane({ tab }: { tab: TabState }) {
     return renderPreview(
       handle.getText(),
       (target) => app.metadata.resolveLink(target, handle.path),
-      // image embeds render as src-less <img class="geode-embed"> placeholders,
+      // image embeds render as src-less <img class="geode-embed"> placeholders
+      // and note embeds as empty span.geode-embed-note containers — both are
       // hydrated asynchronously after the innerHTML lands (effect below)
-      { resolveEmbed: (target) => app.metadata.resolveAttachment(target, handle.path) },
+      {
+        resolveEmbed: (target) => app.metadata.resolveAttachment(target, handle.path),
+        noteEmbeds: true,
+      },
     );
     // metaRevision/previewBump are render triggers, not direct inputs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app, tab.mode, handle, metaRevision, previewBump]);
 
-  /* ---------- fill embed image srcs after each preview render ---------- */
+  /* ---------- hydrate image + note embeds after each preview render ---------- */
 
   useEffect(() => {
-    if (tab.mode !== "preview") return;
+    if (tab.mode !== "preview" || !handle) return;
     const el = previewContentRef.current;
-    if (el) hydrateEmbeds(el, app);
-  }, [app, tab.mode, previewHtml]);
+    if (el) void hydrateEmbeds(el, app, handle.path);
+  }, [app, tab.mode, handle, previewHtml]);
 
   const onPreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {

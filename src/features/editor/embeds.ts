@@ -7,6 +7,7 @@
  * vault events the first time it is used: modified/renamed/deleted paths drop
  * their entry and revoke the URL so the next request re-reads from disk.
  */
+import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
 import type { GeodeApp } from "@app/AppContext";
 
 /** MIME by lowercase extension — mirrors IMAGE_EXTS in core/markdown.ts. */
@@ -75,22 +76,16 @@ export function getEmbedUrl(app: GeodeApp, path: string): Promise<string> {
 }
 
 /**
- * Fill in the `src` of every `img.geode-embed[data-embed-path]` under `root`
- * (the reading-view pipeline emits them without src). Failures mark the img
- * with `.geode-embed-failed` and never throw.
+ * Hydrate every embed under `root` (R12: thin wrapper over the shared core
+ * engine — fills `img.geode-embed` srcs via the blob-URL cache above AND
+ * expands `span.geode-embed-note` note transclusions). `currentPath` seeds
+ * the ancestor set for cycle detection. Never throws.
  */
-export function hydrateEmbeds(root: HTMLElement, app: GeodeApp): void {
-  root.querySelectorAll<HTMLImageElement>("img.geode-embed[data-embed-path]").forEach((img) => {
-    const path = img.dataset.embedPath;
-    if (!path) return;
-    // a revoked-while-loading blob URL surfaces as an error event
-    img.addEventListener("error", () => img.classList.add("geode-embed-failed"), { once: true });
-    getEmbedUrl(app, path).then(
-      (url) => {
-        // the container may have been re-rendered while the read was in flight
-        if (img.isConnected) img.src = url;
-      },
-      () => img.classList.add("geode-embed-failed"),
-    );
+export function hydrateEmbeds(root: HTMLElement, app: GeodeApp, currentPath: string): Promise<void> {
+  return coreHydrateEmbeds(root, {
+    vault: app.vault,
+    metadata: app.metadata,
+    imageSrc: (p: string) => getEmbedUrl(app, p),
+    ancestors: new Set([currentPath]),
   });
 }

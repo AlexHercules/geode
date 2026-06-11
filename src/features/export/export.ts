@@ -8,6 +8,7 @@
  * wikilinks become non-navigating styled text (href="#").
  */
 import type { GeodeApp } from "@app/AppContext";
+import { hydrateEmbeds } from "@core/embeds";
 import { saveTextFile } from "@core/export";
 import { t } from "@core/i18n";
 import { renderMarkdownToHtml } from "@core/markdown";
@@ -30,6 +31,56 @@ function escapeHtml(s: string): string {
  *  Matches the exact markup core/markdown.ts emits for task list items. */
 function disableTaskCheckboxes(bodyHtml: string): string {
   return bodyHtml.replaceAll('class="task-checkbox"', 'class="task-checkbox" disabled');
+}
+
+/** MIME by lowercase extension — mirrors IMAGE_EXTS in core/markdown.ts. */
+const MIME_BY_EXT: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+};
+
+/**
+ * Uint8Array → base64 in fixed-size chunks: spreading a whole image into
+ * String.fromCharCode would blow the argument limit / call stack on large
+ * files, and this must work in both the browser and the Tauri WebView.
+ */
+const BASE64_CHUNK = 0x8000;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + BASE64_CHUNK));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Inline every embed (R12): images become `data:` URIs (the exported file is
+ * self-contained — blob: URLs would dangle), `![[note]]` placeholders are
+ * expanded by the core hydration engine. Runs on a DETACHED container so the
+ * live DOM never sees intermediate states. Core hydrateEmbeds never throws;
+ * a single readBinary failure only marks that img `.geode-embed-failed`.
+ */
+async function inlineEmbeds(app: GeodeApp, notePath: string, bodyHtml: string): Promise<string> {
+  const container = document.createElement("div");
+  container.innerHTML = bodyHtml;
+  await hydrateEmbeds(container, {
+    vault: app.vault,
+    metadata: app.metadata,
+    imageSrc: async (p: string) => {
+      const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
+      const mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
+      const bytes = await app.vault.readBinary(p);
+      return `data:${mime};base64,${bytesToBase64(bytes)}`;
+    },
+    ancestors: new Set([notePath]),
+  });
+  return container.innerHTML;
 }
 
 /** "folder/Note.md" → "Note" — display title / suggested file basename. */
@@ -78,9 +129,18 @@ async function renderActiveNote(
   // and the 600ms save debounce means an export right after typing would
   // silently miss the latest edits
   const content = app.documents.get(path)?.getText() ?? (await app.vault.read(path));
-  const bodyHtml = renderMarkdownToHtml(content, (target) =>
-    app.metadata.resolveLink(target, path),
+  // image embeds render as src-less <img class="geode-embed"> placeholders and
+  // ![[note]] as empty spans (noteEmbeds) — both filled by inlineEmbeds below,
+  // BEFORE the document is assembled/printed
+  const rendered = renderMarkdownToHtml(
+    content,
+    (target) => app.metadata.resolveLink(target, path),
+    {
+      resolveEmbed: (target) => app.metadata.resolveAttachment(target, path),
+      noteEmbeds: true,
+    },
   );
+  const bodyHtml = await inlineEmbeds(app, path, rendered);
   return { title: noteTitle(path), bodyHtml };
 }
 

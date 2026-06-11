@@ -1,4 +1,4 @@
-﻿# Ideas
+# Ideas
 
 Linked from [[Home]].
 

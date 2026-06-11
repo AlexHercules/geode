@@ -1,4 +1,4 @@
-﻿# Home
+# Home
 
 This vault lives on the real Windows filesystem.
 
