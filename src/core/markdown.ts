@@ -23,6 +23,10 @@ interface WikiLinkInfo {
   notePath?: string;
   /** raw text between '#' and '|' in the original inner ("" when absent) */
   noteSubpath?: string;
+  /** R14: raw text between '#' and '|' for a plain internal link (same rule
+   *  as noteSubpath); undefined when absent/empty — rendered as data-subpath
+   *  on the anchor, so subpath-less links stay byte-identical */
+  subpath?: string;
 }
 
 /** Image extensions (lowercase) that `![[...]]` embeds may render as <img>. */
@@ -126,6 +130,11 @@ function replaceWikilinks(
           const pipe = inner.indexOf("|");
           const alias = pipe >= 0 ? inner.slice(pipe + 1).trim() : "";
           const display = alias || inner.split("|")[0].trim();
+          // raw text between '#' and '|' ("" when absent) — R12 noteSubpath
+          // rule, reused for plain-link data-subpath in R14
+          const pre = pipe >= 0 ? inner.slice(0, pipe) : inner;
+          const hash = pre.indexOf("#");
+          const subpath = hash >= 0 ? pre.slice(hash + 1) : "";
           if (bang && resolveEmbed) {
             const resolved = resolveEmbed(target);
             const ext = resolved?.split(".").pop()?.toLowerCase() ?? "";
@@ -139,9 +148,6 @@ function replaceWikilinks(
             // R12: not an image embed — try a note transclusion placeholder
             const notePath = resolve(target);
             if (notePath !== null) {
-              const pre = pipe >= 0 ? inner.slice(0, pipe) : inner;
-              const hash = pre.indexOf("#");
-              const subpath = hash >= 0 ? pre.slice(hash + 1) : "";
               links.push({
                 target,
                 // alias-else-pre-pipe (same rule as the image branch and the
@@ -153,8 +159,10 @@ function replaceWikilinks(
               return `@@GEODELINK${links.length - 1}@@`;
             }
           }
-          // legacy path: a leading "!" stays as literal text before the link
-          links.push({ target, display });
+          // legacy path: a leading "!" stays as literal text before the link.
+          // R14: the raw subpath rides along (undefined when empty) so the
+          // anchor can carry data-subpath; subpath-less output is unchanged.
+          links.push({ target, display, subpath: subpath || undefined });
           return `${bang}@@GEODELINK${links.length - 1}@@`;
         });
       })
@@ -315,8 +323,11 @@ md.core.ruler.push("geode-wikilinks", (state) => {
         } else {
           const resolved = resolve(info.target) !== null;
           const cls = resolved ? "internal-link" : "internal-link is-unresolved";
+          // R14: subpath links carry the raw text after '#' (escaped);
+          // links without a subpath stay byte-identical
+          const sub = info.subpath ? ` data-subpath="${escapeHtml(info.subpath)}"` : "";
           const anchor = new state.Token("html_inline", "", 0);
-          anchor.content = `<a class="${cls}" data-target="${escapeHtml(info.target)}" href="#">${escapeHtml(info.display)}</a>`;
+          anchor.content = `<a class="${cls}" data-target="${escapeHtml(info.target)}"${sub} href="#">${escapeHtml(info.display)}</a>`;
           anchor.level = child.level;
           next.push(anchor);
         }

@@ -20,6 +20,10 @@
  *
  * R13: trailing block id markers (" ^id") are hidden — leading space included
  * — unless the selection touches the line, mirroring the reading-view strip.
+ *
+ * R14: the wikilink/embed regex scan skips fenced-code lines (R13 debt) and
+ * collapsed wikilink marks carry data-link-subpath so clicks on
+ * [[note#Heading]] / [[note#^id]] reveal the target span in the opened note.
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
@@ -203,14 +207,16 @@ class NoteEmbedWidget extends WidgetType {
       while (host.firstChild) container.appendChild(host.firstChild);
     });
     // click delegation: internal links open through the shared wikilink
-    // opener; preventDefault blocks CM selection side effects on the click
+    // opener; preventDefault blocks CM selection side effects on the click.
+    // data-subpath is set by the core render pipeline on subpath-bearing
+    // anchors — threading it makes [[note#Heading]] reveal the span (R14).
     container.addEventListener("click", (e) => {
       const el = e.target instanceof HTMLElement ? e.target : null;
       const link = el?.closest<HTMLAnchorElement>("a.internal-link");
       if (!link || !container.contains(link)) return;
       e.preventDefault();
       const target = link.dataset.target;
-      if (target) void openWikilink(this.app, target, this.getPath());
+      if (target) void openWikilink(this.app, target, this.getPath(), link.dataset.subpath);
     });
     return container;
   }
@@ -495,6 +501,12 @@ function computeDecorations(
       const end = start + m[0].length;
       if (m[0].includes("\n")) continue; // plugins may not hide line breaks
       if (start < fmEnd) continue;
+      // R14 (R13 debt): fenced code is plain text — [[x]] / ![[x]] inside a
+      // fence is neither decorated nor widget-replaced, matching the reading
+      // view. Cross-line matches already bailed above, so the match start
+      // line decides. Inline code stays asymmetric (recorded — Obsidian does
+      // not decorate there either; future work).
+      if (fencedLines.has(doc.lineAt(start).number)) continue;
       const target = wikilinkTarget(m[1]);
       if (!target) continue;
       if (doc.sliceString(Math.max(0, start - 1), start) === "!") {
@@ -540,13 +552,17 @@ function computeDecorations(
       hide(end - 2, end); // "]]"
       const visFrom = pipe >= 0 ? start + 2 + pipe + 1 : start + 2;
       if (visFrom < end - 2) {
+        // subpath = raw text between "#" and "|" — threaded to openWikilink
+        // by the click handler so [[note#Heading]] scrolls to the span (R14)
+        const linkBody = pipe >= 0 ? m[1].slice(0, pipe) : m[1];
+        const linkHash = linkBody.indexOf("#");
+        const linkSubpath = linkHash >= 0 ? linkBody.slice(linkHash + 1) : "";
+        const attributes: Record<string, string> = { "data-link-target": target };
+        if (linkSubpath) attributes["data-link-subpath"] = linkSubpath;
         others.push({
           from: visFrom,
           to: end - 2,
-          deco: Decoration.mark({
-            class: "cm-live-wikilink",
-            attributes: { "data-link-target": target },
-          }),
+          deco: Decoration.mark({ class: "cm-live-wikilink", attributes }),
         });
       }
     }
@@ -638,7 +654,9 @@ function liveClickHandler(app: GeodeApp, getPath: () => string): Extension {
         const target = wl.getAttribute("data-link-target");
         if (target) {
           event.preventDefault();
-          void openWikilink(app, target, getPath());
+          // subpath rides along so [[note#Heading]] reveals the span (R14)
+          const subpath = wl.getAttribute("data-link-subpath");
+          void openWikilink(app, target, getPath(), subpath ?? undefined);
           return true;
         }
       }

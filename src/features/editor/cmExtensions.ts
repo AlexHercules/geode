@@ -17,7 +17,7 @@ import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { type Compartment, StateEffect, type Extension } from "@codemirror/state";
+import { type Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -37,6 +37,39 @@ import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /** Dispatched when the metadata index changes so wikilink resolution re-runs. */
 export const refreshWikilinks = StateEffect.define<null>();
+
+/* ---------------- reveal flash (R14) ---------------- */
+
+/**
+ * One-shot reveal highlight: EditorPane dispatches `revealFlash` with the
+ * target position after scrolling there (workspace.revealTarget consumption);
+ * the line gets `.cm-reveal-flash` (CSS fade-out animation) and EditorPane
+ * dispatches `clearRevealFlash` ~1200ms later to drop the decoration.
+ */
+export const revealFlash = StateEffect.define<{ from: number }>({
+  map: (value, mapping) => ({ from: mapping.mapPos(value.from) }),
+});
+
+export const clearRevealFlash = StateEffect.define<null>();
+
+const revealFlashLine = Decoration.line({ class: "cm-reveal-flash" });
+
+const revealFlashField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    deco = deco.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (effect.is(revealFlash)) {
+        const pos = Math.min(Math.max(0, effect.value.from), tr.state.doc.length);
+        deco = Decoration.set([revealFlashLine.range(tr.state.doc.lineAt(pos).from)]);
+      } else if (effect.is(clearRevealFlash)) {
+        deco = Decoration.none;
+      }
+    }
+    return deco;
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
 
 /* ---------------- theme ---------------- */
 
@@ -122,9 +155,15 @@ function wikilinkDecorations(app: GeodeApp, getPath: () => string): Extension {
       const target = wikilinkTarget(m[1]);
       if (!target) return null;
       const resolved = app.metadata.resolveLink(target, getPath()) !== null;
+      // raw text between '#' and '|' — Ctrl+Click reveal (R14) needs it too
+      const rawBody = m[1].split("|")[0];
+      const hashIdx = rawBody.indexOf("#");
+      const subpath = hashIdx >= 0 ? rawBody.slice(hashIdx + 1) : "";
       return Decoration.mark({
         class: resolved ? "cm-wikilink" : "cm-wikilink cm-wikilink-unresolved",
-        attributes: { "data-link-target": target },
+        attributes: subpath
+          ? { "data-link-target": target, "data-link-subpath": subpath }
+          : { "data-link-target": target },
       });
     },
   });
@@ -180,7 +219,7 @@ function wikilinkClickHandler(app: GeodeApp, getPath: () => string): Extension {
       const target = el?.getAttribute("data-link-target");
       if (!target) return false;
       event.preventDefault();
-      void openWikilink(app, target, getPath());
+      void openWikilink(app, target, getPath(), el?.getAttribute("data-link-subpath") ?? undefined);
       return true;
     },
   });
@@ -246,6 +285,7 @@ export function buildEditorExtensions(opts: {
   const { app, getPath, mode, modeCompartment } = opts;
   return [
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
+    revealFlashField,
     markdown({ base: markdownLanguage, codeLanguages: languages }),
     syntaxHighlighting(mdHighlight),
     EditorView.lineWrapping,

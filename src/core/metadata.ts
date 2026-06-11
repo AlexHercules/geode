@@ -23,6 +23,28 @@ const INLINE_CODE_RE = /`[^`\n]*`/g;
 /** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
 const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
+/** Span of a link subpath target inside a note (R14, frozen contract). */
+export interface SubpathSpan {
+  kind: "heading" | "block";
+  /** anchor start (heading line start / block paragraph start) */
+  from: number;
+  /** range end: heading = section end (start of the next heading with
+   *  level <= it, else end of file); block = block paragraph end */
+  to: number;
+}
+
+/** Markdown-stripped, space-collapsed, lowercased heading text — mirrors
+ *  Obsidian's stripHeading link-matching semantics (loose second pass only;
+ *  the exact raw-text match always wins first). Moved here from core/embeds.ts
+ *  in R14 so resolveSubpath owns all heading-matching logic. */
+export function stripHeadingText(text: string): string {
+  return text
+    .replace(/[*_`~]|\[\[|\]\]|[[\]]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 /**
  * Parse a leading YAML frontmatter block (minimal subset: scalar values,
  * inline lists `[a, b]`, and block lists). Returns null if absent.
@@ -336,6 +358,47 @@ export class MetadataIndex {
 
   getAll(): NoteMetadata[] {
     return [...this.byPath.values()];
+  }
+
+  /**
+   * Resolve a link subpath (the text after '#', WITHOUT the '#') inside a
+   * note to a document span (R14, frozen contract).
+   *  - `^id` → block reference: case-insensitive id match against the block
+   *    index; span = the whole block (paragraph approximation, marker incl.).
+   *  - anything else → heading: exact case-insensitive text match first, then
+   *    a stripHeadingText second pass (Obsidian's stripHeading semantics —
+   *    "# **Bold**" is referenced as "[[note#Bold]]"); span = from the
+   *    heading line up to (exclusive) the next heading of the same or higher
+   *    level, else end of file — Obsidian behaviour.
+   * Unknown path / empty subpath / no match → null.
+   */
+  resolveSubpath(path: string, subpath: string): SubpathSpan | null {
+    const meta = this.byPath.get(path);
+    if (!meta) return null;
+    const sub = subpath.trim();
+    if (!sub) return null;
+    if (sub.startsWith("^")) {
+      const lower = sub.slice(1).toLowerCase();
+      const hit = meta.blocks.find((b) => b.id.toLowerCase() === lower);
+      return hit ? { kind: "block", from: hit.from, to: hit.to } : null;
+    }
+    const headings = meta.headings;
+    const lower = sub.toLowerCase();
+    let idx = headings.findIndex((h) => h.text.toLowerCase() === lower);
+    if (idx === -1) {
+      const stripped = stripHeadingText(sub);
+      idx = headings.findIndex((h) => stripHeadingText(h.text) === stripped);
+    }
+    if (idx === -1) return null;
+    const hit = headings[idx];
+    let to = meta.contentLength;
+    for (let i = idx + 1; i < headings.length; i++) {
+      if (headings[i].level <= hit.level) {
+        to = headings[i].from;
+        break;
+      }
+    }
+    return { kind: "heading", from: hit.from, to };
   }
 
   /**

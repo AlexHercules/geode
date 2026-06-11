@@ -162,6 +162,10 @@ export class Workspace {
   /** Most recent NON-NULL active file (survives switching to the graph tab / modals).
    *  Session-only — not persisted. Seeded from the active tab on load. */
   readonly lastActiveFile = new Store<string | null>(null);
+  /** One-shot reveal request (R14): EditorPane consumes it (scroll + flash)
+   *  then clears it back to null. Session-only — not persisted. Set AFTER
+   *  openFile so the consuming pane already targets `path`. */
+  readonly revealTarget = new Store<{ path: string; from: number; to: number } | null>(null);
   private flushers = new Set<() => void | Promise<void>>();
 
   constructor(private events: EventBus) {
@@ -228,6 +232,12 @@ export class Workspace {
       return { ...s, root, activePaneId: target.id, modal: null };
     });
     this.emitActiveFile();
+  }
+
+  /** Request a one-shot scroll-to-span reveal (R14). Pure store set — no side
+   *  effects; call AFTER openFile(path) so the target pane is already there. */
+  requestReveal(path: string, from: number, to: number): void {
+    this.revealTarget.set({ path, from, to });
   }
 
   openGraph() {

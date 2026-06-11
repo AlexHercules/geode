@@ -7,7 +7,13 @@ import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
-import { buildEditorExtensions, editorModeExtensions, refreshWikilinks } from "./cmExtensions";
+import {
+  buildEditorExtensions,
+  clearRevealFlash,
+  editorModeExtensions,
+  refreshWikilinks,
+  revealFlash,
+} from "./cmExtensions";
 import { hydrateEmbeds } from "./embeds";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { openWikilink } from "./wikilinks";
@@ -226,6 +232,49 @@ export function EditorPane({ tab }: { tab: TabState }) {
     });
   }, [app, handle, tab.mode]);
 
+  /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
+
+  const reveal = useStore(app.workspace.revealTarget);
+  /** pending flash-clear timer id — zeroed on fire, cleared on unmount */
+  const flashTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current !== null) {
+        window.clearTimeout(flashTimerRef.current);
+        flashTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Consume only when this pane targets the requested path AND a CM view
+    // exists (live/source). Preview mode or a path mismatch leaves the
+    // request pending — openFile switches tabs first, so this pane may mount
+    // (handle ready, view built by the lifecycle effect above) AFTER the
+    // requestReveal; depending on both `handle` and `reveal` re-runs the
+    // check on either side arriving.
+    if (!reveal || !handle || reveal.path !== handle.path) return;
+    if (isPreview) return;
+    const view = viewRef.current;
+    if (!view) return;
+    // clamp: subpath offsets come from the metadata index, which may lag
+    // unsaved local edits
+    const from = Math.min(Math.max(0, reveal.from), view.state.doc.length);
+    view.dispatch({
+      selection: { anchor: from },
+      effects: [EditorView.scrollIntoView(from, { y: "center" }), revealFlash.of({ from })],
+    });
+    app.workspace.revealTarget.set(null);
+    if (flashTimerRef.current !== null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      flashTimerRef.current = null;
+      // the view may have been rebuilt meanwhile — a fresh field starts
+      // empty, so dispatching the clear there is a harmless no-op
+      viewRef.current?.dispatch({ effects: clearRevealFlash.of(null) });
+    }, 1200);
+  }, [app, handle, isPreview, reveal]);
+
   /* ---------- report the active view when this tab becomes active ---------- */
 
   useEffect(() => {
@@ -356,7 +405,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
       if (internal) {
         e.preventDefault();
         const target = internal.dataset.target;
-        if (target) void openWikilink(app, target, handle.path);
+        // data-subpath rides on subpath-bearing anchors (core pipeline) so
+        // [[note#Heading]] / [[note#^id]] clicks reveal the target span (R14)
+        if (target) void openWikilink(app, target, handle.path, internal.dataset.subpath);
         return;
       }
 

@@ -369,6 +369,22 @@
   border-radius: 6px;
 }
 
+/* reveal flash (R14) — one-shot highlight on the revealed line after a
+   [[note#subpath]] navigation; low-opacity accent fading out over ~1.2s.
+   The decoration is cleared by EditorPane shortly after the animation ends. */
+.cm-line.cm-reveal-flash {
+  animation: reveal-flash-fade 1.2s ease-out forwards;
+}
+
+@keyframes reveal-flash-fade {
+  from {
+    background-color: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
 /* frontmatter "Properties · n fields" pill (block widget) */
 .cm-live-frontmatter {
   display: inline-flex;

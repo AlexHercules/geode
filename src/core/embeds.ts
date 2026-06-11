@@ -39,17 +39,8 @@ const MAX_EMBED_DEPTH = 5;
 
 /** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
 const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
-
-/** Markdown-stripped, space-collapsed, lowercased heading text — mirrors
- *  Obsidian's stripHeading link-matching semantics (loose second pass only;
- *  the exact raw-text match always wins first). */
-function stripHeadingText(text: string): string {
-  return text
-    .replace(/[*_`~]|\[\[|\]\]|[[\]]/g, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase();
-}
+// stripHeadingText moved to core/metadata.ts in R14 — heading/block matching
+// now lives entirely in MetadataIndex.resolveSubpath.
 
 /** "folder/Note.md" → "Note" */
 function noteName(path: string): string {
@@ -59,11 +50,13 @@ function noteName(path: string): string {
 /** Degraded rendering: a plain internal link inside the container (depth
  *  limit). Clicks ride the caller's existing `a.internal-link` delegation —
  *  data-target resolves via resolveLink. */
-function renderLinkSign(span: HTMLElement, path: string, display: string): void {
+function renderLinkSign(span: HTMLElement, path: string, display: string, subpath: string): void {
   span.textContent = "";
   const a = document.createElement("a");
   a.className = "internal-link";
   a.dataset.target = path;
+  // R14: carry the raw subpath so click handlers can scroll-to-subpath
+  if (subpath) a.dataset.subpath = subpath;
   a.setAttribute("href", "#");
   a.textContent = display;
   span.appendChild(a);
@@ -104,58 +97,31 @@ async function hydrateNote(
       return;
     }
     if (depth >= MAX_EMBED_DEPTH) {
-      renderLinkSign(span, path, display);
+      renderLinkSign(span, path, display, subpath);
       return;
     }
     const content = await ctx.vault.read(path);
     let slice = content;
-    if (subpath.startsWith("^")) {
-      // R13: `#^block-id` — case-insensitive id match against the block
-      // index; slice [from, to) and drop the trailing ` ^id` marker so it
-      // never renders (the render pipeline strips line-end markers too, but
-      // the contract calls for an explicit tail strip here)
-      const id = subpath.slice(1);
-      const lower = id.toLowerCase();
-      const blocks = ctx.metadata.getMetadata(path)?.blocks ?? [];
-      const hit = blocks.find((b) => b.id.toLowerCase() === lower);
-      if (!hit) {
+    if (subpath) {
+      // R14: heading/block matching is unified in resolveSubpath (exact +
+      // stripHeading second pass for headings; case-insensitive id for
+      // `^block` refs). The miss callouts stay here, per kind.
+      const target = ctx.metadata.resolveSubpath(path, subpath);
+      if (!target) {
         renderCallout(
           span,
           "geode-embed-missing",
-          t("editor.embedMissingBlock", { block: id, name: noteName(path) }),
+          subpath.startsWith("^")
+            ? t("editor.embedMissingBlock", { block: subpath.slice(1), name: noteName(path) })
+            : t("editor.embedMissingHeading", { heading: subpath, name: noteName(path) }),
         );
         return;
       }
-      slice = content.slice(hit.from, hit.to).replace(BLOCK_MARKER_RE, "");
-    } else if (subpath) {
-      const headings = ctx.metadata.getMetadata(path)?.headings ?? [];
-      const lower = subpath.toLowerCase();
-      let idx = headings.findIndex((h) => h.text.toLowerCase() === lower);
-      if (idx === -1) {
-        // second pass: markdown-stripped comparison (Obsidian's stripHeading
-        // semantics — "# **Bold**" is referenced as "![[note#Bold]]")
-        const stripped = stripHeadingText(subpath);
-        idx = headings.findIndex((h) => stripHeadingText(h.text) === stripped);
-      }
-      if (idx === -1) {
-        renderCallout(
-          span,
-          "geode-embed-missing",
-          t("editor.embedMissingHeading", { heading: subpath, name: noteName(path) }),
-        );
-        return;
-      }
-      // section = from the matched heading line up to (exclusive) the next
-      // heading of the same or higher level — Obsidian behaviour
-      const hit = headings[idx];
-      let end = content.length;
-      for (let i = idx + 1; i < headings.length; i++) {
-        if (headings[i].level <= hit.level) {
-          end = headings[i].from;
-          break;
-        }
-      }
-      slice = content.slice(hit.from, end);
+      slice = content.slice(target.from, target.to);
+      // R13: drop the trailing ` ^id` marker so it never renders (the render
+      // pipeline strips line-end markers too, but the contract calls for an
+      // explicit tail strip here)
+      if (target.kind === "block") slice = slice.replace(BLOCK_MARKER_RE, "");
     }
 
     // render with the EMBEDDED note as fromPath so its own relative links and
@@ -171,6 +137,8 @@ async function hydrateNote(
     const link = document.createElement("a");
     link.className = "internal-link";
     link.dataset.target = path;
+    // R14: carry the raw subpath so click handlers can scroll-to-subpath
+    if (subpath) link.dataset.subpath = subpath;
     link.setAttribute("href", "#");
     link.textContent = subpath ? `${noteName(path)} > ${subpath}` : noteName(path);
     header.appendChild(link);
