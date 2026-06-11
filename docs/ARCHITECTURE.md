@@ -71,7 +71,48 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 14 additions (current) — scroll-to-subpath 定位 + live preview fence 排除统一
+## Round 15 additions (current) — 整固轮：阅读视图 reveal + 性能基线刷新 + 全量回归
+
+P2 池见底 + P1 仍无用户输入 → HANDOFF 预授权的整固轮。**安装包瘦身显式不做**（决策
+记录：R5 的 moment-with-locales 全 locale 单实例是 compat 正确性选择——calendar/nldates
+依赖任意系统 locale；330KB min 前收益对 12.4MB 安装包边际；Vite 双副本坑风险不对称。
+重开条件：商业分发对体积有硬指标时，按 R5 实现决策重读后专轮处理）。
+
+### 阅读视图内 reveal — `features/editor/EditorPane.tsx` + editor.css（editor agent）
+
+R14 口径升级：preview 态不再挂起，直接在渲染 DOM 内定位。
+- 消费条件扩展：`isPreview && previewContentRef` 就绪且 reveal.path === handle.path。
+- **heading 定位**：用 `metadata.getMetadata(path).headings` 找到 reveal.from 对应的
+  heading（from 精确匹配），取其在 document order 中的序号 n → preview DOM 中
+  `querySelectorAll("h1,h2,h3,h4,h5,h6")[n]`（管线 1:1 渲染 heading，序号稳定——比文本
+  匹配可靠）→ `scrollIntoView({ block: "center" })` + 元素加 `.preview-reveal-flash`
+  类（1.2s CSS 动画后移除，timer 卸载清理）。
+- **block/无法定位**：reveal.from 不是任何 heading.from → 比例近似滚动
+  `previewScrollRef.scrollTop = (from / contentLength) * scrollHeight - clientHeight/2`
+  （无 flash，近似口径记录）。消费后照常 `revealTarget.set(null)`。
+- css：`.preview-reveal-flash` 与 `.cm-reveal-flash` 同源动画（--accent 透明度）。
+- 探针口径更新：r14-probe1 的 pendingInPreview 断言反转（preview 即消费）。
+
+### 性能基线刷新（chief，零代码——纯测量 + PERFORMANCE.md 更新）
+
+- 浏览器 `?bench=10000`（headless Edge + CDP）：graphSettleMs/graphDrawMs、switcher
+  开启、全文搜索、explorer 展开——对照 R3/R7 基线，回归超 20% 立案排查。
+- bench=1000 图谱 60fps 口径不回退。
+- 新路径补口径：10k vault 下 resolveSubpath/resolveAttachment 首次构建耗时记录。
+
+### 全量回归（chief）
+
+最终 v0.15.0 build 上复跑：r9-probe-suite（套件+nldates）、r12-probe1/2（转写+导出）、
+r13-probe1（块）、r14-probe1（定位，按新口径修订）。更新链路（r9-up*）自 R9 零改动，
+跳过并记录。
+
+### Round 15 file ownership
+
+| Agent | Files |
+|---|---|
+| editor | features/editor/EditorPane.tsx, features/editor/editor.css |
+
+## Round 14 additions — scroll-to-subpath 定位 + live preview fence 排除统一
 
 P2 组合轮（P1 渠道/证书继续等用户决策）。引用体验闭环收尾：点击 `[[note#Heading]]` /
 `[[note#^id]]` 打开笔记并**滚动定位到目标 + 居中 + 短暂闪烁高亮**（Obsidian 行为）。

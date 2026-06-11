@@ -255,15 +255,30 @@ live 折叠链接/展开态 Ctrl+Click——评审唯一确认 minor，chief 修
 落位 `# Deep Section` + 滚动 + 闪烁 ✓、block 落位 ✓、闪烁 1.2s 自动淡出 ✓、
 套件 5/5 不回退 ✓。
 
-## R15 候选 — 商业打磨（按优先级）
+### R15 — v0.15（2026-06-11）整固轮：阅读视图 reveal + 性能基线刷新 + 全量回归
+
+P2 池见底，按 HANDOFF 预授权转整固。**安装包瘦身显式不做**（决策入档 ARCHITECTURE
+R15 节：moment 全 locale 是 compat 正确性选择、收益边际、双副本坑风险不对称；重开
+条件 = 商业分发有体积硬指标）。
+**阅读视图内 reveal**（R14 口径升级）：preview 态直接消费——heading 走 metadata 序号
+→ DOM h1-h6[n] 定位（agent 加固：排除嵌入笔记内 heading 的序号干扰，上报后采纳）+
+`.preview-reveal-flash`；block 走比例近似滚动（近似口径）。
+**性能基线刷新**（headless Edge + CDP，七轮欠账）：bench=10000 零回归——
+graphSettle 3958ms（R7 5771 更优）、graphDraw 2.9ms、metadataIndex 185ms（R3 110，
+七轮解析增量可接受）、switcher 20ms；R11/R14 新路径（resolveAttachment/resolveSubpath）
+≤1ms；bench=1000 控制组正常。详表 PERFORMANCE.md R15 节。
+**全量回归**（v0.15.0 release build）：r12（转写+导出 data URI）/r13（块）/r14（定位，
+preview 直接消费新口径）探针全绿 + 套件 5/5 + nldates 全链路不回退。
+更新链路（r9-up*）自 R9 零改动跳过（记录）。
+
+## R16 候选
 
 | P | 功能 | 备注 |
 |---|---|---|
-| P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策（GitHub Releases/自建）与证书购买都需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand |
-| P2 | 安装包瘦身 | moment locale 裁剪（R5 双副本坑注意）+ ureq 特性裁剪 |
-| P2 | 阅读视图内 reveal（同模式滚动定位） | R14 口径：preview 态挂起到切 live；Obsidian 在阅读视图同样定位 |
-| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps（opt-in 可用） |
-| P2 | PDF/音频嵌入、行内 code 装饰对称 | 体验长尾 |
+| P1 | 真实发布渠道接通 + Authenticode 证书 | **外部依赖：渠道决策与证书购买需用户拍板**；技术侧只剩改 endpoint 一行 + 填 signCommand。**P2 池已见底——没有此输入，建议暂停特性轮** |
+| P2 | 全文搜索专项（基线复测 + 防抖自适应 + 倒排索引远期） | PERFORMANCE.md R3 遗留建议 |
+| P2 | 图谱 WebGL/Worker 远期 tier | 不抽样 10k Show all 仍 ~9fps |
+| P2 | PDF/音频嵌入、行内 code 装饰对称、[[#h]] 同文链接 | 体验长尾 |
 
 ## 已知技术债
 

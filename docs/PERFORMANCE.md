@@ -128,6 +128,24 @@ pass throttled settle ticks ~10x (43 s → 5.8 s once suppressed while hot).
 Remaining (future tiers): Web Worker simulation; WebGL renderer (regl/pixi) for an
 unsampled 10k+ view — Canvas2D will not get there.
 
+## R15: 基线刷新（2026-06-11，headless Edge + CDP，v0.15.0）
+
+R7 后七轮特性（i18n/嵌入/转写/块引用/定位）未刷新基线——R15 整固轮复测，**零回归**：
+
+| 指标 @ bench=10000 | R3/R7 基线 | R15 实测 | 判定 |
+|---|---|---|---|
+| metadataIndexMs | ~110（R3） | 185 | +75ms（aliases/blocks 七轮解析增量，可接受） |
+| switcher 开启 | 15ms（R3） | 20ms | 噪声内 |
+| graphSettleMs | 5771（R7） | **3958** | 更优 |
+| graphDrawMs | 3.9（R7） | 2.9 | 更优 |
+| resolveAttachment 首建（R11 新口径） | — | 1ms | 可忽略 |
+| resolveSubpath（R14 新口径） | — | 0ms | 可忽略 |
+
+bench=1000 控制组：graphDrawMs 2.6ms（60fps 余量充足）、metadataIndexMs 33ms。
+全文搜索未复测（UI 驱动探针成本高，下次专项）。探针 `.calibration/r15-bench.js` +
+`cdp-run-url.mjs <expr> <port> <urlSubstring>`（headless Edge：
+`msedge --headless=new --remote-debugging-port=93xx --user-data-dir=<tmp> <url>`）。
+
 ## Remaining bottlenecks & recommendations (R3 list)
 - **Search debounce (250 ms) now dominates** perceived search latency (scan is
   53 ms at 10k). Could drop to ~150 ms, or make it adaptive to vault size.
