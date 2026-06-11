@@ -17,8 +17,8 @@ function countWords(text: string): number {
  */
 export const wordCountPlugin: GeodePlugin = {
   id: "word-count",
-  name: "Word count",
-  description: "Shows word and character counts for the active note in the status bar.",
+  name: () => t("plugin.wordCount.name"),
+  description: () => t("plugin.wordCount.desc"),
   version: "1.0.0",
 
   onload(app: AppHandle) {

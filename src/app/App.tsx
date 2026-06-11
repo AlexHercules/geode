@@ -911,6 +911,9 @@ async function openVaultFlow(app: ReturnType<typeof useApp>) {
     /* ignore */
   }
   await app.vault.load();
+  // tabs persisted from the previous vault point at files the new vault does
+  // not have — close them before plugins reload against the new vault
+  app.workspace.closeMissingFileTabs((p) => app.vault.fileExists(p));
   try {
     await app.plugins.loadExternal(app.vault);
   } catch (err) {

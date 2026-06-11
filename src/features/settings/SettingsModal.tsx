@@ -3,7 +3,13 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { getCommandName, hotkeyFromEvent } from "@core/commands";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
-import type { PluginManager, PluginSettingsSection, PluginSource } from "@core/plugins";
+import {
+  getPluginDescription,
+  getPluginName,
+  type PluginManager,
+  type PluginSettingsSection,
+  type PluginSource,
+} from "@core/plugins";
 import { useStore } from "@core/store";
 import {
   checkForUpdate,
@@ -14,7 +20,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.9.0";
+const APP_VERSION = "0.10.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -317,7 +323,7 @@ function PluginsSection() {
             <h3 className="plugin-group-title">{t("settings.pluginSettingsGroup")}</h3>
           </div>
           {activeSections.map(({ section, plugin }) => (
-            <PluginSettingsBlock key={section.id} section={section} pluginName={plugin.name} />
+            <PluginSettingsBlock key={section.id} section={section} pluginName={getPluginName(plugin)} />
           ))}
         </>
       )}
@@ -411,11 +417,13 @@ function PluginList({
 
   return (
     <div className="plugin-list" data-testid={`settings-plugin-list-${group}`}>
-      {entries.map(({ plugin, enabled, source }) => (
+      {entries.map(({ plugin, enabled, source }) => {
+        const description = getPluginDescription(plugin);
+        return (
         <div className="plugin-item" key={plugin.id} data-testid={`plugin-item-${plugin.id}`}>
           <div className="plugin-info">
             <div className="plugin-name">
-              {plugin.name}
+              {getPluginName(plugin)}
               {plugin.version && <span className="plugin-version">v{plugin.version}</span>}
               <span
                 className={`plugin-source-badge plugin-source-${source}`}
@@ -424,7 +432,7 @@ function PluginList({
                 {t(SOURCE_LABEL_KEY[source])}
               </span>
             </div>
-            {plugin.description && <div className="plugin-desc">{plugin.description}</div>}
+            {description && <div className="plugin-desc">{description}</div>}
             {warnings?.has(plugin.id) && (
               <div
                 className="plugin-warning"
@@ -439,7 +447,7 @@ function PluginList({
             role="switch"
             aria-checked={enabled}
             aria-label={t(enabled ? "settings.disablePlugin" : "settings.enablePlugin", {
-              name: plugin.name,
+              name: getPluginName(plugin),
             })}
             data-testid={`plugin-toggle-${plugin.id}`}
             onClick={() => {
@@ -450,7 +458,8 @@ function PluginList({
             <span className="settings-toggle-thumb" />
           </button>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -147,6 +147,12 @@ async function bootstrap() {
     }
   }
 
+  // persisted tabs may point at files deleted (or from another vault) while the
+  // app was closed — clean them up right after the initial load, before plugins
+  if (vault.isOpen) {
+    workspace.closeMissingFileTabs((p) => vault.fileExists(p));
+  }
+
   for (const plugin of BUILTIN_PLUGINS) {
     try {
       await plugins.register(plugin);

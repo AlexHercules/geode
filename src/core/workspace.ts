@@ -273,6 +273,51 @@ export class Workspace {
     this.emitActiveFile();
   }
 
+  /** Close every markdown tab whose filePath no longer exists. One batched state
+   *  update (normalize once), preserves graph tabs and the active-pane invariants.
+   *  Returns the number of tabs closed. */
+  closeMissingFileTabs(exists: (path: string) => boolean): number {
+    // collect outside the updater so the count is updater-call-count independent
+    const stale = new Set<string>();
+    for (const t of allTabs(this.state.get().root)) {
+      // graph tabs (viewType !== "markdown") and null-path tabs are never touched
+      if (t.viewType === "markdown" && t.filePath !== null && !exists(t.filePath)) {
+        stale.add(t.id);
+      }
+    }
+    if (stale.size === 0) return 0;
+    this.update((s) => {
+      let root = mapAllLeaves(s.root, (l) => {
+        const tabs = l.tabs.filter((t) => !stale.has(t.id));
+        if (tabs.length === l.tabs.length) return l;
+        let activeTabId = l.activeTabId;
+        if (activeTabId !== null && !tabs.some((t) => t.id === activeTabId)) {
+          // closeTab's neighbor rule generalized to batch removal: activate the
+          // survivor at the removed active tab's original slot (i.e. the next
+          // surviving tab to its right), clamped to the last survivor
+          const idx = Math.max(0, l.tabs.findIndex((t) => t.id === activeTabId));
+          const survivorsBefore = l.tabs.slice(0, idx).filter((t) => !stale.has(t.id)).length;
+          activeTabId = tabs[Math.min(survivorsBefore, tabs.length - 1)]?.id ?? null;
+        }
+        return { ...l, tabs, activeTabId };
+      });
+      // normalize once: empty leaves collapse; an all-empty tree falls back to a
+      // single empty leaf (normalize never returns a leafless tree)
+      root = normalize(root);
+      const activePaneId = findLeaf(root, s.activePaneId)
+        ? s.activePaneId
+        : flattenLeaves(root)[0].id;
+      return { ...s, root, activePaneId };
+    });
+    // a missing file must not linger as the local graph's anchor (same rule as
+    // handleDeleted); emitActiveFile re-seeds it from the new active file
+    const last = this.lastActiveFile.get();
+    if (last !== null && !exists(last)) this.lastActiveFile.set(null);
+    console.info(`[workspace] closed ${stale.size} tab(s) pointing at missing files`);
+    this.emitActiveFile();
+    return stale.size;
+  }
+
   /** Activate a tab (and focus the pane that holds it). */
   setActiveTab(id: string) {
     this.update((s) => {

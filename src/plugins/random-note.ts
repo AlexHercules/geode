@@ -7,8 +7,8 @@ import { t } from "@core/i18n";
  */
 export const randomNotePlugin: GeodePlugin = {
   id: "random-note",
-  name: "Random note",
-  description: "Open a random markdown note from the vault via the command palette.",
+  name: () => t("plugin.randomNote.name"),
+  description: () => t("plugin.randomNote.desc"),
   version: "1.0.0",
 
   onload(app: AppHandle) {

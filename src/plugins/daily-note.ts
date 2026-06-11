@@ -37,8 +37,8 @@ async function openToday(app: AppHandle): Promise<void> {
  */
 export const dailyNotePlugin: GeodePlugin = {
   id: "daily-note",
-  name: "Daily notes",
-  description: "Open (or create) a note for today under \"Daily Notes/\" with Ctrl+D.",
+  name: () => t("plugin.dailyNote.name"),
+  description: () => t("plugin.dailyNote.desc"),
   version: "1.0.0",
 
   onload(app: AppHandle) {

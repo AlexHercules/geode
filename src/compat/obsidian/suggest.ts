@@ -139,6 +139,13 @@ export class EditorSuggestManager {
   private selected = 0;
   private popupEl: HTMLElement | null = null;
   private detachDom: (() => void) | null = null;
+  /**
+   * rAF id of the pending coalesced reposition; 0 = none scheduled. Doubles
+   * as the dirty flag (at most one position() per frame). MUST be reset to 0
+   * after cancel/run — R7 StrictMode lesson: a stale non-zero id makes every
+   * later schedule attempt early-return forever.
+   */
+  private repositionRaf = 0;
   /** stale-token guard for async getSuggestions (bumped on close too) */
   private token = 0;
 
@@ -387,11 +394,33 @@ export class EditorSuggestManager {
       if (this.active?.context?.editor.cm.dom.contains(target)) return;
       this.closeActive();
     };
+    // Follow the anchor on viewport changes while the popup is open. "scroll"
+    // does not bubble, so only a capture-phase document listener sees the CM6
+    // scroller (or any other scrolling ancestor). Callbacks are coalesced
+    // through rAF — repositionRaf !== 0 means a frame is already pending, so
+    // position() runs at most once per frame. The popup's own list scroll is
+    // also captured here, but reposition is idempotent (anchor-derived), and
+    // writing style.left/top never fires scroll — no feedback loop.
+    const onViewportChange = (): void => {
+      if (this.repositionRaf !== 0) return; // already scheduled this frame
+      this.repositionRaf = requestAnimationFrame(() => {
+        this.repositionRaf = 0; // reset BEFORE repositioning (R7 lesson)
+        if (this.active) this.position(this.active);
+      });
+    };
     document.addEventListener("keydown", onKeydown, true);
     document.addEventListener("mousedown", onMousedown, true);
+    window.addEventListener("resize", onViewportChange);
+    document.addEventListener("scroll", onViewportChange, true);
     this.detachDom = () => {
       document.removeEventListener("keydown", onKeydown, true);
       document.removeEventListener("mousedown", onMousedown, true);
+      window.removeEventListener("resize", onViewportChange);
+      document.removeEventListener("scroll", onViewportChange, true);
+      if (this.repositionRaf !== 0) {
+        cancelAnimationFrame(this.repositionRaf);
+        this.repositionRaf = 0; // R7 lesson: never leave a cancelled id behind
+      }
     };
   }
 

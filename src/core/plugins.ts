@@ -34,8 +34,13 @@ export interface AppHandle {
 
 export interface GeodePlugin {
   id: string;
-  name: string;
-  description?: string;
+  /** Display name. A thunk (R10) resolves through the i18n layer at render time —
+   *  use `getPluginName(p)` to read it. Plain strings stay valid (compat manifests
+   *  and external plugins register strings). */
+  name: string | (() => string);
+  /** Display description; same string-or-thunk contract as `name` —
+   *  use `getPluginDescription(p)` to read it. */
+  description?: string | (() => string);
   version?: string;
   onload(app: AppHandle): void | Promise<void>;
   onunload?(): void;
@@ -98,13 +103,30 @@ interface PluginRecord {
 function isGeodePlugin(value: unknown): value is GeodePlugin {
   if (typeof value !== "object" || value === null) return false;
   const v = value as Record<string, unknown>;
+  const nameOk =
+    typeof v["name"] === "function" ||
+    (typeof v["name"] === "string" && v["name"].length > 0);
+  const descriptionOk =
+    v["description"] === undefined ||
+    typeof v["description"] === "string" ||
+    typeof v["description"] === "function";
   return (
     typeof v["id"] === "string" &&
     v["id"].length > 0 &&
-    typeof v["name"] === "string" &&
-    v["name"].length > 0 &&
+    nameOk &&
+    descriptionOk &&
     typeof v["onload"] === "function"
   );
+}
+
+/** Resolve a plugin's display name (R10: names may be locale-aware thunks). */
+export function getPluginName(p: GeodePlugin): string {
+  return typeof p.name === "function" ? p.name() : p.name;
+}
+
+/** Resolve a plugin's display description (R10: may be a locale-aware thunk). */
+export function getPluginDescription(p: GeodePlugin): string | undefined {
+  return typeof p.description === "function" ? p.description() : p.description;
 }
 
 const ENABLED_KEY = "geode.plugins.enabled.v1";
@@ -338,7 +360,7 @@ export class PluginManager {
         for (const candidate of collected) {
           if (!isGeodePlugin(candidate)) {
             console.error(
-              `[plugins] ${file.name}: invalid plugin shape (need string id, string name, onload function)`,
+              `[plugins] ${file.name}: invalid plugin shape (need string id, string-or-function name, onload function)`,
             );
             continue;
           }

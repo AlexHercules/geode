@@ -57,6 +57,15 @@ export const en = {
   "cmd.dailyNote": "Open today's daily note",
   "cmd.randomNote": "Open random note",
   "plugin.wordCount": "{words} words · {chars} chars",
+  "plugin.wordCount.name": "Word count",
+  "plugin.wordCount.desc":
+    "Shows word and character counts for the active note in the status bar.",
+  "plugin.dailyNote.name": "Daily notes",
+  "plugin.dailyNote.desc":
+    'Open (or create) a note for today under "Daily Notes/" with Ctrl+D.',
+  "plugin.randomNote.name": "Random note",
+  "plugin.randomNote.desc":
+    "Open a random markdown note from the vault via the command palette.",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -113,4 +122,10 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.dailyNote": "打开今天的日记",
   "cmd.randomNote": "打开随机笔记",
   "plugin.wordCount": "{words} 词 · {chars} 字符",
+  "plugin.wordCount.name": "字数统计",
+  "plugin.wordCount.desc": "在状态栏显示当前笔记的字数与字符数。",
+  "plugin.dailyNote.name": "日记",
+  "plugin.dailyNote.desc": "使用 Ctrl+D 打开（或创建）今天位于 \"Daily Notes/\" 下的日记。",
+  "plugin.randomNote.name": "随机笔记",
+  "plugin.randomNote.desc": "通过命令面板打开库中随机一篇 Markdown 笔记。",
 };
