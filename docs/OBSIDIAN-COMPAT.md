@@ -151,6 +151,20 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R17 套件回归（2026-06-11，桌面 release v0.17.0 实测 `geode.exe compat-vault`）
+
+R17 为原生功能轮（附件摄入 + 折叠），compat 表面零改动（contract 明令）。桌面逐项
+复测不回退：5/5 加载启用 ✓、nldates 指令条 + 逐键 `@tomorrow`→`[[2026-06-12]]` ✓
+（r16-nldates 专用探针；r9-probe-suite 的 lastLine 空值是其弹层关闭后 Enter 落空的
+既有探针语义，非回归）、reload 幂等 + calendar 重挂载 ✓、回声计数正常 ✓；
+r12（转写 ✓ compat-vault + 导出 data URI ✓ demo-vault）/r13（块）/r14（定位）探针
+全绿；r16 改写引擎桌面回归全绿（d4 echo 断言本轮修订为精确语义——引擎写目标绝不
+external；rename 事件无指纹面、external 是设计行为，r17-echo-diag.js 坐实）。
+新增已知口径：编辑器 paste 处理器对纯文本粘贴返回 false 零干扰（url-into-selection
+的 editorCallback 粘贴路径不受影响，实测 ✓）；`vault.getConfig("attachmentFolderPath")`
+仍返回 undefined（Geode 的 attachmentFolder 设置未接 compat——R18+ 候选）。
+缺口表无变化。
+
 ### R16 套件回归（2026-06-11，桌面 release v0.16.0 实测 `geode.exe compat-vault`）
 
 R16 compat 改动一件：`app.fileManager.renameFile` 从 warn-stub 升级为真实现（接 core

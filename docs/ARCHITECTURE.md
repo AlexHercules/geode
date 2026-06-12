@@ -71,7 +71,236 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 16 additions (current) — 重命名自动更新引用 + `[[#h]]` 同文链接
+## Round 17 additions (current) — 附件摄入（粘贴/拖拽图片入库）+ 标题/列表折叠
+
+迁移体验路线图第二轮（ROADMAP R16-R18）。官方校准（obsidian.md/help/attachments +
+obsidian.md/help/folding，2026-06-11 WebFetch）：
+
+- **附件位置**四选项："Vault folder"（库根）/ "In the folder specified below"（指定
+  文件夹）/ "Same folder as current file" / "In subfolder under current folder"；
+  子文件夹缺失时 **"If it doesn't exist, Obsidian creates it when you add an
+  attachment"**（自动创建）。配置值格式官方未文档化——按 Obsidian 实际
+  `attachmentFolderPath` 语义自校准（见下 resolveAttachmentDir，显式口径）。
+- **折叠**：Settings → Editor 的 "Fold heading" + "Fold indent"，**默认开**；箭头
+  "hovering the mouse cursor over the section … selecting the arrow on the left"，
+  **已折叠的节无论 hover 与否常显箭头**；命令 "Fold all headings and lists" /
+  "Unfold all headings and lists"。
+- 粘贴图片命名 `Pasted image YYYYMMDDHHMMSS.<ext>` 为 Obsidian 实测惯例（官方帮助
+  未文档化）——自定口径显式采用。
+
+### 一次性决策（chief，agent 不得加依赖/不碰 Rust）
+
+- **零新增 npm 依赖**：折叠用既有 `@codemirror/language`（codeFolding/foldGutter/
+  foldService 全在其中，R4 起已在依赖树，从未接线）。
+- Rust 新命令 `vault_write_binary`：`#[tauri::command(async)]`（文件 IO 离主线程，
+  R6 教训）+ safe_join + **已存在即拒绝**（镜像 vault_create）+ `create_dir_all(parent)`
+  + **原子写**（sibling `.{name}.geode-tmp` + rename，vault_write R16 先例——点前缀
+  落在 watcher 噪声过滤里，启动清扫顺带覆盖）。
+- 二进制自写**不打回声指纹**（FNV-1a 是文本口径）：桌面 watcher 会把自写 create 当
+  外部事件 → 仅多一次 refreshTree（非 md 不发 file:modified，无编辑器干扰），失败
+  方向安全——显式口径，不为此扩展指纹机制。
+- 折叠扩展进 buildEditorExtensions **基础列表**（live 与 source 共用，不进
+  modeCompartment——CM fold 状态存 EditorState，模式 reconfigure 天然保留）。
+
+### Chief pre-phase: 二进制写全链 — `core/vault.ts` + `src-tauri/src/main.rs`
+
+```ts
+// VaultAdapter:
+/** Write raw bytes to a NEW file (attachment ingestion, R17). Rejects when the
+ *  path already exists. Parent folders are created as needed. */
+writeBinary(path: string, data: Uint8Array): Promise<void>;
+// Tauri → base64 编码 → invoke("vault_write_binary")（与 readBinary 互为镜像）。
+// Memory → files/binaryFiles 任一已含该 path 即 throw；binaryFiles.set + 父文件夹注册
+//          （镜像 createFile）。
+
+// Vault facade:
+/** Create a new binary file: adapter.writeBinary → refreshTree →
+ *  emit file:created → emit vault:changed({reason:"create"})（与 create() 同序，
+ *  attachmentMaps 因 vault:changed 失效 → resolveAttachment 即刻可见新文件）。
+ *  不进 contentCache、不打回声指纹（见一次性决策）。 */
+createBinary(path: string, data: Uint8Array): Promise<void>;
+```
+
+### Core: 附件摄入引擎 — `core/attachments.ts`（新，core agent）
+
+```ts
+/** localStorage "geode.attachmentFolder"，默认 "assets"。存 trim 后原文。 */
+export const attachmentFolder: Store<string>;
+export function setAttachmentFolder(value: string): void; // set + persist（linkRewrite 模式）
+
+/** Obsidian attachmentFolderPath 语义（冻结）：
+ *  ""/"/"        → vault 根（返回 ""）
+ *  "./"          → 笔记同目录
+ *  "./sub/x"     → 笔记同目录下子路径
+ *  "folder/sub"  → vault 级固定文件夹
+ *  返回 vault 相对目录（无尾随 "/"，根 = ""）。notePath 取 parent 目录。 */
+export function resolveAttachmentDir(notePath: string, setting: string): string;
+
+export interface ImportAttachmentDeps { vault: Vault; metadata: MetadataIndex }
+/** 把二进制摄入附件目录：sanitize baseName（剥路径分隔符与 \/:*?"<>| 及控制字符 →
+ *  "-"；空名 → "attachment"）→ resolveAttachmentDir(notePath, attachmentFolder.get())
+ *  → 目录缺失时递归创建（vault.folderExists 守卫 + vault.createFolder——Rust mkdir
+ *  = create_dir_all；Memory 同语义，agent 验证）→ vault.uniquePath(dir, stem, ext)
+ *  防冲突 → vault.createBinary → 返回 { path, linktext }。
+ *  linktext = createBinary 后 resolveAttachment(完整文件名, notePath) === path 时用
+ *  完整文件名（basename 含扩展名），否则全路径（fileToLinktext 消歧精神，R16 同源）。
+ *  全程错误向上抛（调用方决定 UI 反馈）。 */
+export async function importAttachment(
+  deps: ImportAttachmentDeps, notePath: string, baseName: string, data: Uint8Array,
+): Promise<{ path: string; linktext: string }>;
+```
+
+### Editor: paste/drop 摄入 — `features/editor/attachments.ts`（新，editor agent）
+
+```ts
+/** CM 扩展：EditorView.domEventHandlers({ paste, drop })。 */
+export function attachmentIngest(app: GeodeApp, getPath: () => string): Extension;
+```
+
+- **paste**：`clipboardData.items` 中 `kind === "file"` 且 type 以 `image/` 开头的
+  全部项 → 命中至少一个即 `preventDefault` + 返回 true（吃掉整个粘贴——Obsidian
+  同行为：富文本中混图时图片胜出，口径记录）；每项命名一律
+  `Pasted image YYYYMMDDHHMMSS.<ext>`（ext 经 MIME 映射表；同秒多张靠 uniquePath
+  ` 1`/` 2` 后缀）。无图片项 → 返回 false，文本粘贴零干扰。
+- **drop**：`dataTransfer.files` 过滤（扩展名 ∈ core IMAGE_EXTS 或 MIME image/*）；
+  命中至少一个 → `preventDefault`，插入点 = `view.posAtCoords({x,y}) ?? 当前光标`，
+  文件名保留原名（sanitize + uniquePath 防冲突）。零命中 → 不消费（CM 默认文本
+  拖放不受影响）。
+- 插入文本：每文件 `![[linktext]]`，多文件 `\n` 连接；paste 替换当前选区，drop 在
+  drop 点插入（不替换选区）。导入是 async——dispatch 前检查视图存活
+  （`view.dom.isConnected`），位置 clamp 到当前文档长度（导入期间用户可能继续编辑
+  ——clamp 即可的保守口径，编辑竞态属罕见路径）。
+- 单文件导入失败：console.error + 跳过该文件，不阻断其余（全程不抛进 CM）。
+- MIME → ext 映射（冻结）：image/png→png、image/jpeg→jpg、image/gif→gif、
+  image/svg+xml→svg、image/webp→webp、image/bmp→bmp；映射外的 image/* → 按
+  MIME 子类型字符串兜底（剥 "+xxx"）。
+
+### Editor: 折叠 — `features/editor/folding.ts`（新，editor agent）
+
+```ts
+/** codeFolding + foldGutter + 自定义 foldService + fold keymap（一揽子）。 */
+export function markdownFolding(): Extension;
+// App.tsx 命令消费（经 documents.getActiveView()）：
+export function foldAllInView(view: EditorView): void;
+export function unfoldAllInView(view: EditorView): void;
+export function toggleFoldAtCursor(view: EditorView): void;
+```
+
+**foldService 语义（冻结——评审按此对抗）**：
+
+- **heading**：行首为 ATXHeading1-6 节点（syntaxTree——fence 内天然不解析为
+  heading，零额外排除逻辑）→ 折叠范围 = 标题行末 → **节末**（下一个 level ≤ 当前
+  的 ATXHeading 行首之前的行末；无后继 → doc 末尾）。SetextHeading 出轮（缺口）。
+- **列表项**：ListItem 节点跨多于一行 → 折叠范围 = 项首行末 → `node.to`（含全部
+  嵌套子项/续行；嵌套列表由内层 ListItem 自身再提供折叠点）。
+- **foldGutter**：自定义 markerDOM = chevron（CSS 旋转三角）；**可折叠行的箭头仅
+  编辑器 hover 时显示，已折叠行常显**（官方行为）；gutter 背景透明无边框（编辑器
+  此前零 gutter，不得引入视觉底色/布局突变——editor.css 收口）。折叠占位符走默认
+  `.cm-foldPlaceholder`，配色用 --text-muted/--border 变量。
+- **live preview 共存（评审重点，口径冻结）**：computeDecorations 走 visibleRanges
+  ——折叠区不可见、不装饰**是正确行为**（fold 状态变化触发 viewportChanged →
+  装饰重算）；heading 行自身的 `#` 标记隐藏装饰与 gutter 元素无 DOM 交叠；
+  frontmatter pill 不在 heading/list 折叠面内，互不相干。评审验证项：折叠跨
+  widget（EmbedWidget/NoteEmbedWidget 在折叠区内）往返后装饰正确重建、
+  replace 装饰不跨折叠边界报错。
+- App.tsx 三命令（editor agent 接线，i18n 键 chief 预置）：`editor:toggle-fold` /
+  `editor:fold-all` / `editor:unfold-all`，name thunk `t("cmd.toggleFold")` 等，
+  无默认快捷键（Obsidian 同样无）；callback 经 `app.documents.getActiveView()`，
+  无活动 CM 视图 → no-op。
+
+### UI: 附件目录设置 — `features/settings/SettingsModal.tsx`（ui agent）
+
+- R16 "Files & links" 组追加 setting-item：**文本输入**
+  `data-testid="settings-attachment-folder"`，value 绑 attachmentFolder store
+  （useStore），onChange → setAttachmentFolder（即时持久化）；placeholder
+  `"assets"`；输入框样式新增 `.settings-text-input`（settings css，走既有 CSS
+  变量，无硬编码色）。
+- 文案键（chief 预置 dict.views.ts）：`settings.attachmentFolder` +
+  `settings.attachmentFolderDesc`（desc 说明 "/"、"./"、"./sub"、"folder" 四语义）。
+
+### 口径（零代码，记录）
+
+- 仅图片摄入；非图片文件的粘贴/拖拽不消费（Obsidian 导入任意附件类型——缺口表
+  记录，R18+ 按需）。
+- 折叠状态**不持久化**：存 EditorState，live↔source 切换保留（Compartment 不重建
+  state），tab 关闭/重开、preview 往返（CM 销毁）丢失——Obsidian 按文件持久化，
+  显式偏差记录。
+- 阅读视图（preview）无折叠（Obsidian 阅读视图可折叠——缺口记录）。
+- "Fold heading"/"Fold indent" 细分设置开关出轮：折叠常开（官方默认开；细分开关
+  按需 R18+）。
+- compat `vault.getConfig("attachmentFolderPath")` 仍返回 undefined（缺口表既有
+  条目不变；接通 attachmentFolder 为 R18+ 候选）。compat 本轮零改动。
+- 浏览器 E2E 注入口径：合成 `File` + `DataTransfer` 构造 `ClipboardEvent("paste")`
+  / `DragEvent("drop")` 派发到 `.cm-content`（Chromium 双端可构造，无需新探针）。
+
+### As-built deltas (post-review — R17)
+
+Review: 4 dimensions (data-safety / correctness / live-coexist / layering-contract),
+20 findings → 对抗验证 20 confirmed（去重后 ~12 根因：5 major + minors）0 证伪。
+全部确认缺陷已修，浏览器 E2E 逐项实测验证：
+
+- **FIXED (major) — 并发摄入竞态 + Rust TOCTOU**：(1) 前端 importAttachment 模块级
+  promise 链串行化（R16 引擎先例，失败不毒化队列）——同秒双粘贴的 uniquePath 不再
+  拿到同一路径（E2E 实测 ` 1` 后缀正确生成）；(2) Rust `vault_write_binary` 弃用
+  「exists 检查 + 共享 tmp + rename」（check-then-act：两并发可同过检查、共享
+  `.{name}.geode-tmp` 互踩、Windows rename 带 REPLACE_EXISTING 静默换掉先到者），
+  改为 **`create_new` 独占创建直写 + sync_all**——独占性是原子保证（大小写不敏感
+  文件系统同样生效）；崩溃中途最多截断这枚全新附件自身，永不波及既有数据（与
+  vault_write 的场景不同：改写既有笔记必须 tmp+rename，新建文件独占性 > 原子性，
+  口径记录）。写失败清理半成品文件后报错。
+- **FIXED (major) — paste 陈旧偏移删字节**：ingestFiles 捕获导入前的 `state.doc`
+  （Text 不可变，身份比较即变更检测）；async 导入完成时 doc 已变 → 放弃捕获的
+  [from,to] 选区替换，退化为当前光标处纯插入——导入窗口期的用户编辑/外部重载
+  不再可能被覆盖删除。
+- **FIXED (major) — lang-markdown 内置 headerIndent foldService 剥离**：markdown()
+  的 support 数组携带它（Setext/ATX 节折叠，绕过冻结语义；frontmatter 中的伪标题
+  经它可一键折掉整个正文）。cmExtensions `markdownSansHeaderFold()` 按
+  「facet === foldService」结构匹配过滤该项后重建 LanguageSupport——markdown
+  keymap/paste-URL/HTML 补全 support 全保留。配套：**foldService 增加 frontmatter
+  排除**（首行 "---" 至闭合行；解析器把 YAML 当 markdown，`# 注释` 是真 ATXHeading
+  ——WeakMap 按 doc 身份缓存）。E2E：fm 伪标题无节折叠、Setext 行无折叠点。
+- **FIXED (major) — 桌面 drop 死路**：tauri.conf.json 窗口加 `dragDropEnabled:
+  false`——Tauri 默认拦截 OS 文件拖放，DOM 永远收不到带 files 的 drop 事件。
+- **FIXED (major) — 设置输入 trim-on-keystroke**：setAttachmentFolder 改存原文
+  （trim 移到消费端 resolveAttachmentDir）——受控输入框可正常键入含空格目录名。
+  契约「存 trim 后原文」措辞由此修订。
+- **FIXED (minor) — 附件目录穿越/点前缀**：importAttachment 增 validateDir——
+  解析后的目录含 ""/"."/".." 或点前缀段 → 响亮抛错（桌面 safe_join 本会拒
+  ".."，但 Memory 适配器会照写：双端分叉收口；点前缀目录写得进却永不进树/索引
+  ——UI 黑洞）。sanitizeFileName 同步剥文件名前导点。E2E："../evil" 设置下粘贴
+  零写入 + console 明确报错。
+- **FIXED (minor) — fold-all 语义统一**：弃 foldKeymap（其 Ctrl-Alt-[ 绑库版
+  foldAll，会把 fence/blockquote/table 经 foldNodeProp 卷入），显式 keymap 四绑定
+  ——Ctrl-Alt-[/] 走 foldAllInView/unfoldAllInView（仅冻结语义自扫描 +
+  ensureSyntaxTree 500ms 保证大文档全量解析）。
+- **FIXED (minor) — 缩进 1-3 空格 ATX 标题**：`n.from === lineStart` 精确匹配改
+  ownsLine（行内前缀全空白）——缩进标题可折叠且正确终止上节（之前会被上节整段
+  吞掉）。headingSectionEnd 同步改 **cursorAt + next() 游标前向遍历真早退**
+  （iterate 无法跨兄弟中止，大文档下每次 gutter 查询 O(doc)）。
+- **FIXED (minor) — Memory writeBinary 文件夹撞名**：exists 检查补 folders.has。
+- Accepted（已裁决记录）：foldNodeProp 回退使 fence/blockquote/table/多行段落仍
+  显示折叠箭头且可手动折叠（CM 系折叠面大于 Obsidian；箭头仅编辑器 hover 可见、
+  fold-all 不卷入——显式偏差）；`.` 设置值归一化为 `./`；无扩展名 baseName 兜底
+  .png + console.warn（真实调用方必带扩展名）；设置输入框背景用 --bg-input（与
+  modal 内既有输入控件一致）；vault 切换窗口内的 in-flight 摄入写入新库（毫秒级
+  TOCTOU 同类已知限制）；fold gutter 位于面板最左缘（宽窗口下与 46em 居中正文
+  有距离——Obsidian 把箭头贴正文，R18+ polish 候选）。
+
+| Agent | Files |
+|---|---|
+| core | core/attachments.ts (new) |
+| editor | features/editor/{attachments.ts (new), folding.ts (new), cmExtensions.ts, editor.css}, app/App.tsx |
+| ui | features/settings/SettingsModal.tsx, features/settings/settings.css（如存在） |
+
+Chief pre-phase：本节契约 + src-tauri vault_write_binary + core/vault.ts writeBinary/
+createBinary 全链 + dict.app.ts（cmd.toggleFold/foldAll/unfoldAll）+ dict.views.ts
+（settings.attachmentFolder/Desc）en/zh。Frozen surfaces：上述全部代码块签名、
+`geode.attachmentFolder` key、`settings-attachment-folder` testid、三个命令 id、
+MIME 映射、`Pasted image YYYYMMDDHHMMSS` 命名、foldService 语义。每 agent 结束前
+`npx tsc --noEmit`；不加依赖；不碰 docs/、compat/**；agent 行内注释不得修订契约
+（R13 教训）；动 vault/documents 路径前必读 R16 As-built deltas。
+
+## Round 16 additions — 重命名自动更新引用 + `[[#h]]` 同文链接
 
 迁移体验路线图第一轮（ROADMAP R16-R18，2026-06-11 与用户对齐）。**数据安全等级最高的
 一轮**：批量改写用户文件。官方校准（obsidian.md/help + obsidian.d.ts）：

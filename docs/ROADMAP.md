@@ -305,6 +305,47 @@ compat-vault 真实文件系统）：磁盘改写（subpath/alias/嵌入保留�
 （优于 R15 基线 185，归一化扫描 ~2ms/10k）。
 截图 docs/screenshots/r16-desktop-settings-toggle.png。
 
+### R17 — v0.17（2026-06-11）附件摄入（粘贴/拖拽图片入库）+ 标题/列表折叠（迁移体验 #2）
+
+官方校准（obsidian.md/help/attachments + /folding）：附件位置四选项（子文件夹缺失自动
+创建）；折叠 "Fold heading"/"Fold indent" 默认开、悬浮左侧箭头、已折叠常显、
+Fold all/Unfold all 命令。
+**附件摄入**：编辑器 paste（命名 `Pasted image YYYYMMDDHHMMSS.<ext>`，MIME 映射）/
+drop（原名保留，posAtCoords 定点插入）→ `core/attachments.ts` importAttachment
+（**模块级串行化**——同秒双粘贴 uniquePath 不再撞名；sanitize 剥前导点/非法字符；
+attachmentFolder 设置项 Obsidian attachmentFolderPath 四语义 + validateDir 拒
+`..`/点前缀段；大小写不敏感防撞）→ `Vault.createBinary` →
+Rust `vault_write_binary`（async + safe_join + **create_new 独占创建直写**——评审
+major：原 exists 检查+共享 tmp+rename 是 check-then-act，并发可互踩且 Windows
+rename 静默替换；独占性根治，新文件截断风险仅及自身）。插入 `![[linktext]]`
+（basename 唯一用 basename 否则全路径，fileToLinktext 精神）；**陈旧偏移守卫**
+（评审 major：async 导入期间 doc 变更 → 弃选区替换退化光标纯插入，杜绝删用户字节）。
+设置页 "文件与链接" 文本输入（存原文不 trim——评审 major：trim-on-keystroke 锁死
+含空格目录名）。桌面 `dragDropEnabled: false`（评审 major：Tauri 默认拦截 OS 文件
+拖放，DOM 收不到 drop）。
+**折叠**：`features/editor/folding.ts` 冻结语义 foldService（ATX 标题节 = 行末到下一
+同级及以上标题前；多行 ListItem；ownsLine 支持缩进 1-3 空格标题；frontmatter 排除
+——评审 major：解析器把 YAML 当 markdown，`# 注释` 是真 ATXHeading，折它能吞正文）+
+**剥离 lang-markdown 内置 headerIndent foldService**（评审 major：其 Setext/ATX 节
+折叠绕过冻结语义；按 facet 结构匹配过滤 support 数组，keymap/补全保留）+ foldGutter
+（chevron 默认隐藏、编辑器 hover 显示、已折叠常显）+ 三命令 editor:toggle-fold/
+fold-all/unfold-all（fold-all 仅冻结语义自扫描 + ensureSyntaxTree；自定义 keymap
+替代 foldKeymap 保持键盘路径一致）+ headingSectionEnd cursorAt 游标真早退（原
+iterate O(doc)/查询）。基础扩展列表（不进 modeCompartment）——fold 状态存
+EditorState，live↔source 切换天然保留。
+评审 4 维 20 finding → **对抗验证 20 确认（去重 ~12 根因：5 major）0 证伪**，全部
+修复（细节 ARCHITECTURE R17 As-built）。
+浏览器 E2E：粘贴落库+嵌入+live 渲染、同秒双粘贴 ` 1` 后缀、drop 定点、文本粘贴零
+干扰、`./imgs` 语义+目录自动创建、`../evil` 零写入响亮报错、fold-all 仅标题/列表、
+Setext/fm 伪标题无折叠点、live↔source 折叠保持、嵌入 widget 折叠往返全绿。
+桌面 release（v0.17.0 compat-vault 真实文件系统）：磁盘落盘 70 字节往返无损、
+同秒双粘贴两文件、零 .geode-tmp 残留、drop handler ✓、折叠全链路（gutter 点击/
+fold-all/模式切换保持）✓、套件 5/5 + nldates `[[2026-06-12]]` + r12（转写+导出
+data URI，demo-vault）/r13/r14 探针全绿、r16 改写引擎回归全绿（d4 断言修订为
+精确语义：引擎写目标绝不 external——rename 事件本就无指纹面走 external，
+r17-echo-diag 坐实，R16 原断言绿靠时序运气；写抑制不变量完好）。
+截图 docs/screenshots/r17-desktop-fold-ingest.png。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -312,14 +353,7 @@ compat-vault 真实文件系统）：磁盘改写（subpath/alias/嵌入保留�
 
 ### ~~R16 — 重命名自动更新引用（第一梯队 #1，数据安全重轮）~~ → **已完成（v0.16，见上）**
 
-### R17 — 附件摄入 + 折叠
-
-- **粘贴/拖拽图片入库**：编辑器 paste/drop 二进制 → 写入附件目录（默认 `assets/`，
-  设置项可改——Obsidian 的 attachment folder 语义校准）→ 光标处插入 `![[名称]]`；
-  需要 VaultAdapter.writeBinary + Rust 命令（既有 readBinary 的镜像）；命名冲突
-  uniquePath；Memory 适配器同步实现（浏览器 E2E 用 DataTransfer 注入）。
-- **标题/列表折叠**：CM6 folding 接线（fold gutter 或 Obsidian 式悬浮箭头取舍，
-  live preview 装饰共存性是评审重点）。
+### ~~R17 — 附件摄入 + 折叠~~ → **已完成（v0.17，见上）**
 
 ### R18 — Markdown 方言长尾
 
@@ -343,6 +377,15 @@ compat-vault 真实文件系统）：磁盘改写（subpath/alias/嵌入保留�
 
 ## 已知技术债
 
+- R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/
+  preview 往返丢，Obsidian 按文件持久化——偏差）；阅读视图无折叠；Setext 标题无
+  折叠点（headerIndent 已剥离）；foldNodeProp 回退使 fence/blockquote/table/多行
+  段落有 hover 箭头可手动折叠（Obsidian 不提供——fold-all 不卷入）；fold gutter
+  在面板最左缘（宽窗口下与正文有距离，Obsidian 贴正文——R18+ polish）；仅图片
+  摄入（其他附件类型 R18+）；"Fold heading"/"Fold indent" 细分开关未做（常开）；
+  compat `vault.getConfig("attachmentFolderPath")` 仍 undefined；二进制自写无回声
+  指纹（桌面多一次树刷新，安全方向）；vault 切换窗口内 in-flight 摄入写新库
+  （毫秒级 TOCTOU 同类）。
 - R16 改写引擎显式口径（fail-safe 方向，详见 ARCHITECTURE R16 节）：markdown 标准
   链接 `[text](note.md)` 不在解析面、不改写；`[[#h]]` 不进 links 索引（graph 无自环；
   官方 getFileCache().links 含 `#h` 条目——形状偏差）；`![[#h]]` 同文嵌入保持原文；

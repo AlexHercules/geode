@@ -1,34 +1,39 @@
 # 续接提示词（重开对话时直接粘贴）
 
 ```
-继续开发 Geode（C:\Users\16778\Desktop\开发\rock，Obsidian 复刻桌面应用，当前 v0.16.0）。
+继续开发 Geode（C:\Users\16778\Desktop\开发\rock，Obsidian 复刻桌面应用，当前 v0.17.0）。
 启用 workflows。远端：https://github.com/AlexHercules/geode（私有，origin/master）——
 每轮收尾提交后 git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证书决策。
 
 按顺序读这五个文档再动手：
-1. docs/ROADMAP.md      — 核心使命（不变项）、四条底线、R16 完成记录、迁移路线图
-2. docs/OBSIDIAN-COMPAT.md — Tier 表、R16 套件回归、缺口表
+1. docs/ROADMAP.md      — 核心使命（不变项）、四条底线、R17 完成记录、迁移路线图
+2. docs/OBSIDIAN-COMPAT.md — Tier 表、R17 套件回归、缺口表
 3. docs/DEVELOPMENT.md  — 每轮编排节奏、数据安全回归清单、验证手段
-4. docs/ARCHITECTURE.md — 分层规则与核心 API 契约（R16 节含改写引擎全算法 + 评审修复）
+4. docs/ARCHITECTURE.md — 分层规则与核心 API 契约（R17 节含摄入/折叠契约 + 评审修复；
+   R16 节改写引擎算法动 vault/documents 前必读）
 5. docs/DISTRIBUTION.md — 发布流程/密钥管理/签名配置位
 
-本轮目标（R17）按 ROADMAP「迁移体验路线图」执行：**R17 = 附件摄入（粘贴/拖拽图片
-入库）+ 标题/列表折叠**。前者需要 VaultAdapter.writeBinary + Rust 命令（readBinary
-镜像，#[tauri::command(async)] + safe_join + 原子写先例）、附件目录设置项（校准
-Obsidian 的 attachment folder 语义）、命名冲突 uniquePath、Memory 适配器同步实现
-（浏览器 E2E 用 DataTransfer 注入）；后者是 CM6 folding 接线，live preview 装饰
-共存性是评审重点。完成标准沿用四条底线 + OBSIDIAN-COMPAT 套件矩阵不回退。
-后续：R18 方言长尾（callouts/高亮/脚注/%%注释%% + KaTeX/mermaid 一次性依赖决策）。
+本轮目标（R18）按 ROADMAP「迁移体验路线图」执行：**R18 = Markdown 方言长尾**。
+纯管线项（零新依赖）：callouts（`> [!note]` 全类型 + 折叠变体）、`==高亮==`、脚注、
+`%%注释%%`（双视图隐藏）；外加一次性依赖决策（chief 级，moment/ureq 先例）：KaTeX
+数学公式（比 MathJax 轻）+ mermaid（重 ~1MB——按需动态 import 或显式不做，决策时定）。
+验收口径 = 双视图（live preview 装饰 + 阅读视图管线）+ 导出 css 同步 + 既有管线
+字节级 diff 义务（无新语法用例不变）。完成标准沿用四条底线 + OBSIDIAN-COMPAT 套件
+矩阵不回退。后续：R19+ 候选池（主题 CSS 类名兼容层 / Properties 面板 / 模板系统 /
+搜索运算符，见 ROADMAP）。
 ```
 
 ## 给接续者的三句话背景
 
-- 开发模式已验证十六轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维评审 +
-  逐条对抗验证 + 双端运行时实测**。R16 是数据安全重轮（重命名自动改写引用 + [[#h]]）：
-  评审 22 finding 确认 12（1 critical：CRLF/LF 偏移基准错位切错字节——根治 = vault.read
-  咽喉点 CRLF→LF 统一；3 major 竞态全修），浏览器实测另抓 1 个（only-fix-broken 被
-  resolveLink 的 basename 兜底骗过）。改写引擎五步算法 + 全部修复细节在 ARCHITECTURE
-  R16 节，**动 vault/documents/改写路径前必读它的 As-built deltas**。
+- 开发模式已验证十七轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维评审 +
+  逐条对抗验证 + 双端运行时实测**。R17（附件摄入+折叠）评审 20 finding 全确认（5 major：
+  并发摄入 TOCTOU→Rust create_new 独占 + 前端串行化链、paste 陈旧偏移删字节→doc 身份
+  守卫、lang-markdown 内置 headerIndent 折叠服务绕过冻结语义→support 数组结构过滤剥离、
+  桌面 drop 死路→dragDropEnabled:false、设置 trim-on-keystroke）。R16 改写引擎五步算法 +
+  修复细节在 ARCHITECTURE R16 节，**动 vault/documents/改写路径前必读它的 As-built
+  deltas**；R17 摄入/折叠口径在 R17 节。注意：rename 的 watcher 事件无指纹面、external
+  是设计行为（r17-echo-diag.js 坐实，r16-desktop.js d4 断言已修订为「引擎写目标绝不
+  external」）。
 - 验收套件在 `compat-vault/`（gitignore）；桌面 release 实测
   `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 起
   `geode.exe <vault>`（env 与 Start-Process 同一条命令）；探针
