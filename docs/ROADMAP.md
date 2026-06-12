@@ -346,6 +346,38 @@ data URI，demo-vault）/r13/r14 探针全绿、r16 改写引擎回归全绿（d
 r17-echo-diag 坐实，R16 原断言绿靠时序运气；写抑制不变量完好）。
 截图 docs/screenshots/r17-desktop-fold-ingest.png。
 
+### R18 — v0.18（2026-06-12）Markdown 方言长尾：callouts + ==高亮== + 脚注 + %%注释%% + KaTeX 数学（迁移体验 #3）
+
+迁移体验路线图收官轮。官方校准（obsidian.md/help：callouts + basic/advanced-formatting-syntax）：
+callout 13 类型 + 别名表、折叠变体 `+`/`-`、嵌套、未知类型降级 note；`==高亮==`；脚注
+（`[^id]` 引用 + `[^id]:` 多行定义 + 行内 `^[text]`，**官方原文行内脚注仅阅读视图**）；
+`%%注释%%`（官方"仅编辑视图可见"——阅读视图全剥）；数学 inline `$...$` + 块 `$$...$$`。
+**一次性依赖决策**：官方引擎是 MathJax，本轮按 HANDOFF 口径选 **KaTeX**（更轻）——TeX 宏
+覆盖面差异显式偏差（不支持宏红降级显示原文，永不抛）；**动态 import**（Vite code-split：
+katex 独立异步 chunk 260KB，零数学文档不加载，主 chunk 仅 +约 2KB）；**mermaid 显式不做**
+（~1MB、优先级低于数学，入 R19+ 候选）。其余四项零新依赖（手写 markdown-it 规则，不装
+任何 markdown-it-* 插件）。导出数学走 **MathML 输出**（自包含单文件零 CSS/字体依赖），
+应用内走 html 输出 + 注入 katex CSS。compat 零代码改动（共享管线自动获得全部新语法）。
+
+**core/markdown.ts**：预处理状态机扩展（fence→frontmatter→%%剥除→块标记→wikilink）；
+五项手写规则（highlight delimiter / footnote block+inline+tail / callout core rule
+blockquote 树改写含嵌套 / math block+inline 含货币护栏 + `$$` 不参与 inline 配对）。
+**core/embeds.ts + core/math.ts(新)**：KaTeX 懒加载单例 + math 水合 pass（mathOutput 递归
+透传）。**live preview**：highlight/comment（同行隐藏+跨行淡显）/footnote ref 上标/callout
+行装饰（data-callout + mask 图标 CSS ::before）/MathWidget。**阅读视图**：callout 折叠点击
+委托 + 脚注锚点滚动。**导出/app.css/editor.css**：13 色 callout 色板 + lucide 风格 mask
+图标 + 高亮/脚注/数学样式双套（应用变量 + 导出本地变量自包含）。
+评审 4 维 **17 finding → 对抗验证 17 确认（0 证伪）**，全部修复（4 major：callout 二次
+inline.parse 致行内脚注双收集→改 before("inline") 单次解析；`$$` 块闭合吞行→firstRest
+非行尾 `$$` 保字面 + 闭合扫描遇 fence 止损；live 单行 `$$` 无锚定→逐行镜像管线形态；
+minor：预处理 fence 状态机三脱节、脚注 id 跨渲染碰撞→render-seq 前缀、KaTeX maxSize DoS、
+live callout 嵌套首行误判、live `%%` 行内 code 翻转状态机、live highlight 吞 setext 下划线
+（lezer 节点名 `SetextHeading1/2`）、MathWidget 点击死区、live 行内数学转义 `$`）。详见
+ARCHITECTURE R18 As-built deltas。
+桌面 release（v0.18.0 compat-vault 真实 fs）：双视图实测 17/17、套件 5/5 + nldates +
+reload 幂等不回退、r17 折叠+摄入 10/10；字节级 diff 套件 72 用例全绿（33 无新语法字节
+一致 + 39 新语法 DOM）。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -355,25 +387,24 @@ r17-echo-diag 坐实，R16 原断言绿靠时序运气；写抑制不变量完�
 
 ### ~~R17 — 附件摄入 + 折叠~~ → **已完成（v0.17，见上）**
 
-### R18 — Markdown 方言长尾
+### ~~R18 — Markdown 方言长尾~~ → **已完成（v0.18，见上）**
 
-- 纯管线可做（无新依赖）：**callouts**（`> [!note]` 全类型+折叠变体）、`==高亮==`、
-  脚注、`%%注释%%`（双视图隐藏）。
-- **一次性依赖决策**（chief 级，参照 moment/ureq 先例）：数学公式（KaTeX，比 MathJax
-  轻）+ mermaid（重，~1MB——按需动态 import 或显式不做，决策时定）。
-- 双视图（live preview 装饰 + 阅读视图管线）+ 导出 css 同步是验收口径。
+callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内）、`%%注释%%`、KaTeX 数学
+全部双视图 + 导出落地。KaTeX 动态 import（独立 chunk）；**mermaid 显式不做**（入 R19+ 候选）。
 
 ### R19+ 候选池（迁移叙事第二梯队，按需取）
 
 | 功能 | 备注 |
 |---|---|
-| 主题 CSS 类名兼容层 | OBSIDIAN-COMPAT 规划过的独立可选层，迁移叙事里与插件兼容同级但未开工 |
+| mermaid 图表 | R18 显式延后（~1MB，动态 import 先例已由 katex 蹚出，复用即可）；优先级看用户迁移诉求 |
+| 主题 CSS 类名兼容层 | OBSIDIAN-COMPAT 规划过的独立可选层；**R18 的 callout DOM 已按 `.callout`/`data-callout`/`is-collapsible` 社区共识对齐，此层落地时受益** |
 | Properties 可视化编辑 | frontmatter 结构化面板 |
 | 模板系统 | 新建套模板 + 日期变量 |
 | 搜索运算符（path:/tag:/file:/正则）| 搜索专项一并做 |
 | 未链接提及 | 反链面板扩展 |
 | 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |
 | 图谱 WebGL/Worker、倒排索引 | 性能远期 |
+| R18 折叠/数学 polish | callout 标题点击折叠仅阅读视图（live 用 gutter）；跨行 `$$`/块注释 live 淡显不渲染/隐藏；行内脚注 live 零处理（官方同行为）；KaTeX vs MathJax 宏覆盖差异——均显式偏差，见 ARCHITECTURE R18 |
 
 ## 已知技术债
 

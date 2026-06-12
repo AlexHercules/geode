@@ -151,6 +151,20 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R18 套件回归（2026-06-12，桌面 release v0.18.0 实测 `geode.exe compat-vault`）
+
+R18 为原生功能轮（Markdown 方言长尾：callouts/==高亮==/脚注/%%注释%%/KaTeX 数学），
+**compat 表面零代码改动**（contract 明令；git diff 确认 compat/** 无改动）。但共享的
+`core/markdown.ts` 渲染管线本轮新增五项语法——这是**有意的基管线增强**：compat 的
+`MarkdownRenderer.render` 经同一管线**自动获得**全部新语法（callout/高亮/脚注/注释/数学），
+属能力提升非回归。**字节级不变义务**：无新语法内容的渲染输出对所有调用方（含 compat
+MarkdownRenderer）保持字节一致（diff 套件 Part A 33 用例验证）。桌面逐项复测不回退：
+5/5 加载启用 ✓、nldates 指令条 + 逐键 `@tomorrow`→`[[2026-06-13]]` ✓（lastLine 空值是
+弹层关闭后 Enter 落空的既有探针语义，非回归）、reload 幂等 + calendar 重挂载 ✓、回声
+suppressed 4 / external 2 正常 ✓；r17 折叠+摄入 10/10（disk-roundtrip 70 字节无损）。
+新增已知口径：compat `getFileCache()` 不收脚注/callout 专项元数据（官方 CachedMetadata
+亦无此形状——非缺口）。缺口表无变化。
+
 ### R17 套件回归（2026-06-11，桌面 release v0.17.0 实测 `geode.exe compat-vault`）
 
 R17 为原生功能轮（附件摄入 + 折叠），compat 表面零改动（contract 明令）。桌面逐项

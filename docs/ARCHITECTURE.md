@@ -71,7 +71,280 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 17 additions (current) — 附件摄入（粘贴/拖拽图片入库）+ 标题/列表折叠
+## Round 18 additions — Markdown 方言长尾：callouts + ==高亮== + 脚注 + %%注释%% + 数学公式
+
+迁移体验路线图第三轮（ROADMAP R16-R18）。官方校准（obsidian.md/help/callouts +
+basic-formatting-syntax + advanced-formatting-syntax，2026-06-11 WebFetch）：
+
+- **callouts**：`> [!type]` 标题行 + 可选自定义标题；折叠变体 `[!type]-`（初始收起）/
+  `[!type]+`（初始展开）；嵌套官方支持（"can nest in multiple levels"）；未知类型
+  官方降级 note（"Any unsupported type defaults to the note type"）；体内容支持
+  完整 markdown/wikilink/嵌入。13 类型 + 别名：note / abstract(summary,tldr) /
+  info / todo / tip(hint,important) / success(check,done) / question(help,faq) /
+  warning(caution,attention) / failure(fail,missing) / danger(error) / bug /
+  example / quote(cite)。**颜色与图标官方未文档化**——色板与 mask 图标为自定冻结
+  口径（向 Obsidian 默认主题观感对齐）；DOM 类名向社区共识对齐（.callout /
+  .callout-title / .callout-icon / .callout-title-inner / .callout-content、
+  data-callout、is-collapsible/is-collapsed）——主题 CSS 兼容层（R19+ 候选）受益。
+- **`==高亮==`**：官方无附加限制文档；渲染为 `<mark>`。
+- **脚注**：`[^id]` 引用 + `[^id]: 定义`（多行定义 = 续行行首 2 空格缩进）+
+  行内脚注 `^[text]`；官方原文 "Inline footnotes only work in reading view,
+  not in Live Preview"——live preview 零处理即官方行为。
+- **`%%注释%%`**：行内与跨行块两形态；官方 "Comments are only visible in
+  Editing view"——阅读视图完全剥除。
+- **数学**：inline `$...$` + 块 `$$...$$`。**官方引擎是 MathJax，本轮选 KaTeX**
+  （HANDOFF 口径：更轻）——TeX 宏覆盖面差异显式记录为偏差（KaTeX 不支持的宏
+  红色降级显示原文，永不抛）。
+
+### 一次性决策（chief，agent 不得加依赖/不碰 Rust）
+
+- **katex ^0.17 + @types/katex（dev）**——本轮唯一新增依赖（moment/ureq 先例，
+  chief 已预装）。**动态 import**（Vite code-split：主 chunk 零增长，首个含数学
+  的渲染才加载）；katex CSS 经 loader 一次性注入应用。
+- **mermaid 显式不做**（决策入档）：~1MB 级、主题/交互接线重、迁移叙事优先级低于
+  数学公式；记入 R19+ 候选池。动态 import 先例本轮由 katex 蹚出，将来按需直接复用。
+- 其余四项**零新依赖**：core/markdown.ts 内手写 markdown-it 规则（不装任何
+  markdown-it-* 插件）；live preview 沿用既有装饰结构（语法树 + 正则扫描）。
+- **导出数学走 MathML 输出**（katex `output:"mathml"`）：自包含单文件零 CSS/字体
+  依赖；应用内走 `output:"html"` + katex CSS。打印（PDF）路径与导出同源同值。
+- **compat 零代码改动**：MarkdownRenderer 经共享管线自动获得全部新语法
+  （有意的基管线增强，非回归——OBSIDIAN-COMPAT 收尾记录）。
+- 无新增 i18n 键、无设置项、无 Rust 改动。
+
+### Core: 管线规则 — `core/markdown.ts`（core agent）
+
+**预处理扩展（replaceWikilinks 的行级状态机）**——执行序：fence 跟踪（现状）→
+**frontmatter 排除**（首行 `---` 至闭合 `---`，状态机新增，镜像 R17 foldService
+口径——阅读视图接收完整源文，实测确认）→ **`%%注释%%` 剥除（新）** → 行尾块标记
+剥除（现状）→ wikilink 占位（现状）：
+
+- 同行成对 `%%...%%` → 行内剥除（非贪婪逐对；行号稳定义务沿用）。
+- 跨行块注释：行内出现无配对的 `%%`（backtick 奇偶分割后的非 code 段中）→ 该行
+  自 `%%` 起剥到行尾，其后每行整行清空（**保留空行**，行号稳定），直至含闭合
+  `%%` 的行（剥至闭合符含；闭合符后同行余文保留参与渲染）。
+- fence 内 `%%` 字面保留（fence 优先级最高）；frontmatter 区不剥。
+- 行内 code 段（奇数段）内的 `%%` 不剥、不开块（与 wikilink 同口径）。文档无
+  `%%` 时该步零改动（diff 义务）。
+
+**markdown-it 规则（全部手写，规则名 geode-* 前缀）**：
+
+- **highlight（inline rule，delimiter 法照 strikethrough 模式）**：`==text==` →
+  `<mark>`。开闭定界紧邻非空白（scanDelims flanking）；不跨段落；`<mark>` 内
+  强调/链接/wikilink 占位符正常解析。单个/不成对 `==` 字面保留。
+- **footnotes（block rule + inline rule + core rule 收尾）**：
+  - 定义：行首 `[^id]:`（id 冻结 `[^\s\[\]]+`，大小写敏感）+ 内容；续行 = 行首
+    ≥2 空格缩进的后续行（并入同段，inline 渲染）。定义体不支持嵌套块结构
+    （列表/fence 不解析——口径记录）。
+  - 引用：`[^id]` → `<sup class="footnote-ref"><a id="fnref-{N}" href="#fn-{N}"
+    class="footnote-link" data-footnote="{N}">[{N}]</a></sup>`；行内脚注
+    `^[text]` → 匿名定义自动收集同形态。N = 首次引用序（1 起）。
+  - 文末（有被引用定义才输出）：`<hr class="footnotes-sep"><section
+    class="footnotes"><ol class="footnotes-list"><li id="fn-{N}"
+    class="footnote-item">{定义 inline 渲染} <a href="#fnref-{N}"
+    class="footnote-backref">↩</a></li>…</ol></section>`。
+  - 同 id 多次引用同号，backref 回首个引用；未引用定义不输出；未定义引用保持
+    字面原文（含 `[^`）。
+- **callouts（core rule，blockquote token 树改写，处理全部层级——嵌套递归）**：
+  blockquote 首个 inline 的首行匹配冻结正则
+  `/^\[!([A-Za-z0-9_-]+)\]([+-]?)(?:[ \t]+(.*))?$/`：
+  - blockquote_open/close 改写为 `<div class="callout{ is-collapsible}{ is-collapsed}"
+    data-callout="{type 小写}"{ data-callout-fold="+|-"}>`；`-` = is-collapsible +
+    is-collapsed，`+` = is-collapsible。
+  - 标题行 → `<div class="callout-title"><div class="callout-icon"></div><div
+    class="callout-title-inner">{标题 inline 渲染}</div></div>`（icon 空容器，
+    图形由 CSS data-callout mask 提供）；无标题 → 输入 type 原词首字母大写
+    （别名不归一显示——`[!tldr]` 显示 "Tldr"，所见即所写口径）。
+  - 标题行之后的全部内容（含首段余行）→ `<div class="callout-content">` 包裹。
+  - 未知类型照常改写，data-callout 保留原词小写（CSS 兜底 note 配色）。
+  - 普通 blockquote（首行不匹配）字节级不变（diff 义务）。
+- **math（block rule + inline rule）**：
+  - block：行首 `$$`（缩进 ≤3）至闭合 `$$` 行（`$$x$$` 单行形态成立）→
+    `<div class="geode-math geode-math-block" data-math="{tex escaped}">{原文
+    escaped}</div>`（未水合时显示原文——降级可读）。
+  - inline：**单** `$`（开 `$` 后不跟 `$`、闭 `$` 前不是 `$`——`$$` 永远不参与
+    inline 配对）、开 `$` 后紧邻非空白、闭 `$` 前紧邻非空白、闭 `$` 后不跟数字、
+    内容无换行 → `<span class="geode-math geode-math-inline" data-math="{tex}">{原文
+    escaped}</span>`。`\$` 经 markdown-it escape 规则天然豁免；fence/inline code
+    内天然豁免（规则层级）。货币护栏即上述 flanking（"$5 and $10" 不触发）。
+  - 已知口径：`$...$` 内的 `[[x]]` 会先被 wikilink 预处理替换（罕见路径，记录）。
+
+### Core: 水合 — `core/embeds.ts` + `core/math.ts`（新）（core agent）
+
+```ts
+// core/math.ts —— katex 动态加载器（模块级单例 promise）
+/** Dynamic import("katex") + one-time CSS injection
+ *  (import("katex/dist/katex.min.css")). Caches the in-flight promise;
+ *  a load failure clears the cache so the next call retries. */
+export function loadKatex(): Promise<typeof import("katex").default>;
+```
+
+- `HydrateContext` 增 `mathOutput?: "html" | "mathml"`（缺省 "html"；**递归透传**
+  ——嵌套笔记转写内的数学同口径）。
+- hydrateEmbeds 新 pass：`root.querySelectorAll(".geode-math[data-math]")` 非空
+  才 `loadKatex()`（无数学文档零开销）→ 逐元素
+  `katex.render(tex, el, { displayMode: <is geode-math-block>, throwOnError:
+  false, output })`（render 前清空回退原文）。单元素异常 → 加 `.geode-math-error`
+  类 + 保留原文，绝不抛（hydrate 逐元素降级纪律沿用）。
+
+### Editor: live preview 装饰 — `features/editor/livePreview.ts`（editor agent）
+
+全部沿用现有结构（visibleRanges + selectionTouches reveal + fencedLines/
+frontmatter 排除；正则扫描不跳行内 code 的既有不对称沿用并记录）：
+
+- **highlight**：正则扫描（单行、定界紧邻非空白）→ 内容 mark
+  `.cm-live-highlight`；两侧 `==` replace 隐藏（选区触及还原）。
+- **comment**：同行成对 `%%...%%` → 整段 replace 隐藏（选区触及还原）；**跨行块
+  注释 → 行级装饰 `.cm-live-comment-line`（--text-faint 淡显，不隐藏）**——
+  ViewPlugin 不得建跨行 replace（CM 约束），块 widget 不值当；显式偏差：Obsidian
+  live preview 全隐藏。
+- **footnote**：`[^id]` → mark `.cm-live-footnote-ref`（上标样式，不隐藏）；
+  `^[text]` 与定义行零处理（官方 live 行为）。
+- **callout**：语法树遍历中 Blockquote 节点首行内容匹配冻结正则 → 该 blockquote
+  全部行 line decoration `.cm-callout-line` + `attributes: {"data-callout":
+  "<type 小写>"}`；首行另加 `.cm-callout-line-title`；`[!type]±` 标记 replace
+  隐藏（该行选区触及还原）；`>` 标记隐藏走既有 QuoteMark 路径（现状不动）。
+  图标 = CSS `::before` on `.cm-callout-line-title`（data-callout mask，零 DOM
+  注入）。折叠交互不做标题点击（既有 blockquote hover 折叠箭头可用——R17
+  foldNodeProp 回退面，偏差记录）。既有 `.cm-live-quoteline` 与 callout 行装饰
+  共存口径：callout 行**不再**叠加 quoteline（视觉冲突），Blockquote 分支内分流。
+- **math**：inline `$...$`（flanking 与管线冻结规则一致）选区未触及 →
+  `MathWidget` replace（EmbedWidget 同构：sync toDOM 占位 span
+  `.cm-live-math`，异步 loadKatex + render(html 输出) 填充；视图 destroy 后回调
+  不再触碰 DOM）；单行 `$$x$$` → displayMode widget 同路径；**跨行 `$$` 块 →
+  行级装饰 `.cm-live-math-line`（等宽淡显），不渲染 widget**（偏差记录，阅读
+  视图全量支持）。
+
+### Editor: 阅读视图交互 — `features/editor/EditorPane.tsx`（editor agent）
+
+onPreviewClick 委托扩展两条（既有 internal-link/checkbox 委托之前判定）：
+- `.callout.is-collapsible > .callout-title` 点击 → 最近 `.callout` toggle
+  `.is-collapsed`（纯 class 切换，重渲染后回到初始态——状态不持久化口径）。
+- `a.footnote-link` / `a.footnote-backref` 点击 → preventDefault + 预览容器内
+  `getElementById(href 目标)` → `scrollIntoView({block:"center"})`（不触发
+  internal-link 委托）。
+
+### Styles — editor agent: `features/editor/editor.css` + `src/styles/app.css`（变量节）；export agent: `features/export/export.css`
+
+- **callout 色板（冻结，rgb 三元组，dark/light 同值）**——app.css `:root` 新增：
+  `--callout-note: 68,138,255`、`--callout-abstract: 0,191,188`、
+  `--callout-info: 0,184,212`、`--callout-todo: 0,184,212`、
+  `--callout-tip: 0,191,188`、`--callout-success: 68,207,110`、
+  `--callout-question: 236,151,49`、`--callout-warning: 236,151,49`、
+  `--callout-failure: 233,49,71`、`--callout-danger: 233,49,71`、
+  `--callout-bug: 233,49,71`、`--callout-example: 168,130,255`、
+  `--callout-quote: 158,158,158`；高亮 `--text-highlight-bg`：dark
+  `rgba(255,208,0,0.22)` / light `rgba(255,208,0,0.35)`。
+- callout 呈现：容器 `border-left: 3px solid rgb(var(--callout-*))` + 背景
+  `rgba(var(--callout-*), 0.08)` + 圆角；标题行加粗、文字色 rgb(var(--callout-*))；
+  图标 = mask data-URI（13 个 lucide 风格 SVG 内联进 CSS，--callout-* 着色）；
+  别名经 CSS 属性选择器映射同色（`[data-callout="summary"]` → abstract 色等，
+  别名表冻结于上）；未知类型兜底 note 色（`.callout` 基础规则即 note 值）。
+  `.callout.is-collapsed > .callout-content { display: none }`；is-collapsible
+  标题加折叠指示（::after chevron，is-collapsed 旋转）。
+- `<mark>` / `.cm-live-highlight`：背景 var(--text-highlight-bg)，前景继承。
+- footnotes section：上边距 + --text-muted 小字号；`.footnote-ref` 上标；
+  `.footnote-backref` 无下划线。
+- math：`.geode-math-block` 居中 + 上下 margin；`.geode-math-error` 红字保
+  原文（dark `#ff6b6b` / light `#d33` 级，走新变量 `--text-error` 或既有等价
+  变量，agent 查 app.css 现状后跟随）；`.cm-live-math-line` 等宽 + --text-faint。
+- export.css 本地变量体系同步实现全部上述（callout 13 色 + 图标 mask + 高亮 +
+  footnotes + MathML 基础 margin）——导出文件自包含，不引用 app.css 变量。
+
+### Export — `features/export/export.ts` + `export.css`（export agent）
+
+- inlineEmbeds 的 hydrateEmbeds ctx 增 `mathOutput: "mathml"`；打印路径同。
+- 折叠 callout 导出静态呈现初始态（is-collapsed 即收起，无交互脚本——导出
+  零 JS 口径不变）。
+- 导出验证：含数学用例输出含 `<math` 且不含 katex 字体/CSS 引用。
+
+### 口径（零代码，记录）
+
+- live vs reading 四条显式偏差：跨行 `$$` 块 live 不渲染 widget、跨行块注释
+  live 淡显不隐藏、行内脚注 live 零处理（官方同行为）、callout 标题点击折叠
+  live 不做（gutter 手动折叠可用）。
+- KaTeX vs MathJax 宏覆盖面差异（mhchem 等扩展不带）；不支持宏红色降级。
+- 脚注定义体无嵌套块结构；callout 标题显示原词 capitalize；`$...$` 内 wikilink
+  先被预处理（罕见）。
+- compat `getFileCache()` 不收脚注/callout 元数据（官方 CachedMetadata 也无
+  此专项形状）；compat 本轮零改动。
+- 浏览器 E2E：五项语法双视图 DOM 断言 + 导出 MathML/类名断言 + 折叠交互；
+  **diff 义务（core agent）**：无新语法用例（沿用 r12 起的 20+ 用例面）渲染输出
+  字节级一致。
+
+### Round 18 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/markdown.ts, core/embeds.ts, core/math.ts (new), core/katex-css.d.ts (new — CSS import shim，沿 R7 raw-import.d.ts 先例，R18 评审 CONTRACT-05 追认登记) |
+| editor | features/editor/{livePreview.ts, EditorPane.tsx, editor.css}, src/styles/app.css（仅变量节） |
+| export | features/export/{export.ts, export.css} |
+
+Chief pre-phase：本节契约 + katex/@types/katex 预装。Frozen surfaces：上述全部
+类名与 data-* 属性、五项冻结正则/flanking 规则、callout 类型别名表与色板、
+`HydrateContext.mathOutput`、`loadKatex` 签名、footnote DOM 形状、`<mark>` 输出。
+每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 docs/、compat/**、src-tauri/**；
+agent 行内注释不得修订契约（R13 教训）；core agent 跑无新语法用例字节级 diff；
+动 vault/documents 路径前必读 R16 As-built deltas（本轮不应触碰）。
+
+### As-built deltas (post-review — R18)
+
+Review: 4 维（管线正确性 / 注入安全 / live 共存生命周期 / 分层契约），**17 findings →
+对抗验证 17 confirmed（0 证伪）**，全部修复，浏览器 E2E + 桌面 release 实测逐项复验。
+17 条归并为 ~11 个独立根因（4 major），集中在 core/markdown.ts 与
+features/editor/livePreview.ts：
+
+- **FIXED (major) — callout 二次 inline.parse 导致行内脚注双收集**（PIPE-01/CONTRACT-01）：
+  geode-callouts 原注册在内置 "inline" core rule **之后**，callout 首段已被完整分词一次
+  （geode-footnote-inline 把 `^[text]` push 占编号），随后 callout 改写对标题/首段余行用同一
+  env **二次** md.inline.parse → 重复 push（幽灵 li + 悬空 backref + 编号跳号/逆序）。根治 =
+  改 `md.core.ruler.before("inline", "geode-callouts")`：在 inline 分词前改写 blockquote token
+  （此时 inline child 仅有 .content、children 未解析），标记行从 content 切除、标题/体留未分词
+  inline token 交内置规则**只解析一次**；删除两处手动 inline.parse；geode-footnotes-tail 仍
+  after("inline")。`[^id]` 形式本就因 order Map 去重不受影响。
+- **FIXED (major) — `$$` 块闭合判定吞行 + 与 live 分叉**（PIPE-04/CONTRACT-03）：block rule
+  首行 `firstRest` 含**非行尾** `$$` 时直接 return false 保字面（`$$x$$ foo` 不再跨行吞并后续
+  段落/合法公式块）；跨行闭合扫描遇 fence 开启行（缩进≤3 的 ```/~~~）止损按未闭合处理。
+- **FIXED (major) — live 单行 `$$` 无锚定**（LP-1）：widget 路径弃全文盲扫正则，改逐行
+  `/^ {0,3}\$\$([^$\n]+?)\$\$[ \t]*$/`（镜像管线 block rule：行首、缩进≤3、闭合后仅空白）；
+  缩进代码块（CodeBlock lezer 节点）行并入 highlight/footnote/math 统一排除集。
+- **FIXED (minor) — 预处理 fence 状态机三处脱节**（PIPE-02/03/05+CONTRACT-02）：replaceWikilinks
+  的 fence 跟踪重写为 (char, len, indent) 感知（闭合要求同字符 + 长度≥开启 + 无 info string，
+  缩进≤3，与 markdown-it 对齐——`````不再被 ``` 假闭合）；%%注释剥除后与跨行注释闭合余文
+  **重跑 fence 检测**；frontmatter 行**仍参与 fence 奇偶跟踪**（仅跳过替换本身）——三者共同
+  消除 `@@GEODELINK@@` 占位符泄漏进代码块 / fence 内字面 %% 被删 的盲区。「no placeholder
+  ever survives」不变式恢复；Part A 33 字节级用例不回退。
+- **FIXED (minor) — 脚注 DOM id 跨渲染碰撞**（PIPE-06）：每次 render 加模块级 `footnoteRenderSeq`
+  前缀，id = `fn-{seq}-{n}` / `fnref-{seq}-{n}`（data-footnote 仍 `{n}`）——宿主与转写嵌入笔记
+  （分别 render）id 不再撞，点击不跨笔记错跳。
+- **FIXED (minor) — KaTeX maxSize DoS**（SEC-01）：三处 katex.render（embeds.ts 阅读/导出 +
+  livePreview.ts MathWidget）均加 `maxSize: 100`——`\rule{1e6em}` 类巨尺寸不再冻结渲染线程
+  （maxExpand 默认 1000 已拦宏炸弹）。
+- **FIXED (minor) — live callout 嵌套首行误判**（LP-2）：Blockquote 前缀剥离从「吞所有 `>` 层级」
+  改为按节点自身 offset **只剥一层**——`> > [!tip]` 的外层普通引用不再整体误染 callout。
+- **FIXED (minor) — live `%%` 行内 code 翻转状态机**（LP-3）：%% 扫描做 backtick 奇偶分割（本地
+  重实现，不 import core 私有函数），行内 code 内 `%%` 不再开幽灵注释块污染后续行。
+- **FIXED (minor) — live highlight 无结构感知**（LP-4）：highlight 扫描排除 setext 下划线行
+  （lezer 节点名是 **`SetextHeading1`/`SetextHeading2`** 非 `SetextHeading`——chief 实测修正
+  agent 的精确等值判断为 `startsWith`）+ wikilink 折叠区间——`=====` 下划线与 `[[a==b==c]]`
+  显示文本不再被切割。
+- **FIXED (minor) — MathWidget 点击死区**（LP-5）：MathWidget 覆写 `ignoreEvent(){return false}`
+  ——点击公式落标还原源码，且不再吞落在公式上的 drop/paste（R17 attachmentIngest）。
+- **FIXED (minor) — live 行内数学闭合 `$` 不检查转义**（CONTRACT-04）：INLINE_MATH_RE 改手写
+  `scanInlineMath`（镜像 markdown.ts isEscapedAt 反斜杠奇偶），`$a\$b$` 不再在转义 `$` 处提前
+  闭合——live 与阅读视图收敛。
+- **Accepted（记录）**：`$$a$b$$`（内含单 `$`）live 保字面而阅读渲染（charset 既有偏差，LP-1
+  范围外）；真正嵌套 callout 自身首行可能同时带 quoteline + callout-line（只剥一层范围内，罕见）；
+  `katex-css.d.ts` 登记入所有权表（CONTRACT-05，见上）。
+
+桌面 release（v0.18.0 `geode.exe compat-vault` 真实文件系统）：R18 双视图实测 17/17 全绿
+（阅读 callout/`<mark>`/脚注 seq-id/inline+block KaTeX 0 error/注释隐藏/货币字面；live setext
+下划线完整/`foo $$x$$ bar` 不误渲染/嵌套 callout 外层 quote/`[[a==b==c]]` 完整/2 math widget
+KaTeX）；套件 5/5 + nldates 指令条 + reload 幂等 + 回声 suppressed4/external2 不回退；r17
+折叠+摄入 10/10（disk-roundtrip 70 字节无损——探针陈旧字面 68 顺手修正）。字节级 diff 套件
+72 用例全绿（33 无新语法字节一致 + 39 新语法 DOM）。katex 独立异步 chunk（260KB gzip 77KB，
+零数学文档不加载），主 chunk 仅 +约 2KB。
+
+## Round 17 additions — 附件摄入（粘贴/拖拽图片入库）+ 标题/列表折叠
 
 迁移体验路线图第二轮（ROADMAP R16-R18）。官方校准（obsidian.md/help/attachments +
 obsidian.md/help/folding，2026-06-11 WebFetch）：
