@@ -53,6 +53,17 @@ export interface VaultAdapter {
   readConfig(relPath: string): Promise<string | null>;
   /** Write a file under `<vault>/.obsidian/`, creating parent directories. */
   writeConfig(relPath: string, content: string): Promise<void>;
+  /**
+   * List entries directly under `<vault>/.obsidian/<relPath>` (non-recursive).
+   * A missing directory yields an empty list (R20 themes/snippets discovery).
+   */
+  listConfigDir(relPath: string): Promise<ConfigDirEntry[]>;
+}
+
+/** One entry under an `.obsidian/` subdirectory (R20). Mirrors Rust ConfigDirEntry. */
+export interface ConfigDirEntry {
+  name: string;
+  isDir: boolean;
 }
 
 /* ---------------- helpers ---------------- */
@@ -717,12 +728,50 @@ export class MemoryVaultAdapter implements VaultAdapter {
   /** in-session `.obsidian/` config store (not part of the visible tree) */
   private configFiles = new Map<string, string>();
 
+  /** Browser E2E seeds `.obsidian/` fixtures via `window.__geodeObsidianConfig`
+   *  (relPath → content) before load (R20; mirrors __geodeObsidianPlugins). */
+  private seedConfigFromWindow(): void {
+    if (this.configSeeded) return;
+    this.configSeeded = true;
+    const g = globalThis as unknown as { __geodeObsidianConfig?: Record<string, string> };
+    const seed = g.__geodeObsidianConfig;
+    if (!seed || typeof seed !== "object") return;
+    for (const [relPath, content] of Object.entries(seed)) {
+      if (typeof content === "string" && !this.configFiles.has(relPath)) {
+        this.configFiles.set(relPath, content);
+      }
+    }
+  }
+  private configSeeded = false;
+
   async readConfig(relPath: string): Promise<string | null> {
+    this.seedConfigFromWindow();
     return this.configFiles.get(relPath) ?? null;
   }
 
   async writeConfig(relPath: string, content: string): Promise<void> {
+    this.seedConfigFromWindow();
     this.configFiles.set(relPath, content);
+  }
+
+  async listConfigDir(relPath: string): Promise<ConfigDirEntry[]> {
+    this.seedConfigFromWindow();
+    const prefix = relPath === "" ? "" : relPath.replace(/\/+$/, "") + "/";
+    const names = new Map<string, boolean>(); // name → isDir
+    for (const key of this.configFiles.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      const rest = key.slice(prefix.length);
+      if (!rest) continue;
+      const slash = rest.indexOf("/");
+      if (slash === -1) {
+        if (!names.has(rest)) names.set(rest, false);
+      } else {
+        names.set(rest.slice(0, slash), true);
+      }
+    }
+    return [...names.entries()]
+      .map(([name, isDir]) => ({ name, isDir }))
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   }
 
   async listTree(): Promise<FolderNode> {
@@ -959,5 +1008,12 @@ export class TauriVaultAdapter implements VaultAdapter {
 
   async writeConfig(relPath: string, content: string): Promise<void> {
     await this.invoke("vault_write_config", { vault: this.root, path: relPath, content });
+  }
+
+  async listConfigDir(relPath: string): Promise<ConfigDirEntry[]> {
+    return this.invoke<ConfigDirEntry[]>("vault_list_config_dir", {
+      vault: this.root,
+      path: relPath,
+    });
   }
 }

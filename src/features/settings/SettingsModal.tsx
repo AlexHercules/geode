@@ -119,6 +119,12 @@ function AppearanceSection() {
   const currentLocale = useStore(locale);
   const autoUpdate = useStore(autoUpdateLinks);
   const attachFolder = useStore(attachmentFolder);
+  /* R20: Obsidian CSS compat — via the AppContext handle (features never import @compat) */
+  const obsidianCss = useStore(app.obsidianCss.state);
+  const obsidianEnabled = obsidianCss.enabled;
+  const activeThemeListed =
+    obsidianCss.activeTheme === "" ||
+    obsidianCss.themes.some((th) => th.dir === obsidianCss.activeTheme);
 
   return (
     <section>
@@ -190,6 +196,99 @@ function AppearanceSection() {
           <option value="zh">中文</option>
         </select>
       </div>
+
+      {/* ---- Obsidian CSS compat (R20) ---- */}
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianCss")}</div>
+          <div className="setting-desc">{t("settings.obsidianCssDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${obsidianEnabled ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={obsidianEnabled}
+          aria-label={t("settings.obsidianCss")}
+          data-testid="obsidian-css-toggle"
+          onClick={() =>
+            void app.obsidianCss
+              .setEnabled(!obsidianEnabled)
+              .catch((err) => console.warn("[settings] obsidian css toggle failed", err))
+          }
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianTheme")}</div>
+          <div className="setting-desc">{t("settings.obsidianThemeDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="obsidian-theme-select"
+          value={obsidianCss.activeTheme}
+          aria-label={t("settings.obsidianTheme")}
+          disabled={!obsidianEnabled}
+          aria-disabled={!obsidianEnabled}
+          onChange={(e) =>
+            void app.obsidianCss
+              .setTheme(e.target.value)
+              .catch((err) => console.warn("[settings] obsidian theme change failed", err))
+          }
+        >
+          <option value="">{t("settings.obsidianThemeNone")}</option>
+          {obsidianCss.themes.map((th) => (
+            <option key={th.dir} value={th.dir}>
+              {th.name}
+            </option>
+          ))}
+          {/* active theme missing from the discovery list (e.g. files deleted):
+              still shown so the persisted value stays visible (Obsidian口径) */}
+          {!activeThemeListed && (
+            <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
+          )}
+        </select>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianSnippets")}</div>
+          <div className="setting-desc">{t("settings.obsidianSnippetsDesc")}</div>
+        </div>
+      </div>
+      {obsidianCss.snippets.length === 0 ? (
+        <div className="setting-item" data-testid="obsidian-snippets-empty">
+          <div className="setting-info">
+            <div className="setting-desc">{t("settings.obsidianSnippetsEmpty")}</div>
+          </div>
+        </div>
+      ) : (
+        obsidianCss.snippets.map((sn) => (
+          <div className="setting-item" key={sn.name}>
+            <div className="setting-info">
+              <div className="setting-name">{sn.name}</div>
+            </div>
+            <button
+              className={`settings-toggle${sn.enabled ? " is-on" : ""}`}
+              role="switch"
+              aria-checked={sn.enabled}
+              aria-label={sn.name}
+              disabled={!obsidianEnabled}
+              aria-disabled={!obsidianEnabled}
+              data-testid={`obsidian-snippet-toggle-${sn.name}`}
+              onClick={() => {
+                void app.obsidianCss
+                  .setSnippet(sn.name, !sn.enabled)
+                  .catch((err) => console.warn("[settings] obsidian snippet toggle failed", err));
+              }}
+            >
+              <span className="settings-toggle-thumb" />
+            </button>
+          </div>
+        ))
+      )}
 
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
 

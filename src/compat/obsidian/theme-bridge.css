@@ -1,0 +1,137 @@
+/*
+ * Obsidian variable bridge (R20) — injected as <style id="geode-obsidian-bridge">
+ * by compat/obsidian/themes.ts (read via Vite `?raw`). NOT linked statically.
+ *
+ * SYNC OBLIGATION: every literal between the OBSIDIAN-BRIDGE-PALETTE-BEGIN/END
+ * markers below is a verbatim copy of the Geode palette in src/styles/app.css
+ * (:root/html[data-theme="dark"] and html[data-theme="light"] blocks). Any
+ * change to those app.css values MUST be mirrored here (and vice versa) —
+ * the layer promises ZERO visual change while no Obsidian theme is installed.
+ *
+ * Shape mirrors REAL Obsidian (post-review R20-CSS-01 fix): real Obsidian
+ * keeps mode primitives (--color-base-*) under .theme-dark/.theme-light and
+ * defines the SEMANTIC variables (--background-primary, --accent-h, ...) in
+ * the top-level body{} block. Community themes override either scope:
+ *   - theme body{...}        → ties our body{} defaults, wins by doc order
+ *                              (this sheet is injected BEFORE theme.css);
+ *   - theme .theme-dark{...} → (0,1,0) beats body{} (0,0,1) by specificity.
+ * Our mode primitives use private --geode-ob-* names that no theme touches,
+ * so they can never suppress a theme override (the original §1 put semantic
+ * defaults at .theme-dark scope, which silently beat body{} themes — Minimal
+ * and Things both set accent in body{}).
+ *
+ *   §1a .theme-dark / .theme-light — private mode primitives (literals).
+ *   §1b body — Obsidian semantic variable defaults (one var() hop onto §1a).
+ *       The five same-name variables (--text-normal/-muted/-faint/-on-accent
+ *       and --text-highlight-bg) already exist in app.css and are NOT
+ *       re-declared here; themes overriding them at body scope win naturally.
+ *   §2  body — Geode variables repointed onto Obsidian variables (one var()
+ *       hop; element-level scope outranks html[data-theme] so themes flow
+ *       through). Deliberately NOT repointed (no exact Obsidian counterpart,
+ *       zero-visual-change promise wins): --bg-modal, --shadow-modal,
+ *       --accent-muted, --callout-*.
+ */
+
+/* §1a — private mode primitives */
+/* OBSIDIAN-BRIDGE-PALETTE-BEGIN */
+.theme-dark {
+  --geode-ob-bg-primary: #1e1e1e;
+  --geode-ob-bg-primary-alt: #1c1c1c;
+  --geode-ob-bg-secondary: #262626;
+  --geode-ob-bg-secondary-alt: #2a2a2a;
+  --geode-ob-mod-hover: rgba(255, 255, 255, 0.055);
+  --geode-ob-mod-active-hover: rgba(255, 255, 255, 0.1);
+  --geode-ob-mod-border: #363636;
+  --geode-ob-mod-border-hover: #444444;
+  --geode-ob-form-field: #1c1c1c;
+  --geode-ob-text-error: #e06c75;
+  --geode-ob-accent: #8b7cf6;
+  --geode-ob-accent-hover: #9d90f8;
+  --geode-ob-selection: rgba(139, 124, 246, 0.3);
+  /* #8b7cf6 as exact HSL components (round-trips within ±1/255) */
+  --geode-ob-accent-h: 247.38;
+  --geode-ob-accent-s: 87.14%;
+  --geode-ob-accent-l: 72.55%;
+  --geode-ob-interactive-normal: #2a2a2a;
+  --geode-ob-interactive-hover: #363636;
+  --geode-ob-code-bg: rgba(255, 255, 255, 0.06);
+  --geode-ob-link-unresolved: #8b7cf680;
+}
+
+.theme-light {
+  --geode-ob-bg-primary: #f5f5f5;
+  --geode-ob-bg-primary-alt: #fafafa;
+  --geode-ob-bg-secondary: #ffffff;
+  --geode-ob-bg-secondary-alt: #f0f0f0;
+  --geode-ob-mod-hover: rgba(0, 0, 0, 0.05);
+  --geode-ob-mod-active-hover: rgba(0, 0, 0, 0.09);
+  --geode-ob-mod-border: #e0e0e0;
+  --geode-ob-mod-border-hover: #c8c8c8;
+  --geode-ob-form-field: #fafafa;
+  --geode-ob-text-error: #d04848;
+  --geode-ob-accent: #6c5ce7;
+  --geode-ob-accent-hover: #5a4bd1;
+  --geode-ob-selection: rgba(108, 92, 231, 0.25);
+  /* #6c5ce7 as exact HSL components (round-trips within ±1/255) */
+  --geode-ob-accent-h: 246.91;
+  --geode-ob-accent-s: 74.33%;
+  --geode-ob-accent-l: 63.33%;
+  --geode-ob-interactive-normal: #f0f0f0;
+  --geode-ob-interactive-hover: #e0e0e0;
+  --geode-ob-code-bg: rgba(0, 0, 0, 0.05);
+  --geode-ob-link-unresolved: #6c5ce780;
+}
+/* OBSIDIAN-BRIDGE-PALETTE-END */
+
+/* §1b — Obsidian semantic defaults at body scope (official Obsidian shape) */
+body {
+  --background-primary: var(--geode-ob-bg-primary);
+  --background-primary-alt: var(--geode-ob-bg-primary-alt);
+  --background-secondary: var(--geode-ob-bg-secondary);
+  --background-secondary-alt: var(--geode-ob-bg-secondary-alt);
+  --background-modifier-hover: var(--geode-ob-mod-hover);
+  --background-modifier-active-hover: var(--geode-ob-mod-active-hover);
+  --background-modifier-border: var(--geode-ob-mod-border);
+  --background-modifier-border-hover: var(--geode-ob-mod-border-hover);
+  --background-modifier-border-focus: var(--geode-ob-mod-border-hover);
+  --background-modifier-form-field: var(--geode-ob-form-field);
+  --background-modifier-error: var(--geode-ob-text-error);
+  --text-error: var(--geode-ob-text-error);
+  --text-accent: var(--geode-ob-accent);
+  --text-accent-hover: var(--geode-ob-accent-hover);
+  --text-selection: var(--geode-ob-selection);
+  --accent-h: var(--geode-ob-accent-h);
+  --accent-s: var(--geode-ob-accent-s);
+  --accent-l: var(--geode-ob-accent-l);
+  --interactive-accent: hsl(var(--accent-h), var(--accent-s), var(--accent-l));
+  --interactive-accent-hover: var(--geode-ob-accent-hover);
+  --interactive-normal: var(--geode-ob-interactive-normal);
+  --interactive-hover: var(--geode-ob-interactive-hover);
+  --code-background: var(--geode-ob-code-bg);
+  --link-unresolved-color: var(--geode-ob-link-unresolved);
+  /* caret default follows the interactive accent so the (new) consumer in
+     cmExtensions — caretColor: var(--caret-color, var(--accent)) — keeps the
+     zero-visual-change promise; themes overriding --caret-color now work */
+  --caret-color: var(--interactive-accent);
+}
+
+/* §2 — Geode variables repointed onto the Obsidian layer (frozen list). */
+body {
+  --bg-app: var(--background-primary);
+  --bg-panel: var(--background-secondary);
+  --bg-panel-alt: var(--background-secondary-alt);
+  --bg-input: var(--background-modifier-form-field);
+  --bg-hover: var(--background-modifier-hover);
+  --bg-active: var(--background-modifier-active-hover);
+  --border: var(--background-modifier-border);
+  --border-strong: var(--background-modifier-border-hover);
+  --accent: var(--interactive-accent);
+  --accent-hover: var(--interactive-accent-hover);
+  --selection: var(--text-selection);
+  --danger: var(--text-error);
+  --code-bg: var(--code-background);
+  --link-unresolved: var(--link-unresolved-color);
+  /* font hook: themes setting --font-text-theme take effect; fallback is the
+     verbatim app.css body stack (sync obligation applies) */
+  font-family: var(--font-text-theme, "Segoe UI", -apple-system, system-ui, sans-serif);
+}

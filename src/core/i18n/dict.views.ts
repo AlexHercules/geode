@@ -23,6 +23,17 @@ export const en = {
   "settings.language": "Language",
   "settings.languageDesc": "Choose the interface language.",
 
+  // ---- settings: Obsidian CSS (R20) ----
+  "settings.obsidianCss": "Obsidian CSS",
+  "settings.obsidianCssDesc":
+    "Bridge Obsidian theme variables and load community themes and CSS snippets from this vault's .obsidian folder.",
+  "settings.obsidianTheme": "Obsidian theme",
+  "settings.obsidianThemeDesc": "Community theme from .obsidian/themes.",
+  "settings.obsidianThemeNone": "None",
+  "settings.obsidianSnippets": "CSS snippets",
+  "settings.obsidianSnippetsDesc": "Toggle .css files from .obsidian/snippets.",
+  "settings.obsidianSnippetsEmpty": "No CSS snippets found in this vault.",
+
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "Files & links",
   "settings.autoUpdateLinks": "Automatically update internal links",
@@ -163,6 +174,17 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.fontSizeDesc": "Markdown 编辑器与预览所使用的字号。",
   "settings.language": "语言",
   "settings.languageDesc": "选择界面语言。",
+
+  // ---- settings: Obsidian CSS (R20) ----
+  "settings.obsidianCss": "Obsidian CSS 兼容",
+  "settings.obsidianCssDesc":
+    "桥接 Obsidian 主题变量，并加载库内 .obsidian 目录下的社区主题与 CSS 片段。",
+  "settings.obsidianTheme": "Obsidian 主题",
+  "settings.obsidianThemeDesc": "来自 .obsidian/themes 的社区主题。",
+  "settings.obsidianThemeNone": "无",
+  "settings.obsidianSnippets": "CSS 片段",
+  "settings.obsidianSnippetsDesc": "启用或停用 .obsidian/snippets 下的 .css 文件。",
+  "settings.obsidianSnippetsEmpty": "当前库中没有 CSS 片段。",
 
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "文件与链接",

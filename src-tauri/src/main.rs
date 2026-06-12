@@ -49,6 +49,15 @@ struct ObsidianPluginSource {
     data_json: Option<String>,
 }
 
+/// A directory entry under `<vault>/.obsidian/<path>`.
+/// Mirrors `ConfigDirEntry` in src/core/vault.ts (serde camelCase).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigDirEntry {
+    name: String,
+    is_dir: bool,
+}
+
 /// Active vault filesystem watcher. Replacing the inner watcher drops the old
 /// one, which disconnects its mpsc channel and lets its debounce thread exit.
 struct WatcherState(Mutex<Option<RecommendedWatcher>>);
@@ -600,6 +609,26 @@ fn vault_read_config(vault: String, path: String) -> CmdResult<Option<String>> {
     read_optional(&abs)
 }
 
+/// List entries directly under `<vault>/.obsidian/<path>` (non-recursive).
+/// A missing directory is not an error — returns an empty list.
+#[tauri::command]
+fn vault_list_config_dir(vault: String, path: String) -> CmdResult<Vec<ConfigDirEntry>> {
+    let abs = safe_join_obsidian(&vault, &path)?;
+    if !abs.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut out = Vec::new();
+    let entries = fs::read_dir(&abs).map_err(|e| format!("read_dir {}: {e}", abs.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let is_dir = entry.path().is_dir();
+        out.push(ConfigDirEntry { name, is_dir });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
+}
+
 /// Write a config file under `<vault>/.obsidian/`, creating parent directories.
 #[tauri::command]
 fn vault_write_config(vault: String, path: String, content: String) -> CmdResult<()> {
@@ -632,6 +661,7 @@ fn main() {
             vault_obsidian_plugins,
             vault_read_config,
             vault_write_config,
+            vault_list_config_dir,
             http_request,
             export_write
         ])

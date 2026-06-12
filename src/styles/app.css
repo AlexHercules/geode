@@ -1,5 +1,8 @@
 /* ============ Geode theme system ============ */
 /* All colors flow from these variables. data-theme on <html> switches. */
+/* NOTE (R20): the Obsidian variable bridge mirrors these literals — when a
+   value below changes, update the OBSIDIAN-BRIDGE-PALETTE block in
+   src/compat/obsidian/theme-bridge.css to match. */
 
 :root,
 html[data-theme="dark"] {

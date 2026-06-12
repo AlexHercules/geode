@@ -566,12 +566,22 @@ export function EditorPane({ tab }: { tab: TabState }) {
       </div>
     );
   } else if (tab.mode !== "preview") {
-    body = <div className="editor-cm-host" data-testid="cm-editor" ref={hostRef} />;
+    body = (
+      <div
+        className="editor-cm-host markdown-source-view mod-cm6"
+        data-testid="cm-editor"
+        ref={hostRef}
+      />
+    );
   } else {
     body = (
-      <div className="editor-preview" onClick={onPreviewClick} ref={previewScrollRef}>
+      <div
+        className="editor-preview markdown-reading-view"
+        onClick={onPreviewClick}
+        ref={previewScrollRef}
+      >
         <div
-          className="preview-content"
+          className="preview-content markdown-preview-view markdown-rendered"
           data-testid="preview"
           ref={previewContentRef}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -581,7 +591,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
   }
 
   return (
-    <div className="editor-pane" data-testid="editor-pane">
+    // R20: "workspace-leaf"/"markdown-*" classes mirror Obsidian's DOM for
+    // community theme CSS — resident, additive only (contract)
+    <div className="editor-pane workspace-leaf" data-testid="editor-pane">
       <div className="editor-header">
         <div className="editor-title" title={tab.filePath ?? undefined}>
           {tab.title}

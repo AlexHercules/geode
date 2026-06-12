@@ -3,6 +3,13 @@ import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
 import { AppContext, GeodeApp } from "@app/AppContext";
 import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
+import {
+  initObsidianCss,
+  obsidianCssState,
+  setObsidianCssEnabled,
+  setObsidianSnippet,
+  setObsidianTheme,
+} from "@compat/obsidian/themes";
 import { CommandRegistry } from "@core/commands";
 import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
@@ -112,6 +119,13 @@ async function bootstrap() {
     // app layer hands the compat load report to feature modules (no direct
     // @compat imports below the app layer)
     obsidianLoadReport,
+    // Obsidian theme/snippet CSS layer handle (R20, same hand-over pattern)
+    obsidianCss: {
+      state: obsidianCssState,
+      setEnabled: setObsidianCssEnabled,
+      setTheme: setObsidianTheme,
+      setSnippet: setObsidianSnippet,
+    },
   };
 
   workspace.applyDocumentEffects();
@@ -184,6 +198,12 @@ async function bootstrap() {
       console.error("[boot] obsidian plugin load failed", err);
     }
   }
+
+  // Obsidian theme/snippet CSS layer (R20) — non-blocking; handles closed
+  // vaults itself and re-discovers on vault:changed
+  void initObsidianCss({ vault, events, workspace }).catch((err) =>
+    console.error("[boot] obsidian css init failed", err),
+  );
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>

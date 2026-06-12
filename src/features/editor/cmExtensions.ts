@@ -88,10 +88,12 @@ const editorTheme = EditorView.theme({
     padding: "28px 0 45vh",
     maxWidth: "46em",
     margin: "0 auto",
-    caretColor: "var(--accent)",
+    /* --caret-color: Obsidian theme knob (R20 bridge defaults it to the
+       interactive accent — identical to the old hard-coded accent) */
+    caretColor: "var(--caret-color, var(--accent))",
   },
   ".cm-line": { padding: "0 32px" },
-  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--accent)" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--caret-color, var(--accent))" },
   ".cm-content ::selection": { background: "var(--selection)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground":
     { background: "var(--selection)" },

@@ -322,9 +322,11 @@ export function App() {
 
   return (
     <div className="app" data-testid="app-root">
-      <div className="app-body">
+      {/* R20: appended "workspace*" classes mirror Obsidian's DOM so community
+          theme CSS can target them — resident, additive only (contract) */}
+      <div className="app-body workspace">
         {/* ribbon */}
-        <nav className="ribbon" aria-label={t("app.ribbonAria")}>
+        <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
           <RibbonButton
             icon="files"
             title={t("app.ribbonExplorer")}
@@ -386,7 +388,7 @@ export function App() {
         {/* left sidebar */}
         {ws.leftSidebarOpen && (
           <aside
-            className="sidebar sidebar-left"
+            className="sidebar sidebar-left workspace-split mod-horizontal mod-left-split"
             style={{ width: ws.leftWidth }}
             data-testid="left-sidebar"
           >
@@ -402,7 +404,7 @@ export function App() {
         )}
 
         {/* main area: recursive pane tree */}
-        <main className="main">
+        <main className="main workspace-split mod-vertical mod-root">
           <TabDragContext.Provider value={tabDrag}>
             <PaneTree node={ws.root} />
           </TabDragContext.Provider>
@@ -411,7 +413,7 @@ export function App() {
         {/* right sidebar */}
         {ws.rightSidebarOpen && (
           <aside
-            className="sidebar sidebar-right"
+            className="sidebar sidebar-right workspace-split mod-horizontal mod-right-split"
             style={{ width: ws.rightWidth }}
             data-testid="right-sidebar"
           >

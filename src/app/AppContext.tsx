@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { ObsidianPluginReport } from "@compat/obsidian/loader";
+import type { ObsidianCssState } from "@compat/obsidian/themes";
 import { CommandRegistry } from "@core/commands";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
@@ -23,6 +24,16 @@ export interface GeodeApp {
    * modules never import @compat directly (layering rule).
    */
   obsidianLoadReport: Store<ReadonlyArray<ObsidianPluginReport>>;
+  /**
+   * Obsidian theme/snippet CSS layer handle (R20), same hand-over pattern as
+   * obsidianLoadReport — features never import @compat directly.
+   */
+  obsidianCss: {
+    state: Store<ObsidianCssState>;
+    setEnabled: (on: boolean) => Promise<void>;
+    setTheme: (dir: string) => Promise<void>;
+    setSnippet: (name: string, on: boolean) => Promise<void>;
+  };
 }
 
 export const AppContext = createContext<GeodeApp | null>(null);
