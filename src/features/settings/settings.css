@@ -197,6 +197,32 @@
   border-color: var(--accent);
 }
 
+/* ---------- text input (attachment folder etc.) ---------- */
+
+.settings-text-input {
+  flex-shrink: 0;
+  width: 160px;
+  padding: 4px 10px;
+  font-size: 13px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+}
+
+.settings-text-input:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-text-input:focus {
+  border-color: var(--accent);
+}
+
+.settings-text-input::placeholder {
+  color: var(--text-faint);
+}
+
 /* ---------- font size slider ---------- */
 
 .settings-slider {

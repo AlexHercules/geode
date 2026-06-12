@@ -156,6 +156,39 @@ fn vault_read_binary(vault: String, path: String) -> CmdResult<String> {
     Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
+// async — file IO off the main thread (R6 lesson); pasted images can be MBs.
+// Mirror of vault_read_binary; NEW files only (ingestion path never overwrites).
+#[tauri::command(async)]
+fn vault_write_binary(vault: String, path: String, data: String) -> CmdResult<()> {
+    use base64::Engine as _;
+    use std::io::Write as _;
+    let abs = safe_join(&vault, &path)?;
+    if let Some(parent) = abs.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir parents for {path}: {e}"))?;
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("decode {path}: {e}"))?;
+    // R17 (review fix): create_new is the exclusivity authority. The earlier
+    // exists()-check + shared tmp + rename was check-then-act: two concurrent
+    // imports of the same name passed the check together, clobbered each
+    // other's tmp, and Windows rename REPLACES the target — silently losing
+    // the first file. create_new reserves the destination atomically (also on
+    // case-insensitive filesystems); a crash mid-write can only truncate this
+    // brand-new attachment, never existing user data.
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&abs)
+        .map_err(|e| format!("create {path}: {e}"))?;
+    if let Err(e) = f.write_all(&bytes).and_then(|_| f.sync_all()) {
+        drop(f);
+        let _ = fs::remove_file(&abs);
+        return Err(format!("write {path}: {e}"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
     let abs = safe_join(&vault, &path)?;
@@ -588,6 +621,7 @@ fn main() {
             vault_list,
             vault_read,
             vault_read_binary,
+            vault_write_binary,
             vault_write,
             vault_create,
             vault_mkdir,

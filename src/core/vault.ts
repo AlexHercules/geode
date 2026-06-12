@@ -29,6 +29,9 @@ export interface VaultAdapter {
   readFile(path: string): Promise<string>;
   /** Read a file's raw bytes (image embeds, R11). Rejects when missing. */
   readBinary(path: string): Promise<Uint8Array>;
+  /** Write raw bytes to a NEW file (attachment ingestion, R17). Rejects when
+   *  the path already exists; parent folders are created as needed. */
+  writeBinary(path: string, data: Uint8Array): Promise<void>;
   writeFile(path: string, content: string): Promise<void>;
   createFile(path: string, content: string): Promise<void>;
   createFolder(path: string): Promise<void>;
@@ -358,6 +361,16 @@ export class Vault {
       throw err;
     }
     this.cacheSet(path, Vault.normalizeContent(content));
+    await this.refreshTree();
+    this.events.emit("file:created", { path });
+    this.events.emit("vault:changed", { reason: "create" });
+  }
+
+  /** Create a new binary file (attachment ingestion, R17). Uncached; no echo
+   *  fingerprint (FNV is text-scoped) — on desktop the watcher reports our own
+   *  create as external, costing one redundant tree refresh (safe direction). */
+  async createBinary(path: string, data: Uint8Array): Promise<void> {
+    await this.adapter.writeBinary(path, data);
     await this.refreshTree();
     this.events.emit("file:created", { path });
     this.events.emit("vault:changed", { reason: "create" });
@@ -747,6 +760,18 @@ export class MemoryVaultAdapter implements VaultAdapter {
     throw new Error(`File not found: ${path}`);
   }
 
+  async writeBinary(path: string, data: Uint8Array): Promise<void> {
+    if (this.files.has(path) || this.binaryFiles.has(path) || this.folders.has(path)) {
+      throw new Error(`File already exists: ${path}`);
+    }
+    this.binaryFiles.set(path, data);
+    let parent = parentPath(path);
+    while (parent) {
+      this.folders.add(parent);
+      parent = parentPath(parent);
+    }
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     this.files.set(path, content);
   }
@@ -762,7 +787,12 @@ export class MemoryVaultAdapter implements VaultAdapter {
   }
 
   async createFolder(path: string): Promise<void> {
-    this.folders.add(path);
+    // register parents too — fs create_dir_all parity (nested attachment dirs, R17)
+    let p: string | null = path;
+    while (p) {
+      this.folders.add(p);
+      p = parentPath(p);
+    }
   }
 
   async rename(oldPath: string, newPath: string): Promise<void> {
@@ -870,6 +900,16 @@ export class TauriVaultAdapter implements VaultAdapter {
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
+  }
+
+  async writeBinary(path: string, data: Uint8Array): Promise<void> {
+    // chunked btoa input — String.fromCharCode(...whole) overflows the arg stack
+    let bin = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < data.length; i += chunk) {
+      bin += String.fromCharCode(...data.subarray(i, i + chunk));
+    }
+    await this.invoke("vault_write_binary", { vault: this.root, path, data: btoa(bin) });
   }
 
   async writeFile(path: string, content: string): Promise<void> {

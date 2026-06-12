@@ -52,6 +52,9 @@ export const en = {
   "cmd.exportPdf": "Export note as PDF (print)…",
   "cmd.openVault": "Open another vault…",
   "cmd.checkUpdates": "Check for updates…",
+  "cmd.toggleFold": "Toggle fold on the current line",
+  "cmd.foldAll": "Fold all headings and lists",
+  "cmd.unfoldAll": "Unfold all headings and lists",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "Open today's daily note",
@@ -117,6 +120,9 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.exportPdf": "导出笔记为 PDF（打印）…",
   "cmd.openVault": "打开其他库…",
   "cmd.checkUpdates": "检查更新…",
+  "cmd.toggleFold": "折叠/展开当前行",
+  "cmd.foldAll": "折叠所有标题和列表",
+  "cmd.unfoldAll": "展开所有标题和列表",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "打开今天的日记",

@@ -28,6 +28,9 @@ export const en = {
   "settings.autoUpdateLinks": "Automatically update internal links",
   "settings.autoUpdateLinksDesc":
     "When a file is renamed or moved, automatically rewrite the links that point to it.",
+  "settings.attachmentFolder": "Default location for new attachments",
+  "settings.attachmentFolderDesc":
+    'Folder for pasted or dropped images. "/" = vault root, "./" = same folder as the note, "./name" = subfolder under the note\'s folder, "name" = fixed vault folder.',
 
   // ---- settings: plugins ----
   // note split around the inline <code> element (word order differs per locale)
@@ -165,6 +168,9 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.filesAndLinks": "文件与链接",
   "settings.autoUpdateLinks": "自动更新内部链接",
   "settings.autoUpdateLinksDesc": "重命名或移动文件时，自动改写指向它的链接。",
+  "settings.attachmentFolder": "新附件默认位置",
+  "settings.attachmentFolderDesc":
+    "粘贴/拖入图片的保存目录。「/」表示库根目录，「./」表示笔记所在目录，「./名称」表示笔记所在目录下的子文件夹，「名称」表示库内固定文件夹。",
 
   // ---- settings: plugins ----
   "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",

@@ -270,6 +270,81 @@
   font-size: 0.85em;
 }
 
+/* ============ folding (R17, folding.ts) ============ */
+
+/* the editor had ZERO gutters before R17 — the fold gutter must not bring in
+   CM's default gutter chrome: transparent background, no border, no layout
+   surprises beyond its own narrow column */
+.editor-cm-host .cm-editor .cm-gutters {
+  background: transparent;
+  border-right: none;
+}
+
+.editor-cm-host .cm-editor .cm-foldGutter .cm-gutterElement {
+  width: 14px;
+  text-align: center;
+  line-height: 1.65;
+  cursor: pointer;
+}
+
+/* chevron marker: hidden until the editor is hovered; folded lines keep
+   their arrow visible at all times (Obsidian behaviour) */
+.cm-fold-marker {
+  display: inline-block;
+  position: relative;
+  width: 9px;
+  height: 9px;
+  vertical-align: middle;
+  opacity: 0;
+  transform: rotate(0deg);
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.cm-fold-marker::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--text-muted);
+  border-bottom: 1.5px solid var(--text-muted);
+  /* pointing down = open/foldable */
+  transform: rotate(45deg);
+}
+
+.cm-editor:hover .cm-fold-marker {
+  opacity: 1;
+}
+
+.cm-fold-marker.is-folded {
+  opacity: 1;
+  /* pointing right = collapsed */
+  transform: rotate(-90deg);
+}
+
+.cm-fold-marker:hover::before {
+  border-color: var(--text-normal);
+}
+
+/* fold placeholder ("…") — variable palette only */
+.editor-cm-host .cm-editor .cm-foldPlaceholder {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+  padding: 0 5px;
+  margin: 0 3px;
+  cursor: pointer;
+}
+
+.editor-cm-host .cm-editor .cm-foldPlaceholder:hover {
+  border-color: var(--border-strong);
+  color: var(--text-normal);
+}
+
 /* ============ live preview (livePreview.ts decorations) ============ */
 
 /* collapsed markdown [text](url) links */

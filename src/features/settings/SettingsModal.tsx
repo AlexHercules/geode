@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import { getCommandName, hotkeyFromEvent } from "@core/commands";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
 import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
@@ -117,6 +118,7 @@ function AppearanceSection() {
   const ws = useStore(app.workspace.state);
   const currentLocale = useStore(locale);
   const autoUpdate = useStore(autoUpdateLinks);
+  const attachFolder = useStore(attachmentFolder);
 
   return (
     <section>
@@ -206,6 +208,23 @@ function AppearanceSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.attachmentFolder")}</div>
+          <div className="setting-desc">{t("settings.attachmentFolderDesc")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={attachFolder}
+          placeholder="assets"
+          spellCheck={false}
+          aria-label={t("settings.attachmentFolder")}
+          data-testid="settings-attachment-folder"
+          onChange={(e) => setAttachmentFolder(e.target.value)}
+        />
       </div>
     </section>
   );

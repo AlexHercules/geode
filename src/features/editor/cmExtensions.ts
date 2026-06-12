@@ -15,7 +15,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, LanguageSupport, foldService, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { type Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
@@ -32,6 +32,8 @@ import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
+import { attachmentIngest } from "./attachments";
+import { markdownFolding } from "./folding";
 import { livePreview } from "./livePreview";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -286,6 +288,24 @@ export function editorModeExtensions(
   return mode === "live" ? livePreview(app, getPath) : [];
 }
 
+/**
+ * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
+ * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
+ * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
+ * produces would fold the whole body. Strip exactly that entry (the only
+ * support member providing the foldService facet); the markdown keymap,
+ * paste-URL-as-link and HTML completion support all stay.
+ */
+function markdownSansHeaderFold(): Extension {
+  const md = markdown({ base: markdownLanguage, codeLanguages: languages });
+  const support = Array.isArray(md.support)
+    ? (md.support as Extension[]).filter(
+        (ext) => (ext as { facet?: unknown }).facet !== foldService,
+      )
+    : md.support;
+  return new LanguageSupport(md.language, support);
+}
+
 export function buildEditorExtensions(opts: {
   app: GeodeApp;
   /** live path accessor — file:renamed retargets without a view rebuild */
@@ -299,7 +319,7 @@ export function buildEditorExtensions(opts: {
   return [
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
     revealFlashField,
-    markdown({ base: markdownLanguage, codeLanguages: languages }),
+    markdownSansHeaderFold(),
     syntaxHighlighting(mdHighlight),
     EditorView.lineWrapping,
     // resolved at view build time — a locale switch applies to views built after it
@@ -310,5 +330,9 @@ export function buildEditorExtensions(opts: {
     wikilinkDecorations(app, getPath),
     tagPlugin,
     wikilinkClickHandler(app, getPath),
+    // R17 — base list, NOT the mode compartment: fold state lives in the
+    // EditorState and must survive live<->source reconfigures
+    attachmentIngest(app, getPath),
+    markdownFolding(),
   ];
 }

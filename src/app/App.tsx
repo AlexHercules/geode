@@ -15,6 +15,7 @@ import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
+import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { isTauri } from "@core/vault";
 import { updateSupported } from "@core/update";
 import { t, useI18n } from "@core/i18n";
@@ -207,6 +208,30 @@ export function App() {
         name: () => t("cmd.focusPreviousPane"),
         hotkey: "Ctrl+Alt+ArrowLeft",
         callback: () => workspace.focusAdjacentPane(-1),
+      }),
+      commands.register({
+        id: "editor:toggle-fold",
+        name: () => t("cmd.toggleFold"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) toggleFoldAtCursor(active.view);
+        },
+      }),
+      commands.register({
+        id: "editor:fold-all",
+        name: () => t("cmd.foldAll"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) foldAllInView(active.view);
+        },
+      }),
+      commands.register({
+        id: "editor:unfold-all",
+        name: () => t("cmd.unfoldAll"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) unfoldAllInView(active.view);
+        },
       }),
       commands.register({
         id: "app:export-html",
