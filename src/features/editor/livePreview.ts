@@ -24,6 +24,12 @@
  * R14: the wikilink/embed regex scan skips fenced-code lines (R13 debt) and
  * collapsed wikilink marks carry data-link-subpath so clicks on
  * [[note#Heading]] / [[note#^id]] reveal the target span in the opened note.
+ *
+ * R18: markdown dialect long tail — callout line decorations (frozen title
+ * regex), ==highlight== marks, same-line %%comment%% hiding + cross-line
+ * comment-block line tinting, [^id] footnote-ref marks, and KaTeX math
+ * widgets for $inline$ / single-line $$display$$ (cross-line $$ blocks get
+ * line tinting only — view plugins may not build cross-line replaces).
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension, StateField } from "@codemirror/state";
@@ -39,6 +45,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
 import { t } from "@core/i18n";
 import { IMAGE_EXTS } from "@core/markdown";
+import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
@@ -65,6 +72,115 @@ function frontmatterEnd(state: EditorState): number {
   if (doc.length < 4 || doc.sliceString(0, 3) !== "---") return 0;
   const fm = parseFrontmatter(doc.sliceString(0, Math.min(doc.length, 20_000)));
   return fm ? Math.min(fm.to, doc.length) : 0;
+}
+
+/**
+ * Offsets of `%%` inside the non-code (even) segments of a backtick-split line.
+ * Mirrors core/markdown.ts commentDelimOffsets so the live `%%` scan agrees
+ * with the reading pipeline: a `%%` inside an inline-code span (`` `a %% b` ``)
+ * never strips and never toggles a cross-line comment block (LP-3). A local
+ * reimplementation — the core helper is private and must not be imported.
+ */
+function commentDelimOffsets(line: string): number[] {
+  const offsets: number[] = [];
+  let base = 0;
+  const segs = line.split(/(`+[^`]*`+)/g);
+  for (let i = 0; i < segs.length; i++) {
+    if (i % 2 === 0) {
+      let at = segs[i].indexOf("%%");
+      while (at >= 0) {
+        offsets.push(base + at);
+        at = segs[i].indexOf("%%", at + 2);
+      }
+    }
+    base += segs[i].length;
+  }
+  return offsets;
+}
+
+/** True when src[pos] is preceded by an odd number of backslashes (escaped).
+ *  Mirrors core/markdown.ts isEscapedAt (private — reimplemented locally). */
+function isEscapedAt(src: string, pos: number): boolean {
+  let backslashes = 0;
+  for (let i = pos - 1; i >= 0 && src.charCodeAt(i) === 0x5c /* \ */; i--) backslashes++;
+  return backslashes % 2 === 1;
+}
+
+function isWsCode(ch: number): boolean {
+  return ch === 0x20 || ch === 0x09 || ch === 0x0a || ch === 0x0d;
+}
+
+/**
+ * Scan a text slice for inline `$...$` math, mirroring the core/markdown.ts
+ * inline rule byte-for-byte (CONTRACT-04): a SINGLE `$` pair (`$$` never
+ * participates), opener hugs non-whitespace, closer hugs non-whitespace and is
+ * not followed by a digit (currency guard), no newlines inside, and BOTH the
+ * opening and closing `$` honour backslash-parity escaping (so `$a\$b$` is one
+ * span with tex `a\$b`, not split at the escaped `$`). Offsets are relative to
+ * the passed slice. Returns matches in document order, non-overlapping.
+ */
+function scanInlineMath(src: string): { from: number; to: number; tex: string }[] {
+  const out: { from: number; to: number; tex: string }[] = [];
+  const max = src.length;
+  let start = 0;
+  while (start < max) {
+    if (src.charCodeAt(start) !== 0x24 /* $ */) {
+      start++;
+      continue;
+    }
+    if (isEscapedAt(src, start)) {
+      start++;
+      continue; // `\$` is not an opener
+    }
+    if (start + 1 >= max) break;
+    if (src.charCodeAt(start + 1) === 0x24) {
+      start += 2;
+      continue; // `$$` is inert for inline pairing
+    }
+    if (start > 0 && src.charCodeAt(start - 1) === 0x24 && !isEscapedAt(src, start - 1)) {
+      start++;
+      continue; // second half of a `$$` run never opens
+    }
+    if (isWsCode(src.charCodeAt(start + 1))) {
+      start++;
+      continue; // opener must hug content
+    }
+    let pos = start + 1;
+    let close = -1;
+    while (pos < max) {
+      const ch = src.charCodeAt(pos);
+      if (ch === 0x0a /* \n */) break; // no newlines inside
+      if (ch !== 0x24 || isEscapedAt(src, pos)) {
+        pos++;
+        continue; // not a `$`, or an escaped `\$` — keep scanning
+      }
+      let runEnd = pos + 1;
+      while (runEnd < max && src.charCodeAt(runEnd) === 0x24) runEnd++;
+      if (runEnd - pos > 1) {
+        pos = runEnd;
+        continue; // a `$$` run never closes
+      }
+      const prev = src.charCodeAt(pos - 1);
+      if (isWsCode(prev) || (prev === 0x24 && !isEscapedAt(src, pos - 1))) {
+        pos++;
+        continue; // closer must hug content / not trail a `$$`
+      }
+      const next = runEnd < max ? src.charCodeAt(runEnd) : -1;
+      if (next >= 0x30 && next <= 0x39) {
+        pos++;
+        continue; // closing `$` followed by a digit — currency guard
+      }
+      close = pos;
+      break;
+    }
+    if (close < 0) {
+      start++;
+      continue;
+    }
+    out.push({ from: start, to: close + 1, tex: src.slice(start + 1, close) });
+    start = close + 1;
+  }
+  return out;
 }
 
 /* ================= widgets ================= */
@@ -227,6 +343,64 @@ class NoteEmbedWidget extends WidgetType {
   }
 }
 
+/**
+ * KaTeX math widget for `$inline$` and single-line `$$display$$` (R18).
+ * toDOM returns a synchronous placeholder span showing the raw TeX; KaTeX
+ * loads lazily through the shared core loader and the rendered output is
+ * applied only if the placeholder is still in the document (the view may
+ * have been destroyed / the widget dropped while the import was in flight).
+ * Unsupported macros degrade to the red raw-text fallback — never throws.
+ * eq() compares tex + displayMode so unrelated redecorations do not rebuild
+ * (and re-render) the widget. Display only: never writes the document.
+ */
+class MathWidget extends WidgetType {
+  constructor(
+    readonly tex: string,
+    readonly displayMode: boolean,
+  ) {
+    super();
+  }
+  override eq(other: MathWidget): boolean {
+    return other.tex === this.tex && other.displayMode === this.displayMode;
+  }
+  // LP-5: WidgetType.ignoreEvent defaults to true, which makes CM treat clicks
+  // on the rendered formula as "not belonging to the editor" — the selection
+  // never moves to reveal the source, and drop/paste landing on the widget
+  // (R17 attachmentIngest) get swallowed. Returning false lets the click place
+  // the cursor (revealing the raw TeX) and lets domEventHandlers fire.
+  override ignoreEvent(): boolean {
+    return false;
+  }
+  override toDOM(): HTMLElement {
+    const span = document.createElement("span");
+    span.className = "cm-live-math";
+    span.textContent = this.tex;
+    loadKatex().then(
+      (katex) => {
+        if (!span.isConnected) return; // dropped while katex was loading
+        try {
+          span.textContent = "";
+          katex.render(this.tex, span, {
+            displayMode: this.displayMode,
+            throwOnError: false,
+            output: "html",
+            // SEC-01: bound user-controllable \rule/\kern sizes so a malicious
+            // note can't freeze the renderer with a multi-million-px element
+            // (matches the reading/export path in core/embeds.ts)
+            maxSize: 100,
+          });
+        } catch {
+          // non-parse errors can still throw despite throwOnError:false
+          span.textContent = this.tex;
+          span.classList.add("geode-math-error");
+        }
+      },
+      () => span.classList.add("geode-math-error"), // load failure: keep raw TeX
+    );
+    return span;
+  }
+}
+
 class FrontmatterWidget extends WidgetType {
   constructor(
     readonly count: number,
@@ -299,6 +473,25 @@ const WIKILINK_RE = /\[\[([^\[\]]+?)\]\]/g;
 /** Trailing block id marker, e.g. " ^quote-1" (R13 frozen contract regex). */
 const BLOCK_MARK_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
+/** R18 frozen callout title regex (contract) — matched against the first
+ *  blockquote line's content AFTER the leading "> " quote markers. */
+const CALLOUT_RE = /^\[!([A-Za-z0-9_-]+)\]([+-]?)(?:[ \t]+(.*))?$/;
+
+/** ==highlight== — single line, both delimiters hugging non-whitespace. */
+const HIGHLIGHT_RE = /==(\S(?:[^\n]*?\S)?)==/g;
+
+/** [^id] footnote reference (id charset frozen by the pipeline contract). */
+const FOOTNOTE_RE = /\[\^([^\s[\]]+)\]/g;
+
+// Inline `$...$` math is scanned by scanInlineMath() (mirrors the core/markdown
+// inline rule with backslash-parity escaping on BOTH delimiters — CONTRACT-04).
+
+/** Single-line `$$x$$` display math, anchored to mirror the reading pipeline's
+ *  block rule (LP-1): line-leading `$$` at indent ≤3, closing `$$` followed by
+ *  only trailing whitespace to end-of-line. Per-line scan (not a slice scan) so
+ *  `foo $$x$$ bar` / `$$x$$ tail` / indent-≥4 forms stay literal like reading. */
+const SINGLE_LINE_BLOCK_MATH_RE = /^ {0,3}\$\$([^$\n]+?)\$\$[ \t]*$/;
+
 interface Spec {
   from: number;
   to: number;
@@ -327,6 +520,23 @@ function computeDecorations(
 
   /** line numbers inside FencedCode nodes — block-marker hiding skips them */
   const fencedLines = new Set<number>();
+  /** line numbers inside indented CodeBlock nodes — highlight/footnote/math
+   *  scans skip them too, so `==`/`[^id]`/`$..$` inside indented code stay
+   *  literal like the reading view (LP-1 unified exclusion). */
+  const indentedCodeLines = new Set<number>();
+  /** setext underline lines (`====` / `----`, lezer HeaderMark under
+   *  SetextHeading) — the highlight scan must not chew the `=` run (LP-4). */
+  const setextLines = new Set<number>();
+  /** spans of every `[[...]]` wikilink match (document coords) — the highlight
+   *  scan skips `==` that falls inside one, mirroring the reading pipeline's
+   *  wikilink-preprocessing precedence (LP-4). */
+  const wikilinkSpans: { from: number; to: number }[] = [];
+  /** lines owned by a callout blockquote — quoteline must not stack (R18) */
+  const calloutLines = new Set<number>();
+  /** lines tinted as cross-line %%comment%% blocks (R18) */
+  const commentLines = new Set<number>();
+  /** lines tinted as cross-line $$math$$ blocks (R18) */
+  const mathBlockLines = new Set<number>();
   for (const range of view.visibleRanges) {
     syntaxTree(state).iterate({
       from: range.from,
@@ -342,6 +552,12 @@ function computeDecorations(
         switch (node.name) {
           case "HeaderMark": {
             const parent = node.node.parent;
+            if (parent && parent.name.startsWith("SetextHeading")) {
+              // the underline (`====` / `----`); record so the highlight scan
+              // never splits a `=====` run into ==…== marks (LP-4)
+              setextLines.add(doc.lineAt(node.from).number);
+              break;
+            }
             if (!parent || !parent.name.startsWith("ATXHeading")) break;
             if (lineTouched(state, node.from)) break;
             const trailing = doc.sliceString(node.to, node.to + 1) === " " ? 1 : 0;
@@ -455,7 +671,52 @@ function computeDecorations(
           case "Blockquote": {
             const first = doc.lineAt(node.from).number;
             const last = doc.lineAt(node.to).number;
+            // R18 callout: when the first line's content (after the "> "
+            // markers) matches the frozen title regex, the whole blockquote
+            // gets callout line decorations INSTEAD of quoteline (branch
+            // split — stacking both is a visual conflict, contract口径).
+            const firstLine = doc.line(first);
+            // LP-2: strip exactly ONE `>` level — the one this Blockquote node
+            // owns (its `node.from` sits at this level's `>`). Stripping ALL
+            // levels made an OUTER plain blockquote whose first line opens a
+            // nested callout (`> > [!tip]`) itself match CALLOUT_RE, painting
+            // every outer line (incl. trailing plain paragraphs) as a callout.
+            const nodeOffset = Math.max(0, node.from - firstLine.from);
+            const afterNode = firstLine.text.slice(nodeOffset);
+            const oneQuote = /^[ \t]*>[ \t]?/.exec(afterNode);
+            const contentStart = nodeOffset + (oneQuote ? oneQuote[0].length : 0);
+            const cm = CALLOUT_RE.exec(firstLine.text.slice(contentStart));
+            if (cm) {
+              const type = cm[1].toLowerCase();
+              for (let n = first; n <= last; n++) {
+                const line = doc.line(n);
+                calloutLines.add(n);
+                others.push({
+                  from: line.from,
+                  to: line.from,
+                  deco: Decoration.line({
+                    class:
+                      n === first ? "cm-callout-line cm-callout-line-title" : "cm-callout-line",
+                    attributes: { "data-callout": type },
+                  }),
+                });
+              }
+              // hide the "[!type]±" marker (plus separating whitespace)
+              // unless the selection touches the title line; the ">" mark
+              // stays on the existing QuoteMark hiding path (untouched)
+              if (!lineTouched(state, firstLine.from)) {
+                const markFrom = firstLine.from + contentStart;
+                let markTo = markFrom + 2 + cm[1].length + 1 + cm[2].length;
+                while (markTo < firstLine.to && /[ \t]/.test(doc.sliceString(markTo, markTo + 1))) {
+                  markTo++;
+                }
+                hide(markFrom, markTo);
+              }
+              break;
+            }
             for (let n = first; n <= last; n++) {
+              // a plain quote nested inside a callout keeps the callout look
+              if (calloutLines.has(n)) continue;
               const line = doc.line(n);
               others.push({ from: line.from, to: line.from, deco: lineDeco("cm-live-quoteline") });
             }
@@ -492,10 +753,93 @@ function computeDecorations(
             }
             break;
           }
+
+          case "CodeBlock": {
+            // indented (4-space) code block — literal text in the reading view;
+            // record its lines so the regex scans below skip them (LP-1).
+            const first = doc.lineAt(node.from).number;
+            const last = doc.lineAt(node.to).number;
+            for (let n = first; n <= last; n++) indentedCodeLines.add(n);
+            break;
+          }
         }
         return undefined;
       },
     });
+
+    /* ---- %%comments%% (R18 — line state machine over the visible range) ---- */
+    // Scope is the visible range: an opener ABOVE the viewport is not seen,
+    // so cross-line tinting starts at the first visible delimiter line
+    // (accepted approximation, recorded as-built). Fence lines keep %%
+    // literal and never toggle the state; same-line pairs hide inline.
+    const rangeFirstLine = doc.lineAt(range.from).number;
+    const rangeLastLine = doc.lineAt(range.to).number;
+    let inComment = false;
+    for (let n = rangeFirstLine; n <= rangeLastLine; n++) {
+      if (fencedLines.has(n)) continue;
+      const line = doc.line(n);
+      if (line.from < fmEnd) continue;
+      let tinted = false;
+      const tint = () => {
+        if (tinted) return;
+        tinted = true;
+        commentLines.add(n);
+        others.push({ from: line.from, to: line.from, deco: lineDeco("cm-live-comment-line") });
+      };
+      if (inComment) tint();
+      // LP-3: only `%%` in the non-code (backtick-even) segments toggle/strip —
+      // a single `%%` inside an inline-code span (`` `a %% b` ``) must not open
+      // a phantom comment block (it would tint + suppress every line below and
+      // invert %% parity vs the reading pipeline).
+      const delims = commentDelimOffsets(line.text);
+      let di = 0;
+      while (di < delims.length) {
+        const i = delims[di];
+        if (inComment) {
+          // closing delimiter — the rest of the line renders normally
+          inComment = false;
+          di++;
+          continue;
+        }
+        if (di + 1 < delims.length) {
+          // same-line pair: hide the whole span unless the selection touches
+          const j = delims[di + 1];
+          const from = line.from + i;
+          const to = line.from + j + 2;
+          if (!selectionTouches(state, from, to)) hide(from, to);
+          di += 2;
+        } else {
+          // unpaired opener: a cross-line comment block starts on this line
+          inComment = true;
+          tint();
+          di++;
+        }
+      }
+    }
+
+    /* ---- cross-line $$math$$ blocks (R18 — line tinting, no widget) ---- */
+    // ViewPlugins may not build cross-line replaces; blocks get monospace
+    // faint line decorations instead (recorded live-vs-reading deviation).
+    let inMathBlock = false;
+    for (let n = rangeFirstLine; n <= rangeLastLine; n++) {
+      if (fencedLines.has(n) || commentLines.has(n)) continue;
+      const line = doc.line(n);
+      if (line.from < fmEnd) continue;
+      if (inMathBlock) {
+        mathBlockLines.add(n);
+        others.push({ from: line.from, to: line.from, deco: lineDeco("cm-live-math-line") });
+        if (line.text.includes("$$")) inMathBlock = false;
+        continue;
+      }
+      // opener: line-leading $$ (≤3 indent, pipeline contract) and no closer
+      // on the same line (the single-line $$x$$ form is widget-replaced below)
+      const opener = /^ {0,3}\$\$/.exec(line.text);
+      if (opener && line.text.indexOf("$$", opener[0].length) < 0) {
+        inMathBlock = true;
+        mathBlockLines.add(n);
+        others.push({ from: line.from, to: line.from, deco: lineDeco("cm-live-math-line") });
+      }
+    }
 
     /* ---- wikilinks [[target|alias]] + ![[embeds]] (regex — not a lezer node) ---- */
     const text = doc.sliceString(range.from, range.to);
@@ -512,8 +856,12 @@ function computeDecorations(
       // line decides. Inline code stays asymmetric (recorded — Obsidian does
       // not decorate there either; future work).
       if (fencedLines.has(doc.lineAt(start).number)) continue;
-      const target = wikilinkTarget(m[1]);
+      // LP-4: record the span so the highlight scan never treats `==` inside a
+      // wikilink (e.g. collapsed `[[a==b==c]]`) as a highlight delimiter —
+      // mirrors the reading pipeline's wikilink-preprocessing precedence.
       const isEmbed = doc.sliceString(Math.max(0, start - 1), start) === "!";
+      wikilinkSpans.push({ from: isEmbed ? start - 1 : start, to: end });
+      const target = wikilinkTarget(m[1]);
       if (!target) {
         // R16: [[#h]] self-link — falls through to the collapse branch below
         // with data-link-target="" (the click handler routes empty targets
@@ -578,6 +926,106 @@ function computeDecorations(
           deco: Decoration.mark({ class: "cm-live-wikilink", attributes }),
         });
       }
+    }
+
+    /* ---- ==highlights== (R18 — single-line regex scan) ---- */
+    // The content mark stays even while the selection touches the span
+    // (Obsidian keeps the highlight while editing); only the == delimiters
+    // un-hide. Fence / frontmatter / comment-block / math-block / indented-code
+    // lines are excluded; inline code stays asymmetric like the wikilink scan.
+    // LP-4: setext underline lines (`=====`) and `==` falling inside a wikilink
+    // span are skipped so we don't shred a heading underline or a collapsed
+    // `[[a==b==c]]` display text.
+    HIGHLIGHT_RE.lastIndex = 0;
+    while ((m = HIGHLIGHT_RE.exec(text)) !== null) {
+      const start = range.from + m.index;
+      const end = start + m[0].length;
+      if (start < fmEnd) continue;
+      const lineNo = doc.lineAt(start).number;
+      if (
+        fencedLines.has(lineNo) ||
+        indentedCodeLines.has(lineNo) ||
+        commentLines.has(lineNo) ||
+        mathBlockLines.has(lineNo) ||
+        setextLines.has(lineNo)
+      ) {
+        continue;
+      }
+      if (wikilinkSpans.some((s) => start < s.to && end > s.from)) continue;
+      if (!selectionTouches(state, start, end)) {
+        hide(start, start + 2);
+        hide(end - 2, end);
+      }
+      others.push({
+        from: start + 2,
+        to: end - 2,
+        deco: Decoration.mark({ class: "cm-live-highlight" }),
+      });
+    }
+
+    /* ---- footnote references [^id] (R18 — superscript mark, no hiding) ---- */
+    // Definition lines ("[^id]:" at line start) and inline footnotes ^[text]
+    // get ZERO live treatment (official live-preview behaviour).
+    FOOTNOTE_RE.lastIndex = 0;
+    while ((m = FOOTNOTE_RE.exec(text)) !== null) {
+      const start = range.from + m.index;
+      const end = start + m[0].length;
+      if (start < fmEnd) continue;
+      const line = doc.lineAt(start);
+      if (fencedLines.has(line.number) || indentedCodeLines.has(line.number)) continue;
+      if (commentLines.has(line.number) || mathBlockLines.has(line.number)) continue;
+      if (start === line.from && doc.sliceString(end, end + 1) === ":") continue; // definition
+      others.push({
+        from: start,
+        to: end,
+        deco: Decoration.mark({ class: "cm-live-footnote-ref" }),
+      });
+    }
+
+    /* ---- math widgets: single-line $$x$$ (per-line) then inline $x$ ---- */
+    const mathExcluded = (lineNo: number) =>
+      fencedLines.has(lineNo) ||
+      indentedCodeLines.has(lineNo) ||
+      commentLines.has(lineNo) ||
+      mathBlockLines.has(lineNo);
+
+    // LP-1: single-line `$$x$$` is matched PER LINE against an anchored regex
+    // (line-leading `$$` ≤3 indent, closer followed by only trailing space) so
+    // `foo $$x$$ bar` / `$$x$$ tail` / indent-≥4 forms stay literal exactly as
+    // the reading pipeline's block rule decides — no more slice-wide scanning.
+    for (let n = rangeFirstLine; n <= rangeLastLine; n++) {
+      if (mathExcluded(n)) continue;
+      const line = doc.line(n);
+      if (line.from < fmEnd) continue;
+      const bm = SINGLE_LINE_BLOCK_MATH_RE.exec(line.text);
+      if (!bm) continue;
+      const openIdx = line.text.indexOf("$$");
+      const closeIdx = line.text.lastIndexOf("$$");
+      const start = line.from + openIdx;
+      const end = line.from + closeIdx + 2;
+      if (selectionTouches(state, start, end)) continue; // revealed for editing
+      replaces.push({
+        from: start,
+        to: end,
+        deco: Decoration.replace({ widget: new MathWidget(bm[1], true) }),
+      });
+    }
+
+    // inline `$x$` via the escape-aware scanner (CONTRACT-04). It runs after
+    // the block pass so a `$$x$$` line is already claimed; the scanner treats
+    // `$$` runs as inert anyway, and the merge pass drops any nested replace.
+    for (const im of scanInlineMath(text)) {
+      const start = range.from + im.from;
+      const end = range.from + im.to;
+      if (start < fmEnd) continue;
+      const lineNo = doc.lineAt(start).number;
+      if (mathExcluded(lineNo)) continue;
+      if (selectionTouches(state, start, end)) continue; // revealed for editing
+      replaces.push({
+        from: start,
+        to: end,
+        deco: Decoration.replace({ widget: new MathWidget(im.tex, false) }),
+      });
     }
 
     /* ---- trailing block id markers " ^id" (R13) ---- */

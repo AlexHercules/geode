@@ -25,6 +25,22 @@ html[data-theme="dark"] {
   --selection: rgba(139, 124, 246, 0.3);
   --danger: #e06c75;
   --editor-font-size: 16px;
+  /* R18: ==highlight== background (dark) */
+  --text-highlight-bg: rgba(255, 208, 0, 0.22);
+  /* R18: callout palette — frozen rgb triplets, same values in both themes */
+  --callout-note: 68, 138, 255;
+  --callout-abstract: 0, 191, 188;
+  --callout-info: 0, 184, 212;
+  --callout-todo: 0, 184, 212;
+  --callout-tip: 0, 191, 188;
+  --callout-success: 68, 207, 110;
+  --callout-question: 236, 151, 49;
+  --callout-warning: 236, 151, 49;
+  --callout-failure: 233, 49, 71;
+  --callout-danger: 233, 49, 71;
+  --callout-bug: 233, 49, 71;
+  --callout-example: 168, 130, 255;
+  --callout-quote: 158, 158, 158;
   color-scheme: dark;
 }
 
@@ -50,6 +66,8 @@ html[data-theme="light"] {
   --code-bg: rgba(0, 0, 0, 0.05);
   --selection: rgba(108, 92, 231, 0.25);
   --danger: #d04848;
+  /* R18: ==highlight== background (light); callout triplets inherit :root */
+  --text-highlight-bg: rgba(255, 208, 0, 0.35);
   color-scheme: light;
 }
 

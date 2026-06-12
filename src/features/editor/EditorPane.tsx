@@ -436,6 +436,33 @@ export function EditorPane({ tab }: { tab: TabState }) {
       const el = e.target instanceof HTMLElement ? e.target : null;
       if (!el || !handle) return;
 
+      // R18: footnote ref/backref hop — scroll the counterpart into view
+      // inside the preview container. Checked FIRST (it is an anchor, so the
+      // generic a[href] branch below must never see it). preventDefault stops
+      // the webview from hijacking the #fragment navigation.
+      const fnLink = el.closest<HTMLAnchorElement>("a.footnote-link, a.footnote-backref");
+      if (fnLink) {
+        e.preventDefault();
+        const href = fnLink.getAttribute("href") ?? "";
+        const id = href.startsWith("#") ? href.slice(1) : "";
+        const target = id
+          ? previewContentRef.current?.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+          : null;
+        target?.scrollIntoView({ block: "center" });
+        return;
+      }
+
+      // R18: collapsible callout title toggles .is-collapsed (pure class
+      // flip — a re-render returns to the authored initial state, recorded
+      // 口径). Links inside the title fall through to the link delegations
+      // below instead of toggling (no mis-swallowing).
+      const calloutTitle = el.closest<HTMLElement>(".callout.is-collapsible > .callout-title");
+      if (calloutTitle && !el.closest("a")) {
+        e.preventDefault();
+        calloutTitle.closest(".callout")?.classList.toggle("is-collapsed");
+        return;
+      }
+
       const checkbox = el.closest<HTMLInputElement>("input.task-checkbox");
       if (checkbox) {
         e.preventDefault();

@@ -79,6 +79,10 @@ async function inlineEmbeds(app: GeodeApp, notePath: string, bodyHtml: string): 
       return `data:${mime};base64,${bytesToBase64(bytes)}`;
     },
     ancestors: new Set([notePath]),
+    // R18: exported/printed documents are self-contained — MathML output needs
+    // no KaTeX CSS or fonts. Both the HTML export and the print (PDF) path
+    // render through this single inlineEmbeds call site (via renderActiveNote).
+    mathOutput: "mathml",
   });
   return container.innerHTML;
 }

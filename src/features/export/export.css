@@ -287,6 +287,296 @@
   transform: rotate(-45deg) translate(5%, -10%);
 }
 
+/* --- R18: callout palette (frozen rgb triplets, ARCHITECTURE.md R18) +
+       highlight + error — local variables, self-contained (no app.css) --- */
+
+.geode-export {
+  --export-callout-note: 68,138,255;
+  --export-callout-abstract: 0,191,188;
+  --export-callout-info: 0,184,212;
+  --export-callout-todo: 0,184,212;
+  --export-callout-tip: 0,191,188;
+  --export-callout-success: 68,207,110;
+  --export-callout-question: 236,151,49;
+  --export-callout-warning: 236,151,49;
+  --export-callout-failure: 233,49,71;
+  --export-callout-danger: 233,49,71;
+  --export-callout-bug: 233,49,71;
+  --export-callout-example: 168,130,255;
+  --export-callout-quote: 158,158,158;
+  /* hardcoded copy of the light --text-highlight-bg value (frozen) */
+  --export-highlight: rgba(255,208,0,0.35);
+  /* light-level error red (mirrors the app's --text-error light value) */
+  --export-error: #d33;
+}
+
+/* --- R18: callouts — container; the base rule IS the note color, so any
+       unknown data-callout type falls back to note automatically --- */
+
+.geode-export .callout {
+  --export-callout-color: var(--export-callout-note);
+  margin: 0.8em 0;
+  padding: 0.75em 1em;
+  border-left: 3px solid rgb(var(--export-callout-color));
+  border-radius: 6px;
+  background: rgba(var(--export-callout-color), 0.08);
+}
+
+/* type + alias → color mapping (alias table frozen in the R18 contract) */
+
+.geode-export .callout[data-callout="abstract"],
+.geode-export .callout[data-callout="summary"],
+.geode-export .callout[data-callout="tldr"] {
+  --export-callout-color: var(--export-callout-abstract);
+}
+
+.geode-export .callout[data-callout="info"] {
+  --export-callout-color: var(--export-callout-info);
+}
+
+.geode-export .callout[data-callout="todo"] {
+  --export-callout-color: var(--export-callout-todo);
+}
+
+.geode-export .callout[data-callout="tip"],
+.geode-export .callout[data-callout="hint"],
+.geode-export .callout[data-callout="important"] {
+  --export-callout-color: var(--export-callout-tip);
+}
+
+.geode-export .callout[data-callout="success"],
+.geode-export .callout[data-callout="check"],
+.geode-export .callout[data-callout="done"] {
+  --export-callout-color: var(--export-callout-success);
+}
+
+.geode-export .callout[data-callout="question"],
+.geode-export .callout[data-callout="help"],
+.geode-export .callout[data-callout="faq"] {
+  --export-callout-color: var(--export-callout-question);
+}
+
+.geode-export .callout[data-callout="warning"],
+.geode-export .callout[data-callout="caution"],
+.geode-export .callout[data-callout="attention"] {
+  --export-callout-color: var(--export-callout-warning);
+}
+
+.geode-export .callout[data-callout="failure"],
+.geode-export .callout[data-callout="fail"],
+.geode-export .callout[data-callout="missing"] {
+  --export-callout-color: var(--export-callout-failure);
+}
+
+.geode-export .callout[data-callout="danger"],
+.geode-export .callout[data-callout="error"] {
+  --export-callout-color: var(--export-callout-danger);
+}
+
+.geode-export .callout[data-callout="bug"] {
+  --export-callout-color: var(--export-callout-bug);
+}
+
+.geode-export .callout[data-callout="example"] {
+  --export-callout-color: var(--export-callout-example);
+}
+
+.geode-export .callout[data-callout="quote"],
+.geode-export .callout[data-callout="cite"] {
+  --export-callout-color: var(--export-callout-quote);
+}
+
+/* title row: icon + inline-rendered title text, tinted by the callout color */
+
+.geode-export .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-weight: 700;
+  color: rgb(var(--export-callout-color));
+}
+
+.geode-export .callout-title-inner {
+  min-width: 0;
+}
+
+/* icon container — tinted box shaped by a mask. Until the per-type lucide
+   mask block is synced in below, the fallback mask is a plain circle, so a
+   missing icon set degrades to a colored dot (contract fallback). */
+.geode-export .callout-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  background-color: rgb(var(--export-callout-color));
+  -webkit-mask: radial-gradient(circle, #000 38%, transparent 40%) center / 100% 100% no-repeat;
+  mask: radial-gradient(circle, #000 38%, transparent 40%) center / 100% 100% no-repeat;
+}
+
+/* R18-CALLOUT-ICONS-BEGIN */
+/* synced by chief from features/editor/editor.css — data URIs byte-identical;
+   selectors adapted to the .geode-export scope (the print path injects this
+   sheet into the live app document, so nothing may leak unscoped) */
+.geode-export .callout {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="abstract"],
+.geode-export .callout[data-callout="summary"],
+.geode-export .callout[data-callout="tldr"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2'/%3E%3Cpath d='M12 11h4'/%3E%3Cpath d='M12 16h4'/%3E%3Cpath d='M8 11h.01'/%3E%3Cpath d='M8 16h.01'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="info"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 16v-4'/%3E%3Cpath d='M12 8h.01'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="todo"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="tip"],
+.geode-export .callout[data-callout="hint"],
+.geode-export .callout[data-callout="important"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="success"],
+.geode-export .callout[data-callout="check"],
+.geode-export .callout[data-callout="done"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="question"],
+.geode-export .callout[data-callout="help"],
+.geode-export .callout[data-callout="faq"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="warning"],
+.geode-export .callout[data-callout="caution"],
+.geode-export .callout[data-callout="attention"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="failure"],
+.geode-export .callout[data-callout="fail"],
+.geode-export .callout[data-callout="missing"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="danger"],
+.geode-export .callout[data-callout="error"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="bug"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m8 2 1.88 1.88'/%3E%3Cpath d='M14.12 3.88 16 2'/%3E%3Cpath d='M9 7.13v-1a3 3 0 1 1 6 0v1'/%3E%3Cpath d='M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6'/%3E%3Cpath d='M12 20v-9'/%3E%3Cpath d='M6.53 9C4.6 8.8 3 7.1 3 5'/%3E%3Cpath d='M6 13H2'/%3E%3Cpath d='M3 21c0-2.1 1.7-3.9 3.8-4'/%3E%3Cpath d='M20.97 5c0 2.1-1.6 3.8-3.5 4'/%3E%3Cpath d='M22 13h-4'/%3E%3Cpath d='M17.2 17c2.1.1 3.8 1.9 3.8 4'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="example"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 6h13'/%3E%3Cpath d='M8 12h13'/%3E%3Cpath d='M8 18h13'/%3E%3Cpath d='M3 6h.01'/%3E%3Cpath d='M3 12h.01'/%3E%3Cpath d='M3 18h.01'/%3E%3C/svg%3E");
+}
+
+.geode-export .callout[data-callout="quote"],
+.geode-export .callout[data-callout="cite"] {
+  --export-callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'/%3E%3Cpath d='M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z'/%3E%3C/svg%3E");
+}
+
+/* the per-type mask replaces the colored-dot fallback (same specificity,
+   later in source order wins) */
+.geode-export .callout-icon {
+  -webkit-mask: var(--export-callout-icon) no-repeat center / contain;
+  mask: var(--export-callout-icon) no-repeat center / contain;
+}
+/* R18-CALLOUT-ICONS-END */
+
+/* body: everything after the title line; collapsed callouts export their
+   initial state statically — no script in the exported document */
+
+.geode-export .callout-content {
+  margin-top: 0.4em;
+}
+
+.geode-export .callout-content > :first-child {
+  margin-top: 0;
+}
+
+.geode-export .callout-content > :last-child {
+  margin-bottom: 0;
+}
+
+.geode-export .callout.is-collapsed > .callout-content {
+  display: none;
+}
+
+/* static chevron on collapsible callouts: down = expanded, right = collapsed */
+
+.geode-export .callout.is-collapsible > .callout-title::after {
+  content: "";
+  width: 0.45em;
+  height: 0.45em;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+.geode-export .callout.is-collapsible.is-collapsed > .callout-title::after {
+  transform: rotate(-45deg);
+}
+
+/* --- R18: ==highlight== --- */
+
+.geode-export mark {
+  background: var(--export-highlight);
+  color: inherit;
+}
+
+/* --- R18: footnotes --- */
+
+.geode-export section.footnotes {
+  margin-top: 1.6em;
+  color: var(--export-text-muted);
+  font-size: 0.85em;
+}
+
+.geode-export .footnotes-list {
+  margin: 0.4em 0;
+}
+
+.geode-export sup.footnote-ref {
+  font-size: 0.75em;
+  line-height: 0;
+}
+
+.geode-export a.footnote-link {
+  text-decoration: none;
+}
+
+.geode-export a.footnote-backref {
+  text-decoration: none;
+  border-bottom: none;
+}
+
+/* --- R18: math — exported documents carry MathML (no KaTeX CSS/fonts) --- */
+
+.geode-export .geode-math-block {
+  display: block;
+  text-align: center;
+  margin: 1em 0;
+}
+
+/* the MathML root inherits the surrounding text color */
+.geode-export math {
+  color: inherit;
+}
+
+/* a TeX string KaTeX could not render: original source kept, shown in red */
+.geode-export .geode-math-error {
+  color: var(--export-error);
+}
+
 /* --- print --- */
 
 @media print {
