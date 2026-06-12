@@ -59,6 +59,9 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
   ——**别在仓库根 npm i**，会污染主 package.json）；dev server 必须经
   `tmux new-session -d -s geodedev "npm run dev"` 起（hook 强制）；
   curl 探活加 `--noproxy '*'`（本机代理环境变量会劫持 localhost）。
+- **cargo 不在非交互 shell 的默认 PATH**：跑 `cargo check`/`npm run tauri build`
+  前缀 `PATH="$HOME/.cargo/bin:$PATH"`——漏掉时 tauri build 报 "failed to run
+  cargo metadata" 但管道下游可能呈现 exit 0 假象（R21 踩坑）。
 - 桌面验证：`npm run tauri build` 产出裸二进制 `src-tauri/target/release/geode`
   （bundle targets 是 Windows NSIS 配置，macOS 下无 .app/.dmg——验证用裸二进制
   `./geode <vault绝对路径>` 直开即可）。**WKWebView 无 CDP**——桌面 E2E 改用

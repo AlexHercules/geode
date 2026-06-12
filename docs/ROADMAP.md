@@ -439,6 +439,32 @@ release 二进制 + **probe 插件自检方案**——WKWebView 无 CDP，`.geod
 已知限制：appearance.json 写非原子（R21+ 候选）；部分桥变量暂无 Geode 消费侧
 （默认值面口径）；macOS 桌面截图因 TCC 权限未产出。
 
+### R21 — v0.21（2026-06-12）搜索运算符（R19+ 候选池 #3）
+
+官方校准（obsidian.md/help/plugins/search，2026-06-12 WebFetch）：运算符表 +
+引号短语/OR/`-`排除/括号/`/regex/`（JS 风味）+ 默认大小写不敏感。R21 范围 =
+`file:` `path:` `content:` `tag:` `line:` `match-case:` `ignore-case:` + 全部布尔
+组合语法；**显式延期**（候选池备注）：`block:`/`section:`/`task:`*/属性搜索
+`[key:value]`/比较运算。
+**core/search.ts（新，纯 TS 零依赖）**：手写 tokenizer + 递归下降 parser →
+`SearchExpr` AST + `evaluateSearch` 求值器；冻结语义 8 条入契约（优先级
+`-` > 隐式 AND > `OR`、字段重绑、嵌套标签 `/` 边界、空操作数降级字面词、
+ranges 只收正向参与命中的 content 锚定区间、零长正则按 code point 步进）。
+**SearchPanel**：全文模式接解析器/求值器，行命中由 ranges + 行偏移映射推导、
+`<mark>` 按区间渲染；标签浏览模式收窄 `/^#\S*$/` 整查询；parse error 行
+（`search-error` testid）+ hint 提运算符；i18n 新 5 键 en/zh。compat 零改动。
+评审 4 维 **13 finding → 对抗验证 10 确认（1 critical + 1 major + 8 minor，去重
+5 根因）/ 3 证伪**，全修复或入档：critical = `u` flag 零长正则 + emoji surrogate
+死循环挂死主线程（V8 lastIndex 回退，验证者看门狗实测）→ code point 步进；
+major = U+0130 İ `toLowerCase` 变长致区间漂移 → `LoweredText` 偏移双映射（同长
+路径零开销）；minor = `path:#foo` 标签糖劫持（条款修订字面绑定）、行尾 `\n` 区间
+归错行被吞、`line:` 内 default 词跳 basename 例外回填契约。已知限制入档：
+灾难性回溯正则无护栏（与 Obsidian 同级暴露面，worker 化远期）。
+验证：解析器矩阵 51 用例（`.calibration/r21-parser-tests.mjs`）+ 浏览器 E2E
+29 断言（`r21-e2e.mjs`）全绿；10k bench searchScanMs 21-69ms（运算符组合查询，
+不劣于纯词扫描口径）；桌面 macOS release 二进制 + r21 搜索 probe 插件
+（compat-vault 自建夹具驱动真实面板 DOM）+ r20 套件 probe 回归。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -464,7 +490,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~主题 CSS 类名兼容层~~ | **R20 已完成（v0.20，见上）**——变量桥+类名对齐+theme/snippets 加载；后续逐步对齐更多类名/变量消费侧 |
 | Properties 可视化编辑 | frontmatter 结构化面板 |
 | 模板系统 | 新建套模板 + 日期变量 |
-| 搜索运算符（path:/tag:/file:/正则）| 搜索专项一并做 |
+| ~~搜索运算符（path:/tag:/file:/正则）~~ | **R21 已完成（v0.21，见上）**——余项：block:/section:/task:*/属性搜索 `[key:value]`/比较运算（按需求驱动） |
 | 未链接提及 | 反链面板扩展 |
 | 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |
 | 图谱 WebGL/Worker、倒排索引 | 性能远期 |

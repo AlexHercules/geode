@@ -151,6 +151,18 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R21 套件回归（2026-06-12，macOS release 二进制 v0.21.0 实测 `geode compat-vault`）
+
+R21 为原生功能轮（搜索运算符），**compat 表面零代码改动**（contract 明令；
+git diff 确认 compat/** 无改动）。搜索面板/core/search.ts 均不在任何 compat
+调用面上（插件无搜索 API 缺口表条目，官方 Search 插件 API 本就不在公开 d.ts）。
+macOS probe 方案复测：r20-suite-probe 9/9 不回退（5/5 加载启用 + calendar 挂载 +
+bridge 共存）；新增 r21-search-probe 14/14（自建 R21 Fixtures 夹具驱动真实
+SearchPanel DOM：tag:嵌套边界/path:+词/file:/引号短语/负向/OR/正则+tag 组合/
+match-case 双向/line: 同行约束/parse error 面板呈现——原生 value setter +
+input 事件驱动 React 受控输入的先例）。probe 结果文件重跑前须删除（create
+撞已存在文件）。缺口表无变化。
+
 ### R20 套件回归（2026-06-12，macOS release 二进制实测 `geode compat-vault`——环境迁移后首轮）
 
 R20 = **主题 CSS 兼容层落地**（R3 末规划的「CSS 类名兼容做成独立可选层」正式成层，

@@ -71,6 +71,137 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 21 additions — 搜索运算符（path:/tag:/file:/正则 + 布尔组合）
+
+> 官方校准（obsidian.md/help/plugins/search，2026-06-12 WebFetch）。R21 范围 =
+> `file:` `path:` `content:` `tag:` `line:` `match-case:` `ignore-case:` + 引号短语 +
+> `OR` + `-` 排除 + `()` 分组 + `/regex/`。**显式延期**（R22+ 候选）：`block:` /
+> `section:` / `task:`/`task-todo:`/`task-done:` / 属性搜索 `[key:value]` / 比较运算。
+> compat 表面零改动（原生功能轮）。
+
+### 新模块 `core/search.ts`（纯 TS，仅可 import core/types）
+
+```ts
+export type CaseMode = "default" | "sensitive" | "insensitive";
+
+export type SearchMatcher =
+  | { kind: "text"; text: string; caseMode: CaseMode }   // substring 匹配
+  | { kind: "regex"; source: string; flags: string };    // JS 正则，parse 期校验
+
+export type SearchField = "content" | "file" | "path" | "tag";
+
+export type SearchExpr =
+  | { type: "and"; children: SearchExpr[] }              // children.length >= 1
+  | { type: "or"; children: SearchExpr[] }
+  | { type: "not"; child: SearchExpr }
+  | { type: "term"; field: SearchField | "default"; matcher: SearchMatcher }
+  | { type: "line"; child: SearchExpr };                 // 子式逐行求值
+
+export type SearchParseErrorCode =
+  | "bad-regex" | "unclosed-quote" | "unclosed-paren" | "empty-query-group";
+
+export interface ParsedSearch {
+  expr: SearchExpr | null;                       // null = 空白查询或有 error
+  error: { code: SearchParseErrorCode; detail?: string } | null;
+}
+export function parseSearchQuery(raw: string): ParsedSearch;
+
+export interface SearchInput {
+  path: string;                 // vault 相对路径（正斜杠）
+  fileName: string;             // 末段含扩展名（file: 的匹配面）
+  basename: string;             // 不含扩展名（default 字段的文件名侧）
+  content: string;
+  tags: readonly string[];      // metadata 索引标签，无 '#'，嵌套形如 "a/b"
+}
+export interface SearchMatchRange { from: number; to: number }
+export interface SearchOutcome {
+  matched: boolean;
+  /** content 锚定的正向命中区间（排序+合并去重叠）；负向/未命中分支不贡献 */
+  ranges: SearchMatchRange[];
+  /** basename 上的命中区间（default/file 字段）——面板高亮文件名用 */
+  nameRanges: SearchMatchRange[];
+}
+export function evaluateSearch(expr: SearchExpr, input: SearchInput): SearchOutcome;
+```
+
+### 冻结语法语义（实现与评审以此为准）
+
+1. **分词**：空白分隔；`"..."` 引号短语（`\"` 转义，未闭合 → `unclosed-quote`）；
+   `/.../flags` 正则 token（flags ⊆ `imsu`，`new RegExp` 校验失败 → `bad-regex`；
+   正则体内 `\/` 转义）；`(`/`)` 分组（未闭合 → `unclosed-paren`；空组 →
+   `empty-query-group`）；token 恰为大写 `OR` = 或运算符；`-` 紧贴下一元素 = 取反。
+2. **运算符**（仅小写识别）：`file:` `path:` `content:` `tag:` `line:`
+   `match-case:` `ignore-case:`。操作数 = 冒号后紧贴的单 token（裸词/引号短语/正则）
+   或括号组。括号组语义：`path:(a OR b)` 把组内 **default 字段的裸词**重绑定到该
+   字段；组内显式运算符保持自身字段。`line:(...)` 子式对每一行独立求值，任一行
+   整体命中即命中（`-line:(...)` = 取反）。`match-case:`/`ignore-case:` 递归重绑
+   操作数的 caseMode（正则：match-case 剥 `i`、ignore-case 加 `i`）。
+   **字段运算符的单 token 裸词操作数按字面文本绑定该字段，`#` 不触发标签糖**
+   （`content:#todo` 搜正文字面 `#todo`，不退化为 tag 词；R21 评审修订）；
+   `tag:` 操作数照常剥前导 `#`。
+3. **默认口径**：裸词 field="default" = **content ∪ basename**（任一命中即命中，
+   basename 命中参与排序加权——Geode R1 以来既有 UX，保留；与官方 content-only
+   倾向的差异记显式偏差）。**例外：`line:` 作用域内 default 词只看行内 content**
+   ——否则文件名命中会让同行约束对裸词退化（R21 评审上报后冻结）。文本默认
+   大小写不敏感（官方同口径）；正则按书写形态（无隐式 `i`）。
+4. **`#token` 裸标签词** = `tag:#token`（官方同形）。`tag:` 操作数剥前导 `#`；
+   文本匹配 = 标签全等 **或** 前缀 + `/` 边界（嵌套子标签命中，`tag:work` 命中
+   `work/phone`，不命中 `workshop`，大小写不敏感）；正则操作数对每个标签 test。
+5. **优先级**：`-` > 隐式 AND > `OR`；括号覆盖。`a b OR c d` = `(a AND b) OR
+   (c AND d)`（Lucene 同构，冻结口径）。
+6. **空操作数**（`path:` 后随空白/EOF）→ 整个 token 降级为字面文本词（不报错）。
+7. **求值/区间**：matched 按布尔树；ranges 只收命中文件中**实际参与命中**的正向
+   content 锚定匹配（default 的 content 侧、`content:`、`line:` 子式行内命中、
+   content 正则）；`not` 子树与未命中的 `or` 分支零贡献；file/path/tag 命中不进
+   ranges（nameRanges 单独收 basename 区间）。正则求值统一补 `g` 收区间；零长
+   匹配前进一位防死循环。
+8. **性能**：parse 每次查询一次；逐文件求值 O(content)（不敏感文本匹配按
+   每文件一次 lowercase 缓存）；`line:` 行拆分逐文件惰性一次。bench=10000
+   `searchScanMs` 口径不回退。
+
+### SearchPanel 接入契约（features/search 所有权）
+
+- 全文模式改走 `parseSearchQuery` + `evaluateSearch`（扫描循环/防抖/
+  MAX_FILE_RESULTS=200/MAX_LINES_PER_FILE=5/排序 nameMatch→total→basename 全保留；
+  nameMatch := nameRanges.length>0；total := ranges.length + nameMatch?1:0）。
+- 行命中由 ranges 推导（行偏移映射），`<mark>` 高亮按区间渲染（替换现 query 子串
+  highlight；contextSlice 窗口锚定行内首个区间）。
+- **标签浏览模式收窄**：仅 `/^#\S*$/` 整查询走现有 tag 浏览器（列表+计数+展开）；
+  含空白/其他 token 的查询进解析器（`#tag` 成 tag 词）。
+- parse error → 提示行（`search.errorBadRegex` / `search.errorUnclosedQuote` /
+  `search.errorUnclosedParen` / `search.errorEmptyGroup`）；空 expr 显示既有 hint。
+- hint 文案更新提及运算符（`search.hintOperators`）。新 i18n 键全在
+  dict.panels.ts（en+zh 成对）。data-testid 不变（search-panel/input/clear/result），
+  新增 `search-error`。
+
+### As-built deltas（评审修复后回填）
+
+评审 4 维 13 finding → 对抗验证 **10 确认（1 critical + 1 major + 8 minor，去重 5
+根因）/ 3 证伪**，全部修复或入档：
+
+- **critical（已修）**：`regexScan` 零长匹配步进 `m.index+1` 在 `u` flag 正则 +
+  surrogate pair（emoji/astral CJK）处死循环——`u` 模式下 mid-pair 的 lastIndex
+  被 V8 回退到 pair 起点，同位置零长匹配永复（验证者看门狗实测挂死）。修复 =
+  零长步进时遇 high surrogate 前进 2（按 code point 步进）。
+- **major（已修）**：大小写不敏感文本匹配在 `toLowerCase` 变长码点（U+0130 İ →
+  "i̇"）后区间整体右移、可产生超出 content 的非法区间（4 finding 同根因）。修复 =
+  `LoweredText`（lowered 串 + 长度变化时惰性建 lowered→原始偏移 Int32Array 双映射，
+  常见同长路径零开销），content/basename/fileName/path 文本匹配统一走该结构。
+- **minor（已修）**：字段运算符单 token 裸词操作数被 `#` 标签糖劫持
+  （`path:#foo` ≡ `tag:foo`、`content:#todo` 永不命中字面正文）→ 语义条款 2 修订
+  （字面绑定），实现同步。
+- **minor（已修）**：`deriveLineHits` 对恰始于行尾 `\n` 的区间归给前一行并吞掉
+  （真实命中行不列出）→ 行归属改严格 `<` + 跨行起点 clamp。
+- **minor（契约回填）**：`line:` 作用域内 default 词跳过 basename——实现取舍
+  合理但原契约未写明，条款 3 增补例外（agent 上报，未自行修订契约——程序正确）。
+- **已知限制（不修，入档）**：灾难性回溯正则（如 `/(a+)+b/`）无执行预算护栏，
+  可冻结主线程且殃及防抖保存窗口（`-/re/` 取反形态同样触发）——JS 主线程无廉价
+  缓解（worker 化/RE2 是远期项），与 Obsidian 自身暴露面同级。零长正则挂死类
+  （上条 critical）已根治，与此项不同因。
+- 证伪 3：`content:#x` 改写主张的 layering 维变体（parser 维同根因已确认采纳）、
+  未闭合正则报 bad-regex 属契约一致行为、测试覆盖缺口清单（非缺陷，缺口用例
+  已在修复回归中补齐）。
+
 ## Round 20 additions — Obsidian 主题 CSS 兼容层（变量桥 + 类名对齐 + theme/snippets 加载）
 
 R19+ 候选池第 2 项（OBSIDIAN-COMPAT R3 末规划过的「独立可选层」；R18 callout DOM
