@@ -71,6 +71,201 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 19 additions — mermaid 图表（```mermaid fence → 动态 import 渲染）
+
+R19+ 候选池首项（用户拍板 2026-06-12：「从 mermaid 开始，逐步完成每一项」）。
+官方校准（obsidian.md/help/Editing+and+formatting/Advanced+formatting+syntax，
+2026-06-12 WebFetch）：
+
+- 语法 = ` ```mermaid ` 代码围栏；官方提及 flow charts / sequence diagrams /
+  timelines，全量类型以 mermaid 官方文档为准。
+- **internal-link 节点**：官方支持 `class A,B internal-link;` 把图内节点变为可点
+  内链（特殊字符节点名用双引号包）；官方明示 "Internal links from diagrams
+  don't show up in the Graph view"——不进 links 索引是官方行为，非偏差。
+- 主题/样式官方未文档化——自定冻结口径：图表主题跟随应用主题
+  （dark → mermaid "dark"，light → "default"）。
+
+### 一次性决策（chief，agent 不得加依赖/不碰 Rust）
+
+- **mermaid ^11（11.15.0）**——本轮唯一新增依赖（chief 已预装；自带类型，无需
+  @types）。**动态 import**（katex R18 先例：core/mermaid.ts loadMermaid 模块级
+  单例 promise，失败清缓存可重试；Vite 自动 code-split——主 chunk 零增长，
+  零 mermaid 文档零加载）。
+- **initialize 冻结配置**：`{ startOnLoad: false, securityLevel: "strict",
+  suppressErrorRendering: true, theme }`——strict 走 mermaid 内置 DOMPurify
+  消毒（maxTextSize/maxExpand 默认护栏不放宽）；suppressErrorRendering 禁止
+  v11 向 body 注入错误 SVG（降级由我们自己的 error 口径接管）。theme 每次
+  hydrate 批次按当前值 initialize（重复 initialize 廉价且幂等）。
+- **渲染串行**：单文档多图逐个 `await mermaid.render(id, src)`（mermaid 全局
+  状态，不并发）；id = 模块级自增 `geode-mermaid-{seq}`（脚注 render-seq 先例）。
+- **live preview 零处理**（显式偏差，记录）：fence 在 live 维持源码呈现（既有
+  fencedLines 排除面不动）。Obsidian live 光标外渲染 widget——跨行块 widget
+  需 StateField 跨行 replace（R18 `$$` 块同因显式延后），入 R20+ polish 候选。
+- **compat 零代码改动**：MarkdownRenderer 经共享管线 + 共享水合自动获得图表
+  （R18 同口径：有意的基管线增强，非回归）。
+- 无新增 i18n 键、无设置项、无 Rust 改动。
+
+### Core: fence 渲染分流 — `core/markdown.ts`（core agent）
+
+- **fence renderer 覆写**（首个 renderer.rules.fence 自定义；保存 default 引用）：
+  `token.info` 经 markdown-it `unescapeAll().trim()` 后**首个空白分隔词与
+  "mermaid" 大小写敏感全等** → 输出占位（冻结 DOM）：
+  `<div class="geode-mermaid" data-mermaid="{escapeHtml(content.trimEnd())}">
+  <pre class="geode-mermaid-source"><code>{escapeHtml(content.trimEnd())}</code>
+  </pre></div>\n`（未水合显示源码——math 降级可读口径沿用）。
+- 其余一切 fence **走 default renderer，输出字节级不变**（diff 义务：Part A
+  33 用例含 ```js fence 不回退）；`Mermaid`/`MERMAID` 等非全等 info 照常走
+  default（负向用例）。callout/blockquote/list 内的 mermaid fence 经 token 流
+  天然分流（无行级特判）。
+- **diff 套件（core agent 义务）**：改完重建 `.calibration/r18-diff/markdown-new.cjs`
+  （esbuild bundle，现有产物同法），run.cjs 增 ≥5 个 mermaid Part B 用例
+  （占位 DOM / data-mermaid 转义（`-->` → `--&gt;`）/ info 尾随空白容忍 /
+  大小写负向 / callout 体内占位 / ```js 不受影响），72 旧用例全绿不回退。
+
+### Core: 加载器 + 水合 — `core/mermaid.ts`（新）+ `core/embeds.ts`（core agent）
+
+```ts
+// core/mermaid.ts —— mermaid 动态加载器（katex/math.ts 同构）
+/** Dynamic import("mermaid"). Caches the in-flight promise; a load failure
+ *  clears the cache so the next call retries. No CSS import (mermaid inlines
+ *  styles into each rendered SVG). */
+export function loadMermaid(): Promise<typeof import("mermaid").default>;
+```
+
+- `HydrateContext` 增 `mermaidTheme?: "default" | "dark"`——缺省**水合时**读
+  `document.documentElement.dataset.theme === "dark" ? "dark" : "default"`
+  （应用内调用方含 compat 零接线自动跟主题）；导出显式传 `"default"`
+  （export.css 浅色自包含口径）。**递归透传**（嵌套转写内图表同口径，
+  mathOutput 先例）。
+- hydrateEmbeds 新 pass：`root.querySelectorAll(".geode-mermaid[data-mermaid]")`
+  非空才 `loadMermaid()`（零图表文档零开销）→ initialize（冻结配置 + theme）→
+  **for 循环串行**逐元素 render：成功 → `el.innerHTML = svg`（SVG 自带内联
+  样式，导出序列化自包含）→ **internal-link 后处理**：`el.querySelectorAll(
+  ".internal-link")` 逐节点 `setAttribute("data-target", textContent.trim())`；
+  失败 → `el.classList.add("geode-mermaid-error")` + 保留源码 fallback
+  （**不预清内容**——render 返回字符串，成功才替换；单元素降级绝不抛，
+  loadMermaid 失败整批保留 fallback，hydrate 纪律沿用）。
+
+### Editor: 阅读视图交互 + 样式 — `features/editor/{EditorPane.tsx, editor.css}`（editor agent）
+
+- onPreviewClick：`e.target instanceof HTMLElement` 收窄放宽为 `Element`
+  （SVG 内点击现状直接 bail——closest 是 Element 方法，分支匹配器均锚定 HTML
+  元素，类型安全；**as-built 修正**：既有 SVG 死区点击（如 KaTeX `\sqrt`
+  拉伸件）放宽后会进入既有分支——可折叠 callout 标题内的 KaTeX svg 点击现在
+  触发折叠，方向良性的行为变化，显式记录）。internal 分支之后新增：
+  `el.closest(".geode-mermaid .internal-link[data-target]")` 命中 →
+  preventDefault + `openWikilink(app, data-target, handle.path)`（unresolved
+  → create-from-unresolved 既有语义；不传 subpath）→ return（不落入
+  a[href] 分支）。
+- editor.css：`.geode-mermaid`（居中 + 上下 margin + `svg { max-width: 100% }`）；
+  `.geode-mermaid-source`（等宽淡显，未水合/加载失败可读）；
+  `.geode-mermaid-error`（红色边框提示，`--danger` 变量——app.css 既有红色对，
+  `.geode-math-error` 同口径；契约原文误称 `--text-error` R18 已有，该变量从未
+  落地，as-built 修正）；
+  `.geode-mermaid .internal-link { cursor: pointer }` + 节点文字 accent 色
+  （`text { fill: var(--accent) }` 级别，仅 internal-link 节点）。
+
+### Export — `features/export/{export.ts, export.css}`（export agent）
+
+- inlineEmbeds ctx 增 `mermaidTheme: "default"`（打印路径同一调用点，自动同源）。
+- export.css：`.geode-mermaid` 居中 + margin、`svg { max-width: 100% }`、
+  `.geode-mermaid-source`/`.geode-mermaid-error` 同口径（本地变量体系，
+  不引用 app.css）；internal-link 节点**无交互**（导出零 JS 口径——样式
+  保持普通文字，不加 pointer）。
+- 导出验证：含 mermaid 用例输出含 `<svg`（图内联自包含）且不含 blob:/外链
+  脚本引用。
+
+### 口径（零代码，记录）
+
+- live preview 不渲染 mermaid widget（源码呈现，显式偏差，R20+ polish 候选）。
+- 主题切换后**已渲染**图表保持旧主题至该视图重渲染（R11 外部改图 stale
+  widget 先例）；导出恒浅色（export.css 主题无关口径）。
+- 图内 internal-link 不进 links 索引 / graph（官方同行为，非偏差）；compat
+  MarkdownRenderer 输出的图表带 data-target 但点击接线由调用方自理（记录）。
+- mermaid 渲染含 `<foreignObject>` HTML 标签（flowchart htmlLabels）——strict
+  模式经 DOMPurify 消毒；导出文件含其序列化结果（自包含，无外部引用）。
+- 浏览器 E2E：阅读视图 mermaid SVG 出现 + 错误图降级 + internal-link 点击
+  跳转 + 导出含 `<svg` 断言；diff 义务见 core 节。
+
+### Round 19 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/markdown.ts, core/embeds.ts, core/mermaid.ts (new), .calibration/r18-diff/{run.cjs, markdown-new.cjs 重建} |
+| editor | features/editor/{EditorPane.tsx, editor.css} |
+| export | features/export/{export.ts, export.css} |
+
+Chief pre-phase：本节契约 + mermaid ^11 预装。Frozen surfaces：`.geode-mermaid` /
+`.geode-mermaid-source` / `.geode-mermaid-error` 类名与占位 DOM、`data-mermaid`
+属性、info 首词大小写敏感全等规则、`loadMermaid` 签名、`HydrateContext.mermaidTheme`、
+initialize 冻结配置、internal-link data-target 后处理规则。每 agent 结束前
+`npx tsc --noEmit`；不加依赖；不碰 docs/、compat/**、src-tauri/**、core/markdown.ts
+预处理段（replaceWikilinks——本轮 fence renderer 不动预处理）；agent 行内注释
+不得修订契约（R13 教训）；core agent 跑 diff 套件全绿。
+
+### As-built deltas (post-review — R19)
+
+Review: 4 维（管线正确性 / 注入安全 / 水合生命周期 / 分层契约），13 findings →
+对抗验证 **11 confirmed（1 major）/ 2 refuted**，确认项全部修复（去重后 7 个
+独立根因）：
+
+- **FIXED (major) — SEC-1：mermaid click 链接生成 `<a xlink:href>` 绕过预览
+  a[href] 守卫**：strict 模式下 flowchart `click A "url"` 仍生效（setLink 无
+  securityLevel 闸门；sanitizeUrl 只剥 javascript:/data:，相对路径/mailto 等
+  放行），且 SVG 锚只带命名空间 `xlink:href`——`closest("a[href]")` 属性选择器
+  永不匹配，非 http preventDefault 安全网失效，恶意图一键导航整个 webview
+  （csp null）。双层修复：① core/embeds.ts 水合后处理 `neutralizeMermaidAnchors`
+  ——http(s) 锚补平 `href` + `target="_blank"` + noopener（对齐 markdown 外链
+  策略，导出序列化同样受益）、其余协议剥除两种 href 置惰性；② EditorPane 锚
+  分支放宽为 `closest("a")` + 读 href ?? xlink:href（第二层防线）。浏览器实测：
+  `click C "https://example.com"` → `_blank` 外链；`click D "../../evil"` →
+  href 全剥除、导出内零非 http 锚点（`data-mermaid` 属性内的源码文本是惰性
+  转义字面，非攻击面）。
+- **FIXED (minor，三 finding 同根因 RENDER-1/SEC-2/HYD-1) — 跨批次主题竞态**：
+  `mermaid.initialize` 同步改全局 config，而 render 经 mermaid 模块级
+  executionQueue 串行消费、**出队执行时**才 getConfig() 取主题——导出
+  （default）与应用内（dark）水合并发时，后发 initialize 毒化先发批次已排队
+  的 render（验证 agent 以 Playwright 实跑复现：a2/e2 被互相截胡）。修复 =
+  模块级 `mermaidBatchChain` promise 链把每批次（initialize + 全部 render）
+  原子串行化，链路 catch 防断。嵌套转写递归批次排在外层之后，无死锁。
+- **FIXED (minor) — internal-link accent 着色被 #id 作用域样式恒压制**：
+  mermaid 向 SVG 内联 `#geode-mermaid-N` 前缀的主题样式（stylis 编译），
+  含 ID 的选择器恒胜类链——accent 规则从不生效。修复 = editor.css 两条规则
+  加 `!important`（mermaid label 规则自身无 !important，稳赢）。
+- **FIXED (minor) — 打印路径杂散临时容器**：mermaid render 执行期向
+  document.body 同步挂无样式临时 `div#d<render-id>`，print 样式不隐藏它——
+  并发预览水合 + 打印时窗口真实（验证 agent 微任务级推演确认必现序）。修复 =
+  printActiveNote 注入样式补 `@media print { body >
+  div[id^="dgeode-mermaid-"] { display:none !important } }`。
+- **FIXED (minor) — 陈旧水合批次无取消**：预览重渲染 detach 旧 DOM 后，旧批次
+  继续全成本渲染（body 内真实布局测量）并占用全局队列。修复 = 批次起点
+  `els.some(isConnected)` 才跟踪连接性，循环内跳过已 detach 元素——导出的
+  detached container 批次不受影响（其元素从未 connected）。
+- **FIXED (minor) — diff 套件判别性缺口**：info 首词规则缺第二词正向用例，
+  「整串全等」变异体可存活（验证 agent 变异测试确认）。补
+  `"```mermaid graph"` 用例封口（套件 78 用例全绿）。
+- **FIXED (minor) — export.css 错误面板缺 padding**：与 editor 侧降级面板
+  口径漂移，红框贴住源码块。补 `padding: 8px 12px`。
+- **契约文本 as-built 修正两处**（实现合理、契约写错）：`--text-error` 为幽灵
+  变量（R18 实际落地 `--danger`，本契约正文已改）；Element 放宽「行为不变」
+  断言不实——KaTeX `\sqrt`/拉伸件 SVG 死区点击现在会进入既有分支（可折叠
+  callout 标题内 KaTeX svg 点击触发折叠），方向良性的行为变化，正文已补记。
+- **Refuted（2，记录）**：「成功绘制后置区段抛错泄漏临时 div」——装包源码逐
+  路径核实该区段无可达抛出（DOMPurify 入参恒字符串、addA11yInfo 仅 textContent
+  赋值）；「递归水合打破渲染串行契约」——mermaid v11 自带模块级 executionQueue
+  全局串行化 render，directive 状态每次 render 起点 reset（跨批次并发由库内
+  队列兜底——该依赖现已在 hydrateMermaid 注释与本节显式化；升级 mermaid 或
+  改用 mermaidAPI.render 时须复核）。
+
+桌面 release（v0.19.0 `geode.exe compat-vault`）实测结果见 OBSIDIAN-COMPAT R19
+套件回归节。浏览器 E2E（dev :1420 + AppHandle 探针）：合法图 SVG 渲染 ✓、
+非法图 `.geode-mermaid-error` 保源码 ✓、`class A internal-link` 节点
+data-target + 点击 openWikilink 跳转 ✓、js fence 字节不变 ✓、mermaid chunk
+零图表文档不加载（按需 import 实测）✓、导出/打印 HTML 内联 `<svg` 自包含 +
+深色应用 vs 浅色导出主题分流（#id 归一化后样式串不同）✓、live 模式 fence
+源码呈现零装饰 ✓。dev-only 已知现象：mermaid 首次按需优化触发 Vite 整页
+reload（生产构建无此事）。
+
 ## Round 18 additions — Markdown 方言长尾：callouts + ==高亮== + 脚注 + %%注释%% + 数学公式
 
 迁移体验路线图第三轮（ROADMAP R16-R18）。官方校准（obsidian.md/help/callouts +
@@ -779,7 +974,7 @@ verification. All confirmed code defects FIXED by chief; integration re-verified
   嵌入漏改（嵌入渲染是 attachment-first），方向安全（漏改非误写，消歧校验
   fail-closed）。
 - **卫生（pre-existing）**：metadata.ts getGraph 边键里 R3 时代的字面 NUL 字节
-  改为 ` ` 转义（运行时字符串等价）——该字节让 ripgrep 把整个文件按二进制
+  改为 `\0` 转义（运行时字符串等价）——该字节让 ripgrep 把整个文件按二进制
   跳过，本轮评审两次被它绊倒。
 - Accepted（agent 上报已采纳）：根目录改名且 basename 撞车时双形态消歧均败 →
   skip+报告（安全方向）；整文件 skip 粒度（契约原文）；`[[ A ]]` 内空白不保留；

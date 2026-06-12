@@ -378,6 +378,33 @@ ARCHITECTURE R18 As-built deltas。
 reload 幂等不回退、r17 折叠+摄入 10/10；字节级 diff 套件 72 用例全绿（33 无新语法字节
 一致 + 39 新语法 DOM）。
 
+### R19 — v0.19（2026-06-12）mermaid 图表（R19+ 候选池 #1）
+
+候选池首轮（用户拍板 2026-06-12：「从 mermaid 开始，逐步完成每一项」）。官方校准
+（obsidian.md/help advanced-formatting-syntax）：` ```mermaid ` 围栏 + `class A
+internal-link;` 图内节点变可点内链（官方明示图内链接不进 graph）。
+**唯一新依赖 mermaid ^11（11.15.0）**，KaTeX 先例动态 import（core/mermaid.ts
+loadMermaid 单例；主 chunk 零增长，mermaid.core 独立异步 chunk 607KB gzip 145KB
++ 各图类型子 chunk 按需，零图表文档不加载——浏览器实测确认）。
+**core/markdown.ts** fence renderer 覆写：info 首词大小写敏感全等 "mermaid" →
+`.geode-mermaid[data-mermaid]` 占位（未水合显示源码），其余 fence 走 default
+字节级不变。**core/embeds.ts** 水合 pass：initialize（strict + suppressError +
+theme）→ 串行 render → SVG 注入 + internal-link 节点 data-target 后处理 +
+锚点消毒；`HydrateContext.mermaidTheme`（应用内跟主题/导出恒浅色）。阅读视图
+internal-link 点击 → openWikilink；live 维持源码呈现（显式偏差，R20+ polish
+候选）；compat 零改动自动受益。
+评审 4 维 **13 finding → 对抗验证 11 确认（1 major）/ 2 证伪**，全部修复
+（major：strict 模式 `click A "url"` 生成 `<a xlink:href>` 绕过 a[href] 守卫可
+导航整 webview→水合层锚点消毒（https 补 `_blank`+noopener / 其余剥除）+ 点击
+守卫双层；minor：跨批次 initialize 主题竞态→模块级 promise 链批次原子化、
+#id 作用域样式压制 accent→!important、打印杂散临时容器→print guard、陈旧
+批次无取消→isConnected 跳过、diff 用例判别缺口、export 错误面板 padding）。
+详见 ARCHITECTURE R19 As-built deltas。
+桌面 release（v0.19.0 compat-vault 真实 fs）：R19 探针 14/14（双图 SVG/错误
+降级保源码/内链点击跳转/锚点消毒/live 源码/打印内联 svg）、套件 5/5 + nldates
+`[[2026-06-13]]` + reload 幂等 + 回声 suppressed4/external2 不回退；diff 套件
+78 用例全绿。截图 docs/screenshots/r19-desktop-mermaid.png。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -394,9 +421,12 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 
 ### R19+ 候选池（迁移叙事第二梯队，按需取）
 
+> 用户口径（2026-06-12）：**从 mermaid 开始，逐步完成每一项**——候选池即后续
+> 轮次的执行队列，每轮取一项直至清空（发布渠道项仍待用户拍板）。
+
 | 功能 | 备注 |
 |---|---|
-| mermaid 图表 | R18 显式延后（~1MB，动态 import 先例已由 katex 蹚出，复用即可）；优先级看用户迁移诉求 |
+| ~~mermaid 图表~~ | **R19 已完成（v0.19，见上）** |
 | 主题 CSS 类名兼容层 | OBSIDIAN-COMPAT 规划过的独立可选层；**R18 的 callout DOM 已按 `.callout`/`data-callout`/`is-collapsible` 社区共识对齐，此层落地时受益** |
 | Properties 可视化编辑 | frontmatter 结构化面板 |
 | 模板系统 | 新建套模板 + 日期变量 |
@@ -405,6 +435,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |
 | 图谱 WebGL/Worker、倒排索引 | 性能远期 |
 | R18 折叠/数学 polish | callout 标题点击折叠仅阅读视图（live 用 gutter）；跨行 `$$`/块注释 live 淡显不渲染/隐藏；行内脚注 live 零处理（官方同行为）；KaTeX vs MathJax 宏覆盖差异——均显式偏差，见 ARCHITECTURE R18 |
+| R19 mermaid polish | live 不渲染图表 widget（源码呈现——块 widget 需 StateField 跨行 replace，与跨行 `$$` 同因）；主题切换后已渲染图保持旧主题至视图重渲染（R11 stale widget 先例）；compat MarkdownRenderer 输出图表带 data-target 但点击接线调用方自理——均显式偏差，见 ARCHITECTURE R19 |
 
 ## 已知技术债
 

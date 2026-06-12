@@ -151,6 +151,21 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R19 套件回归（2026-06-12，桌面 release v0.19.0 实测 `geode.exe compat-vault`）
+
+R19 为原生功能轮（mermaid 图表），**compat 表面零代码改动**（contract 明令；
+git diff 确认 compat/** 无改动）。共享管线本轮新增 ` ```mermaid ` fence 分流
+——compat 的 `MarkdownRenderer.render` 经同一管线自动输出 `.geode-mermaid`
+占位，且调用方若走共享水合（R13 接通的 hydrate 路径）自动获得 SVG（**有意的
+基管线增强，非回归**；R18 同口径）。**字节级不变义务**：所有非 mermaid fence
+输出对全部调用方字节一致（diff 套件 Part A 33 用例 + ```js/```Mermaid 负向
+用例验证）。桌面逐项复测不回退：5/5 加载启用 ✓、nldates 指令条 + 逐键
+`@tomorrow`→`[[2026-06-13]]` ✓（lastLine 空值为既有探针语义，非回归）、
+reload 幂等 + calendar 重挂载 ✓、回声 suppressed 4 / external 2 正常 ✓；
+R19 探针 14/14（图表渲染/降级/内链点击/锚点消毒/live 源码口径/打印自包含）。
+新增已知口径：compat 输出图表中 internal-link 节点带 data-target，但点击
+接线由调用方自理（宿主预览的委托不覆盖插件自渲染容器）。缺口表无变化。
+
 ### R18 套件回归（2026-06-12，桌面 release v0.18.0 实测 `geode.exe compat-vault`）
 
 R18 为原生功能轮（Markdown 方言长尾：callouts/==高亮==/脚注/%%注释%%/KaTeX 数学），
