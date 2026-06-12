@@ -42,6 +42,12 @@ export const en = {
   "search.meta": "{results} in {notes}",
   "search.showingTop": "showing top {count}",
   "search.lineTooltip": "Line {line}",
+  // rendered as a plain text line under the type-to-search hint
+  "search.hintOperators": 'Operators: path:, tag:, file:, "...", OR, - (exclude), /regex/',
+  "search.errorBadRegex": "Invalid regular expression",
+  "search.errorUnclosedQuote": "Unclosed quote in query",
+  "search.errorUnclosedParen": "Unclosed parenthesis in query",
+  "search.errorEmptyGroup": "Empty group in query",
 
   // ---- backlinks ----
   "backlinks.title": "Backlinks",
@@ -111,6 +117,11 @@ export const zh: Record<keyof typeof en, string> = {
   "search.meta": "在 {notes} 中找到 {results}",
   "search.showingTop": "仅显示前 {count} 项",
   "search.lineTooltip": "第 {line} 行",
+  "search.hintOperators": "支持运算符：path:、tag:、file:、\"...\"、OR、-（排除）、/正则/",
+  "search.errorBadRegex": "正则表达式无效",
+  "search.errorUnclosedQuote": "查询中的引号未闭合",
+  "search.errorUnclosedParen": "查询中的括号未闭合",
+  "search.errorEmptyGroup": "查询中存在空分组",
 
   // ---- backlinks ----
   "backlinks.title": "反向链接",

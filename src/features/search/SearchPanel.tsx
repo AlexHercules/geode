@@ -4,18 +4,25 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
+import type { I18nKey } from "@core/i18n";
+import { parseSearchQuery, evaluateSearch } from "@core/search";
+import type { SearchInput, SearchMatchRange, SearchParseErrorCode } from "@core/search";
 import "./search.css";
 
 interface LineHit {
   lineNo: number;
   text: string;
+  /** highlight ranges, offsets into `text` */
+  marks: SearchMatchRange[];
 }
 
 interface FileResult {
   path: string;
   basename: string;
   nameMatch: boolean;
-  /** total content match count in this file */
+  /** highlight ranges on basename */
+  nameMarks: readonly SearchMatchRange[];
+  /** ranges.length + (nameMatch ? 1 : 0) — frozen R21 counting */
   total: number;
   lines: LineHit[];
 }
@@ -29,40 +36,99 @@ const CONTEXT_RADIUS = 36;
  */
 const MAX_FILE_RESULTS = 200;
 
+const PARSE_ERROR_KEYS: Record<SearchParseErrorCode, I18nKey> = {
+  "bad-regex": "search.errorBadRegex",
+  "unclosed-quote": "search.errorUnclosedQuote",
+  "unclosed-paren": "search.errorUnclosedParen",
+  "empty-query-group": "search.errorEmptyGroup",
+};
+
 /** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
 function perfMark(key: string, value: number): void {
   const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
   g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
 }
 
-/** Trim a long line to a window around the first occurrence of `lowerQuery`. */
-function contextSlice(line: string, lowerQuery: string): string {
-  const trimmed = line.trim();
-  if (trimmed.length <= 110) return trimmed;
-  const at = trimmed.toLowerCase().indexOf(lowerQuery);
-  if (at === -1) return trimmed.slice(0, 110) + "…";
-  const start = Math.max(0, at - CONTEXT_RADIUS);
-  const end = Math.min(trimmed.length, at + lowerQuery.length + CONTEXT_RADIUS * 2);
-  return (start > 0 ? "…" : "") + trimmed.slice(start, end) + (end < trimmed.length ? "…" : "");
+/**
+ * Trim a long line to a window anchored at its first match range, remapping
+ * the ranges into offsets of the returned display text.
+ */
+function sliceLine(
+  raw: string,
+  ranges: SearchMatchRange[],
+): { text: string; marks: SearchMatchRange[] } {
+  const leading = raw.length - raw.trimStart().length;
+  const trimmed = raw.trim();
+  const local = ranges
+    .map((r) => ({
+      from: Math.max(0, Math.min(r.from - leading, trimmed.length)),
+      to: Math.max(0, Math.min(r.to - leading, trimmed.length)),
+    }))
+    .filter((r) => r.to > r.from);
+  if (trimmed.length <= 110) return { text: trimmed, marks: local };
+  const first = local[0];
+  if (!first) return { text: trimmed.slice(0, 110) + "…", marks: [] };
+  const start = Math.max(0, first.from - CONTEXT_RADIUS);
+  const end = Math.min(trimmed.length, first.to + CONTEXT_RADIUS * 2);
+  const prefix = start > 0 ? "…" : "";
+  const text = prefix + trimmed.slice(start, end) + (end < trimmed.length ? "…" : "");
+  const marks: SearchMatchRange[] = [];
+  for (const r of local) {
+    const from = Math.max(r.from, start);
+    const to = Math.min(r.to, end);
+    if (to > from) marks.push({ from: from - start + prefix.length, to: to - start + prefix.length });
+  }
+  return { text, marks };
 }
 
-/** Wrap each case-insensitive occurrence of `query` in <mark>. */
-function highlight(text: string, query: string): ReactNode {
-  const q = query.toLowerCase();
-  if (!q) return text;
-  const lower = text.toLowerCase();
+/**
+ * Map sorted, merged content-offset ranges onto lines. Every range counts
+ * toward `total` upstream; only the first MAX_LINES_PER_FILE matched lines
+ * are materialized for display. Multi-line ranges are clipped to their
+ * starting line.
+ */
+function deriveLineHits(content: string, ranges: readonly SearchMatchRange[]): LineHit[] {
+  const out: LineHit[] = [];
+  if (ranges.length === 0) return out;
+  const lines = content.split("\n");
+  let ri = 0;
+  let lineStart = 0;
+  for (let i = 0; i < lines.length && ri < ranges.length; i++) {
+    const lineEnd = lineStart + lines[i].length;
+    // strict `<`: a range starting exactly on the newline belongs to the NEXT
+    // line (its visible text starts there); `from` is clamped because such a
+    // range reaches this line from the preceding newline.
+    if (ranges[ri].from < lineEnd) {
+      const local: SearchMatchRange[] = [];
+      while (ri < ranges.length && ranges[ri].from < lineEnd) {
+        local.push({
+          from: Math.max(0, ranges[ri].from - lineStart),
+          to: Math.min(ranges[ri].to, lineEnd) - lineStart,
+        });
+        ri++;
+      }
+      const { text, marks } = sliceLine(lines[i], local);
+      out.push({ lineNo: i + 1, text, marks });
+      if (out.length >= MAX_LINES_PER_FILE) break;
+    }
+    lineStart = lineEnd + 1;
+  }
+  return out;
+}
+
+/** Wrap each range of `text` in <mark>. Ranges must be sorted + disjoint. */
+function highlightRanges(text: string, marks: readonly SearchMatchRange[]): ReactNode {
+  if (marks.length === 0) return text;
   const parts: ReactNode[] = [];
   let pos = 0;
   let key = 0;
-  for (;;) {
-    const at = lower.indexOf(q, pos);
-    if (at === -1) break;
-    if (at > pos) parts.push(text.slice(pos, at));
-    parts.push(<mark key={key++}>{text.slice(at, at + q.length)}</mark>);
-    pos = at + q.length;
+  for (const m of marks) {
+    if (m.from > pos) parts.push(text.slice(pos, m.from));
+    parts.push(<mark key={key++}>{text.slice(m.from, m.to)}</mark>);
+    pos = m.to;
   }
   if (pos < text.length) parts.push(text.slice(pos));
-  return parts.length > 0 ? parts : text;
+  return parts;
 }
 
 export function SearchPanel() {
@@ -85,8 +151,15 @@ export function SearchPanel() {
   }, [query]);
 
   const trimmed = debounced.trim();
-  const tagMode = trimmed.startsWith("#");
-  const tagQuery = tagMode ? trimmed.slice(1).trim().toLowerCase() : "";
+  // tag BROWSER only for a whole-query bare `#…` token; anything else (spaces,
+  // operators) goes through the query parser, where `#tag` means tag:tag.
+  const tagMode = /^#\S*$/.test(trimmed);
+  const tagQuery = tagMode ? trimmed.slice(1).toLowerCase() : "";
+
+  const parsed = useMemo(
+    () => (!trimmed || tagMode ? null : parseSearchQuery(trimmed)),
+    [trimmed, tagMode],
+  );
 
   /* ---------- tag mode ---------- */
 
@@ -102,7 +175,8 @@ export function SearchPanel() {
   /* ---------- full-text mode ---------- */
 
   useEffect(() => {
-    if (!trimmed || tagMode) {
+    const expr = parsed && !parsed.error ? parsed.expr : null;
+    if (!expr) {
       setResults([]);
       setHiddenFiles(0);
       setGrandTotal(0);
@@ -111,7 +185,6 @@ export function SearchPanel() {
     }
     let cancelled = false;
     setSearching(true);
-    const lower = trimmed.toLowerCase();
 
     void (async () => {
       const t0 = performance.now();
@@ -125,25 +198,25 @@ export function SearchPanel() {
           continue;
         }
         if (cancelled) return;
-        const nameMatch = f.basename.toLowerCase().includes(lower);
-        const lines = content.split("\n");
-        const hits: LineHit[] = [];
-        let total = 0;
-        for (let i = 0; i < lines.length; i++) {
-          const ll = lines[i].toLowerCase();
-          let at = ll.indexOf(lower);
-          if (at === -1) continue;
-          while (at !== -1) {
-            total++;
-            at = ll.indexOf(lower, at + lower.length);
-          }
-          if (hits.length < MAX_LINES_PER_FILE) {
-            hits.push({ lineNo: i + 1, text: contextSlice(lines[i], lower) });
-          }
-        }
-        if (nameMatch || total > 0) {
-          out.push({ path: f.path, basename: f.basename, nameMatch, total, lines: hits });
-        }
+        const input: SearchInput = {
+          path: f.path,
+          fileName: f.path.split("/").pop() ?? f.path,
+          basename: f.basename,
+          content,
+          // metadata index stores tags without '#' already
+          tags: app.metadata.getMetadata(f.path)?.tags.map((tag) => tag.tag) ?? [],
+        };
+        const outcome = evaluateSearch(expr, input);
+        if (!outcome.matched) continue;
+        const nameMatch = outcome.nameRanges.length > 0;
+        out.push({
+          path: f.path,
+          basename: f.basename,
+          nameMatch,
+          nameMarks: outcome.nameRanges,
+          total: outcome.ranges.length + (nameMatch ? 1 : 0),
+          lines: deriveLineHits(content, outcome.ranges),
+        });
       }
       out.sort(
         (a, b) =>
@@ -153,8 +226,7 @@ export function SearchPanel() {
       );
       if (!cancelled) {
         perfMark("searchScanMs", performance.now() - t0);
-        const total = out.reduce((n, r) => n + Math.max(r.total, r.nameMatch ? 1 : 0), 0);
-        setGrandTotal(total);
+        setGrandTotal(out.reduce((n, r) => n + r.total, 0));
         setHiddenFiles(Math.max(0, out.length - MAX_FILE_RESULTS));
         setResults(out.length > MAX_FILE_RESULTS ? out.slice(0, MAX_FILE_RESULTS) : out);
         setSearching(false);
@@ -163,7 +235,7 @@ export function SearchPanel() {
     return () => {
       cancelled = true;
     };
-  }, [app.vault, trimmed, tagMode, rev]);
+  }, [app.vault, app.metadata, parsed, rev]);
 
   const totalMatches = grandTotal;
   const totalFiles = results.length + hiddenFiles;
@@ -187,6 +259,8 @@ export function SearchPanel() {
         {t("search.hintTagsBefore")}
         <code>#</code>
         {t("search.hintTagsAfter")}
+        <br />
+        {t("search.hintOperators")}
       </div>
     );
   } else if (tagMode) {
@@ -232,6 +306,24 @@ export function SearchPanel() {
           })}
         </>
       );
+  } else if (parsed?.error) {
+    body = (
+      <div className="search-hint search-error" data-testid="search-error">
+        {t(PARSE_ERROR_KEYS[parsed.error.code])}
+        {parsed.error.detail && (
+          <div className="search-error-detail">{parsed.error.detail}</div>
+        )}
+      </div>
+    );
+  } else if (!parsed?.expr) {
+    // parser collapsed the query to nothing (whitespace-only after tokenizing)
+    body = (
+      <div className="search-hint">
+        {t("search.hintType")}
+        <br />
+        {t("search.hintOperators")}
+      </div>
+    );
   } else if (searching && results.length === 0) {
     body = <div className="search-hint">{t("search.searching")}</div>;
   } else if (results.length === 0) {
@@ -257,7 +349,7 @@ export function SearchPanel() {
               onClick={() => openFile(r.path)}
               title={r.path}
             >
-              <span className="search-file-name">{highlight(r.basename, trimmed)}</span>
+              <span className="search-file-name">{highlightRanges(r.basename, r.nameMarks)}</span>
               {r.total > 0 && <span className="search-tag-count">{r.total}</span>}
             </div>
             {r.lines.map((line) => (
@@ -267,7 +359,7 @@ export function SearchPanel() {
                 onClick={() => openFile(r.path)}
                 title={t("search.lineTooltip", { line: line.lineNo })}
               >
-                {highlight(line.text, trimmed)}
+                {highlightRanges(line.text, line.marks)}
               </div>
             ))}
           </div>

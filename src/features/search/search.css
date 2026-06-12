@@ -57,6 +57,18 @@
   line-height: 1.7;
 }
 
+/* query parse error (after .search-hint so the combined class wins on color) */
+.search-error {
+  color: var(--danger);
+}
+
+.search-error-detail {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  word-break: break-all;
+}
+
 .search-hint code {
   background: var(--code-bg);
   border-radius: 3px;
