@@ -21,6 +21,9 @@
 - [docs/01-vision.md](docs/01-vision.md) —— 产品构想与核心机制
 - [docs/02-business-model.md](docs/02-business-model.md) —— 商业模式
 - [docs/03-harness-architecture.md](docs/03-harness-architecture.md) —— Borges harness 架构（约束优先）
+- [docs/04-prior-art.md](docs/04-prior-art.md) —— 现有开源项目调研与借鉴清单
+- [docs/05-product-split.md](docs/05-product-split.md) —— 产品分层：本地开源软件 × 平台
+- [docs/06-legal-framework.md](docs/06-legal-framework.md) —— 法律框架：三层版权协议设计
 - [CLAUDE.md](CLAUDE.md) —— 博尔赫斯 agent 的工作守则
 
 ## 现状

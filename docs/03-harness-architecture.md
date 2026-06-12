@@ -77,9 +77,20 @@ book-<id>/
 | 9 | 续写隔离 | 分支续写在独立 worktree 中进行，永远不能改动祖先分支的任何 commit |
 | 10 | 发布前置 gate | 平台期：未通过流水线全部 gate 的章节没有发布资格，无后门 |
 
+## Gate 工具层（调研后选型，详见 docs/04-prior-art.md）
+
+四层 gate，确定性在前、便宜在前：
+
+1. **结构 gate**：remark-lint + JSON Schema 校验章纲/frontmatter（毫秒级，零成本）；外加 novelWriter 式标签静态检查（章节引用了不存在的人物/地点 = 直接拒）；
+2. **词法 gate**：Vale（YAML+正则自定义规则：禁用词、AI 味词表、视角词）+ textlint（JS 自定义规则：句长分布、排版）；
+3. **纠错 gate**：pycorrector 类中文纠错模型，错别字超阈值打回（warning 级，有误报）；
+4. **LLM 评审 gate**：审查团基于 promptfoo/deepeval 式 rubric assertion 实现，不自造评测框架。
+
+canon 注入采用 SillyTavern lorebook 机制：canon 条目带 `keys:` 关键词，注入决策由确定性解析器按关键词命中 + token 预算裁剪完成（支持递归激活、sticky 持续在场）——**注入是代码，不是 LLM 的自由检索**，符合最小权限约束。
+
 ## 工位编排的技术选型（按阶段）
 
-- **阶段 0（验证流水线）**：Claude Code + 本目录。gates 用脚本（JSON Schema 校验、字数统计、禁用词 grep）实现为可执行命令；审查团用 subagent 并行跑。先证明"约束流水线写出的章节质量稳定高于裸 prompt"；
+- **阶段 0（验证流水线）**：Claude Code + 本目录。gates 用上述工具实现为可执行命令；审查团用 subagent 并行跑。先证明"约束流水线写出的章节质量稳定高于裸 prompt"；
 - **阶段 1（脱离交互式）**：迁移到 Claude Agent SDK，流水线编排写成确定性代码（TypeScript），gate 全部进程内执行，模型调用是纯函数式的"工位"；
 - **阶段 2（平台化）**：流水线跑在服务端队列里，每次续写是一个 job：fork 仓库 → 跑流水线 → gate 全绿 → 发布。读者端只是这个引擎上的一层 UI。
 
