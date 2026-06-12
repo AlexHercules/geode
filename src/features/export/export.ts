@@ -83,6 +83,10 @@ async function inlineEmbeds(app: GeodeApp, notePath: string, bodyHtml: string): 
     // no KaTeX CSS or fonts. Both the HTML export and the print (PDF) path
     // render through this single inlineEmbeds call site (via renderActiveNote).
     mathOutput: "mathml",
+    // R19: exported/printed documents are always light (export.css is a
+    // self-contained light palette), so diagrams must not follow the app
+    // theme. Same single call site keeps both paths in sync.
+    mermaidTheme: "default",
   });
   return container.innerHTML;
 }
@@ -217,6 +221,10 @@ export async function printActiveNote(app: GeodeApp): Promise<void> {
 @media print {
   #root { display: none !important; }
   #geode-print-root { display: block; }
+  /* R19: a concurrently hydrating preview may have mermaid's temp render
+     container (div#d<render-id>, appended to <body>) alive at print time —
+     keep the stray half-rendered diagram out of the printed pages */
+  body > div[id^="dgeode-mermaid-"] { display: none !important; }
 }
 `;
   const printRoot = document.createElement("div");

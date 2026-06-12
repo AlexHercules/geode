@@ -577,6 +577,34 @@
   color: var(--export-error);
 }
 
+/* --- R19: mermaid diagrams — hydrated to inline-styled SVG before assembly,
+       so the exported file is self-contained. internal-link nodes stay plain
+       text on purpose: the export carries no JS, nothing is clickable --- */
+
+.geode-export .geode-mermaid {
+  margin: 1em 0;
+  text-align: center;
+}
+
+.geode-export .geode-mermaid svg {
+  max-width: 100%;
+}
+
+/* source fallback: shown when hydration never ran or mermaid failed to load */
+.geode-export .geode-mermaid-source {
+  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  text-align: left;
+  color: var(--export-text-muted);
+}
+
+/* diagram source mermaid could not render: source kept, framed in red
+   (padding mirrors the editor-side plate — same-口径, R19 review fix) */
+.geode-export .geode-mermaid-error {
+  border: 1px solid var(--export-error);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
 /* --- print --- */
 
 @media print {

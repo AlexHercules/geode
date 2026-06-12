@@ -1149,3 +1149,50 @@ mark {
 .cm-live-math .katex-display {
   margin: 0.3em 0;
 }
+
+/* ============ mermaid diagrams (R19, core/embeds.ts hydration) ============ */
+
+.editor-preview .geode-mermaid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin: 1em 0;
+}
+
+.editor-preview .geode-mermaid svg {
+  max-width: 100%;
+}
+
+/* un-hydrated / load-failed fallback keeps the fence source readable */
+.editor-preview .geode-mermaid-source {
+  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  color: var(--text-faint);
+}
+
+/* render failure plate — --danger is the existing red pair (the contract's
+   --text-error name does not exist in app.css; .geode-math-error口径) */
+.editor-preview .geode-mermaid-error {
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+/* internal-link nodes (`class A internal-link;`) — clickable + accent text.
+   Both surfaces: SVG <text> labels take fill, foreignObject htmlLabel spans
+   take color (mermaid emits either depending on htmlLabels). */
+.editor-preview .geode-mermaid .internal-link {
+  cursor: pointer;
+}
+
+/* !important: mermaid inlines a <style> scoped by the svg's #id (e.g.
+   `#geode-mermaid-0 .label text, #geode-mermaid-0 span`), and an id-bearing
+   selector beats any pure class chain — without it the accent never applies
+   (R19 review fix; mermaid's own label rules carry no !important). */
+.editor-preview .geode-mermaid .internal-link text {
+  fill: var(--accent) !important;
+}
+
+.editor-preview .geode-mermaid .internal-link span {
+  color: var(--accent) !important;
+}

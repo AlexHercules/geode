@@ -433,7 +433,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
 
   const onPreviewClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      const el = e.target instanceof HTMLElement ? e.target : null;
+      // Element (not HTMLElement): clicks inside a rendered mermaid SVG land
+      // on SVGElements, which used to bail here. closest() lives on Element,
+      // and the branch matchers themselves are HTML-anchored, so no type
+      // hazard — but dead clicks on OTHER svg targets (e.g. KaTeX \sqrt /
+      // stretchy delimiters) now reach the branches too: clicking the svg
+      // part of a collapsible callout title now toggles it (intended fix of
+      // the dead zone, recorded as an R19 behaviour change).
+      const el = e.target instanceof Element ? e.target : null;
       if (!el || !handle) return;
 
       // R18: footnote ref/backref hop — scroll the counterpart into view
@@ -496,9 +503,30 @@ export function EditorPane({ tab }: { tab: TabState }) {
         return;
       }
 
-      const anchor = el.closest<HTMLAnchorElement>("a[href]");
+      // R19: internal-link nodes inside rendered mermaid diagrams (data-target
+      // set by the hydration post-pass). The hit may be an SVGElement, so the
+      // attribute is read via getAttribute — dataset would assume HTMLElement.
+      // No subpath semantics in diagram node names (contract口径).
+      const mermaidLink = el.closest(".geode-mermaid .internal-link[data-target]");
+      if (mermaidLink) {
+        e.preventDefault();
+        const target = mermaidLink.getAttribute("data-target");
+        if (target) void openWikilink(app, target, handle.path);
+        return;
+      }
+
+      // R19 review fix (SEC-1 defense in depth): match bare `a`, not
+      // `a[href]` — SVG anchors emitted by mermaid carry only a namespaced
+      // xlink:href, which the attribute selector never matches, so a crafted
+      // diagram link would dodge the non-http preventDefault below and
+      // navigate the whole webview. Hydration already neutralizes those
+      // anchors (core/embeds.ts); this guard is the second layer.
+      const anchor = el.closest("a");
       if (anchor) {
-        const href = anchor.getAttribute("href") ?? "";
+        const href =
+          anchor.getAttribute("href") ??
+          anchor.getAttributeNS("http://www.w3.org/1999/xlink", "href") ??
+          "";
         if (!/^https?:/i.test(href)) e.preventDefault();
       }
     },

@@ -9,8 +9,11 @@
  *  - R18 dialect long tail: frontmatter exclusion + %%comment%% stripping in
  *    the pre-pass, plus hand-written markdown-it rules for ==highlight==,
  *    footnotes, callouts and $math$ (no markdown-it-* plugins).
+ *  - R19: ```mermaid fences render a hydration placeholder (fence renderer
+ *    override; every other fence keeps the default byte-identical output).
  */
 import MarkdownIt from "markdown-it";
+import { unescapeAll } from "markdown-it/lib/common/utils.mjs";
 
 /** Extract the link target from the inside of a [[...]] span (drops alias + heading). */
 export function wikilinkTarget(inner: string): string {
@@ -406,6 +409,27 @@ md.renderer.rules.image = (tokens, idx, options, env, self) => {
   const src = token.attrGet("src") ?? "";
   if (PLACEHOLDER_TEST.test(src)) token.attrSet("src", "#");
   if (defaultImageRule) return defaultImageRule(tokens, idx, options, env, self);
+  return self.renderToken(tokens, idx, options);
+};
+
+/* ---------------- R19: ```mermaid fence → hydration placeholder ---------------- */
+
+// The first word of the info string (unescapeAll + trim, exactly how the
+// default fence renderer derives the language) must equal "mermaid"
+// case-sensitively; everything else falls through to the default renderer so
+// ordinary fences stay byte-identical. The placeholder keeps the escaped
+// source visible (math fallback-readability precedent) until core/embeds.ts
+// swaps it for the rendered SVG; data-mermaid carries the same source for
+// that hydration.
+const defaultFenceRule = md.renderer.rules.fence;
+md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+  const token = tokens[idx];
+  const lang = unescapeAll(token.info).trim().split(/\s+/g)[0];
+  if (lang === "mermaid") {
+    const src = escapeHtml(token.content.trimEnd());
+    return `<div class="geode-mermaid" data-mermaid="${src}"><pre class="geode-mermaid-source"><code>${src}</code></pre></div>\n`;
+  }
+  if (defaultFenceRule) return defaultFenceRule(tokens, idx, options, env, self);
   return self.renderToken(tokens, idx, options);
 };
 

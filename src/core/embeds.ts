@@ -21,6 +21,7 @@
 import { t } from "./i18n";
 import { renderMarkdownToHtml } from "./markdown";
 import { loadKatex } from "./math";
+import { loadMermaid } from "./mermaid";
 import type { MetadataIndex } from "./metadata";
 import type { Vault } from "./vault";
 
@@ -37,6 +38,11 @@ export interface HydrateContext {
    *  views, default); "mathml" is self-contained (export/print). Propagated
    *  recursively into nested note transclusions. */
   mathOutput?: "html" | "mathml";
+  /** R19 mermaid diagram theme: defaults at hydration time to the current
+   *  app theme (document.documentElement.dataset.theme === "dark" ? "dark"
+   *  : "default"); export passes "default" explicitly (light, self-contained
+   *  output). Propagated recursively into nested note transclusions. */
+  mermaidTheme?: "default" | "dark";
 }
 
 /** Nesting guard (self-defined; Obsidian documents no limit). */
@@ -106,6 +112,103 @@ async function hydrateMath(els: HTMLElement[], ctx: HydrateContext): Promise<voi
       el.textContent = tex; // restore the source — never throw
     }
   }
+}
+
+/** Module-level counter handing every mermaid render a unique DOM id
+ *  (mermaid requires one per render call; footnoteRenderSeq precedent). */
+let mermaidRenderSeq = 0;
+
+/** R19 review fix (theme race): mermaid.initialize mutates GLOBAL config
+ *  synchronously while renders drain through mermaid's global queue, so two
+ *  overlapping hydration batches with different themes (export "default" vs.
+ *  in-app "dark") would poison each other's queued renders. This chain makes
+ *  each batch (initialize + ALL its renders) atomic — batches append and run
+ *  strictly one after another. Failures never break the chain (runBatch
+ *  swallows per-element errors and the chain link catches defensively). */
+let mermaidBatchChain: Promise<void> = Promise.resolve();
+
+const XLINK_NS = "http://www.w3.org/1999/xlink";
+
+/** R19 review fix (SEC-1): strict securityLevel still honours flowchart
+ *  `click A "url"` links, emitting `<a xlink:href>` SVG anchors that the
+ *  preview's `a[href]` click guard never sees (xlink:href is a namespaced
+ *  attribute) — a crafted diagram could navigate the whole webview. Policy:
+ *  http(s) links get the same treatment as markdown external links (plain
+ *  href + target=_blank + noopener, works in the serialized export too);
+ *  everything else (relative, mailto:, ftp:, ...) is stripped inert. */
+function neutralizeMermaidAnchors(root: HTMLElement): void {
+  for (const a of Array.from(root.querySelectorAll("a"))) {
+    const href = a.getAttribute("href") ?? a.getAttributeNS(XLINK_NS, "href") ?? "";
+    if (/^https?:/i.test(href)) {
+      a.setAttribute("href", href);
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener noreferrer");
+    } else {
+      a.removeAttribute("href");
+      a.removeAttributeNS(XLINK_NS, "href");
+    }
+  }
+}
+
+/** R19: render `.geode-mermaid[data-mermaid]` placeholders. Only called when
+ *  the root actually contains diagrams (diagram-free documents never load
+ *  mermaid). A single element failing degrades to `.geode-mermaid-error` with
+ *  the source fallback kept (render returns a string, so nothing is cleared
+ *  until success); a loader failure leaves every fallback in place. */
+function hydrateMermaid(els: HTMLElement[], ctx: HydrateContext): Promise<void> {
+  const runBatch = async (): Promise<void> => {
+    let mermaid: Awaited<ReturnType<typeof loadMermaid>>;
+    try {
+      mermaid = await loadMermaid();
+    } catch (err) {
+      console.warn("[embeds] failed to load mermaid", err);
+      return; // every element keeps its source fallback
+    }
+    const theme =
+      ctx.mermaidTheme ??
+      (document.documentElement.dataset.theme === "dark" ? "dark" : "default");
+    // re-initializing per batch is cheap and idempotent (the batch chain makes
+    // initialize + renders atomic); strict mode routes diagram text through
+    // mermaid's bundled DOMPurify, and suppressing error rendering keeps v11
+    // from injecting error SVGs into document.body (our `.geode-mermaid-error`
+    // fallback owns degradation instead).
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      suppressErrorRendering: true,
+      theme,
+    });
+    // R19 review fix (stale batches): a preview re-render replaces the DOM
+    // while an older hydration is still draining — skip elements that got
+    // detached so they stop wasting renders. Export hydrates a deliberately
+    // detached container, so only batches that STARTED attached track this.
+    const trackConnectivity = els.some((el) => el.isConnected);
+    for (const el of els) {
+      if (trackConnectivity && !el.isConnected) continue;
+      try {
+        const { svg } = await mermaid.render(
+          `geode-mermaid-${mermaidRenderSeq++}`,
+          el.getAttribute("data-mermaid") ?? "",
+        );
+        el.innerHTML = svg;
+        neutralizeMermaidAnchors(el);
+        // `class A internal-link;` nodes become clickable wikilinks: carry the
+        // node text as data-target so the caller's click delegation can resolve
+        // it like any other internal link (no links-index entry — official
+        // Obsidian behaviour).
+        for (const node of Array.from(el.querySelectorAll(".internal-link"))) {
+          node.setAttribute("data-target", (node.textContent ?? "").trim());
+        }
+      } catch (err) {
+        console.warn("[embeds] mermaid failed to render", err);
+        el.classList.add("geode-mermaid-error");
+      }
+    }
+  };
+  const run = mermaidBatchChain.then(runBatch, runBatch);
+  // keep the chain unbreakable even if runBatch itself ever rejects
+  mermaidBatchChain = run.catch(() => {});
+  return run;
 }
 
 async function hydrateImage(img: HTMLImageElement, ctx: HydrateContext): Promise<void> {
@@ -212,11 +315,17 @@ export async function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Pro
     // R18: math pass — nested transclusions are covered by the recursive
     // hydrateNote → hydrateEmbeds({...ctx}) call, which carries mathOutput
     const mathEls = Array.from(root.querySelectorAll<HTMLElement>(".geode-math[data-math]"));
+    // R19: mermaid pass — nested transclusions are covered by the recursive
+    // hydrateNote → hydrateEmbeds({...ctx}) call, which carries mermaidTheme
+    const mermaidEls = Array.from(
+      root.querySelectorAll<HTMLElement>(".geode-mermaid[data-mermaid]"),
+    );
     const passes = [
       ...imgs.map((img) => hydrateImage(img, ctx)),
       ...spans.map((span) => hydrateNote(span, ctx, depth, ancestors)),
     ];
     if (mathEls.length > 0) passes.push(hydrateMath(mathEls, ctx));
+    if (mermaidEls.length > 0) passes.push(hydrateMermaid(mermaidEls, ctx));
     await Promise.all(passes);
   } catch (err) {
     // defensive: per-element handlers already swallow their own failures
