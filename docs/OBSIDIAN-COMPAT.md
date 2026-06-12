@@ -137,7 +137,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `vault.getConfig`（非公开 API） | 固定值：defaultViewMode→"source"、useMarkdownLinks→false，其余 undefined（每 key 记缺口） |
 | `App.dragManager` / `App.internalPlugins` / `App.plugins` | warn-stub 形状（dragFile→null、getEnabledPluginById→null、plugins:{} 空字典）——recent-files 拖拽降级、daily-notes 探测返回"未启用" |
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
-| `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**（core 改写引擎，rename + 全库链接更新）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
+| `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**；**R22：`fileManager.processFrontMatter` 真实现**（core/properties 编辑引擎，逐 key diff 字节保留改写；opaque 条目不进 fm 对象且永不被改写、不可序列化值 TypeError reject、options/mtime 忽略——偏差见 ARCHITECTURE R22）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
 | `getFileCache().links` 缺 `[[#h]]` 条目 | 偏差（R16 记录）：同文链接不进 links 索引（官方含 `link: "#h"` 形态条目） |
 | `DataAdapter.appendBinary`（及 readBinary/writeBinary/stat/trash*） | warn-stub + 说明性 throw；append/process/rmdir/copy 已用字符串 IO 真实实现 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
@@ -150,6 +150,24 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
    每轮记录每个插件：加载✓/命令✓/设置页✓/核心功能✓/缺口列表。
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
+
+### R22 套件回归（2026-06-12，macOS release 二进制 v0.22.0 实测 `geode compat-vault`）
+
+R22 compat 改动一件：`fileManager.processFrontMatter` 从 no-op stub 升级为真
+实现（官方签名 d.ts:2954；core/properties 同一编辑引擎——文本来源双路径
+开文件 handle / 关文件 readFresh，R16 先例；fn 同步 mutate 对象后逐 key diff
+应用，零变更不写盘，builder 拒绝即整体 reject 零写入）。官方语义偏差入档：
+opaque 条目（嵌套 map/块标量/注释等）不进 fm 对象且永不被改写；整块不可
+解析不抛 YAMLParseError（降级空对象）；嵌套对象等不可序列化赋值 TypeError
+reject（官方全量 YAML 序列化——我们绝不静默写坏）；undefined 赋值 = 跳过
+非删除；DataWriteOptions 忽略；开文件多 key 变更 = 多 undo 步。
+macOS probe 实测：**r22-props-probe 22/22**（面板真实磁盘编辑/opaque 字节
+保留/types.json 真实写入/processFrontMatter 真实改写含删 key + opaque 不动/
+阅读视图面板）；**r20-suite-probe 9/9 不回退**（5/5 插件加载启用 + calendar
+挂载 + bridge 共存）；**r21-search-probe 14/14 不回退**。新增共写口径：
+`.obsidian/types.json` 与 Obsidian 同文件同形状（{"types":{name:type}}，
+RMW 保留未知键与兄弟键）——同库往返类型绑定不丢。缺口表更新一行
+（processFrontMatter 划入真实现）。
 
 ### R21 套件回归（2026-06-12，macOS release 二进制 v0.21.0 实测 `geode compat-vault`）
 

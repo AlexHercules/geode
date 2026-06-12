@@ -71,6 +71,333 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 22 additions — Properties 可视化编辑（frontmatter 结构化面板）
+
+> 官方校准（obsidian.md/help/properties + obsidian.d.ts:2954，2026-06-12 WebFetch）：
+> 7 种属性类型（text/list/number/checkbox/date/datetime/tags）；类型按属性名**全库绑定**
+> （存 `.obsidian/types.json`）；默认属性 tags/aliases/cssclasses；显示三选项
+> Visible/Hidden/Source；命令 "Add file property"（Cmd/Ctrl+;）；内链须引号；
+> JSON frontmatter 自动转 YAML（我们不做，见偏差）。
+> **R22 范围** = 文档内属性面板（live + reading 双模式可编辑）+ 类型系统 + 显示设置 +
+> `editor:add-property` 命令 + compat `fileManager.processFrontMatter` 真实现。
+> **显式延期**：Properties 侧栏视图（全库属性浏览/全局改名）、属性值自动补全
+> （已有值建议）、text 属性内链点击渲染、JSON frontmatter、嵌套属性编辑
+> （不透明保留，见下）、属性搜索 `[key:value]`（R21 既有延期项）。
+
+### 数据安全总原则（本轮第一底线，评审必设维度）
+
+面板**绝不重排/重写未被编辑的字节**。所有编辑 = 针对单个属性条目行区间的
+splice（其余内容含其他条目、注释、不支持的 YAML 构造逐字节保留）。超出解析子集
+的条目（嵌套 map、`|`/`>` 多行标量、重复键的后者等）解析为**不透明条目**
+（opaque：原文行只读呈现，不可视化编辑，永不被改写）。整块完全不可解析时面板
+降级为只读提示行（"在源码模式编辑"），零写入。
+
+### 新模块 `core/properties.ts`（纯 TS，零新依赖；core agent 所有）
+
+```ts
+export type PropertyType =
+  | "text" | "multitext" | "number" | "checkbox" | "date" | "datetime"
+  | "tags" | "aliases";
+export type PropertyValue = string | number | boolean | string[] | null;
+
+export interface PropertyEntry {
+  key: string;                  // 原文大小写
+  value: PropertyValue;         // null = 空值（`key:`）
+  /** 该条目完整行区间 [from, to)（含行尾 \n；to 为下一行首或块体末） */
+  from: number; to: number;
+  /** 不透明条目：原文行保留，value 无意义，面板只读 */
+  opaque?: boolean;
+  /** opaque 时的原文（含换行） */
+  raw?: string;
+}
+export interface ParsedProperties {
+  entries: PropertyEntry[];     // 文档序
+  /** 整块区间（含两道 --- 围栏与末尾换行），坐标同 FrontmatterData */
+  from: number; to: number;
+}
+/** null = 无 frontmatter 块。块边界判定与 metadata.parseFrontmatter 冻结一致：
+ *  首行恰为 `---`，闭合为行首 `---`。仅解析前 20_000 字符（livePreview 同口径）。 */
+export function parseProperties(content: string): ParsedProperties | null;
+
+export interface PropertyEdit { from: number; to: number; insert: string }
+/** 以下构造器均针对传入 content 计算单一 splice；冲突/键不存在/大小写不敏感
+ *  撞名等不可安全执行的情形返回 null（调用方重新 parse 后重试或放弃）。 */
+export function buildSetProperty(content: string, key: string, value: PropertyValue): PropertyEdit | null;
+  // 已存在（大小写不敏感匹配，保留原键写法）→ 重写该条目行区间；
+  // 不存在 → 在闭合 --- 前插入新行；无块 → 在偏移 0 创建 "---\nk: v\n---\n"。
+  // opaque 条目不可 set（返回 null）。
+export function buildRenameProperty(content: string, key: string, newKey: string): PropertyEdit | null;
+  // 仅替换键文本，值字节不动；newKey 与既有键大小写不敏感撞名 → null；
+  // newKey 须匹配 /^[^\s:][^:]*$/（拒绝冒号/前导空白）。
+export function buildRemoveProperty(content: string, key: string): PropertyEdit | null;
+  // 删除条目行；删除后块内无任何条目（含 opaque）→ 连两道围栏一起删除。
+export function inferPropertyType(value: PropertyValue): PropertyType;
+  // boolean→checkbox；number→number；/^\d{4}-\d{2}-\d{2}$/→date；
+  // /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/→datetime；array→multitext；其余 text。
+export function effectivePropertyType(key: string, value: PropertyValue, assigned?: string): PropertyType;
+  // 内建键固定：tags→tags、aliases→aliases、cssclasses→multitext（大小写不敏感）；
+  // 其余：assigned（registry 值，未知字符串回退推断）?? inferPropertyType。
+```
+
+**值解析（冻结，扩展自 parseFrontmatter 子集但独立实现，互不改动）**：
+未引号标量 `true`/`false` → boolean、`null`/`~` → null、有限十进制数字面量 → number、
+其余 → string；引号标量（单/双）恒 string（剥引号，双引号内 `\"`→`"`、`\\`→`\\`）；
+行内 `[a, b]` 与块列表 → string[]（逐项同标量剥引号但**不**做 bool/number 推断——
+列表是文本列表，官方同口径）；`key:` 空值 → null（紧随块列表项时成为列表）。
+**不透明判定**：行既非 `key: ...`（键 charset 同 parseFrontmatter）也非当前列表的
+`- item` 续行 → 该行自成匿名 opaque 条目；嵌套缩进 map（值后随更深缩进的 k: v）、
+`|`/`>` 块标量 → 整条目 opaque；同名键（大小写不敏感）再现 → 后者 opaque。
+`#` 整行注释 → opaque。**CRLF 不在解析面**（vault.read 咽喉点已统一 LF，R16）。
+
+**值序列化（冻结，含评审后修订）**：string 需要引号当且仅当（空串 | 首/末空白 |
+首字符 ∈ `[ { " ' # & * ! | > % @ \` - ?` | 含 `: ` | **尾冒号 `/:$/`**（R22-01
+评审修订：`draft:` 裸写对 js-yaml 是非法 YAML/列表项静默变嵌套 map） | 含 `#`
+（前导空白后） | 形如 bool/number/null 字面量 | 含 `[[`）——**date/datetime
+字面量不引号**（评审修订：本子集中日期本就是 string，引号无意义且偏离
+Obsidian 写法）——用双引号，内部 `\`→`\\`、`"`→`\"`；number/boolean 字面量
+（**指数记法数字拒写**——`String(n)` 离开十进制子集时返回 null，往返不变量
+优先；`canSerializeNumber` 导出给面板做 text 回退）；null → `key:`（裸键）；
+list → 块列表（`key:\n  - a\n  - b`，两空格缩进），空 list → `key: []`。
+**全部行终结符拒写**（\n、\r、U+2028、U+2029——后三者能活过引号但杀死
+re-parse 的 KV 正则，critical 评审修复）。**新键/改名键拒绝 `-` 前缀**
+（`---` 前缀序列化即闭合围栏截断块、`- ` 前缀 re-parse 成匿名 opaque 行，
+critical 评审修复；rename 与 set 同走 isInsertableKey）。**逐笔自验证**：
+serializeEntry 产物 re-parse 必须恰得一条同键等值可见条目，否则返回 null
+（未枚举到的冲突类在此兜底，绝不落盘）。
+
+**类型注册表（registry，core/properties.ts 内）**：
+```ts
+export interface PropertyTypeRegistry {
+  revision: Store<number>;
+  get(key: string): string | undefined;                 // 大小写不敏感
+  assign(key: string, type: PropertyType): Promise<void>;
+  init(vault: Vault): Promise<void>;                    // 读 .obsidian/types.json
+}
+export const propertyTypes: PropertyTypeRegistry;
+```
+存储 `.obsidian/types.json` 形状 `{"types": {"<name>": "<type>"}}`（Obsidian 实际
+文件，类型词汇 text/multitext/number/checkbox/date/datetime/tags/aliases）。
+读：缺失/坏 JSON → 空表 warn 一次；**未知类型值原样保留**（get 返回原串，
+effectivePropertyType 兜底推断）。写：RMW 保留未知键与 `types` 外的兄弟键
+（R20 appearance.json 先例）；写经模块级 promise 链串行化（R20 opChain 先例）。
+main.tsx 启动 `void propertyTypes.init(vault)`（不阻塞）；vault:changed 重读。
+浏览器 Memory adapter 经既有 configFiles/`__geodeObsidianConfig` 注入口。
+
+### Core: 配套扩展（core agent 所有）
+
+- `core/metadata.ts`：`MetadataIndex.getPropertyKeys(): string[]`——聚合全库
+  frontmatter 键（原文大小写、大小写不敏感去重取首见、字典序），按 revision
+  惰性缓存。parseFrontmatter/parseNote **零改动**（metadata 路径字节级不回归）。
+- `core/workspace.ts`：`propertiesInDocument: Store<"visible"|"hidden"|"source">`
+  + `setPropertiesInDocument(v)`，localStorage `geode.propertiesInDocument`
+  持久化，默认 "visible"（theme/fontSize 先例）。**不进 WorkspaceState 持久化树**。
+
+### UI: PropertiesPanel — `features/editor/PropertiesPanel.tsx`（新）+ EditorPane 集成 + 设置页 + 命令（ui agent 所有）
+
+```tsx
+export function PropertiesPanel(props: {
+  /** 当前文档文本（commit 时以 getDoc() 重取，不用渲染时快照） */
+  getDoc: () => string;
+  /** 应用一笔 splice：live 模式 = CM dispatch；preview 模式 = setText+modify */
+  applyEdit: (edit: PropertyEdit, focusAfter?: boolean) => void;
+  path: string;          // tags/键名自动补全 & registry 用
+  revision: number;      // handle.revision 镜像，触发重渲染
+}): JSX.Element | null;
+```
+
+- **渲染**：parseProperties(getDoc())；null → 仅在收到 add-property 聚焦请求时
+  创建块。条目按文档序渲染行：类型图标按钮 + 键名 input + 值编辑器 + 删除按钮
+  （hover 显示）。opaque 条目 → 只读原文行（`property-row-opaque`）。
+  **20k 边缘口径（评审修订，原"不会出现"断言被证伪）**：闭合围栏落在 20k
+  解析上限之外的块，parseProperties 返回 null 而 metadata（无上限）仍判有块
+  ——此类文件**禁止任何写入**：`canCreatePropertiesBlock(content)`（导出）
+  在首行为 `---` 且全文存在 `\n---` 闭合时返回 false，buildSetProperty 无块
+  创建路径与面板/命令的空块创建路径都以它为闸（评审 critical 组合后果：
+  原先会在偏移 0 叠第二个块，原 frontmatter 整体沦为正文）。
+- **值编辑器按 effectivePropertyType**：text=单行 input；number=`type="number"`
+  （commit 时 Number() 非有限 → 按 text 字符串存）；checkbox=复选框（非 boolean
+  值显示 indeterminate，点击落 true）；date/datetime=原生 `type="date|datetime-local"`
+  （存值非法格式 → 退 text input 编辑）；multitext/tags/aliases=chips + 追加
+  input（Enter/逗号提交一项、Backspace 空输入删末项、chip ✕ 删除）；tags 输入
+  带 datalist（metadata.getTagMap() 键，存值剥前导 `#`）。
+- **提交语义（冻结）**：聚焦行持本地草稿，blur/Enter 提交（与 Obsidian 逐键
+  落盘的偏差，记录）、Escape 还原草稿；提交时以 getDoc() 现值重算 builder，
+  builder 返回 null → 放弃并重渲染（响亮 console.warn）。键名改名提交 =
+  buildRenameProperty；新增 = 名称 input（datalist = getPropertyKeys()）+
+  Enter 落 `key: null` 后聚焦值编辑器。每笔提交恰一笔 splice = live 模式下
+  恰一个 undo 步。
+- **类型按钮**：点击弹类型菜单（8 选 1 内建键禁用），选择 →
+  `propertyTypes.assign(key, type)`（全库绑定，官方口径）；值不即时转换
+  （显示层随 effectiveType 切换，下次提交按新类型序列化——记录口径）。
+- **testid 面（冻结）**：`properties-panel`、`property-row-<key>`、
+  `property-row-opaque`、`property-name-<key>`、`property-value-<key>`、
+  `property-type-<key>`、`property-delete-<key>`、`property-add`、
+  `property-add-input`、`property-chip-<key>-<i>`。
+- **EditorPane 集成**：① live 模式 = createPortal 到 pane 持有的稳定容器 div
+  （经 buildEditorExtensions 新 opts 传给 livePreview，见下），applyEdit =
+  `viewRef.current.dispatch({changes: edit, userEvent: "input"})`（不动选区——
+  选区在 fm 区间外时面板不触发 reveal）；② preview 模式 = 面板直接渲染在
+  `.preview-content` 之前（同 scroller 内，随滚动），applyEdit = 任务复选框
+  先例（splice 应用于 handle.getText() → handle.setText + vault.modify；
+  **preview 态编辑不进 undo 历史——显式口径**）；③ source 模式无面板。
+  显示设置 hidden → 双模式均不渲染面板；source → 不渲染面板（live 原文显示
+  交给 livePreview 段）。订阅 handle.revision 驱动 revision prop。
+- **命令**：`editor:add-property`（name thunk t("cmd.addProperty")——As-built
+  修订：原契约写 commands.* 命名空间系笔误，仓库命令键惯例是 dict.app.ts 的
+  cmd.*，实现循惯例（评审 F7 上报后裁决）。默认热键 `Ctrl+;`，App.tsx 既有
+  编辑器命令注册点）。行为：活动 tab 无文件 → no-op；mode==="source" → 先
+  setTabMode("live")；显示设置非 visible → 先 setPropertiesInDocument
+  ("visible")（命令即编辑意图，评审 INT-2 修订）；请求经
+  `workspace.requestAddProperty(tabId, filePath)` 一次性 Store（As-built
+  修订：原契约的同步 CustomEvent 在 source→live 翻转时面板尚未挂载、事件
+  丢失——改 revealTarget R14 一次性消费形态；带 filePath，tab 导航走后的
+  陈旧请求被丢弃而非写错文件）。面板消费：无 fm 块且
+  canCreatePropertiesBlock 通过 → 创建空块（`---\n---\n` 偏移 0）并聚焦
+  新增名称输入。
+- **设置页**（features/settings/SettingsModal.tsx，Editor 节）：
+  "文档内属性" 三选下拉（`settings-properties-display`），绑
+  workspace.propertiesInDocument。
+- **i18n**（dict.views.ts，en+zh 成对）：`editor.addProperty`、
+  `editor.propertyNamePlaceholder`、`editor.propertyValuePlaceholder`、
+  `editor.deleteProperty`、`editor.propertyTypeAria`、`editor.typeText/
+  typeMultitext/typeNumber/typeCheckbox/typeDate/typeDatetime/typeTags/
+  typeAliases`、`editor.propertiesOpaqueHint`、`commands.addProperty`、
+  `settings.propertiesDisplay`、`settings.propertiesDisplayDesc`、
+  `settings.propertiesVisible/Hidden/Source`。既有 `editor.propertiesOne/
+  propertiesMany/editProperties` 键保留（pill 退役后删除 → 不删，compat
+  面板空态备用；删除与否由 ui agent 上报 chief 裁决，不得自行修订契约）。
+
+### live preview: 面板宿主 widget — `features/editor/livePreview.ts` + `cmExtensions.ts`（livePreview agent 所有）
+
+- `buildEditorExtensions` opts 新增 `propertiesHost?: HTMLElement`（EditorPane
+  创建的稳定容器；同文件双 pane 各持自己的容器/视图）。经新 Facet
+  `propertiesHostFacet` 注入 state。**签名冻结**：
+  `buildEditorExtensions({ app, getPath, mode, modeCompartment, propertiesHost })`。
+- `frontmatterField` 改造（替换 FrontmatterWidget 药丸）：
+  - 显示设置 = "visible" 且存在 fm 块 → block replace 装饰 [0, blockTo) 挂
+    `PropertiesHostWidget`（toDOM = 返回包一层的 div 并 append
+    `state.facet(propertiesHostFacet)` 容器；`eq` 恒真——容器身份稳定，CM 复用
+    DOM、portal 内容跨 doc 变更存活；`ignoreEvent` 恒真——面板事件全归 React；
+    `estimatedHeight` 提示减抖）。**选区进入 fm 区间不再 reveal 原文**（面板
+    即编辑面；键盘把光标移进区间时装饰保持——与药丸时代行为变更，记录）。
+    光标紧邻区间的上下行导航不得死锁（widget 块装饰 CM 原生跳过）。
+  - "source" → 恒不装饰（原文 YAML 常显）；"hidden" → block replace 为零内容
+    widget（fm 整段视觉隐藏；光标可经键盘进入？冻结：hidden 同样不 reveal，
+    源码模式是编辑入口——记录口径）。
+  - 显示设置变更响应：新 StateEffect `refreshProperties`，EditorPane 订阅
+    `workspace.propertiesInDocument` 后 dispatch（refreshWikilinks 先例）；
+    frontmatterField 的 update 对该 effect 重算。
+  - `propertiesHost` 未提供（防御）→ 退化为既有药丸行为（compat 或孤立调用面）。
+- pill 相关代码（FrontmatterWidget）保留为退化路径，不删。
+
+### Compat: `fileManager.processFrontMatter` 真实现（compat agent 所有；plugin.ts）
+
+官方签名（d.ts:2954）`processFrontMatter(file: TFile, fn: (fm: any) => void,
+options?: DataWriteOptions): Promise<void>`，语义 = 同步 mutate 对象后落盘：
+
+- 文本来源：`documents.get(path)` 开着 → `handle.getText()`；否则
+  `vault.readFresh(path)`（R16 双路径先例）。
+- `parseProperties` → 可视条目构成普通对象（opaque 条目**不进对象**且永不被
+  改写——与官方"完整 YAML 对象"的偏差，记录）；无块 → 空对象。fn 同步执行，
+  抛错原样 reject（官方口径）。
+- diff 应用：被删键 → buildRemoveProperty；变更/新增键（浅相等比较，数组逐项）
+  → buildSetProperty（新增按 fn 内赋值序追加块尾）；逐笔 builder 串行重算
+  （每笔基于上一笔结果文本）。零变更 → 不写盘。
+- 落盘：开着 → `handle.applyExternalEdits(edits 合并为逐笔序列)`（标脏+防抖
+  保存+进共享 undo）；关着 → `vault.modify(path, next)`（回声指纹既有）。
+  `options`（mtime）忽略，记缺口。非 .md 文件 → reject。
+- 值面：fn 可写入 string/number/boolean/string[]/null 之外的类型（嵌套对象等）
+  → 该键以 JSON.stringify 字符串落盘？**不**——冻结：不可序列化类型抛
+  TypeError reject（绝不静默写坏 YAML；与官方全量 YAML 序列化的偏差，记录）。
+- `reportGap` 该方法条目移除；其余 fileManager 方法仍 no-op stub。
+
+### 验证基建（test agent 所有；.calibration/，gitignore）
+
+- `r22-props-tests.mjs`：esbuild 打包 core/properties.ts 为 cjs 后 node 直跑
+  （r21-parser-tests 先例）。矩阵 ≥60 用例：解析（7 类型/引号/转义/行内与块
+  列表/空值/null/数字边界/日期判别）、不透明（嵌套 map、`|`/`>`、重复键、
+  注释行、匿名行）、**对抗性输入维**（R21 教训冻结进流程）：emoji/astral 键名
+  与值、U+0130 İ 大小写敏感撞键、`\r` 内嵌、超长行、值含 `---`、键含引号、
+  YAML 炸弹形状（深嵌套缩进——全 opaque 不递归）、`__proto__`/`constructor`
+  键名（对象构造用 null-prototype 或 Map 防原型污染——**冻结要求**）；
+  序列化往返（set 后 re-parse 等值）、builder 字节保留断言（编辑 A 键，
+  B 键与 opaque 区字节不变）、删除最后条目连围栏、registry RMW 保留未知键。
+- `r22-e2e.mjs`：浏览器 Playwright（dev server tmux）：面板渲染/7 类型编辑器/
+  add/rename/delete/chips/tags datalist/类型菜单 assign + types.json 往返
+  （`__geodeObsidianConfig` 注入口）/显示三模式/source 模式无面板/preview 态
+  编辑落盘/live undo 单步/无 fm 命令创建块/opaque 行只读/全 opaque 降级/
+  metadata 联动（fm tags 改动 → 标签面板）/数据安全（编辑面板期间另一 pane
+  source 同文档编辑不互踩）。
+- 桌面 probe：`compat-vault/.geode/plugins/r22-props-probe.js`（r21 先例：自建
+  fixtures、驱动真实面板 DOM、结果写回 vault；重跑前删结果文件）覆盖：面板
+  渲染+编辑落真实磁盘、types.json 真实写入、processFrontMatter 经 fixture
+  插件调用真实改写、r20/r21 probe 复跑、套件 5/5。
+
+### 一次性决策与显式偏差（chief 拍板，agent 不得修订）
+
+- 零新 npm 依赖（不引 js-yaml——子集+不透明保留比全量解析更符合字节保留承诺）。
+- 提交粒度 = blur/Enter（Obsidian 逐键落盘——偏差，记录；undo 噪声与焦点
+  重建风险不对称）。
+- preview 态编辑不进 undo（任务复选框先例同口径）。
+- JSON frontmatter 不支持（官方自动转 YAML——缺口记录）。
+- 面板内 text 值的 `[[链接]]` 不渲染为可点链接（官方渲染——延期）。
+- `.obsidian/types.json` 与 Obsidian 共写（迁移叙事：同库往返类型不丢）。
+- metadata 侧 parseFrontmatter 不动（搜索/别名/标签链路零回归面）。
+
+### As-built deltas（评审修复后回填）
+
+评审 5 维（数据安全/对抗性输入/契约分层/交互正确性/安全）workflow 32 agent：
+**25 finding → 逐条对抗验证 25 确认 / 2 证伪；去重 13 根因（3 critical +
+5 major + 5 minor），全部修复**并经复现探针反向验证 + 84 断言 E2E +
+150 用例矩阵 + 桌面 22 断言 probe 回归：
+
+- **critical#1（CSS/CM 度量）**：面板 host 的垂直 margin 折叠逃出 widget
+  wrapper，CM heightmap 少量 ~16px → **带 frontmatter 笔记的全部鼠标点击
+  光标偏一行**。修复 = `.properties-host` 垂直间距改 padding + wrapper
+  `flow-root`（editor.css 有 CRITICAL 注释，改动须保持非折叠形态）。
+  教训：**CM 块 widget 的样式必须保证 getBoundingClientRect 含全部占位**。
+- **critical#2（键名危险前缀）**：isInsertableKey 原放行 `---*`（序列化行
+  即闭合围栏，块截断属性凭空消失）与 `- *`（re-parse 成匿名 opaque）键名
+  → 拒绝 `-` 前缀；rename 同谓词；另加 entryRoundTrips 逐笔自验证兜底。
+- **critical#3（行终结符）**：serializeEntry 原只拒 \n——\r/U+2028/U+2029
+  活过引号但杀死 re-parse KV 正则（条目变匿名 opaque，键失踪）→ 全终结符
+  拒写。注意 **JS 正则字面量内不能写裸 U+2028/2029**（终结字面量），用转义。
+- **major**：尾冒号字符串引号缺失（js-yaml 报错/列表项静默变嵌套 map——
+  自家子集能往返故套件全绿掩蔽，靠外部解析器视角的评审抓出）；嵌套 flow
+  序列 `[[a,b],c]` 误压平（→ splitInlineList 见未引号括号返 null、整条目
+  opaque）；20k 边缘叠块（→ canCreatePropertiesBlock 三处闸）；块列表夹
+  空行/注释半解析（→ gap 后再现 item = 整段 opaque）；date/datetime 逐
+  change 提交（键盘清段瞬时 "" 即写 null 毁日期 → 草稿化与 ScalarInput
+  同构）；add-property 陈旧请求跨文件写入（→ 请求带 filePath + 显示态
+  翻转 + 失配即弃）；widget 边界 Backspace 吞围栏换行正文无声消失（→
+  atomicRanges + Prec.high keymap 在 blockTo+1 处吞键）。
+- **minor**：types.json RMW 跨 vault 切换窗口（→ adapter 身份写前校验）；
+  number 指数形态有限数两头不接（→ canSerializeNumber 面板 text 回退）；
+  拒绝提交后草稿不回弹（→ commitText 返 boolean，false 即 setDraft(stored)）；
+  类型菜单零键盘（→ Escape/方向键/focusout）；卸载丢草稿（→
+  **useLayoutEffect** 清理冲刷——passive effect 清理跑在 DOM 摘除后，
+  activeElement 判断必失败，实测踩过）。
+- **证伪 2**：processFrontMatter 逐笔 applyExternalEdits 中途抛错留半写
+  （验证者证明守卫不变量在同步循环内每步重建，不可构造）；number 类型
+  非数字存值显示为空（契约口径后果，入 polish 候选非缺陷）。
+- 其余 As-built：facet/effect 定义移 livePreview.ts 经 cmExtensions 再导出
+  （单文件内聚，公共导入面不变）；vault:changed 重读 types.json 过滤
+  reason==="load"（每次保存都重读是性能噪声）；rename 自身改大小写放行
+  （"既有键"读作"其他键"）；设置页新增 "Editor" 节标题（settings.editorHeading
+  i18n 键，契约未列）；ScalarInput 卸载冲刷只覆盖值草稿——键名改名/半敲
+  chips 草稿卸载即弃（自动提交半敲键名更危险，口径记录）。
+- **已知限制（入档不修）**：双 pane 同文件 add 聚焦首消费者赢；显式
+  cursorDocStart 仍可把光标放进 widget 区间（typing 落点可见无声损坏面
+  已被 atomicRanges+Backspace 闸收窄）；退化药丸路径在 atomicRanges 下
+  键盘选区进入不再触发 reveal（点击 reveal 不受影响——compat 防御面）；
+  灾难性回溯类 YAML 无新增暴露面（解析全手写状态机零回溯正则）。
+- 性能：10k metadataIndexMs 125.8ms（优于 R16 基线 151）；searchScan
+  22-69ms 持平 R21；getPropertyKeys 0.1ms（revision 缓存）。
+- 验证资产（.calibration/，gitignore）：r22-props-tests.mjs 150 用例、
+  r22-e2e.mjs 84 断言、评审复现探针 r22-review-probe*.mjs /
+  r22-verify-*.mjs / r22-adv-*.mjs（修复后反向复跑全数确认）；桌面
+  compat-vault/.geode/plugins/r22-props-probe.js 22 断言。
+
 ## Round 21 additions — 搜索运算符（path:/tag:/file:/正则 + 布尔组合）
 
 > 官方校准（obsidian.md/help/plugins/search，2026-06-12 WebFetch）。R21 范围 =

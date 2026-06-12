@@ -465,6 +465,40 @@ major = U+0130 İ `toLowerCase` 变长致区间漂移 → `LoweredText` 偏移�
 不劣于纯词扫描口径）；桌面 macOS release 二进制 + r21 搜索 probe 插件
 （compat-vault 自建夹具驱动真实面板 DOM）+ r20 套件 probe 回归。
 
+### R22 — v0.22（2026-06-12）Properties 可视化编辑（R19+ 候选池 #4）
+
+官方校准（obsidian.md/help/properties + obsidian.d.ts:2954，2026-06-12
+WebFetch）：7 类型（text/list/number/checkbox/date/datetime/tags）、类型按
+属性名**全库绑定**（`.obsidian/types.json` 共写）、默认属性、显示三选项
+Visible/Hidden/Source、`Ctrl+;` 命令。
+**数据安全总原则（本轮第一底线）**：面板绝不重写未编辑字节——所有编辑 =
+单条目行区间 splice；超出解析子集的构造（嵌套 map、`|`/`>` 块标量、嵌套
+flow 序列、夹空行/注释的列表、重复键）= **不透明条目**逐字节保留、面板
+只读、永不被改写。
+**core/properties.ts（新，纯 TS 零依赖）**：typed 解析（boolean/number/
+null/string/string[] + 每条目行区间）+ 三个字节保留 edit builder（不可安全
+执行一律 null + 逐笔序列化自验证）+ 类型注册表（types.json RMW 保留未知键、
+opChain 串行化、adapter 身份防 vault 切换竞态）。**PropertiesPanel**：7 类
+值编辑器（草稿 + blur/Enter 提交 + Escape 还原 + 卸载冲刷）、chips、双
+datalist 自动补全、类型菜单（含键盘）、add/rename/delete；live 模式经 CM
+块 widget + React portal（稳定容器跨 doc 变更存活），preview 模式同面板
+直渲染；显示三模式设置 + `editor:add-property`（Ctrl+;，一次性消费 Store
+防挂载竞态）。**compat**：`fileManager.processFrontMatter` 真实现（同引擎
+逐 key diff，套件先例双路径）。
+评审 5 维 workflow（32 agent）**25 finding → 对抗验证 25 确认 / 2 证伪，
+去重 13 根因（3 critical + 5 major + 5 minor）全修复**：critical = 面板
+margin 折叠致 CM heightmap 少测、带 fm 笔记全部鼠标点击偏一行（padding
+根治）；`---`/`- ` 前缀键名序列化即围栏截断/匿名 opaque（键名谓词 + 往返
+自验证）；\r/U+2028/U+2029 杀 re-parse（全终结符拒写）。major 含尾冒号
+YAML 合法性（自家子集往返全绿掩蔽——**教训：序列化正确性要用外部解析器
+视角评审**，js-yaml 实测）、20k 边缘叠块、widget 边界 Backspace 吞行
+（atomicRanges + keymap）、陈旧 add 请求跨文件写入。
+验证：单测矩阵 150 用例 + 浏览器 E2E 84 断言 + 评审复现探针修复后反向
+全数确认；桌面 macOS r22-props-probe 22/22 + r20 9/9 + r21 14/14 不回退；
+10k metadataIndexMs 125.8ms（优于 R16 基线）。
+显式延期：Properties 侧栏视图（全库浏览/全局改名）、值建议、text 内链
+渲染、JSON frontmatter、嵌套属性编辑、`[key:value]` 属性搜索。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -488,7 +522,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 |---|---|
 | ~~mermaid 图表~~ | **R19 已完成（v0.19，见上）** |
 | ~~主题 CSS 类名兼容层~~ | **R20 已完成（v0.20，见上）**——变量桥+类名对齐+theme/snippets 加载；后续逐步对齐更多类名/变量消费侧 |
-| Properties 可视化编辑 | frontmatter 结构化面板 |
+| ~~Properties 可视化编辑~~ | **R22 已完成（v0.22，见上）**——余项：侧栏 Properties 视图/全局改名/值建议/text 内链渲染（按需求驱动） |
 | 模板系统 | 新建套模板 + 日期变量 |
 | ~~搜索运算符（path:/tag:/file:/正则）~~ | **R21 已完成（v0.21，见上）**——余项：block:/section:/task:*/属性搜索 `[key:value]`/比较运算（按需求驱动） |
 | 未链接提及 | 反链面板扩展 |
