@@ -52,3 +52,22 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
   `dangerousInsecureTransportProtocol`，不得提交），探针 `.calibration/r9-up1~3.js`
   （检查/负向篡改签名/正向安装），负向必须含"合法编码错误签名"用例
 - demo vault 是回归夹具，测试痕迹要清理后再提交
+
+## macOS 环境口径（R20 起，开发机迁移）
+
+- 浏览器 E2E：Playwright 装在 **`.calibration/`**（gitignore，独立 package.json
+  ——**别在仓库根 npm i**，会污染主 package.json）；dev server 必须经
+  `tmux new-session -d -s geodedev "npm run dev"` 起（hook 强制）；
+  curl 探活加 `--noproxy '*'`（本机代理环境变量会劫持 localhost）。
+- 桌面验证：`npm run tauri build` 产出裸二进制 `src-tauri/target/release/geode`
+  （bundle targets 是 Windows NSIS 配置，macOS 下无 .app/.dmg——验证用裸二进制
+  `./geode <vault绝对路径>` 直开即可）。**WKWebView 无 CDP**——桌面 E2E 改用
+  probe 插件方案：`<vault>/.geode/plugins/*.js` 探针拿 `window.geode.app` 做
+  断言、结果写回 vault 文件，外部读文件判定（r20-probe.js / r20-suite-probe.js
+  先例，在 .calibration/theme-vault 与 compat-vault）。`screencapture` 需要
+  终端屏幕录制权限（TCC，未授予则截图跳过）。
+- 重建资产（gitignore 不随 git 迁移）：compat-vault 5 插件 GitHub 按版本重下；
+  `.calibration/theme-vault`（Minimal 主题夹具）；r18-diff 字节级套件**尚未
+  在本机重建**——改 core/markdown.ts 前必须先重建（HANDOFF 有命令）。
+- Windows 专项（NSIS 安装包/更新链路 E2E/nldates 逐键 CDP 探针）本机不可执行，
+  发布相关验证留 Windows 机或 CI。

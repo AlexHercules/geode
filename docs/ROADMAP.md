@@ -405,6 +405,40 @@ internal-link 点击 → openWikilink；live 维持源码呈现（显式偏差�
 `[[2026-06-13]]` + reload 幂等 + 回声 suppressed4/external2 不回退；diff 套件
 78 用例全绿。截图 docs/screenshots/r19-desktop-mermaid.png。
 
+### R20 — v0.20（2026-06-12）Obsidian 主题 CSS 兼容层（R19+ 候选池 #2）
+
+**本轮起开发环境迁移至 macOS**（用户云端拷贝项目到本地桌面；Rust 工具链/Playwright/
+tmux 重建，gitignored 资产 .calibration/compat-vault 重建——**.tauri-keys 更新签名
+私钥未随迁，见 HANDOFF 风险条目**）。官方校准（docs.obsidian.md/Themes + Reference/
+CSS variables，2026-06-12 WebFetch）：主题 = `.obsidian/themes/<name>/{manifest.json,
+theme.css}` + appearance.json `cssTheme`；snippets = `.obsidian/snippets/*.css` +
+`enabledCssSnippets`；作用域 = body 上的 `.theme-dark/.theme-light` 类。
+**三层结构**：① 变量桥（`theme-bridge.css` 注入式样式表，镜像真实 Obsidian 形状——
+私有 `--geode-ob-*` 模式原语进 .theme-dark/.theme-light、语义变量默认值（字面量 =
+Geode 现调色板）进 body{}、Geode 变量 body 作用域 repoint 一跳 var()——**零视觉变化
+承诺**：无主题时桥开/关计算样式一致，E2E 断言）；② 类名对齐常驻子集（body theme-dark/
+light、workspace*/workspace-leaf、markdown-preview-view/markdown-rendered、
+markdown-source-view/mod-cm6 等）；③ 加载链（Rust 新命令 `vault_list_config_dir` +
+adapter `listConfigDir` 三实现；appearance.json 读写往返**保留未知键**；总开关
+localStorage 默认开 = 逃生口；设置页主题下拉 + snippets 开关列表 + i18n 8 键）。
+发现即 Geode 调色板本就镜像 Obsidian dark base 色板且五个 text 变量同名——桥接面
+小于预期。compat 接线沿 obsidianLoadReport 先例（AppContext.obsidianCss 句柄下放，
+features 零 compat import）。
+评审（4 维 workflow + 安全维补跑）**11 finding → 对抗验证全确认（2 major）0 证伪**，
+全部修复：major#1 = 桥语义变量锁 .theme-dark 特异性压制主流主题的官方 body{} accent
+覆写（Minimal/Things 实测形状；验证者 headless Chrome 复现）→ 私有原语+body 语义
+默认三段式重构；major#2 = setObsidianSnippet 并发丢更新 → mutate 内增量 RMW + 单
+opChain 串行化全部变更；minor 含 caret 死旋钮接通、插件样式/主题注入序不变量
+（订阅 obsidianLoadReport 重建）、appearance.json 坏 JSON 防最小化覆写（fail-visible）、
+?raw 声明迁 src/、--background-modifier-error 补全。详见 ARCHITECTURE R20 As-built。
+浏览器 E2E（Playwright，新基建 .calibration/r20-e2e.mjs）33/33：恒等/穿透/body{}
+accent 回归/双色调选边/并发 toggle 回归/caret/类名/往返/逃生口全绿。桌面（macOS
+release 二进制 + **probe 插件自检方案**——WKWebView 无 CDP，`.geode/plugins` 探针
+写结果文件）：theme-vault 真实 Minimal 主题 9/9（发现/注入/磁盘往返），compat-vault
+套件回归 9/9（**5/5 插件 macOS 真实 fs 加载启用** + calendar 挂载 + R20 层共存）。
+已知限制：appearance.json 写非原子（R21+ 候选）；部分桥变量暂无 Geode 消费侧
+（默认值面口径）；macOS 桌面截图因 TCC 权限未产出。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -427,7 +461,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | 功能 | 备注 |
 |---|---|
 | ~~mermaid 图表~~ | **R19 已完成（v0.19，见上）** |
-| 主题 CSS 类名兼容层 | OBSIDIAN-COMPAT 规划过的独立可选层；**R18 的 callout DOM 已按 `.callout`/`data-callout`/`is-collapsible` 社区共识对齐，此层落地时受益** |
+| ~~主题 CSS 类名兼容层~~ | **R20 已完成（v0.20，见上）**——变量桥+类名对齐+theme/snippets 加载；后续逐步对齐更多类名/变量消费侧 |
 | Properties 可视化编辑 | frontmatter 结构化面板 |
 | 模板系统 | 新建套模板 + 日期变量 |
 | 搜索运算符（path:/tag:/file:/正则）| 搜索专项一并做 |

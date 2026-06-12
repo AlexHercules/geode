@@ -71,6 +71,296 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 20 additions — Obsidian 主题 CSS 兼容层（变量桥 + 类名对齐 + theme/snippets 加载）
+
+R19+ 候选池第 2 项（OBSIDIAN-COMPAT R3 末规划过的「独立可选层」；R18 callout DOM
+已按社区共识对齐，本层落地直接受益）。官方校准（docs.obsidian.md/Themes/App+themes/
+Build+a+theme + Reference/CSS+variables/*，2026-06-12 WebFetch）：
+
+- **主题文件布局**：`<vault>/.obsidian/themes/<name>/{manifest.json, theme.css}`，
+  manifest `name` 须与目录名一致；激活主题记录在 `.obsidian/appearance.json` 的
+  `cssTheme` 键（空/缺失 = 默认主题）；CSS snippets 在 `.obsidian/snippets/*.css`，
+  启用列表在 appearance.json `enabledCssSnippets`（string[]，不含 .css 后缀）。
+- **主题作用域**：官方主题在三个选择器下覆写变量——`body`（两模式共用）、
+  `.theme-dark` / `.theme-light`（按色调）；这两个类挂在 **body** 上。
+- **变量面**：官方 400+ 变量；基础色板 = `--background-primary/-alt`、
+  `--background-secondary/-alt`、`--background-modifier-*`（hover/active-hover/
+  border/border-hover/border-focus/form-field/error）、`--text-normal/muted/faint/
+  on-accent/accent/accent-hover/error/selection/highlight-bg`、`--interactive-
+  normal/hover/accent/accent-hover`、`--accent-h/s/l`、`--caret-color`。
+- **关键事实（探查确认）**：Geode 调色板本就镜像 Obsidian 默认主题观感
+  （#1e1e1e/#262626/#2a2a2a/#363636/#dadada 即 Obsidian dark base 色板），且
+  `--text-normal/--text-muted/--text-faint/--text-on-accent/--text-highlight-bg`
+  五个变量**直接同名**——桥接面小于预期。
+
+### 一次性决策（chief；agent 不得加依赖、不碰 Rust）
+
+- **零新 npm 依赖**。Rust 新增一条通用命令 `vault_list_config_dir`（chief 落地，
+  见下）；无其他 Rust 改动。
+- **三层结构**：① 变量桥（bridge）= 注入式样式表：Obsidian 基础变量默认值
+  （字面量 = Geode 现值，**零视觉变化承诺**）+ Geode 变量 repoint 到 Obsidian
+  变量；② 类名对齐 = 常驻 DOM class 子集（不随开关增删，无主题 CSS 时惰性）；
+  ③ 加载链 = appearance.json 读写 + theme.css / snippets 注入。
+- **总开关**（设置页 "Obsidian CSS"，默认 **开**）：localStorage
+  `geode.obsidianCss`（"on"/"off"）。开 = 注入 bridge + 激活主题 + 启用 snippets；
+  关 = 移除全部三组 style 元素（兜底逃生口——桥变量链路若有差错一键归零）。
+  开且未装任何主题 = bridge 恒等映射，**计算样式与关闭时一致**（E2E 断言，
+  accent HSL 表示允许 ±1/255 舍入）。
+- **CSS 信任口径（记录）**：theme.css/snippet 是用户自装的任意 CSS，可经
+  url()/@import 发起网络请求——与社区插件同级信任（Obsidian 同口径），不消毒
+  不拦截。路径安全由 Rust `safe_join_obsidian` 兜底（`.obsidian/` 禁越界）。
+- **主题色调跟随 Geode**：theme.css 同时带 .theme-dark/.theme-light 两套作用域，
+  body 类随 Geode 主题切换自动选边；appearance.json 的 `theme`（base 色调）与
+  `accentColor` 键**忽略**（Geode 自有主题/accent 设置，缺口记录）。
+
+### Rust: `vault_list_config_dir`（chief 已落地）
+
+```rust
+#[derive(Serialize)] #[serde(rename_all = "camelCase")]
+struct ConfigDirEntry { name: String, is_dir: bool }
+/// List entries directly under `<vault>/.obsidian/<path>`.
+/// Missing dir → empty vec (not an error). safe_join_obsidian 防越界。
+#[tauri::command]
+fn vault_list_config_dir(vault: String, path: String) -> CmdResult<Vec<ConfigDirEntry>>
+```
+
+### Core: adapter 扩展 — `core/vault.ts`（core agent）
+
+```ts
+export interface ConfigDirEntry { name: string; isDir: boolean }
+// VaultAdapter 新增（readConfig/writeConfig 同族）：
+listConfigDir(relPath: string): Promise<ConfigDirEntry[]>;
+```
+
+- Tauri 实现：invoke `vault_list_config_dir`。Memory 实现：扫 `configFiles` Map
+  键前缀合成（`themes/X/theme.css` → "themes" 列出 `{name:"X", isDir:true}`），
+  名字典序；首次 config 访问时惰性种子 `window.__geodeObsidianConfig`
+  （`Record<string,string>`，键 = `.obsidian` 相对路径——E2E 注入口，
+  `__geodeObsidianPlugins` 先例）。消费方走 `vault.adapter.listConfigDir`
+  （loader 的 readConfig 直访先例，不加门面方法）。
+- body 的 `.theme-dark/.theme-light` 同步**不在 core**（分层：compat 自管，见下）。
+
+### Compat: 管理器 — `compat/obsidian/themes.ts`（新）+ `theme-bridge.css`（新，?raw import）（compat agent）
+
+```ts
+export interface ObsidianCssTheme { dir: string; name: string }   // name = manifest.name ?? dir
+export interface ObsidianCssSnippet { name: string; enabled: boolean } // name 不含 .css
+export interface ObsidianCssState {
+  enabled: boolean;
+  themes: ReadonlyArray<ObsidianCssTheme>;
+  activeTheme: string;                       // theme dir；"" = 无
+  snippets: ReadonlyArray<ObsidianCssSnippet>;
+}
+export const obsidianCssState: Store<ObsidianCssState>;
+export function initObsidianCss(ctx: { vault: Vault; events: EventBus; workspace: Workspace }): Promise<void>;
+export function setObsidianCssEnabled(on: boolean): Promise<void>;
+export function setObsidianTheme(dir: string): Promise<void>;     // "" 清除
+export function setObsidianSnippet(name: string, on: boolean): Promise<void>;
+```
+
+- **发现**：`listConfigDir("themes")` 的 isDir 项 → `readConfig("themes/<dir>/
+  manifest.json")`（JSON 失败 → name 退 dir，warn 一次）；theme.css 缺失的目录
+  跳过。`listConfigDir("snippets")` 的 `*.css` 文件项。manifest `minAppVersion`
+  不校验（记录）。
+- **appearance.json**：读 `cssTheme`/`enabledCssSnippets`（缺失文件/坏 JSON →
+  视为 `{}`，warn 一次）；写 = read-modify-write **保留未知键**（与真实
+  Obsidian vault 往返不丢字段）；激活主题不在发现列表 → 不注入但 UI 显示该值
+  （Obsidian 同口径：主题文件删了配置仍在）。
+- **注入（冻结 DOM）**：`<style id="geode-obsidian-bridge">`（bridge）→
+  `<style id="geode-obsidian-theme" data-theme-dir="<dir>">`（theme.css 原文）→
+  `<style data-obsidian-snippet="<name>">`（按 enabledCssSnippets 序）。三组按
+  此序 append 到 `document.head` 末尾；任何变更 = 整组移除重注入（顺序不变量
+  靠重建保证，不靠 insertBefore 微调）。总开关关 → 三组全移除。
+- **body 类同步**：init 时按 `workspace.state` 设 `body.theme-dark|theme-light`，
+  订阅 `theme:changed` 切换。**常驻**（不随总开关移除——类名惰性，snippets/
+  theme 的作用域锚点）。
+- **vault:changed** → 全量重发现 + 重注入（旧 vault 的 style 元素先移除）。
+  `initObsidianCss` 幂等（重复调用 = 重新发现）；测试钩子
+  `window.__geodeObsidianCssReinit = () => initObsidianCss(ctx)`。
+- 主题文件磁盘外部修改**不热重载**（.obsidian 不在 watcher 面；重切主题/重开
+  vault 生效——口径记录）。
+
+### Compat: 变量桥 — `theme-bridge.css`（冻结映射表）
+
+选择器形状镜像**真实 Obsidian**（评审 R20-CSS-01 修正）：模式原语用私有
+`--geode-ob-*` 名放 `.theme-dark`/`.theme-light`（主题永不触碰私有名，不可能
+压制主题覆写），全部 Obsidian **语义变量默认值放 `body{}`**（官方 app.css 同
+形状）——主题在 `body{}` 覆写按文档序赢（本表注入序在 theme.css 之前）、在
+`.theme-dark{}` 覆写按特异性赢，两路都通。三段：
+
+**①a 私有模式原语 + ①b body 作用域语义默认值**（字面量 = app.css 现值的
+拷贝；CSS 同步块成对注释 `/* OBSIDIAN-BRIDGE-PALETTE-BEGIN */` … `-END`，
+app.css 变量节加对应注释提示改动须同步）：
+
+| Obsidian 变量 | dark（= Geode 现值） | light |
+|---|---|---|
+| `--background-primary` | `#1e1e1e`（--bg-app） | `#f5f5f5` |
+| `--background-primary-alt` | `#1c1c1c`（--bg-input） | `#fafafa` |
+| `--background-secondary` | `#262626`（--bg-panel） | `#ffffff` |
+| `--background-secondary-alt` | `#2a2a2a`（--bg-panel-alt） | `#f0f0f0` |
+| `--background-modifier-hover` | `rgba(255,255,255,0.055)` | `rgba(0,0,0,0.05)` |
+| `--background-modifier-active-hover` | `rgba(255,255,255,0.1)` | `rgba(0,0,0,0.09)` |
+| `--background-modifier-border` | `#363636` | `#e0e0e0` |
+| `--background-modifier-border-hover` | `#444444` | `#c8c8c8` |
+| `--background-modifier-border-focus` | `#444444` | `#c8c8c8` |
+| `--background-modifier-form-field` | `#1c1c1c` | `#fafafa` |
+| `--text-normal/muted/faint/on-accent/highlight-bg` | （同名既有，桥不重复定义——主题在 body 级覆写天然生效） | 同左 |
+| `--text-error` | `#e06c75`（--danger） | `#d04848` |
+| `--text-accent` | `#8b7cf6` | `#6c5ce7` |
+| `--text-accent-hover` | `#9d90f8` | `#5a4bd1` |
+| `--text-selection` | `rgba(139,124,246,0.3)` | `rgba(108,92,231,0.25)` |
+| `--accent-h/s/l` | `#8b7cf6` 的精确 HSL 三分量 | `#6c5ce7` 的 |
+| `--interactive-accent` | `hsl(var(--accent-h), var(--accent-s), var(--accent-l))` | 同左 |
+| `--interactive-accent-hover` | `#9d90f8` | `#5a4bd1` |
+| `--interactive-normal` | `#2a2a2a` | `#f0f0f0` |
+| `--interactive-hover` | `#363636` | `#e0e0e0` |
+| `--code-background` | `rgba(255,255,255,0.06)` | `rgba(0,0,0,0.05)` |
+| `--link-unresolved-color` | `#8b7cf680` | `#6c5ce780` |
+| `--background-modifier-error` | `#e06c75`（--danger） | `#d04848` |
+| `--caret-color` | `var(--interactive-accent)`（消费侧 cmExtensions `caretColor: var(--caret-color, var(--accent))`——桥开恒等 accent，主题覆写生效） | 同左 |
+
+**② Geode 变量 repoint**（`body` 作用域——元素级覆盖 html[data-theme] 定义，
+无环：桥默认值全为字面量）：`--bg-app: var(--background-primary)`、
+`--bg-panel: var(--background-secondary)`、`--bg-panel-alt:
+var(--background-secondary-alt)`、`--bg-input: var(--background-modifier-
+form-field)`、`--bg-hover: var(--background-modifier-hover)`、`--bg-active:
+var(--background-modifier-active-hover)`、`--border: var(--background-
+modifier-border)`、`--border-strong: var(--background-modifier-border-hover)`、
+`--accent: var(--interactive-accent)`、`--accent-hover: var(--interactive-
+accent-hover)`、`--selection: var(--text-selection)`、`--danger:
+var(--text-error)`、`--code-bg: var(--code-background)`、`--link-unresolved:
+var(--link-unresolved-color)`。**不 repoint**（无精确对应物，零视觉变化承诺
+优先，缺口记录）：`--bg-modal`、`--shadow-modal`、`--accent-muted`、
+`--callout-*`。
+**字体钩子**：`body { font-family: var(--font-text-theme, <Geode 现默认栈
+字面量>) }`（主题设 `--font-text-theme` 即生效；--font-interface/-monospace
+不接，记录）。
+
+### UI: 类名对齐 + 设置页 — `app/App.tsx` + `features/editor/EditorPane.tsx` + `features/settings/SettingsModal.tsx` + `core/i18n/dict.views.ts`（ui agent）
+
+- **类名追加**（常驻、只增不改，app.css 选择器零改动）：`.app-body` +=
+  `workspace`；`.ribbon` += `workspace-ribbon side-dock-ribbon mod-left`；
+  `.sidebar-left` += `workspace-split mod-horizontal mod-left-split`；
+  `.sidebar-right` += `workspace-split mod-horizontal mod-right-split`；
+  `.main` += `workspace-split mod-vertical mod-root`；`.editor-pane` +=
+  `workspace-leaf`；`.editor-preview` += `markdown-reading-view`；
+  `.preview-content` += `markdown-preview-view markdown-rendered`；
+  `.editor-cm-host` += `markdown-source-view mod-cm6`。（tab header/nav 树/
+  modal/设置页类名不对齐——后续逐步，缺口记录。）
+- **设置页 Appearance 节新增 "Obsidian CSS" 三项**（经 AppContext 的
+  `obsidianCss` 句柄，features 不 import compat）：总开关
+  （`data-testid="obsidian-css-toggle"`，settings-toggle 既有形态）；主题下拉
+  （`obsidian-theme-select`，"无" + 发现列表，value=dir，显示 manifest name；
+  激活值不在列表时附加显示）；snippets 开关列表（`obsidian-snippet-toggle-
+  <name>`；空 → muted 提示行）。开关/下拉变更即调句柄 setter（async，错误
+  console.warn 不抛 UI）。
+- **i18n 8 键**（dict.views.ts，en+zh 双全）：`settings.obsidianCss`（"Obsidian
+  CSS" / "Obsidian CSS 兼容"）、`settings.obsidianCssDesc`、
+  `settings.obsidianTheme`、`settings.obsidianThemeDesc`、
+  `settings.obsidianThemeNone`（"None"/"无"）、`settings.obsidianSnippets`、
+  `settings.obsidianSnippetsDesc`、`settings.obsidianSnippetsEmpty`。
+
+### 接线 — `main.tsx` + `app/AppContext.tsx`（compat agent；bootstrap wiring 例外面）
+
+- main.tsx：`loadObsidianPlugins` 之后 `void initObsidianCss({vault, events,
+  workspace})`（不阻塞启动）；AppContext 新增
+  `obsidianCss: { state: Store<ObsidianCssState>; setEnabled; setTheme;
+  setSnippet }`（obsidianLoadReport 先例——shell 持有 compat 句柄下放，
+  features 仍零 compat import）。
+
+### 口径（零代码，记录）
+
+- 主题 CSS 只承诺**变量层生效 + 已对齐类名子集**；主题对未对齐 DOM 结构的规则
+  （tab/nav/modal 深层）不生效或部分生效——「逐步对齐但不承诺」（OBSIDIAN-COMPAT
+  R3 末战略口径）。
+- compat 插件注入的 styles.css 与本层共存：插件样式在前（loader 既有时序），
+  主题在后——同特异性主题胜（Obsidian 实际加载序同向）。
+- 桥 repoint 后 Geode 变量经一层 var() 间接——DevTools 里追值多一跳（记录，
+  非缺陷）。
+- E2E（浏览器）：开关恒等断言（无主题时桥开/关计算样式一致）、fixture 主题
+  变量穿透（--background-primary → .editor-pane 计算背景）、dark/light 切换
+  选边、snippet 启停往返 appearance.json、总开关移除全部 style 元素、body 类
+  跟随、设置页三控件交互。桌面（macOS .app）：真实社区主题（Minimal）目检
+  截图。
+
+### Round 20 file ownership (parallel agents — do not cross)
+
+| Agent | Files |
+|---|---|
+| core | core/vault.ts（ConfigDirEntry + listConfigDir 三实现） |
+| compat | compat/obsidian/themes.ts（新）, compat/obsidian/theme-bridge.css（新）, src/main.tsx（接线行）, src/app/AppContext.tsx（obsidianCss 句柄） |
+| ui | src/app/App.tsx（类名）, features/editor/EditorPane.tsx（类名）, features/settings/SettingsModal.tsx（Obsidian CSS 节）, core/i18n/dict.views.ts（8 键 en+zh） |
+
+Chief pre-phase：本节契约 + Rust `vault_list_config_dir`。Frozen surfaces：
+adapter `listConfigDir`/`ConfigDirEntry` 形状、themes.ts 导出五件套签名、
+`obsidianCssState` 形状、三组 style 元素 id/attr 与注入序、变量映射表全表、
+类名追加清单、localStorage 键、appearance.json 读写口径、AppContext.obsidianCss
+形状、i18n 8 键。每 agent 结束前 `npx tsc --noEmit`；不加依赖；不碰 docs/、
+src-tauri/**、core/markdown.ts、core/embeds.ts；ui agent 不碰 app.css 选择器
+（仅 chief 核可的同步注释）；agent 行内注释不得修订契约（R13 教训）。
+
+### As-built deltas (post-review — R20)
+
+Review: 4 维（变量桥与层叠 / 注入与路径安全 / 生命周期与并发 / 分层契约），
+评审 workflow 11 finding → 对抗验证 **10 confirmed（2 major）/ 0 refuted**
+（security 维 agent 流超时，单独补跑 = 1 minor confirmed），全部修复：
+
+- **FIXED (major) — R20-CSS-01：桥语义变量锁在 `.theme-dark` 特异性下，
+  压制主题的官方 `body{}` 覆写**：真实 Obsidian 把语义变量（含 accent 系）
+  定义在 `body{}`，Minimal/Things 等主流主题也在 `body{}` 覆写 accent——
+  原桥把全部默认值放 `.theme-dark/.theme-light`（0,1,0），特异性恒胜主题的
+  `body{}`（0,0,1），文档序救不了，主题 accent 被静默忽略（验证者 headless
+  Chrome 复现 + 比对真实 Obsidian app.css 与 Minimal/Things 源码实锤）。
+  修复 = 桥改三段式：私有 `--geode-ob-*` 模式原语进 `.theme-dark/.theme-light`
+  （主题不触私有名），语义默认值全部移到 `body{}` 一跳 var() 引用——主题
+  body{}（文档序）与 .theme-dark{}（特异性）两路覆写都生效。E2E 新增
+  body{} accent 覆写回归用例。
+- **FIXED (major) — R20-LC-1：setObsidianSnippet 并发丢更新**：next 数组在
+  await 前从模块级 snippetOrder 快照、await 后整体覆盖回写——交错调用第二次
+  覆盖第一次（磁盘丢数据 + state/DOM/磁盘三方不一致）。修复 = ① next 改在
+  persistAppearance 的 mutate 内从刚读出的 obj 计算（增量 RMW）；② 单条
+  `opChain` promise 链把 init + 全部 setter 串行化（enqueue），同时根治
+  **LC-2**（init 尾部整体 state.set 用过期快照回滚交错 setter 的变更）。
+  E2E 新增并发双 toggle 回归用例。
+- **FIXED (minor) — R20-CSS-02：--caret-color 死旋钮**：桥定义了它但全仓无
+  消费者（CM 主题硬编码 var(--accent)）。修复 = cmExtensions 两处改
+  `var(--caret-color, var(--accent))` + 桥默认值改 `var(--interactive-accent)`
+  （桥开恒等 accent、桥关走 fallback，零视觉变化承诺保持；主题覆写生效）。
+  契约表已更新。
+- **FIXED (minor) — R20-LC-3/CC-5：插件 styles.css 与主题的 head 文档序
+  不变量**：切库/重载插件时 loader 把插件 style 追加到我们三组之后，
+  「插件样式在前、主题在后」被打破。修复 = themes.ts 订阅
+  `obsidianLoadReport`（compat 内部 import，分层合规），每轮插件加载后
+  applyInjection 重建三组（append 回 head 末尾恢复不变量）。
+- **FIXED (minor) — 安全 F-01：appearance.json 坏 JSON 触发最小化覆写**：
+  原实现 parse 失败降级 `{}` 再写回——Obsidian 自有键（theme/accentColor/…）
+  被静默清空。修复 = 文件缺失才从 `{}` 新建；存在但 unreadable/非对象 →
+  抛错中止写入（fail-visible，setter 经 opChain warn 降级、state 不前进）。
+  其余五个审计面（Rust 越界/symlink、setAttribute/textContent 注入、React
+  转义、localStorage 异常、Memory 前缀匹配）零 finding。
+- **FIXED (minor) — R20-CC-2**：`--background-modifier-error` 补入桥
+  （= --danger 字面量，契约表已补行）。
+- **FIXED (minor) — R20-CC-4**：`*.css?raw` 全局声明从 features/export/
+  raw-import.d.ts 迁至 **src/raw-import.d.ts**（compat 不再编译依赖 feature
+  目录内文件；katex-css.d.ts 注释同步修正）。
+- **as-built 口径修正三处（实现合理、契约入档）**：① `vault:changed` 重发现
+  收窄为 `reason === "load"`（vault ROOT 切换；逐文件事件不重发现——.obsidian
+  不在 watcher 面，且逐 keystroke 重建 style 元素有闪烁风险）；② 总开关关闭
+  时设置页主题下拉与 snippet 开关均加原生 `disabled` + aria-disabled（CC-3
+  统一两控件机制）；③ ui agent 自加 `data-testid="obsidian-snippets-empty"`
+  空态行（非冻结面）。
+- 已知限制（记录）：appearance.json 写入沿用 `vault_write_config` 非原子
+  fs::write（崩溃窗口可留半文件；F-01 修复保证后续操作不会再放大为键丢失，
+  原子化留 R21+）；桥变量 `--text-accent`/`--interactive-normal`/
+  `--interactive-hover` 等暂无 Geode 消费者（主题引用它们可正常解析——
+  仅作默认值面，与真实 Obsidian 的消费深度有差距，逐步对齐口径）。
+
+浏览器 E2E（dev :1420 + Playwright，.calibration/r20-e2e.mjs）33/33：恒等
+开关、fixture 主题穿透（背景/侧栏）、**body{} 作用域 accent 覆写**（CSS-01
+回归）、light/dark 选边、类名对齐、snippet 注入序/启停往返/未知键保留、
+**并发双 toggle**（LC-1 回归）、**caret 旋钮**（CSS-02 回归）、总开关移除
+三组、reinit 钩子。桌面（macOS，见 OBSIDIAN-COMPAT R20 节）。
+
 ## Round 19 additions — mermaid 图表（```mermaid fence → 动态 import 渲染）
 
 R19+ 候选池首项（用户拍板 2026-06-12：「从 mermaid 开始，逐步完成每一项」）。

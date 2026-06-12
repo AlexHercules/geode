@@ -151,6 +151,25 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R20 套件回归（2026-06-12，macOS release 二进制实测 `geode compat-vault`——环境迁移后首轮）
+
+R20 = **主题 CSS 兼容层落地**（R3 末规划的「CSS 类名兼容做成独立可选层」正式成层，
+见 ARCHITECTURE R20）。compat 新增 themes.ts/theme-bridge.css（独立模块，不碰
+loader 主链路）；AppContext 增 obsidianCss 句柄（obsidianLoadReport 同模式）。
+**环境口径变化**：开发机迁 macOS，WKWebView 无 CDP——桌面套件回归改用
+**probe 插件自检方案**（`.geode/plugins/r20-suite-probe.js` 读
+`window.geode.app.obsidianLoadReport` + DOM 断言，结果写回 vault 文件）；
+compat-vault 为本机重建（5 插件 GitHub 原版本重新下载：recent-files 1.7.9 /
+better-word-count 0.10.1 / nldates 0.6.2 / url-into-selection 1.11.4 /
+calendar 1.5.10）。Windows 专项链路（NSIS/nldates 逐键 CDP 探针/更新链路）本机
+不可执行，**留待 Windows 机或 CI 复跑**（记录，非回归）。
+macOS 实测 9/9：**5/5 加载启用 ✓**（report status 全 "enabled"）、calendar
+sidebar-panel 真实挂载 ✓、R20 bridge 与插件 styles.css 共存 ✓（注入序不变量 =
+插件样式在前，主题层经 obsidianLoadReport 订阅每轮重建恒守）。
+新增已知口径：插件 styles.css 与社区主题同特异性时主题胜（文档序，Obsidian
+同向）；`vault.getConfig("cssTheme")` 仍 undefined（compat getConfig 缺口表
+既有条目，主题状态走 Geode 自有 obsidianCss 句柄）。缺口表无变化。
+
 ### R19 套件回归（2026-06-12，桌面 release v0.19.0 实测 `geode.exe compat-vault`）
 
 R19 为原生功能轮（mermaid 图表），**compat 表面零代码改动**（contract 明令；
