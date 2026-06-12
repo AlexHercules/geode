@@ -229,6 +229,8 @@ export class MetadataIndex {
     lowerPathToPath: Map<string, string>;
     lowerBasenameToPaths: Map<string, string[]>;
   } | null = null;
+  /** R22: lazy vault-wide frontmatter key list, cached per revision */
+  private propertyKeysCache: { rev: number; keys: string[] } | null = null;
 
   constructor(
     private vault: Vault,
@@ -537,6 +539,28 @@ export class MetadataIndex {
       }
     }
     return map;
+  }
+
+  /**
+   * R22: every frontmatter key used anywhere in the vault — authored casing,
+   * case-insensitively deduplicated (first occurrence wins), sorted
+   * lexicographically. Lazily computed and cached per index revision.
+   */
+  getPropertyKeys(): string[] {
+    const rev = this.revision.get();
+    if (this.propertyKeysCache?.rev === rev) return this.propertyKeysCache.keys;
+    const seen = new Map<string, string>(); // lowercased → first-seen casing
+    for (const meta of this.byPath.values()) {
+      const fields = meta.frontmatter?.fields;
+      if (!fields) continue;
+      for (const key of Object.keys(fields)) {
+        const lower = key.toLowerCase();
+        if (!seen.has(lower)) seen.set(lower, key);
+      }
+    }
+    const keys = [...seen.values()].sort();
+    this.propertyKeysCache = { rev, keys };
+    return keys;
   }
 
   /** Global graph including unresolved (phantom) nodes. */

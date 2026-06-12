@@ -34,11 +34,25 @@ import type { GeodeApp } from "@app/AppContext";
 import { t as tr } from "@core/i18n";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
-import { livePreview } from "./livePreview";
+import { livePreview, propertiesHostFacet } from "./livePreview";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /** Dispatched when the metadata index changes so wikilink resolution re-runs. */
 export const refreshWikilinks = StateEffect.define<null>();
+
+/* ---------------- properties panel host (R22) ---------------- */
+
+/**
+ * `refreshProperties` — dispatched by EditorPane when
+ * workspace.propertiesInDocument changes so the livePreview frontmatter field
+ * recomputes its decoration mode.
+ * `propertiesHostFacet` — stable per-pane container element hosting the React
+ * PropertiesPanel portal. Provided by buildEditorExtensions; consumed by the
+ * livePreview PropertiesHostWidget. null = no host (degraded pill behaviour).
+ * Both are DEFINED in livePreview.ts (next to the consuming StateField) and
+ * re-exported here — the public import surface is unchanged.
+ */
+export { propertiesHostFacet, refreshProperties } from "./livePreview";
 
 /* ---------------- reveal flash (R14) ---------------- */
 
@@ -316,9 +330,12 @@ export function buildEditorExtensions(opts: {
   mode: "live" | "source";
   /** owned by EditorPane — live↔source reconfigures this slice in place */
   modeCompartment: Compartment;
+  /** stable container for the React PropertiesPanel portal (R22) */
+  propertiesHost?: HTMLElement;
 }): Extension[] {
   const { app, getPath, mode, modeCompartment } = opts;
   return [
+    propertiesHostFacet.of(opts.propertiesHost ?? null),
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
     revealFlashField,
     markdownSansHeaderFold(),

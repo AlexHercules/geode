@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { DocumentHandle } from "@core/documents";
+import type { PropertyEdit } from "@core/properties";
 import type { TabState, ViewMode } from "@core/types";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
@@ -11,11 +13,13 @@ import {
   buildEditorExtensions,
   clearRevealFlash,
   editorModeExtensions,
+  refreshProperties,
   refreshWikilinks,
   revealFlash,
 } from "./cmExtensions";
 import { hydrateEmbeds } from "./embeds";
 import { renderPreview, toggleTaskOnLine } from "./preview";
+import { PropertiesPanel } from "./PropertiesPanel";
 import { openWikilink } from "./wikilinks";
 import "./editor.css";
 
@@ -87,6 +91,62 @@ export function EditorPane({ tab }: { tab: TabState }) {
    *  on it (live↔source must NOT rebuild the view) */
   const latestModeRef = useRef<ViewMode>(tab.mode);
   latestModeRef.current = tab.mode;
+
+  /* ---------- properties panel (R22) ---------- */
+
+  /** in-document properties display preference (visible | hidden | source) */
+  const propsDisplay = useStore(app.workspace.propertiesInDocument);
+  /** stable host container for the live-mode PropertiesPanel portal — created
+   *  lazily ONCE per pane and handed to buildEditorExtensions; the CM
+   *  PropertiesHostWidget appends it (eq恒真 → DOM reused, portal survives) */
+  const propertiesHostRef = useRef<HTMLDivElement | null>(null);
+  if (propertiesHostRef.current === null) {
+    const el = document.createElement("div");
+    el.className = "properties-host";
+    propertiesHostRef.current = el;
+  }
+  /** handle.revision mirror — drives the panel's revision prop in BOTH live
+   *  and preview modes (live edits, other panes, external reloads) */
+  const [docRevision, setDocRevision] = useState(0);
+
+  useEffect(() => {
+    if (!handle) return;
+    // resync on (re)subscribe — the handle may have advanced while no panel
+    // was mounted (display hidden / source mode round trips)
+    setDocRevision(handle.revision.get());
+    return handle.revision.subscribe(() => setDocRevision(handle.revision.get()));
+  }, [handle]);
+
+  // display preference changed → the CM frontmatter field must recompute its
+  // decoration (panel widget ↔ raw ↔ hidden). The store subscription above
+  // (useStore) already re-renders the React side.
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshProperties.of(null) });
+  }, [propsDisplay]);
+
+  /** one splice into the live CM view — exactly one undo step, selection
+   *  untouched (the panel never reveals/moves the cursor, contract口径) */
+  const applyLiveEdit = useCallback((edit: PropertyEdit) => {
+    viewRef.current?.dispatch({ changes: edit, userEvent: "input" });
+  }, []);
+
+  /** preview-mode splice — task-checkbox precedent: apply to the handle's
+   *  canonical text, sync every attached view via setText (NOT the undo
+   *  history — preview edits don't undo, recorded口径), persist via modify */
+  const applyPreviewEdit = useCallback(
+    (edit: PropertyEdit) => {
+      const h = handleRef.current;
+      if (!h) return;
+      const cur = h.getText();
+      const next = cur.slice(0, edit.from) + edit.insert + cur.slice(edit.to);
+      const path = h.path;
+      h.setText(next);
+      void app.vault.modify(path, next).catch((err) => {
+        console.error(`[editor] failed to save property edit in ${path}`, err);
+      });
+    },
+    [app],
+  );
 
   const setHandle = useCallback((h: DocumentHandle | null) => {
     handleRef.current = h;
@@ -162,6 +222,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
           getPath: () => handle.path,
           mode,
           modeCompartment,
+          // R22: portal target for the live-mode PropertiesPanel
+          propertiesHost: propertiesHostRef.current ?? undefined,
         }),
       ),
       parent: hostRef.current,
@@ -567,11 +629,29 @@ export function EditorPane({ tab }: { tab: TabState }) {
     );
   } else if (tab.mode !== "preview") {
     body = (
-      <div
-        className="editor-cm-host markdown-source-view mod-cm6"
-        data-testid="cm-editor"
-        ref={hostRef}
-      />
+      <>
+        <div
+          className="editor-cm-host markdown-source-view mod-cm6"
+          data-testid="cm-editor"
+          ref={hostRef}
+        />
+        {/* R22: live mode hosts the panel via a portal into the stable
+            container the CM PropertiesHostWidget adopts (display "visible"
+            only — "hidden"/"source" render no panel; source mode shows raw
+            YAML inside CM instead) */}
+        {tab.mode === "live" &&
+          propsDisplay === "visible" &&
+          propertiesHostRef.current &&
+          createPortal(
+            <PropertiesPanel
+              getDoc={() => handle.getText()}
+              applyEdit={applyLiveEdit}
+              path={handle.path}
+              revision={docRevision}
+            />,
+            propertiesHostRef.current,
+          )}
+      </>
     );
   } else {
     body = (
@@ -580,6 +660,16 @@ export function EditorPane({ tab }: { tab: TabState }) {
         onClick={onPreviewClick}
         ref={previewScrollRef}
       >
+        {/* R22: reading view renders the panel before the content, inside the
+            same scroller (it scrolls with the note) */}
+        {propsDisplay === "visible" && (
+          <PropertiesPanel
+            getDoc={() => handle.getText()}
+            applyEdit={applyPreviewEdit}
+            path={handle.path}
+            revision={docRevision}
+          />
+        )}
         <div
           className="preview-content markdown-preview-view markdown-rendered"
           data-testid="preview"

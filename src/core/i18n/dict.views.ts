@@ -34,6 +34,15 @@ export const en = {
   "settings.obsidianSnippetsDesc": "Toggle .css files from .obsidian/snippets.",
   "settings.obsidianSnippetsEmpty": "No CSS snippets found in this vault.",
 
+  // ---- settings: editor (R22) ----
+  "settings.editorHeading": "Editor",
+  "settings.propertiesDisplay": "Properties in document",
+  "settings.propertiesDisplayDesc":
+    "How frontmatter properties are shown at the top of a note.",
+  "settings.propertiesVisible": "Visible",
+  "settings.propertiesHidden": "Hidden",
+  "settings.propertiesSource": "Source",
+
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "Files & links",
   "settings.autoUpdateLinks": "Automatically update internal links",
@@ -145,6 +154,23 @@ export const en = {
   "editor.propertiesOne": "Properties · {count} field",
   "editor.propertiesMany": "Properties · {count} fields",
   "editor.editProperties": "Edit properties",
+
+  // ---- editor: properties panel (R22) ----
+  "editor.addProperty": "Add property",
+  "editor.propertyNamePlaceholder": "Property name",
+  "editor.propertyValuePlaceholder": "Empty",
+  "editor.deleteProperty": "Remove property",
+  "editor.propertyTypeAria": "Property type: {type}",
+  "editor.typeText": "Text",
+  "editor.typeMultitext": "List",
+  "editor.typeNumber": "Number",
+  "editor.typeCheckbox": "Checkbox",
+  "editor.typeDate": "Date",
+  "editor.typeDatetime": "Date & time",
+  "editor.typeTags": "Tags",
+  "editor.typeAliases": "Aliases",
+  "editor.propertiesOpaqueHint": "This entry can't be edited here — edit it in source mode.",
+
   "editor.embedCircular": "Circular embed: {name}",
   "editor.embedMissingHeading": 'Heading "{heading}" not found in {name}',
   "editor.embedMissingBlock": 'Block "^{block}" not found in {name}',
@@ -185,6 +211,14 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.obsidianSnippets": "CSS 片段",
   "settings.obsidianSnippetsDesc": "启用或停用 .obsidian/snippets 下的 .css 文件。",
   "settings.obsidianSnippetsEmpty": "当前库中没有 CSS 片段。",
+
+  // ---- settings: editor (R22) ----
+  "settings.editorHeading": "编辑器",
+  "settings.propertiesDisplay": "文档内属性",
+  "settings.propertiesDisplayDesc": "笔记顶部 frontmatter 属性的显示方式。",
+  "settings.propertiesVisible": "可见",
+  "settings.propertiesHidden": "隐藏",
+  "settings.propertiesSource": "源码",
 
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "文件与链接",
@@ -288,6 +322,23 @@ export const zh: Record<keyof typeof en, string> = {
   "editor.propertiesOne": "属性 · {count} 个字段",
   "editor.propertiesMany": "属性 · {count} 个字段",
   "editor.editProperties": "编辑属性",
+
+  // ---- editor: properties panel (R22) ----
+  "editor.addProperty": "添加属性",
+  "editor.propertyNamePlaceholder": "属性名称",
+  "editor.propertyValuePlaceholder": "空",
+  "editor.deleteProperty": "删除属性",
+  "editor.propertyTypeAria": "属性类型：{type}",
+  "editor.typeText": "文本",
+  "editor.typeMultitext": "列表",
+  "editor.typeNumber": "数字",
+  "editor.typeCheckbox": "复选框",
+  "editor.typeDate": "日期",
+  "editor.typeDatetime": "日期与时间",
+  "editor.typeTags": "标签",
+  "editor.typeAliases": "别名",
+  "editor.propertiesOpaqueHint": "此条目无法在面板中编辑——请在源码模式中编辑。",
+
   "editor.embedCircular": "循环嵌入：{name}",
   "editor.embedMissingHeading": "在 {name} 中找不到标题 \"{heading}\"",
   "editor.embedMissingBlock": "在 {name} 中找不到块 \"^{block}\"",

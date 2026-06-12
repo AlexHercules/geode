@@ -7,8 +7,12 @@
  * the raw syntax is revealed for editing. Some marks are replaced with
  * interactive widgets (task checkboxes, bullets, horizontal rules).
  *
- * The frontmatter "Properties" pill is a block replace decoration spanning
- * line breaks, which CM6 forbids from view plugins — it lives in a StateField.
+ * The frontmatter block decoration spans line breaks, which CM6 forbids from
+ * view plugins — it lives in a StateField (buildFrontmatterField). R22: when a
+ * properties host container rides in via propertiesHostFacet, the block is
+ * replaced by PropertiesHostWidget (the React PropertiesPanel portal target)
+ * per the workspace propertiesInDocument preference; without a host the R21
+ * "Properties" pill behaviour remains as the degraded path.
  *
  * R11: `![[img]]` embeds that resolve to a vault image are replaced with an
  * <img> widget (EmbedWidget); cursor contact reveals the raw text as usual.
@@ -32,11 +36,12 @@
  * line tinting only — view plugins may not build cross-line replaces).
  */
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, type Extension, StateField } from "@codemirror/state";
+import { type EditorState, type Extension, Facet, Prec, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
+  keymap,
   ViewPlugin,
   type ViewUpdate,
   WidgetType,
@@ -49,6 +54,21 @@ import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
+
+/* ================= properties panel host plumbing (R22) ================= */
+// Defined here (the consuming StateField lives in this file) and RE-EXPORTED
+// from cmExtensions.ts so the public import surface is unchanged.
+
+/** Dispatched by EditorPane when workspace.propertiesInDocument changes so the
+ *  livePreview frontmatter field recomputes its decoration mode. */
+export const refreshProperties = StateEffect.define<null>();
+
+/** Stable per-pane container element hosting the React PropertiesPanel portal
+ *  (R22). Provided by buildEditorExtensions; consumed by the livePreview
+ *  PropertiesHostWidget. null = no host (degraded pill behaviour). */
+export const propertiesHostFacet = Facet.define<HTMLElement | null, HTMLElement | null>({
+  combine: (values) => values.find((v) => v != null) ?? null,
+});
 
 /* ================= helpers ================= */
 
@@ -434,16 +454,95 @@ class FrontmatterWidget extends WidgetType {
   }
 }
 
-/* ================= frontmatter pill (StateField — block decoration) ================= */
+/**
+ * Properties panel host (R22): a block widget that adopts the stable per-pane
+ * container EditorPane portals the React PropertiesPanel into. The container
+ * OUTLIVES the widget DOM — toDOM only wraps and re-appends it, so the portal
+ * content (focus state, React tree) survives CM dropping/rebuilding the
+ * widget. eq() is constant-true (one stable container per view — Facet value
+ * never changes for a built view), ignoreEvent() constant-true (panel events
+ * belong to React, never to CM selection handling).
+ */
+class PropertiesHostWidget extends WidgetType {
+  constructor(readonly host: HTMLElement) {
+    super();
+  }
+  override eq(): boolean {
+    return true;
+  }
+  override ignoreEvent(): boolean {
+    return true;
+  }
+  override get estimatedHeight(): number {
+    return 120;
+  }
+  override toDOM(): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "cm-properties-host";
+    wrap.appendChild(this.host);
+    return wrap;
+  }
+}
 
-function frontmatterDeco(state: EditorState): DecorationSet {
+/** "hidden" display setting (R22): the frontmatter block is replaced with a
+ *  zero-content widget — visually nothing, source mode is the editing entry. */
+class HiddenFrontmatterWidget extends WidgetType {
+  override eq(): boolean {
+    return true;
+  }
+  override ignoreEvent(): boolean {
+    return true;
+  }
+  override get estimatedHeight(): number {
+    return 0;
+  }
+  override toDOM(): HTMLElement {
+    const el = document.createElement("div");
+    el.className = "cm-properties-hidden";
+    el.style.display = "none";
+    return el;
+  }
+}
+
+/* ============ frontmatter block (StateField — block decoration) ============ */
+
+function frontmatterDeco(state: EditorState, app: GeodeApp): DecorationSet {
   const doc = state.doc;
   const fmEnd = frontmatterEnd(state);
   if (fmEnd === 0) return Decoration.none;
-  const fm = parseFrontmatter(doc.sliceString(0, Math.min(doc.length, 20_000)));
-  if (!fm) return Decoration.none;
   // replace up to the end of the closing "---" line, keeping its newline
   const blockTo = doc.lineAt(Math.max(0, fmEnd - 1)).to;
+
+  const host = state.facet(propertiesHostFacet);
+  if (host) {
+    // R22 panel path. The selection entering the block NO LONGER reveals the
+    // raw YAML — the panel is the editing surface ("visible") or source mode
+    // is ("hidden"/"source"). CM skips block replaces natively on vertical
+    // cursor motion, so keyboard navigation hops over the widget.
+    switch (app.workspace.propertiesInDocument.get()) {
+      case "source":
+        return Decoration.none; // raw YAML always visible
+      case "hidden":
+        return Decoration.set([
+          Decoration.replace({ widget: new HiddenFrontmatterWidget(), block: true }).range(
+            0,
+            blockTo,
+          ),
+        ]);
+      case "visible":
+        return Decoration.set([
+          Decoration.replace({ widget: new PropertiesHostWidget(host), block: true }).range(
+            0,
+            blockTo,
+          ),
+        ]);
+    }
+  }
+
+  // Degraded pill path (no host: compat / isolated call sites) — pre-R22
+  // behaviour byte-for-byte, including the selection-touch reveal.
+  const fm = parseFrontmatter(doc.sliceString(0, Math.min(doc.length, 20_000)));
+  if (!fm) return Decoration.none;
   if (selectionTouches(state, 0, blockTo)) return Decoration.none; // revealed
   const firstLineEnd = doc.lineAt(0).to;
   return Decoration.set([
@@ -457,14 +556,25 @@ function frontmatterDeco(state: EditorState): DecorationSet {
   ]);
 }
 
-const frontmatterField = StateField.define<DecorationSet>({
-  create: (state) => frontmatterDeco(state),
-  update(deco, tr) {
-    if (tr.docChanged || tr.selection) return frontmatterDeco(tr.state);
-    return deco;
-  },
-  provide: (f) => EditorView.decorations.from(f),
-});
+/** Field factory (R22): the decoration depends on the workspace preference, so
+ *  the field closes over `app` instead of being module-level. EditorPane
+ *  dispatches `refreshProperties` when the preference store changes. */
+function buildFrontmatterField(app: GeodeApp) {
+  return StateField.define<DecorationSet>({
+    create: (state) => frontmatterDeco(state, app),
+    update(deco, tr) {
+      if (
+        tr.docChanged ||
+        tr.selection ||
+        tr.effects.some((e) => e.is(refreshProperties))
+      ) {
+        return frontmatterDeco(tr.state, app);
+      }
+      return deco;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+}
 
 /* ================= inline decoration computation (ViewPlugin) ================= */
 
@@ -1041,7 +1151,7 @@ function computeDecorations(
     for (let n = firstLine; n <= lastLine; n++) {
       if (fencedLines.has(n)) continue; // fence content is never a block marker
       const line = doc.line(n);
-      if (line.from < fmEnd) continue; // frontmatter is owned by the pill field
+      if (line.from < fmEnd) continue; // frontmatter is owned by the frontmatter field (pill/panel)
       const bm = BLOCK_MARK_RE.exec(line.text);
       if (!bm) continue;
       const markFrom = line.from + bm.index;
@@ -1136,5 +1246,39 @@ const liveTheme = EditorView.theme({
 /** The full live-preview extension set (only included when mode === "live").
  *  `getPath` is a live accessor — file:renamed retargets without a rebuild. */
 export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
-  return [frontmatterField, livePreviewPlugin(app, getPath), liveClickHandler(app, getPath), liveTheme];
+  const fmField = buildFrontmatterField(app);
+  return [
+    fmField,
+    // R22 review fix (INT-3): the replaced fm range is atomic — cursor
+    // motion treats the widget as a unit, so the caret can no longer be
+    // parked invisibly inside the hidden region (empty set when revealed /
+    // source display, so reveal flows are unaffected).
+    EditorView.atomicRanges.of(
+      (view) => view.state.field(fmField, false) ?? Decoration.none,
+    ),
+    // Backspace at the start of the first body line deletes the \n AFTER the
+    // closing fence — parseFrontmatter then reads that body line AS the
+    // closing fence and it silently vanishes into the widget (INT-3).
+    // Swallow exactly that keypress while the block widget is active.
+    Prec.high(
+      keymap.of([
+        {
+          key: "Backspace",
+          run: (view) => {
+            const deco = view.state.field(fmField, false);
+            if (!deco || deco.size === 0) return false;
+            let end = -1;
+            deco.between(0, view.state.doc.length, (_f, to) => {
+              end = Math.max(end, to);
+            });
+            const sel = view.state.selection.main;
+            return sel.empty && end >= 0 && sel.head === end + 1;
+          },
+        },
+      ]),
+    ),
+    livePreviewPlugin(app, getPath),
+    liveClickHandler(app, getPath),
+    liveTheme,
+  ];
 }

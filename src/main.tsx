@@ -17,6 +17,7 @@ import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
+import { propertyTypes } from "@core/properties";
 import { isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
@@ -204,6 +205,14 @@ async function bootstrap() {
   void initObsidianCss({ vault, events, workspace }).catch((err) =>
     console.error("[boot] obsidian css init failed", err),
   );
+
+  // R22: property type registry (.obsidian/types.json) — non-blocking;
+  // re-read when the vault ROOT switches (reason "load", initObsidianCss
+  // precedent: per-file events never touch .obsidian config files)
+  void propertyTypes.init(vault);
+  events.on("vault:changed", ({ reason }) => {
+    if (reason === "load") void propertyTypes.init(vault);
+  });
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>

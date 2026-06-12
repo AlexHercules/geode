@@ -4,6 +4,13 @@
  */
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
+import {
+  buildRemoveProperty,
+  buildSetProperty,
+  parseProperties,
+  type PropertyEdit,
+  type PropertyValue,
+} from "@core/properties";
 import type { Command as GeodeCommand } from "@core/types";
 import { Component } from "./component";
 import type { Editor } from "./editor";
@@ -62,13 +69,168 @@ export interface GeodeBridge {
   registry: FileRegistry;
 }
 
+/* ---------------- fileManager.processFrontMatter (real since R22) ---------------- */
+
+/** Apply a single splice to a string (mirror of the panel's edit application). */
+function spliceText(text: string, edit: PropertyEdit): string {
+  return text.slice(0, edit.from) + edit.insert + text.slice(edit.to);
+}
+
+/**
+ * Validate a value the plugin callback wrote into the frontmatter object.
+ * Frozen R22 contract: anything outside PropertyValue (nested objects,
+ * functions, non-finite numbers, non-string array items, symbols, bigints)
+ * throws TypeError — we NEVER silently serialize broken YAML. (Deviation from
+ * the official full-YAML serializer, recorded in the round report.)
+ */
+function validateFrontmatterValue(key: string, v: unknown): PropertyValue {
+  if (v === null) return null;
+  if (typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "number") {
+    if (!Number.isFinite(v)) {
+      throw new TypeError(
+        `[obsidian-compat] processFrontMatter: non-finite number for "${key}" cannot be serialized as YAML`,
+      );
+    }
+    return v;
+  }
+  if (Array.isArray(v)) {
+    for (const item of v as unknown[]) {
+      if (typeof item !== "string") {
+        throw new TypeError(
+          `[obsidian-compat] processFrontMatter: list "${key}" contains a non-string item — only string[] lists can be serialized`,
+        );
+      }
+    }
+    return v as string[];
+  }
+  throw new TypeError(
+    `[obsidian-compat] processFrontMatter: value for "${key}" has unsupported type ${typeof v} — only string/number/boolean/string[]/null can be serialized`,
+  );
+}
+
+/** Shallow equality on PropertyValue (arrays compared element-wise). */
+function samePropertyValue(a: PropertyValue, b: PropertyValue): boolean {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((x, i) => x === b[i])
+    );
+  }
+  return a === b;
+}
+
+/**
+ * Real `fileManager.processFrontMatter` (official d.ts:2954): read the note,
+ * expose its frontmatter as a plain JS object, run the synchronous mutator,
+ * then write back ONLY the changed entries as byte-preserving splices.
+ *
+ * - Text source is the R16 dual path: an open buffer (documents.get) is the
+ *   source of truth; otherwise the disk is read fresh (never the content
+ *   cache).
+ * - Only VISIBLE parseProperties entries enter the object; opaque entries
+ *   (nested maps, |/> scalars, duplicate keys, comments) never appear and are
+ *   never rewritten (recorded deviation from the official full-YAML object).
+ * - Diff: deleted keys → buildRemoveProperty; new/changed keys →
+ *   buildSetProperty in assignment (Object.keys) order. Every edit is rebuilt
+ *   against the previous step's text; a null builder result aborts the whole
+ *   call with zero bytes written. Zero changes → zero writes.
+ * - An unparseable/absent block yields an EMPTY object and fn still runs (the
+ *   official @throws YAMLParseError has no equivalent here — parseProperties
+ *   degrades to all-opaque instead of failing; recorded deviation).
+ */
+async function doProcessFrontMatter(
+  handle: Omit<AppHandle, "ui">,
+  file: { path: string },
+  fn: (frontmatter: Record<string, unknown>) => void,
+): Promise<void> {
+  const path = typeof file?.path === "string" ? file.path : null;
+  if (path === null || !/\.md$/i.test(path)) {
+    throw new Error(
+      `[obsidian-compat] processFrontMatter: "${String(path)}" is not a Markdown file`,
+    );
+  }
+  const { vault, documents } = handle;
+  const doc = documents.get(path);
+  // From here on the open-buffer path is fully SYNCHRONOUS until the edits are
+  // applied, so the buffer cannot change under our offsets.
+  const content = doc !== null ? doc.getText() : await vault.readFresh(path);
+
+  // Visible entries → plain object (null prototype: no pollution, `in` is own-only).
+  const frontmatter: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  const original = new Map<string, PropertyValue>();
+  const parsed = parseProperties(content);
+  if (parsed !== null) {
+    for (const entry of parsed.entries) {
+      if (entry.opaque) continue;
+      // independent array copies: fn may mutate in place (push/splice) and the
+      // diff below must still see the pre-mutation value
+      frontmatter[entry.key] = Array.isArray(entry.value) ? [...entry.value] : entry.value;
+      original.set(entry.key, Array.isArray(entry.value) ? [...entry.value] : entry.value);
+    }
+  }
+
+  fn(frontmatter); // synchronous mutator; a throw rejects this promise as-is (official contract)
+
+  // Diff → ordered plan: deletions first, then new/changed keys in
+  // assignment order (Object.keys). Validation happens BEFORE any write so a
+  // TypeError can never leave a half-applied note.
+  const plan: Array<
+    { kind: "remove"; key: string } | { kind: "set"; key: string; value: PropertyValue }
+  > = [];
+  for (const key of original.keys()) {
+    if (!(key in frontmatter)) plan.push({ kind: "remove", key });
+  }
+  for (const key of Object.keys(frontmatter)) {
+    const raw = frontmatter[key];
+    if (raw === undefined) continue; // frozen: undefined ≙ untouched, never a delete
+    const value = validateFrontmatterValue(key, raw);
+    if (original.has(key) && samePropertyValue(original.get(key) ?? null, value)) continue;
+    plan.push({ kind: "set", key, value });
+  }
+  if (plan.length === 0) return; // zero changes → zero writes
+
+  // Rebuild each splice against the PREVIOUS step's text; abort everything on
+  // the first null (conflicting/opaque/unsafe) — never a partial write.
+  let next = content;
+  const steps: PropertyEdit[] = [];
+  for (const op of plan) {
+    const edit =
+      op.kind === "remove"
+        ? buildRemoveProperty(next, op.key)
+        : buildSetProperty(next, op.key, op.value);
+    if (edit === null) {
+      throw new Error(
+        `[obsidian-compat] processFrontMatter: cannot safely ${op.kind} property "${op.key}" (conflicting or opaque entry) — no changes written`,
+      );
+    }
+    steps.push(edit);
+    next = spliceText(next, edit);
+  }
+  if (next === content) return;
+
+  if (doc !== null) {
+    // applyExternalEdits expects coordinates valid for the buffer AT CALL
+    // TIME; our steps were each computed against the previous step's result,
+    // so they are applied ONE CALL PER STEP (still one synchronous task: the
+    // buffer text tracks `next` exactly between calls). Each call lands as a
+    // local edit: dirty + debounced save + shared undo history.
+    for (const edit of steps) doc.applyExternalEdits([edit]);
+  } else {
+    await vault.modify(path, next); // echo-fingerprint suppression included
+  }
+}
+
 /**
  * fileManager shim: `renameFile` is real since R16 (rename + link rewrite via
  * the core engine, matching the official "update all links" semantics — the
- * official Vault.rename stays a bare rename by design). Every OTHER method
- * access records a gap and resolves to undefined, so chains like
- * `app.fileManager.processFrontMatter(...)` do not crash. `then` is excluded
- * so the proxy is not accidentally thenable.
+ * official Vault.rename stays a bare rename by design) and
+ * `processFrontMatter` is real since R22 (read-mutate-splice on the properties
+ * model, see doProcessFrontMatter). Every OTHER method access records a gap
+ * and resolves to undefined, so chained calls do not crash. `then` is
+ * excluded so the proxy is not accidentally thenable.
  */
 function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
   // Official signature returns Promise<void>; the rewrite report is dropped.
@@ -77,12 +239,29 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
     const { vault, metadata, documents } = handle;
     await renameWithLinkUpdate({ vault, metadata, documents }, file.path, normalizePath(newPath));
   };
+  // "Atomically read, modify, and save": calls are serialized through a
+  // promise chain (R20 opChain precedent) so two concurrent closed-file
+  // calls can never interleave their read-modify-write. `options`
+  // (DataWriteOptions mtime/ctime) is ignored — recorded gap, no reportGap
+  // per the R22 contract. Rejections propagate to the caller but never
+  // poison the chain.
+  let pfmChain: Promise<void> = Promise.resolve();
+  const processFrontMatter = (
+    file: { path: string },
+    fn: (frontmatter: Record<string, unknown>) => void,
+    _options?: unknown,
+  ): Promise<void> => {
+    const result = pfmChain.then(() => doProcessFrontMatter(handle, file, fn));
+    pfmChain = result.catch(() => undefined);
+    return result;
+  };
   return new Proxy(
     {},
     {
       get(_target, prop): unknown {
         if (typeof prop !== "string" || prop === "then") return undefined;
         if (prop === "renameFile") return renameFile;
+        if (prop === "processFrontMatter") return processFrontMatter;
         reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
         return async () => undefined;
       },
@@ -133,7 +312,7 @@ export class App {
 
   /* ----- out-of-tier App members: warn-stubs, never a crash (T2 gaps) ----- */
 
-  /** renameFile is real (R16); other methods gap per access in the proxy. */
+  /** renameFile (R16) + processFrontMatter (R22) are real; other methods gap per access. */
   get fileManager(): unknown {
     return (this._fileManager ??= makeFileManager(this._geode.handle));
   }

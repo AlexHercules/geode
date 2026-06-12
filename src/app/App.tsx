@@ -234,6 +234,29 @@ export function App() {
         },
       }),
       commands.register({
+        id: "editor:add-property",
+        name: () => t("cmd.addProperty"),
+        hotkey: "Ctrl+;",
+        callback: () => {
+          // no file in the active tab → no-op (contract)
+          const tab = workspace.getActiveTab();
+          if (!tab || !tab.filePath) return;
+          // source mode has no panel — flip to live first (contract); a
+          // hidden/source DISPLAY setting also has no panel — the command is
+          // an explicit edit intent, so flip the setting to visible too
+          // (R22 review fix INT-2: otherwise the request hangs unconsumed)
+          if (tab.mode === "source") workspace.setTabMode(tab.id, "live");
+          if (workspace.propertiesInDocument.get() !== "visible") {
+            workspace.setPropertiesInDocument("visible");
+          }
+          // one-shot request (revealTarget shape): the matching panel may not
+          // be MOUNTED yet when the mode just flipped — it consumes the
+          // request after mount, creates an empty frontmatter block when
+          // missing and focuses the add-name input
+          workspace.requestAddProperty(tab.id, tab.filePath);
+        },
+      }),
+      commands.register({
         id: "app:export-html",
         name: () => t("cmd.exportHtml"),
         callback: () => void exportActiveNoteHtml(app),

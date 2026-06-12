@@ -53,6 +53,7 @@ export const en = {
   "cmd.openVault": "Open another vault…",
   "cmd.checkUpdates": "Check for updates…",
   "cmd.toggleFold": "Toggle fold on the current line",
+  "cmd.addProperty": "Add file property",
   "cmd.foldAll": "Fold all headings and lists",
   "cmd.unfoldAll": "Unfold all headings and lists",
 
@@ -121,6 +122,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.openVault": "打开其他库…",
   "cmd.checkUpdates": "检查更新…",
   "cmd.toggleFold": "折叠/展开当前行",
+  "cmd.addProperty": "添加文件属性",
   "cmd.foldAll": "折叠所有标题和列表",
   "cmd.unfoldAll": "展开所有标题和列表",
 

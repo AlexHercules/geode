@@ -119,6 +119,8 @@ function AppearanceSection() {
   const currentLocale = useStore(locale);
   const autoUpdate = useStore(autoUpdateLinks);
   const attachFolder = useStore(attachmentFolder);
+  /* R22: in-document properties display (visible | hidden | source) */
+  const propsDisplay = useStore(app.workspace.propertiesInDocument);
   /* R20: Obsidian CSS compat — via the AppContext handle (features never import @compat) */
   const obsidianCss = useStore(app.obsidianCss.state);
   const obsidianEnabled = obsidianCss.enabled;
@@ -289,6 +291,31 @@ function AppearanceSection() {
           </div>
         ))
       )}
+
+      <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
+
+      {/* ---- R22: in-document properties display ---- */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.propertiesDisplay")}</div>
+          <div className="setting-desc">{t("settings.propertiesDisplayDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-properties-display"
+          value={propsDisplay}
+          aria-label={t("settings.propertiesDisplay")}
+          onChange={(e) =>
+            app.workspace.setPropertiesInDocument(
+              e.target.value === "hidden" ? "hidden" : e.target.value === "source" ? "source" : "visible",
+            )
+          }
+        >
+          <option value="visible">{t("settings.propertiesVisible")}</option>
+          <option value="hidden">{t("settings.propertiesHidden")}</option>
+          <option value="source">{t("settings.propertiesSource")}</option>
+        </select>
+      </div>
 
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
 

@@ -1196,3 +1196,317 @@ mark {
 .editor-preview .geode-mermaid .internal-link span {
   color: var(--accent) !important;
 }
+
+/* ============ properties panel (R22, PropertiesPanel.tsx) ============ */
+
+/* Obsidian metadata-container density: 13px UI font, ~28px rows, muted key
+   column (~9em). All colors via app.css variables (contract). The same panel
+   renders in TWO hosts: the CM PropertiesHostWidget container (live preview)
+   and directly inside .editor-preview before .preview-content (reading view). */
+
+/* live-mode host container — block widget inside CM; match the editor's
+   32px line gutter (same as the legacy .cm-live-frontmatter pill).
+   CRITICAL (R22 review INT-1): vertical spacing must be PADDING, not margin
+   — collapsing margins escape the widget wrapper box, CM's heightmap then
+   under-measures the widget by ~16px and posAtCoords lands every mouse
+   click one line low in any note with frontmatter. The wrapper also gets
+   flow-root so the panel's own bottom margin cannot collapse out. */
+.properties-host {
+  display: block;
+  margin: 0 32px;
+  padding: 4px 0 12px;
+}
+
+.cm-properties-host {
+  display: flow-root;
+}
+
+/* reading view: align with .preview-content (46em column, 32px padding) */
+.editor-preview > .properties-panel {
+  max-width: 46em;
+  margin: 0 auto;
+  padding: 20px 32px 0;
+}
+
+.properties-panel {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-normal);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.property-row {
+  display: flex;
+  align-items: flex-start;
+  min-height: 28px;
+  border-radius: 5px;
+  position: relative;
+}
+
+.property-row:hover {
+  background: var(--bg-hover);
+}
+
+/* key column: type icon + name input, fixed ~9em, muted */
+.property-key {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: 9em;
+  min-height: 28px;
+  gap: 2px;
+  color: var(--text-muted);
+}
+
+.property-value {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+
+/* shared icon button (type button / delete / chip remove) */
+.property-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.property-icon-btn:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.property-icon-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* delete button: hover-revealed, pinned right */
+.property-delete {
+  position: absolute;
+  right: 2px;
+  top: 3px;
+  opacity: 0;
+}
+
+.property-row:hover .property-delete,
+.property-delete:focus-visible {
+  opacity: 1;
+}
+
+.property-row:hover .property-value {
+  padding-right: 24px; /* keep values clear of the revealed delete button */
+}
+
+/* key-name input: borderless, muted, takes the rest of the key column */
+.property-name-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  padding: 4px 2px;
+  outline: none;
+}
+
+.property-name-input:focus {
+  color: var(--text-normal);
+}
+
+/* value inputs: borderless until focus (Obsidian quiet look) */
+.property-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-normal);
+  font: inherit;
+  padding: 3px 6px;
+  outline: none;
+}
+
+.property-input:focus {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+
+.property-input::placeholder,
+.property-name-input::placeholder {
+  color: var(--text-faint);
+}
+
+/* native date/datetime pickers stay compact */
+.property-input-date {
+  flex: 0 1 auto;
+  color-scheme: dark light;
+}
+
+.property-checkbox {
+  width: 15px;
+  height: 15px;
+  margin: 6px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ---- chips (multitext / tags / aliases) ---- */
+
+.property-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+}
+
+.property-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.property-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.property-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.property-chip-remove:hover {
+  opacity: 1;
+  background: var(--bg-active);
+}
+
+.property-chip-input {
+  flex: 1;
+  min-width: 6em;
+  padding: 2px 4px;
+}
+
+/* ---- type menu ---- */
+
+.property-type-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.property-type-menu {
+  position: absolute;
+  top: 24px;
+  left: 0;
+  z-index: 30;
+  min-width: 11em;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-modal);
+  box-shadow: var(--shadow-modal);
+}
+
+.property-type-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.property-type-item:hover {
+  background: var(--bg-hover);
+}
+
+.property-type-item.is-active {
+  color: var(--accent);
+}
+
+/* ---- opaque rows: read-only raw source, monospace, never editable ---- */
+
+.property-row-opaque {
+  align-items: center;
+  padding: 2px 6px;
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.property-opaque-raw {
+  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- add row ---- */
+
+.property-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.property-add:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.property-row-add {
+  padding: 0 2px;
+}
+
+.property-add-name {
+  max-width: 14em;
+}

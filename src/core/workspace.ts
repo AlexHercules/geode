@@ -526,6 +526,44 @@ export class Workspace {
     this.update((s) => ({ ...s, modal: null }));
   }
 
+  /* ---------- properties-in-document display preference (R22) ---------- */
+
+  /** "visible" = structured panel, "hidden" = nothing, "source" = raw YAML.
+   *  localStorage-persisted, NOT part of the persisted WorkspaceState tree. */
+  readonly propertiesInDocument = new Store<"visible" | "hidden" | "source">(
+    ((): "visible" | "hidden" | "source" => {
+      try {
+        const v = localStorage.getItem("geode.propertiesInDocument");
+        return v === "hidden" || v === "source" ? v : "visible";
+      } catch {
+        return "visible";
+      }
+    })(),
+  );
+
+  setPropertiesInDocument(v: "visible" | "hidden" | "source") {
+    this.propertiesInDocument.set(v);
+    try {
+      localStorage.setItem("geode.propertiesInDocument", v);
+    } catch {
+      /* storage unavailable — session-only */
+    }
+  }
+
+  /** One-shot "add file property" request (R22) — same consume-once shape as
+   *  revealTarget (R14). The command sets it; the matching tab's
+   *  PropertiesPanel consumes it once it is mounted and connected (a
+   *  synchronous window event would fire before the panel exists when the
+   *  command flips source → live). Carries the file path so a request left
+   *  hanging while the tab navigates elsewhere is DISCARDED instead of
+   *  writing an empty frontmatter block into a file the user never touched
+   *  (R22 review fix INT-2/SEC-03). */
+  readonly addPropertyRequest = new Store<{ tabId: string; filePath: string } | null>(null);
+
+  requestAddProperty(tabId: string, filePath: string) {
+    this.addPropertyRequest.set({ tabId, filePath });
+  }
+
   setTheme(theme: ThemeKind) {
     this.update((s) => ({ ...s, theme }));
     document.documentElement.dataset.theme = theme;
