@@ -568,6 +568,36 @@ Hub notes like [[Welcome]] grow bigger as more notes link to them.
 
 #project #roadmap
 `,
+  // R23 template fixtures — mirrored on disk at demo-vault/templates/ (byte-identical).
+  "templates/Meeting Notes.md": `---
+type: meeting
+status: draft
+---
+
+# {{title}}
+
+Created: {{date}} {{time}}
+
+## Attendees
+
+-
+
+## Notes
+
+-
+`,
+  "templates/Daily Log.md": `---
+type: daily
+---
+
+# Daily Log — {{date:dddd, MMMM Do YYYY}}
+
+Literal (not a variable): {{title:bogus}}
+
+## Today
+
+-
+`,
 };
 
 /* ---- synthetic bench vault (?bench=N) ---- */

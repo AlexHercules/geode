@@ -14,6 +14,14 @@ import {
 } from "@core/plugins";
 import { useStore } from "@core/store";
 import {
+  setTemplateDateFormat,
+  setTemplateFolder,
+  setTemplateTimeFormat,
+  templateDateFormat,
+  templateFolder,
+  templateTimeFormat,
+} from "@core/templates";
+import {
   checkForUpdate,
   downloadAndInstallUpdate,
   updateSupported,
@@ -22,7 +30,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.16.0";
+const APP_VERSION = "0.23.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -119,6 +127,10 @@ function AppearanceSection() {
   const currentLocale = useStore(locale);
   const autoUpdate = useStore(autoUpdateLinks);
   const attachFolder = useStore(attachmentFolder);
+  /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
+  const tplFolder = useStore(templateFolder);
+  const tplDateFormat = useStore(templateDateFormat);
+  const tplTimeFormat = useStore(templateTimeFormat);
   /* R22: in-document properties display (visible | hidden | source) */
   const propsDisplay = useStore(app.workspace.propertiesInDocument);
   /* R20: Obsidian CSS compat — via the AppContext handle (features never import @compat) */
@@ -350,6 +362,56 @@ function AppearanceSection() {
           aria-label={t("settings.attachmentFolder")}
           data-testid="settings-attachment-folder"
           onChange={(e) => setAttachmentFolder(e.target.value)}
+        />
+      </div>
+
+      <h2 className="settings-heading">{t("settings.templates")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.templateFolder")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={tplFolder}
+          placeholder="templates"
+          spellCheck={false}
+          aria-label={t("settings.templateFolder")}
+          data-testid="settings-template-folder"
+          onChange={(e) => setTemplateFolder(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.templateDateFormat")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={tplDateFormat}
+          placeholder="YYYY-MM-DD"
+          spellCheck={false}
+          aria-label={t("settings.templateDateFormat")}
+          data-testid="settings-template-date-format"
+          onChange={(e) => setTemplateDateFormat(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.templateTimeFormat")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={tplTimeFormat}
+          placeholder="HH:mm"
+          spellCheck={false}
+          aria-label={t("settings.templateTimeFormat")}
+          data-testid="settings-template-time-format"
+          onChange={(e) => setTemplateTimeFormat(e.target.value)}
         />
       </div>
     </section>

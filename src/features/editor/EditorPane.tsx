@@ -246,7 +246,11 @@ export function EditorPane({ tab }: { tab: TabState }) {
     // report the focused view — the compat Editor shim consumes it
     const onFocusIn = () => app.documents.setActiveView(view, handle.path);
     view.dom.addEventListener("focusin", onFocusIn);
-    view.focus();
+    // with a modal open (R23 insert-template flips preview→live and opens the
+    // template picker in the same commit) focusing here would steal focus from
+    // the modal input — keystrokes would silently land in the document and
+    // autosave (R23 review critical). Mirror the modal:closed restore guard.
+    if (!app.workspace.state.get().modal) view.focus();
     if (app.workspace.getActiveTab()?.id === tab.id) {
       app.documents.setActiveView(view, handle.path);
     }

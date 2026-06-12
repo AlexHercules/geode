@@ -13,10 +13,12 @@ import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
+import { TemplateSelector } from "@features/palette/TemplateSelector";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { isTauri } from "@core/vault";
+import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
@@ -255,6 +257,41 @@ export function App() {
           // missing and focuses the add-name input
           workspace.requestAddProperty(tab.id, tab.filePath);
         },
+      }),
+      commands.register({
+        id: "editor:insert-template",
+        name: () => t("cmd.insertTemplate"),
+        available: () => workspace.getActiveTab()?.filePath != null,
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (!tab || !tab.filePath) return;
+          // reading view has no cursor — flip to an editable mode first
+          // (add-property precedent, contract)
+          if (tab.mode === "preview") workspace.setTabMode(tab.id, "live");
+          // one-shot mode handoff: set BEFORE opening, the modal reads on mount
+          templatePickerMode.set("insert");
+          workspace.openModal("templates");
+        },
+      }),
+      commands.register({
+        id: "app:new-note-from-template",
+        name: () => t("cmd.newNoteFromTemplate"),
+        callback: () => {
+          templatePickerMode.set("create");
+          workspace.openModal("templates");
+        },
+      }),
+      commands.register({
+        id: "editor:insert-date",
+        name: () => t("cmd.insertDate"),
+        available: () => getActiveFileEditorView(app) !== null,
+        callback: () => insertNowAtSelection(app, "{{date}}"),
+      }),
+      commands.register({
+        id: "editor:insert-time",
+        name: () => t("cmd.insertTime"),
+        available: () => getActiveFileEditorView(app) !== null,
+        callback: () => insertNowAtSelection(app, "{{time}}"),
       }),
       commands.register({
         id: "app:export-html",
@@ -510,9 +547,43 @@ export function App() {
       {/* modals */}
       {ws.modal === "palette" && <CommandPalette />}
       {ws.modal === "switcher" && <QuickSwitcher />}
+      {ws.modal === "templates" && <TemplateSelector />}
       {ws.modal === "settings" && <SettingsModal />}
     </div>
   );
+}
+
+/** The reported active editor view, but only when it belongs to the
+ *  workspace-active tab's file. The raw report is a latched field that can go
+ *  stale (a background pane's live editor while a preview/graph tab is
+ *  active) — writing through it would edit a NON-active file (R23 review
+ *  major DS-1). Pre-R23 consumers (fold commands) are non-destructive. */
+function getActiveFileEditorView(app: ReturnType<typeof useApp>) {
+  const active = app.documents.getActiveView();
+  if (!active || active.path !== app.workspace.getActiveFile()) return null;
+  return active;
+}
+
+/**
+ * Insert the formatted current date/time at the active editor's selection
+ * (R23 insert-date / insert-time commands). Routing through expandTemplate
+ * keeps the format consumption (trim, empty = default) in core/templates —
+ * the replaced value is never re-scanned (single pass).
+ */
+function insertNowAtSelection(
+  app: ReturnType<typeof useApp>,
+  variable: "{{date}}" | "{{time}}",
+): void {
+  const active = getActiveFileEditorView(app);
+  if (!active) return;
+  const insert = expandTemplate(variable, { title: "", now: new Date() });
+  const main = active.view.state.selection.main;
+  // single transaction: replaces a non-empty selection, cursor lands at the
+  // end of the inserted text
+  active.view.dispatch({
+    changes: { from: main.from, to: main.to, insert },
+    selection: { anchor: main.from + insert.length },
+  });
 }
 
 /* ---------------- pieces ---------------- */

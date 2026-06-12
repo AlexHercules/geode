@@ -1,6 +1,6 @@
 /**
  * i18n dictionary fragment — app shell strings (R8).
- * Owner: sweep-app agent. Namespaces: app.* / cmd.* / plugin.*
+ * Owner: sweep-app agent. Namespaces: app.* / cmd.* / plugin.* / templates.* (R23)
  * `zh` is keyed against `en` so a missing translation is a type error.
  */
 export const en = {
@@ -56,6 +56,18 @@ export const en = {
   "cmd.addProperty": "Add file property",
   "cmd.foldAll": "Fold all headings and lists",
   "cmd.unfoldAll": "Unfold all headings and lists",
+  "cmd.insertTemplate": "Insert template",
+  "cmd.newNoteFromTemplate": "New note from template",
+  "cmd.insertDate": "Insert current date",
+  "cmd.insertTime": "Insert current time",
+
+  // ---- template selector modal (R23) ----
+  "templates.aria": "Template picker",
+  "templates.placeholder": "Find a template…",
+  "templates.notConfigured":
+    "No template folder configured. Set a template folder location in Settings.",
+  "templates.empty": "No templates found in the template folder",
+  "templates.noMatch": "No matching templates",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "Open today's daily note",
@@ -125,6 +137,17 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.addProperty": "添加文件属性",
   "cmd.foldAll": "折叠所有标题和列表",
   "cmd.unfoldAll": "展开所有标题和列表",
+  "cmd.insertTemplate": "插入模板",
+  "cmd.newNoteFromTemplate": "从模板新建笔记",
+  "cmd.insertDate": "插入当前日期",
+  "cmd.insertTime": "插入当前时间",
+
+  // ---- template selector modal (R23) ----
+  "templates.aria": "模板选择",
+  "templates.placeholder": "查找模板…",
+  "templates.notConfigured": "尚未配置模板文件夹。请在设置中配置模板文件夹位置。",
+  "templates.empty": "模板文件夹中没有模板。",
+  "templates.noMatch": "没有匹配的模板。",
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "打开今天的日记",

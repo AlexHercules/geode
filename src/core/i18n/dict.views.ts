@@ -52,6 +52,12 @@ export const en = {
   "settings.attachmentFolderDesc":
     'Folder for pasted or dropped images. "/" = vault root, "./" = same folder as the note, "./name" = subfolder under the note\'s folder, "name" = fixed vault folder.',
 
+  // ---- settings: templates (R23) ----
+  "settings.templates": "Templates",
+  "settings.templateFolder": "Template folder location",
+  "settings.templateDateFormat": "Date format",
+  "settings.templateTimeFormat": "Time format",
+
   // ---- settings: plugins ----
   // note split around the inline <code> element (word order differs per locale)
   "settings.pluginsNotePre":
@@ -227,6 +233,12 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.attachmentFolder": "新附件默认位置",
   "settings.attachmentFolderDesc":
     "粘贴/拖入图片的保存目录。「/」表示库根目录，「./」表示笔记所在目录，「./名称」表示笔记所在目录下的子文件夹，「名称」表示库内固定文件夹。",
+
+  // ---- settings: templates (R23) ----
+  "settings.templates": "模板",
+  "settings.templateFolder": "模板文件夹位置",
+  "settings.templateDateFormat": "日期格式",
+  "settings.templateTimeFormat": "时间格式",
 
   // ---- settings: plugins ----
   "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",
