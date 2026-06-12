@@ -499,6 +499,44 @@ YAML 合法性（自家子集往返全绿掩蔽——**教训：序列化正确�
 显式延期：Properties 侧栏视图（全库浏览/全局改名）、值建议、text 内链
 渲染、JSON frontmatter、嵌套属性编辑、`[key:value]` 属性搜索。
 
+### R23 — v0.23（2026-06-13）模板系统（R19+ 候选池 #5）
+
+> **本轮起开发环境再次迁移**（新机器，仓库路径
+> `/Users/cutealexander/Code/active/geode/geode`）：node_modules/.calibration/
+> compat-vault/tmux 全部重建（compat 5 插件按原版本 GitHub 重下、Playwright
+> 重装、probe 脚本重写——原 gitignored 脚本未随迁）；`.tauri-keys` 更新签名
+> 私钥**仍未找回**（见 HANDOFF 风险条目）。
+
+官方校准（obsidian.md/help/plugins/templates，2026-06-13 WebFetch）：设置三项
+（模板文件夹 / 日期格式默认 `YYYY-MM-DD` / 时间格式默认 `HH:mm`）；Insert
+template（选择器、光标处插入）+ Insert current date/time 三命令；变量
+`{{title}}`/`{{date}}`/`{{time}}` + `{{date:FMT}}` moment 令牌。
+**core/templates.ts（新，纯 TS）**：设置三 Store（localStorage，存原文消费侧
+trim——R17 先例）+ `listTemplates`（消费态段校验返 null 不抛/递归前缀过滤/
+localeCompare）+ `expandTemplate`（冻结正则 `/\{\{(title|date|time)(?::([^}]*))?\}\}/gi`
+单趟替换——替换值不再扫描，title 不吃格式串，moment 与 compat 同 specifier 单
+实例主 chunk 零增长）。**TemplateSelector**（QuickSwitcher 同构 modal，
+ModalKind+"templates"，insert/create 双模式一次性 templatePickerMode）+ 四命令
+（insert-template 带 preview→live 翻转 / **new-note-from-template 为 Geode 显式
+扩展**（官方无此命令，uniquePath + 大小写撞名层、title=唯一化后 basename）/
+insert-date / insert-time）+ 设置页模板节三输入 + i18n en/zh。compat 零改动。
+评审 5 维 Workflow **13 finding → 12 确认 / 1 证伪（去重 10 根因：1 critical +
+1 major）全修复**：critical = preview→live 翻转 + 开 modal 同 commit 时 EditorPane
+重建 `view.focus()` 抢走选择器焦点——键入直接污染正文并自动保存（修复 = focus
+带 modal 守卫）；major = `getActiveView` 闩锁字段陈旧，insert-date/time 可写进
+非活动文件（修复 = 视图须属于活动文件双侧门控）；minor 含 activate 重入守卫/
+await 后视图重校验/create 大小写层/`{{date:}}` 契约勘误/版本号三处（顺带根治
+**前存缺陷**：About 页 APP_VERSION 自 R16 硬编码 "0.16.0"）。详见 ARCHITECTURE
+R23 As-built。
+验证：浏览器 E2E 22/22（`.calibration/r23-e2e.mjs`——选择器/过滤/插入/单步
+undo/create 唯一后缀/自定义格式/对抗性输入/设置消费/preview 翻转）；桌面
+macOS release 真实 fs probe：**r23-templates-probe 10/10**（插入/创建/变量/
+calendar 共存）+ **r23-suite-probe 9/9**（**5/5 插件新机重建后加载启用** +
+插件命令 + R23 共存）。新环境教训（.calibration npm 污染/后台 app probe 晚期
+await 不可靠）入 ARCHITECTURE R23 + DEVELOPMENT macOS 节。
+显式延期：`{{date+Nd}}` 偏移语法（官方 Templates 页无）；ribbon 按钮；新建
+笔记默认位置设置；模板内嵌套变量展开（单趟口径）。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -523,7 +561,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~mermaid 图表~~ | **R19 已完成（v0.19，见上）** |
 | ~~主题 CSS 类名兼容层~~ | **R20 已完成（v0.20，见上）**——变量桥+类名对齐+theme/snippets 加载；后续逐步对齐更多类名/变量消费侧 |
 | ~~Properties 可视化编辑~~ | **R22 已完成（v0.22，见上）**——余项：侧栏 Properties 视图/全局改名/值建议/text 内链渲染（按需求驱动） |
-| 模板系统 | 新建套模板 + 日期变量 |
+| ~~模板系统~~ | **R23 已完成（v0.23，见上）**——余项：`{{date+Nd}}` 偏移/ribbon 按钮/新建默认位置（按需求驱动） |
 | ~~搜索运算符（path:/tag:/file:/正则）~~ | **R21 已完成（v0.21，见上）**——余项：block:/section:/task:*/属性搜索 `[key:value]`/比较运算（按需求驱动） |
 | 未链接提及 | 反链面板扩展 |
 | 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |

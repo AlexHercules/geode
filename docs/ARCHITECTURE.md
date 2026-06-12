@@ -71,6 +71,172 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 23 additions — 模板系统（Templates 核心插件复刻 + 新建套模板）
+
+> 官方校准（obsidian.md/help/plugins/templates，2026-06-13 WebFetch）：设置三项
+> Template folder location / Date format（默认 `YYYY-MM-DD`）/ Time format（默认
+> `HH:mm`）；命令 "Insert template"（选择器，光标处插入）+ "Insert current date" +
+> "Insert current time"；变量 `{{title}}`（活动笔记标题）/`{{date}}`/`{{time}}`，
+> date/time 支持冒号后 Moment.js 格式令牌（`{{date:YYYY-MM-DD}}`）。
+> **R23 范围** = core/templates.ts 变量引擎 + 模板枚举 + 设置三项 + TemplateSelector
+> 选择器 modal + 四命令（insert-template / new-note-from-template / insert-date /
+> insert-time）。**「从模板新建笔记」是 Geode 显式扩展**（官方核心插件无此命令，
+> 候选池口径"新建套模板"）。
+> **显式偏差/延期**：官方模板文件夹默认未设置——Geode 默认 `"templates"`（demo 可用性，
+> 空设置 = 未配置语义保留）；ribbon 按钮不做（命令面板 + 可自定义快捷键覆盖）；
+> 日记/Unique note creator 插件的 `{{date+Nd}}` 偏移语法不做（官方 Templates 页无此
+> 语法）；模板内嵌套变量（替换值再扫描）**显式不做**（单趟替换，见冻结语义）；
+> Obsidian 官方"模板文件夹笔记不排除于库"同口径（模板笔记照常进索引/搜索/图谱）。
+
+### 数据安全口径
+
+插入 = 经活动 EditorView 单事务 dispatch（共享文档模型 undo 一步、标脏 + 防抖保存
+既有链路）；模板文件本身**永不被改写**（只读展开）；新建笔记走 `vault.uniquePath`
+防撞 + `vault.create`（已存在路径绝不覆盖）。
+
+### 新模块 `core/templates.ts`（纯 TS；moment 经 `moment/min/moment-with-locales`
+import——与 compat 同 specifier 单实例，主 chunk 零增长；core agent 所有）
+
+```ts
+/** 设置 Store（R17 attachmentFolder 先例：存原文不 trim，消费侧 trim） */
+export const templateFolder: Store<string>;       // localStorage geode.templateFolder，默认 "templates"
+export function setTemplateFolder(v: string): void;
+export const templateDateFormat: Store<string>;   // localStorage geode.templateDateFormat，默认 ""（空 = YYYY-MM-DD）
+export function setTemplateDateFormat(v: string): void;
+export const templateTimeFormat: Store<string>;   // localStorage geode.templateTimeFormat，默认 ""（空 = HH:mm）
+export function setTemplateTimeFormat(v: string): void;
+
+/** 选择器打开模式（一次性语义：命令先 set 再 openModal("templates")，modal 挂载时读取） */
+export const templatePickerMode: Store<"insert" | "create">;
+
+export interface TemplateInfo { path: string; name: string }  // name = basename 去 .md
+/** 模板枚举：folder = templateFolder 消费态（trim + 剥首尾斜杠）。
+ *  空串/含 ""|"."|".."|点前缀段 → null（= 未配置/非法，选择器显示配置提示，不抛）。
+ *  否则返回 folder 下（含子文件夹递归）全部 .md，name 字典序（localeCompare）。
+ *  文件夹不存在/无 md → []（选择器显示空提示）。 */
+export function listTemplates(vault: Vault): TemplateInfo[] | null;
+
+/** 变量展开（冻结语义）：
+ *  - 识别 /\{\{(title|date|time)(?::([^}]*))?\}\}/gi —— 变量名大小写不敏感
+ *    （官方未文档化，冻结为不敏感）；格式串 = 冒号后至最近 "}}"，原文传给
+ *    moment(now).format(fmt)，不含 "}" 字符（[^}]*，更长贪婪不做）。
+ *  - {{title}} → ctx.title（字面替换）；{{title:...}} 不是变量，原文保留。
+ *  - {{date}} → moment(now).format(dateFormat 消费态)；{{date:FMT}} → format(FMT)；
+ *    {{time}}/{{time:FMT}} 同理走 timeFormat。FMT 为空串（"{{date:}}"）→ 同
+ *    {{date}}（设置消费态；设置为空才落 YYYY-MM-DD/HH:mm——评审 R23-F1 勘误）。
+ *  - **单趟替换**（String.replace 回调一次扫描）：替换值不再被扫描——
+ *    title 含 "{{date}}" 不二次展开（对抗性输入口径）。
+ *  - 纯文本变换，永不抛（moment.format 对任意串安全）。 */
+export function expandTemplate(content: string, ctx: { title: string; now: Date }): string;
+```
+
+### 命令四条（App.tsx 注册，ui agent 所有；无默认快捷键——官方同口径，
+Hotkeys 设置页可自定义）
+
+- `editor:insert-template`（name `cmd.insertTemplate`）：`available` = 活动 tab 有
+  filePath；callback：tab.mode === "preview" → `setTabMode(tab.id, "live")`（官方
+  "光标不在正文则插到上次光标位"的 Geode 对应口径 = 翻到可编辑模式，add-property
+  先例）；`templatePickerMode.set("insert")` → `openModal("templates")`。
+- `app:new-note-from-template`（name `cmd.newNoteFromTemplate`）：无 available 门
+  （不需要活动文件）；`templatePickerMode.set("create")` → `openModal("templates")`。
+- `editor:insert-date` / `editor:insert-time`（name `cmd.insertDate`/`cmd.insertTime`）：
+  `available` = `documents.getActiveView() !== null`；callback 取 active view，按
+  对应格式（消费态，空 → 默认）`moment().format(...)` 后在当前选区单事务
+  replace（光标落插入文本末尾）。
+- 选择器内确认动作：
+  - insert 模式：`documents.getActiveView()` 取 view 与 path；title = path basename
+    去扩展名；`vault.read(模板 path)` → expandTemplate → 在 view 当前主选区
+    `dispatch({ changes: {from, to, insert}, selection: { anchor: from+insert.length } })`
+    （选区非空 = 替换选区，官方"光标处插入"的超集口径）→ closeModal。
+    view 为 null（极端竞态）→ closeModal + console.warn，零写入。
+  - create 模式：`vault.uniquePath("", template.name)` → title = 实际唯一路径的
+    basename 去扩展名（"Meeting 1" 而非 "Meeting"）→ expandTemplate →
+    `vault.create(path, expanded)` → `workspace.openFile(path)` → closeModal。
+    新笔记落 vault 根（attachmentFolder 不适用；默认新建位置设置项延期）。
+
+### UI: TemplateSelector — `features/palette/TemplateSelector.tsx`（新，ui agent 所有）
+
+QuickSwitcher 同构 modal（`.modal-overlay` + 输入框过滤 + ArrowUp/Down + Enter +
+点击 + overlay 点击关闭；Escape 由 shell 全局处理）。`ModalKind` 增 `"templates"`
+（types.ts 该行本轮归 ui agent）；App.tsx 渲染
+`{ws.modal === "templates" && <TemplateSelector />}`。
+状态呈现：`listTemplates` 返回 null → 单行提示 `templates.notConfigured`（含"在设置
+中配置"文案）；[] → `templates.empty`；过滤无命中 → `templates.noMatch`。
+`data-testid`：`template-selector`（容器）、`template-selector-input`、
+`template-option`（每行，`data-path` 属性）、`template-selector-hint`（提示行）。
+
+### 设置页（SettingsModal.tsx，ui agent 所有）
+
+"文件与链接" h2 之后新增 "模板" h2（`settings.templates`）三行设置：
+模板文件夹（`settings.templateFolder`，文本输入，placeholder "templates"）、
+日期格式（`settings.templateDateFormat`，placeholder "YYYY-MM-DD"）、
+时间格式（`settings.templateTimeFormat`，placeholder "HH:mm"）。受控输入存原文
+（R17 先例——trim 在消费侧）。`data-testid`：`settings-template-folder` /
+`settings-template-date-format` / `settings-template-time-format`。
+
+### i18n（ui agent 所有）
+
+`cmd.*` 四键进 dict.app.ts；`settings.templates*` 三 + 1 节标题进 dict.views.ts；
+`templates.aria/notConfigured/empty/noMatch` + 选择器 placeholder
+`templates.placeholder` 放 dict.app.ts（**勘误 R23-STYLE-01**：原句"按既有 palette
+字符串归属"理由有误——palette.*/switcher.* 实际在 dict.panels.ts；选 dict.app.ts 的
+真实依据是本轮 agent 所有权不含 dict.panels.ts，三个同构 modal 字符串自此分居两
+文件，记维护注意项）。en/zh 双语（zh 类型锁定缺译即错）。
+
+### Demo vault 夹具（core/vault.ts DEMO_FILES，core agent 所有；浏览器 E2E 依赖）
+
+新增 `templates/Meeting Notes.md`（含 frontmatter + `{{title}}`/`{{date}}`/`{{time}}`）
+与 `templates/Daily Log.md`（含 `{{date:dddd, MMMM Do YYYY}}` 自定义格式 +
+`{{title:bogus}}` 负向字面量）。磁盘 demo-vault 同步两文件（双端一致先例）。
+
+### Agent 文件所有权（独占）
+
+| agent | 文件 |
+|---|---|
+| core | `core/templates.ts`（新）、`core/vault.ts`（仅 DEMO_FILES 增条目）、`demo-vault/templates/*`（新） |
+| ui | `features/palette/TemplateSelector.tsx`（新）+ palette css、`app/App.tsx`、`core/types.ts`（仅 ModalKind 一行）、`features/settings/SettingsModal.tsx`、`core/i18n/dict.app.ts`、`core/i18n/dict.views.ts` |
+
+### R23 As-built deltas（评审后修订记录）
+
+评审 5 维 Workflow（数据安全/对抗性输入/契约符合性/生命周期竞态/分层 i18n，
+18 agent）：**13 finding → 对抗验证 12 确认 / 1 证伪，去重 10 根因
+（1 critical + 1 major + 8 minor）全修复**：
+
+- **critical LIFE-1**：preview→live 翻转 + openModal 同一 commit 时，EditorPane
+  重建 effect 的无条件 `view.focus()` 在 modal input autoFocus 之后执行，抢走焦点
+  ——选择器开着但所有键入直接进正文并被防抖保存持久化（验证者浏览器三次复现，
+  契约主路径）。修复 = focus 前查 `workspace.state.get().modal`（镜像 modal:closed
+  恢复守卫）。**教训：同一 commit 内「翻模式 + 开 modal」时，被重建组件的 effect
+  焦点操作必须带 modal 守卫**（autoFocus 在 commit 相、passive effect 在其后）。
+- **major DS-1**：`documents.getActiveView()` 是闩锁字段（focusin 设置、仅视图
+  销毁清除）——活动 tab 无编辑器（preview/graph）时仍指向后台 pane 的旧视图，
+  insert-date/time 作为**首个走该句柄的第一方写命令**会把日期写进非活动文件并
+  自动保存（验证者分屏实测复现）。修复 = `getActiveFileEditorView`：报告视图
+  须与 `workspace.getActiveFile()` 同路径才可用（available + callback 双侧）。
+  既有消费方（fold 命令）为非破坏性视图操作，维持现状。
+- minor 八项：activate() 重入守卫（busyRef——桌面 vault.read 是真 IPC 窗口，
+  双击/连 Enter 双插入；QuickSwitcher 先关 modal 先例本轮未沿用被评审抓出）；
+  await 后视图重校验（Ctrl+W 穿透 modal 销毁编辑器 → dispatch 静默丢弃，现
+  console.warn 降级）；create 路径补 R17 大小写不敏感撞名层；`{{date:}}` 契约
+  措辞勘误（≡ {{date}} 消费态，非硬编码默认——实现保持）；版本号 0.23.0 三处
+  （含 **前存缺陷**：SettingsModal `APP_VERSION` 自 R16 起硬编码 "0.16.0"，About
+  页七轮显示旧版本，本轮根治）；i18n 归属契约理由勘误（见上节）；新增
+  `templates.aria` 专用键（原复用 placeholder，与姊妹 modal 名词性 aria 不一致）；
+  en 空态文案去句号对齐 palette/switcher。
+- 证伪 1：vault_create TOCTOU 覆盖（Tauri 2 同步命令主线程串行，无并发交错面；
+  external 进程残余窗口为微秒级加固项非缺陷）。
+- 开发 agent 上报偏差 3 条全采纳：fuzzy 打分复用同 feature 文件夹 `./fuzzy` 模块
+  （非跨 feature import）；选择器字符串按所有权放 dict.app.ts（契约理由已勘误）；
+  read/create 异步失败 catch + console.error + finally closeModal（零写入）。
+
+**环境教训（新开发机迁移，2026-06-13）**：① `.calibration` 必须先有自己的
+package.json 再 `npm i`——目录里裸 npm install 会向上爬到仓库根污染主
+package.json（HANDOFF 老警告的新变体，本轮实测踩中后回滚）；② **后台启动的
+桌面 app 里 probe 插件的晚期 await/timer 不可靠**（t≈10s 后 setTimeout/写入
+promise 可能永不归来——App Nap/WKWebView 节流），probe 断言要在生命周期早段
+完成、进度用 fire-and-forget 写链落盘、挂载类断言查贡献点 Store 而非
+可见性依赖的 DOM。
+
 ## Round 22 additions — Properties 可视化编辑（frontmatter 结构化面板）
 
 > 官方校准（obsidian.md/help/properties + obsidian.d.ts:2954，2026-06-12 WebFetch）：

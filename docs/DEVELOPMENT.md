@@ -53,12 +53,21 @@ npm run tauri build  # NSIS 安装包 → src-tauri/target/release/bundle/nsis/
   （检查/负向篡改签名/正向安装），负向必须含"合法编码错误签名"用例
 - demo vault 是回归夹具，测试痕迹要清理后再提交
 
-## macOS 环境口径（R20 起，开发机迁移）
+## macOS 环境口径（R20 起，开发机迁移；R23 起再迁新机
+`/Users/cutealexander/Code/active/geode/geode`）
 
 - 浏览器 E2E：Playwright 装在 **`.calibration/`**（gitignore，独立 package.json
-  ——**别在仓库根 npm i**，会污染主 package.json）；dev server 必须经
-  `tmux new-session -d -s geodedev "npm run dev"` 起（hook 强制）；
-  curl 探活加 `--noproxy '*'`（本机代理环境变量会劫持 localhost）。
+  ——**别在仓库根 npm i**，会污染主 package.json；R23 实测变体：`.calibration`
+  里若还没有 package.json 就 `npm i`，npm 会向上爬到仓库根照样污染——**先写
+  package.json 再装**）；dev server 经 tmux 或后台进程起（R23 新机无 tmux/hook，
+  `npm run dev` 后台直跑可用）；curl 探活加 `--noproxy '*'`。
+- **桌面 probe 时序纪律（R23 新教训）**：从 shell 后台启动的 release 二进制，
+  webview 在 t≈10s 后 setTimeout/写入 promise 可能永不归来（App Nap/WKWebView
+  节流）——probe 断言放插件加载后的前几秒完成；进度用 fire-and-forget 写链
+  （绝不 await vault 写入再前进）；挂载类断言查贡献点 Store
+  （`plugins.sidebarPanels`）而非依赖侧栏展开的 DOM。结果文件重跑前先删
+  （vault.create 拒绝已存在路径），probe 会改写 vault 内容——断言夹具每次
+  运行前重置。
 - **cargo 不在非交互 shell 的默认 PATH**：跑 `cargo check`/`npm run tauri build`
   前缀 `PATH="$HOME/.cargo/bin:$PATH"`——漏掉时 tauri build 报 "failed to run
   cargo metadata" 但管道下游可能呈现 exit 0 假象（R21 踩坑）。

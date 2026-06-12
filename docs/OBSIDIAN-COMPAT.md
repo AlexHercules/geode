@@ -151,6 +151,25 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### R23 套件回归（2026-06-13，macOS release 二进制 v0.23.0 实测 `geode compat-vault`——新开发机重建后首轮）
+
+R23 为原生功能轮（模板系统），**compat 表面零代码改动**（contract 明令；git
+diff 确认 compat/** 无改动）。模板引擎/选择器均不在 compat 调用面上。
+**环境口径**：开发机再次迁移（新机器），compat-vault 本机重建——5 插件按原
+版本 GitHub 重下（recent-files 1.7.9 / better-word-count 0.10.1 / nldates 0.6.2 /
+url-into-selection 1.11.4 / calendar 1.5.10）；原 probe 脚本（gitignored）未随迁，
+按 R20-R22 记录的不变量**重写** r23-suite-probe.js + r23-templates-probe.js。
+macOS 实测：**r23-suite-probe 9/9**——report 5 条 ✓、**5/5 status "enabled"** ✓、
+recent-files/nldates 插件命令注册 ✓、R23 insert-template 命令共存 ✓；
+**r23-templates-probe 10/10**——真实 fs 模板插入/创建/变量展开 + **calendar
+sidebarPanels 贡献点挂载** ✓。
+probe 方法论修订（新机教训，写给后续轮次）：后台启动的 app 里 probe 晚期
+await/timer 不可靠（App Nap/WKWebView 节流，t≈10s 后 setTimeout 可能永不
+归来）——断言放生命周期早段、进度 fire-and-forget 写链落盘、挂载断言查
+`plugins.sidebarPanels` Store 而非可见性依赖的 DOM（侧栏收起时 tab 不渲染）。
+旧轮次专项探针（nldates 逐键 CDP/更新链路/NSIS）仍属 Windows 专项，本机不可
+执行（非回归）。缺口表无变化。
+
 ### R22 套件回归（2026-06-12，macOS release 二进制 v0.22.0 实测 `geode compat-vault`）
 
 R22 compat 改动一件：`fileManager.processFrontMatter` 从 no-op stub 升级为真
