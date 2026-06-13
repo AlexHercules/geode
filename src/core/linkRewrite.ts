@@ -87,20 +87,45 @@ export function renameWithLinkUpdate(
   newPath: string,
 ): Promise<LinkRewriteResult> {
   const run = runTail.then(
-    () => doRenameWithLinkUpdate(deps, oldPath, newPath),
-    () => doRenameWithLinkUpdate(deps, oldPath, newPath), // a failed predecessor never poisons the queue
+    () => doLinkUpdate(deps, oldPath, newPath, true),
+    () => doLinkUpdate(deps, oldPath, newPath, true), // a failed predecessor never poisons the queue
   );
   runTail = run.catch(() => {});
   return run;
 }
 
-async function doRenameWithLinkUpdate(
+/**
+ * Rewrite every link/embed that resolved to `fromPath` so it points at `toPath`,
+ * WITHOUT moving any file (R47 note-composer merge: `toPath` already exists). Same
+ * verified capture→splice→post-rewrite-reassert engine as rename — the merge
+ * caller appends `fromPath`'s body into `toPath` and trashes `fromPath` AFTER this
+ * runs (so the capture still resolves `fromPath`). Serialized on the same queue as
+ * renames. Always rewrites (ignores the autoUpdateLinks toggle): a merge that left
+ * `[[fromPath]]` links dangling after the source is trashed would be data loss.
+ */
+export function rewriteLinksForMerge(
+  deps: LinkRewriteDeps,
+  fromPath: string,
+  toPath: string,
+): Promise<LinkRewriteResult> {
+  const run = runTail.then(
+    () => doLinkUpdate(deps, fromPath, toPath, false),
+    () => doLinkUpdate(deps, fromPath, toPath, false),
+  );
+  runTail = run.catch(() => {});
+  return run;
+}
+
+async function doLinkUpdate(
   deps: LinkRewriteDeps,
   oldPath: string,
   newPath: string,
+  move: boolean,
 ): Promise<LinkRewriteResult> {
   const { vault, metadata, documents } = deps;
-  if (!autoUpdateLinks.get()) {
+  // move=false (merge) ALWAYS rewrites — see rewriteLinksForMerge. Only a real
+  // rename degrades to a bare move when the user disabled auto-update.
+  if (move && !autoUpdateLinks.get()) {
     await vault.rename(oldPath, newPath);
     return { filesChanged: 0, linksRewritten: 0, skipped: [] };
   }
@@ -168,8 +193,9 @@ async function doRenameWithLinkUpdate(
   }
 
   /* ---- step 2: rename (its errors propagate — the caller catches) ---- */
+  /*       merge (move=false) skips this: toPath already exists, the file is not moved */
 
-  await vault.rename(oldPath, newPath);
+  if (move) await vault.rename(oldPath, newPath);
 
   const result: LinkRewriteResult = { filesChanged: 0, linksRewritten: 0, skipped: [] };
 
@@ -184,9 +210,18 @@ async function doRenameWithLinkUpdate(
   if (captures.size === 0) return result;
 
   // a referrer that itself lived under the renamed folder is read/written at
-  // its NEW path (the renamed md file's own self links remap the same way)
+  // its NEW path (the renamed md file's own self links remap the same way).
+  // merge (move=false) moves no file, so every referrer keeps its own path —
+  // including `oldPath` itself (the source's body, already appended into toPath,
+  // is rewritten in BOTH places while the source still exists; it is trashed after).
   const remap = (p: string): string =>
-    p === oldPath ? newPath : p.startsWith(oldPath + "/") ? newPath + p.slice(oldPath.length) : p;
+    !move
+      ? p
+      : p === oldPath
+        ? newPath
+        : p.startsWith(oldPath + "/")
+          ? newPath + p.slice(oldPath.length)
+          : p;
   // same precedence as capture: markdown resolution shadows attachments
   const resolveUnified = (target: string, fromPath: string): string | null =>
     metadata.resolveLink(target, fromPath) ?? metadata.resolveAttachment(target, fromPath);

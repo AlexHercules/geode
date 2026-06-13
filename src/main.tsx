@@ -50,6 +50,7 @@ import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid } from "@core/dailyNote";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
+import { mergeNotes } from "@core/noteMerge";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { parseObsidianUri } from "@core/obsidianUri";
@@ -523,6 +524,21 @@ async function bootstrap() {
     parse: (uri) => parseObsidianUri(uri),
     handle: (uri) => {
       void handleObsidianUri(app, uri);
+    },
+  };
+
+  // always-on note-merge probe (R47): drives the real-fs merge (append source
+  // into target + rewrite inbound links + delete source) through the SAME
+  // LinkRewriteDeps the rename engine uses (single write throat). WKWebView has
+  // no CDP, so desktop verifies the merge through this hook (same pattern as
+  // __geodeRename / __geodeExplorerMove). Assigned BEFORE loadExternal so an
+  // external plugin's onload can capture it synchronously.
+  const mergeHost = globalThis as typeof globalThis & {
+    __geodeMerge?: { merge: (s: string, t: string) => void };
+  };
+  mergeHost.__geodeMerge = {
+    merge: (s, t) => {
+      void mergeNotes({ vault, metadata, documents }, s, t);
     },
   };
 

@@ -29,6 +29,7 @@ import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri } from "@core/vault";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
+import { mergeTargetMode } from "@core/noteMerge";
 import { bookmarks } from "@core/bookmarks";
 import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
@@ -320,6 +321,23 @@ export function App() {
         name: () => t("cmd.exportPdf"),
         callback: () => void printActiveNote(app),
         available: () => workspace.getActiveFile() !== null,
+      }),
+      commands.register({
+        // R47: merge the active file INTO a picked target. The switcher reads
+        // mergeTargetMode on mount and turns a file pick into a merge (#⑬).
+        id: "editor:merge-file",
+        name: () => t("cmd.mergeFile"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const src = workspace.getActiveFile();
+          if (!src) return;
+          // if the switcher is already open, openModal("switcher") won't remount it
+          // (so it wouldn't snapshot merge mode) AND mergeTargetMode would leak into
+          // the NEXT plain switcher open → a surprise merge. No-op instead (R47 review).
+          if (workspace.state.get().modal === "switcher") return;
+          mergeTargetMode.set(src);
+          workspace.openModal("switcher");
+        },
       }),
       commands.register({
         id: "bookmarks:bookmark-file",

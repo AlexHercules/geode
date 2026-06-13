@@ -8,6 +8,7 @@ import type { FileNode, HeadingRef, BlockRef } from "@core/types";
 import { allTabs } from "@core/workspace";
 import { fuzzyMatch, toSegments } from "@core/fuzzy";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
+import { mergeTargetMode, mergeNotes } from "@core/noteMerge";
 import "./palette.css";
 
 type Row =
@@ -34,6 +35,19 @@ function folderOf(path: string): string {
   return i >= 0 ? path.slice(0, i) : "";
 }
 
+/** Transient DOM toast for merge outcomes (skipped links / failure). Mirrors
+ *  Explorer's showLinkUpdateNotice (same `.link-update-notice` style) so a merge
+ *  never fails or drops links silently (R47 review). */
+function showMergeNotice(message: string): void {
+  document.querySelector(".link-update-notice")?.remove();
+  const el = document.createElement("div");
+  el.className = "link-update-notice";
+  el.textContent = message;
+  el.setAttribute("data-testid", "merge-notice");
+  document.body.appendChild(el);
+  window.setTimeout(() => el.remove(), 4000);
+}
+
 export function QuickSwitcher() {
   const app = useApp();
   const t = useI18n();
@@ -42,6 +56,17 @@ export function QuickSwitcher() {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
   const listRef = useRef<HTMLDivElement | null>(null);
+
+  // R47 merge mode: the "merge current file with…" command sets mergeTargetMode
+  // (the source path) and opens this switcher. Snapshot the source on MOUNT and
+  // clear the store in an effect (NOT in the useState initializer — StrictMode
+  // double-invokes it in dev, where the 2nd read would see null and lose the
+  // merge intent). Clearing on mount = consume-once: a cancelled pick (Escape)
+  // never leaks into the next plain switcher open (revealTarget precedent).
+  const [mergeSource] = useState<string | null>(() => mergeTargetMode.get());
+  useEffect(() => {
+    mergeTargetMode.set(null);
+  }, []);
 
   // flattening the vault tree is O(files) — do it once per tree change,
   // not on every keystroke
@@ -133,6 +158,32 @@ export function QuickSwitcher() {
   }, [sel, rows]);
 
   const activate = (row: Row) => {
+    // R47 merge mode: a file pick (other than the source itself) merges the
+    // source INTO the picked file, then opens the survivor. Self-pick falls
+    // through to the plain openFile branch (no-op merge).
+    if (mergeSource !== null && row.kind === "file" && row.file.path !== mergeSource) {
+      const target = row.file.path;
+      app.workspace.closeModal();
+      void mergeNotes(
+        { vault: app.vault, metadata: app.metadata, documents: app.documents },
+        mergeSource,
+        target,
+      )
+        .then((result) => {
+          app.workspace.openFile(target);
+          // a skipped referrer keeps its [[source]] link, now dangling (source
+          // trashed) — surface it like Explorer's rename path does (R47 review).
+          if (result && result.skipped.length > 0) {
+            showMergeNotice(t("switcher.mergeLinksSkipped", { count: result.skipped.length }));
+          }
+        })
+        .catch((err) => {
+          // modify/read/trash failed — never silently swallow on a merge (R47 review).
+          console.error("[merge] failed", err);
+          showMergeNotice(t("switcher.mergeFailed"));
+        });
+      return;
+    }
     if (row.kind === "file") {
       app.workspace.openFile(row.file.path); // openFile also closes the modal
       return;
@@ -175,7 +226,8 @@ export function QuickSwitcher() {
 
   const mode = switcherMode(query);
   const placeholder =
-    mode === "heading" ? t("switcher.placeholderHeading")
+    mergeSource !== null ? t("switcher.placeholderMerge")
+    : mode === "heading" ? t("switcher.placeholderHeading")
     : mode === "block" ? t("switcher.placeholderBlock")
     : t("switcher.placeholder");
   const emptyText =
