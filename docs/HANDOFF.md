@@ -19,11 +19,13 @@ git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证�
 候选池执行口径：迁移叙事第二梯队（R19+）逐项做完——R19 mermaid ✓、R20 主题 CSS ✓、
 R21 搜索运算符 ✓、R22 Properties ✓、R23 模板系统 ✓、**R24 未链接提及 ✓**，**执行
 队列清空**。已与用户登记 **R25+ 候选池（Obsidian 原生功能补课，见 ROADMAP「R25+
-候选池」表）**：①悬停预览（Ctrl+hover 卡片，compat hoverPopover 也是空 stub）②PDF
-查看器 + PDF/音视频嵌入（现全降级链接，PDF.js 是一次性依赖决策）③书签 Bookmarks
-④文件树拖拽移动（R16 改写引擎已就绪，接线为主）⑤折叠持久化 + 阅读视图折叠（R17 债）
-⑥Properties 侧栏视图（R22 延期）⑦斜杠命令 `/` 菜单。**用户口径（2026-06-13）：不着
-急一口气都做，逐项记录在案——开工前问用户取项或按优先级挑**。另：发布渠道 +
+候选池」表）**：①悬停预览 ②PDF 查看器 + PDF/音视频嵌入 ③书签 Bookmarks ④文件树
+拖拽移动 ⑤折叠持久化 + 阅读视图折叠 ⑥Properties 侧栏视图 ⑦斜杠命令 `/` 菜单。
+**下一项已设计好：R25 = 悬停预览（Page Preview / Ctrl+hover 页面预览卡片），契约
+已冻结在 ARCHITECTURE「Round 25 additions」节——直接照此执行**（Workflow 并行
+agent，文件所有权表见契约；零新依赖，复用 renderMarkdownToHtml + hydrateEmbeds）。
+其后第三梯队余项 ②~⑦ 按优先级或用户指定逐轮取（**用户口径 2026-06-13：不着急一
+口气都做，逐项记录在案**）。另：发布渠道 +
 Authenticode（待拍板，.tauri-keys 私钥未找回，**不主动启动**）+ 性能远期项仍待办。
 验收沿用四条底线 + OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。
 用户全权委托决策，目标=复刻 Obsidian——但发布/签名等不可逆外向动作仍须先确认。

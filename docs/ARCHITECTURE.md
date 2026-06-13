@@ -71,6 +71,123 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 25 additions — 悬停预览（Page Preview / Ctrl+hover 页面预览卡片）【设计冻结，待执行】
+
+> **状态：契约已冻结，尚未实现**（R25 设计文档，2026-06-13 与用户登记 R25+ 候选池后
+> 预写，供下一会话「阅读 handoff 继续开发」直接照此执行）。
+>
+> 官方校准（obsidian.md/help/plugins/page-preview，2026-06-13 WebFetch）：Page preview
+> 核心插件**默认开启**；**默认无修饰键**——在 File explorer / Search / Backlinks 等
+> 处 hover 内链即预览；**编辑视图（live/source）需按住 Ctrl（macOS Cmd）** hover；
+> 设置项可「要求所有预览都按 Ctrl/Cmd」。预览内容 = 目标笔记（subpath 链接滚到对应
+> heading/block——官方行为，本轮复刻）。
+> **R25 范围** = `features/hover/` 悬停控制器 + 预览卡片（复用
+> `renderMarkdownToHtml` + `hydrateEmbeds` 渲染管线，**零新依赖**）+ 触发源（内链锚点 /
+> explorer 文件行 / backlinks·未链接·outgoing 源项）+ 修饰键规则 + 设置两项 + i18n +
+> compat `registerHoverLinkSource` 接通。
+> **显式偏差/延期**：plugin 自渲染的 `hoverPopover`/`HoverParent`（插件自己挂预览）
+> 保持 gap（Geode 全局 hover 已覆盖其 `a.internal-link`，插件被动受益——记缺口）；
+> graph 节点 hover 预览延期（图谱节点非 `a.internal-link`，按需驱动）；嵌入文件
+> （`![[x]]`）内的链接 hover 走同一委托自动受益；预览卡片内**再 hover**（嵌套预览）
+> 不做（单层，hover 卡片内链接点击 = 导航）。
+
+### 数据安全口径
+
+悬停预览**纯只读**：渲染走既有 `renderMarkdownToHtml`（同 compat/reading 管线）+
+`hydrateEmbeds`，**绝不写任何文件**、不改 workspace/tab 状态（不 openFile，除非用户
+点击卡片内链接 → 既有 `openWikilink` 导航）。图片走 `vault.readBinary` → blob（feature
+私有模块缓存 + 文件事件失效，R11 先例；hover feature 不 import editor 的 blob 缓存——
+分层，自建小缓存）。
+
+### 新模块 `core/hover.ts`（纯 TS；core agent 所有）
+
+```ts
+import { Store } from "./store";
+
+/** 一次悬停请求的目标（控制器写入，卡片消费）。 */
+export interface HoverTarget {
+  /** 解析出的目标笔记 vault 路径（已 resolveLink；unresolved → 不预览，控制器不写）*/
+  path: string;
+  /** subpath（"#heading" / "#^block" 去掉前导 "#" 后的原文；无则空串）*/
+  subpath: string;
+  /** 触发锚点的视口矩形（卡片定位锚）*/
+  rect: { top: number; left: number; bottom: number; right: number };
+}
+
+/** 设置 Store（R17/R23 先例：localStorage，消费侧读）。 */
+export const pagePreviewEnabled: Store<boolean>;        // geode.pagePreviewEnabled，默认 true（官方默认开）
+export function setPagePreviewEnabled(v: boolean): void;
+export const pagePreviewRequireModifier: Store<boolean>; // geode.pagePreviewRequireModifier，默认 false
+export function setPagePreviewRequireModifier(v: boolean): void;
+// false = 官方默认（编辑视图需 Ctrl/Cmd、其余无修饰）；true = 所有来源都需 Ctrl/Cmd
+
+/** 悬停延迟（ms）冻结常量：进入 SHOW_DELAY 后显示，离开 anchor+card HIDE_DELAY 后隐藏。 */
+export const HOVER_SHOW_DELAY = 300;
+export const HOVER_HIDE_DELAY = 120;
+```
+
+### UI: `features/hover/`（新，hover agent 所有）
+
+- `HoverController`（`hoverController.ts`，非 React 或 React effect 均可，挂在卡片
+  组件的 useEffect 里）：document 级委托监听 `mouseover`/`mouseout`/`mousemove`/
+  `keydown`/`scroll`（capture）：
+  - **触发源解析**（首个命中胜出）：① `el.closest("a.internal-link")` →
+    `data-target`（空 + 有 `data-subpath` = 同文链接，path=当前笔记）+ `data-subpath`；
+    ② `el.closest("[data-hover-path]")`（explorer 行 / backlinks·未链接·outgoing 项，
+    见下）→ `data-hover-path` + 可选 `data-hover-subpath`。
+  - **修饰键规则**：`pagePreviewEnabled` 关 → 不触发；锚点在 `.cm-content` 内（live/
+    source 编辑器）**且** `pagePreviewRequireModifier===false` → 需 Ctrl/Cmd（hover 时
+    或 keydown 补触发）；`requireModifier===true` → 所有来源都需 Ctrl/Cmd；其余（reading
+    `.preview-content` / sidebar / explorer）→ 无修饰。
+  - 解析 target：`metadata.resolveLink(rawTarget, sourcePath)`，**unresolved → 不预览**
+    （官方同向，不弹"未创建"卡）。解析得 path → `SHOW_DELAY` 后写 `hoverStore`。
+  - 隐藏：离开 anchor 且未进入 card 后 `HIDE_DELAY`；Escape / scroll（卡片外）/ 点击
+    卡片内链接导航后 → 立即隐藏。进入 card 取消隐藏计时（可滚动/点链接）。
+- `HoverPreview.tsx`（卡片，App.tsx 挂一份）：订阅 `hoverStore`；目标变化时
+  `renderMarkdownToHtml(content, {...})` + `hydrateEmbeds(root, ctx)` 注入 ref 容器
+  （异步，hover 变更即取消旧渲染——陈旧守卫，R24/R19 先例）；subpath 非空 → 渲染后
+  `resolveSubpath` 定位并把卡片滚到该 heading/block（DOM 序号或锚点，R15 reveal 先例）；
+  定位 = 锚 rect 下方优先、视口溢出翻转（R10 popup 重定位 rAF 合帧先例）；卡片内
+  `a.internal-link` 点击 → `openWikilink` 导航 + 关卡片。`data-testid="hover-preview"`。
+- `hover.css`：卡片样式（`--bg-panel`/`--border`/阴影、max-height + 滚动、
+  `.preview-content` 复用阅读视图排版）。
+
+### 触发源 data 属性（各 feature owner 加；锚点类无需改——已有 data-target）
+
+- `features/explorer/Explorer.tsx`：文件行加 `data-hover-path={file.path}`。
+- `features/backlinks/BacklinksPanel.tsx`：backlinks 源按钮 / 未链接源按钮 / outgoing
+  已解析项加 `data-hover-path`（outgoing 未解析项不加——无目标）；未链接/反链片段
+  按钮可加 `data-hover-path`（指向源文件）。
+- 编辑器内链锚点（reading/live/embed/mermaid）**已带 `data-target`/`data-subpath`**，
+  零改动。
+
+### 设置页（SettingsModal.tsx）+ i18n + compat
+
+- 设置：「外观」或新「页面预览」小节两个 toggle —— `settings.pagePreview`（启用，
+  默认开）、`settings.pagePreviewModifier`（要求 Ctrl/Cmd，默认关）。testid
+  `settings-page-preview` / `settings-page-preview-modifier`。
+- i18n：上述 + 节标题，en/zh（dict.views.ts，settings.* 归属）。
+- compat：`Plugin.registerHoverLinkSource(id, info)` 由 reportGap stub 升级为**真实
+  无操作登记**（记录 source id，返回——Geode 全局 hover 已覆盖插件渲染的
+  `a.internal-link`，无需插件参与）；`hoverPopover`/`HoverParent`（插件自挂预览）
+  **保持 gap**（缺口表更新一行）。
+
+### Agent 文件所有权（独占，执行时据此分发）
+
+| agent | 文件 |
+|---|---|
+| core | `core/hover.ts`（新：设置 Store + HoverTarget + 常量） |
+| hover | `features/hover/HoverPreview.tsx` + `hoverController.ts` + `hover.css`（新）、`app/App.tsx`（仅挂卡片一行 + hoverStore 提供） |
+| sources | `features/explorer/Explorer.tsx`、`features/backlinks/BacklinksPanel.tsx`（仅加 `data-hover-*` 属性） |
+| settings | `features/settings/SettingsModal.tsx`、`core/i18n/dict.views.ts`、`src/compat/obsidian/plugin.ts`（仅 registerHoverLinkSource 升级 + hoverPopover gap 注释） |
+
+> `hoverStore`（`Store<HoverTarget | null>`）的归属：放 core/hover.ts 或由 App 在
+> bootstrap 建好下放 AppContext——执行时 chief 定（建议 core/hover.ts 导出单例
+> Store，controller/card 同源订阅，最省接线）。验收：四条底线 + 浏览器 E2E
+> （hover 内链出卡 / 编辑器需 Ctrl / subpath 滚动 / unresolved 不出 / 卡内点击导航 /
+> 设置 toggle）+ 桌面 probe（真实 vault hover 渲染——`__geodeHover` 钩子或 DOM 断言）+
+> r24/r23 套件不回退。
+
 ## Round 24 additions — 未链接提及（Unlinked Mentions / 反链面板扩展）
 
 > 官方校准（obsidian.md/help/plugins/backlinks，2026-06-13 WebFetch）："Unlinked

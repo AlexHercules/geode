@@ -610,7 +610,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **悬停预览（Hover preview）** | **完全缺失**——无 hover 卡片；compat 的 `hoverPopover`/`registerHoverLinkSource` 也是空 stub（grep 零命中）| core hover 贡献点 + 预览卡片（复用 `renderMarkdownToHtml` + embeds 水合 + blob 缓存）+ 触发源（内链/反链/explorer/未链接提及，Ctrl/Cmd+hover）+ 悬停延迟/跟随/边界翻转 + compat `hoverPopover` 接通。无新依赖。 |
+| **悬停预览（Hover preview）** ⭐**R25 设计冻结待执行** | **完全缺失**——无 hover 卡片；compat 的 `hoverPopover`/`registerHoverLinkSource` 也是空 stub（grep 零命中）| **契约已写在 ARCHITECTURE「Round 25 additions」节**：features/hover 控制器 + 卡片（复用 `renderMarkdownToHtml` + `hydrateEmbeds`）+ 触发源（内链锚点/explorer/backlinks/未链接，编辑视图需 Ctrl 其余无修饰，官方口径）+ 设置两项 + compat `registerHoverLinkSource` 接通。零新依赖。 |
 | **PDF 查看器 + PDF/音频/视频嵌入** | `![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]` **全降级为链接**（R12 缺口"PDF/音频/canvas 嵌入均降级链接"；embeds.ts 仅 img/note/math/mermaid 分支）| embeds 管线增 audio→`<audio>` / video→`<video>`（零依赖，走 `readBinary`+blob，R11 先例）；PDF = **一次性依赖决策**（PDF.js ~体积 vs `<embed>`/iframe 内嵌 webview PDF——桌面 WKWebView 原生支持 PDF，浏览器端要 PDF.js）。阅读视图/live/导出三态 + 页码锚点 `#page=N`。 |
 | **书签（Bookmarks）** | **完全缺失**（grep 零命中）| core bookmarks store（兼容 `.obsidian/bookmarks.json` 形状：file/folder/heading/block/search/graph 类型 + 分组）+ 侧栏面板（拖拽排序/分组）+ 命令（Bookmark current file/收藏当前 heading）+ compat。 |
 | **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
