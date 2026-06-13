@@ -52,9 +52,11 @@ import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid } from "@core/dai
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
+import { parseObsidianUri } from "@core/obsidianUri";
 import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
 import { tagCandidates, tagTrigger } from "@features/editor/tagCompletion";
 import { installSearchProbe } from "@features/editor/searchCommands";
+import { handleObsidianUri } from "@features/editor/obsidianUriHandler";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -507,6 +509,21 @@ async function bootstrap() {
     derive: (selected) => deriveNoteName(selected),
     content: (selected) => extractedContent(selected),
     replacement: (name, mode) => extractReplacement(name, mode),
+  };
+
+  // always-on obsidian:// URI probe (R46): `parse` is the PURE parser
+  // (core/obsidianUri) so browser/desktop E2E can assert the action mapping
+  // deterministically; `handle` drives the impure executor (open/create/search)
+  // through the app layer. Same pure-gate approach as __geodeFormat; assigned
+  // BEFORE loadExternal so an external plugin's onload can capture it.
+  const uriHost = globalThis as typeof globalThis & {
+    __geodeUri?: { parse: (uri: string) => unknown; handle: (uri: string) => void };
+  };
+  uriHost.__geodeUri = {
+    parse: (uri) => parseObsidianUri(uri),
+    handle: (uri) => {
+      void handleObsidianUri(app, uri);
+    },
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll

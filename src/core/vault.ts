@@ -93,6 +93,29 @@ export function parentPath(path: string): string {
   return i >= 0 ? path.slice(0, i) : "";
 }
 
+/** Reject a vault-relative path that escapes the vault or carries control chars.
+ *  The Tauri side's safe_join enforces this, but the Memory adapter does not — so
+ *  a hostile path (e.g. an obsidian://new URI with `..`/NUL) could otherwise write
+ *  an out-of-vault KEY in the browser. Centralized so both adapters honor the same
+ *  contract (R46 review). Throws on: empty, absolute (`/`, `\`, drive letter), any
+ *  `..` segment, or a control char (U+0000–U+001F / U+007F). */
+function assertSafeRelPath(path: string): void {
+  if (path === "" || path.startsWith("/") || path.startsWith("\\") || /^[a-zA-Z]:/.test(path)) {
+    throw new Error(`unsafe vault path: "${path}"`);
+  }
+  // control chars (U+0000-U+001F / U+007F) — char-code scan avoids a literal
+  // control-byte regex range in source (keeps the file plain-text clean).
+  for (const ch of path) {
+    const c = ch.charCodeAt(0);
+    if (c < 0x20 || c === 0x7f) {
+      throw new Error(`unsafe vault path (control char): "${path}"`);
+    }
+  }
+  for (const seg of path.split("/")) {
+    if (seg === "..") throw new Error(`unsafe vault path ("..") : "${path}"`);
+  }
+}
+
 export function makeFileNode(path: string): FileNode {
   const name = basename(path);
   return { kind: "file", path, name, basename: stripExtension(name), extension: extension(name) };
@@ -368,6 +391,7 @@ export class Vault {
 
   /** Create a file; auto-creates "Untitled n.md" style unique names upstream. */
   async create(path: string, content = ""): Promise<void> {
+    assertSafeRelPath(path);
     // record BEFORE awaiting the write — the echo can arrive mid-write
     this.recordSelfWrite(path, content);
     try {

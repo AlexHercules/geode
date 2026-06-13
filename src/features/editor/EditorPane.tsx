@@ -23,6 +23,7 @@ import { hydrateEmbeds } from "./embeds";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { openWikilink } from "./wikilinks";
+import { handleObsidianUri } from "./obsidianUriHandler";
 import "./editor.css";
 
 /**
@@ -669,6 +670,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
           anchor.getAttribute("href") ??
           anchor.getAttributeNS("http://www.w3.org/1999/xlink", "href") ??
           "";
+        // R46: obsidian:// links route in-app — intercept the default navigation
+        // and execute the parsed action (open/new/search). Sits before the generic
+        // non-http preventDefault so the webview never tries to navigate to it.
+        if (/^obsidian:/i.test(href)) {
+          e.preventDefault();
+          void handleObsidianUri(app, href);
+          return;
+        }
         if (!/^https?:/i.test(href)) e.preventDefault();
       }
     },
