@@ -611,6 +611,32 @@ unresolved/subpath 滚动/卡内点击导航/设置 toggle 失效复活）+ R24 
 （卡内再 hover）不做（单层，卡内链接点击 = 导航）；图谱节点 hover 延期；backlinks
 片段按钮 hover（官方「可加」，未加）。
 
+### R26 — v0.26（2026-06-13）PDF/音视频嵌入（R25+ 候选池 #②）
+
+补齐 R12 缺口「PDF/音频/canvas 嵌入均降级链接」中的 PDF/音频/视频三类。官方校准
+（obsidian.md/help/How to/Embed files）：支持嵌入 audio/video/PDF，PDF 带 `#page=N`。
+**零新依赖**（CLAUDE.md 硬边界 #5 自主拍板取零依赖路线）：音视频用原生 `<audio>`/
+`<video>`，PDF 用原生 `<iframe>`（桌面 WKWebView 与浏览器 Chromium 均原生渲染 PDF）
+——**不引入 PDF.js**。**core/markdown.ts**：新增 `AUDIO_EXTS`/`VIDEO_EXTS`/
+`fileEmbedKind`/`mimeForPath`（与 `IMAGE_EXTS` 同源单一真值），emission 在 image 分支后
+增 file-embed 分支，发射 `<span class="geode-embed-file" data-embed-path/ext/subpath/
+display>` 占位（仅 `![[x.{media}]]` 输出变化）。**core/embeds.ts** `hydrateFile`：按 kind
+派生 `<audio controls>`/`<video controls>`/`<iframe class=geode-embed-pdf>`，blob 走
+`ctx.imageSrc`（feature 用核心 `mimeForPath` 给正确 MIME），PDF `#page=N` 拼接，失败降级
+`.geode-embed-failed`。三态接线：阅读视图（核心 hydrate）+ live（`FileEmbedWidget` CM
+widget）+ 导出（data-URI）；editor/export 旧 MIME 表删除改 import 核心。
+**对抗评审 5 维 0 缺陷**（emission 仅影响媒体附件、escapeHtml 无注入、webm→video、
+失败降级、live `eq()` 含 path+ext+subpath）。**字节级守卫**：先落 `__geodeRenderMarkdown`
+探针 + `.calibration/r26-bytes.mjs`（36 例语料，改 markdown.ts 前 `--baseline` 快照、
+改后 diff），实测**仅 4 媒体用例变、32 非媒体用例字节不变**（Part-A 不变量，替代未
+重建的 r18-diff）。详见 ARCHITECTURE R26 As-built。
+验证：浏览器 E2E `.calibration/r26-e2e.mjs` **12/12**（阅读+live 三态出元素/`#page=N`/
+zip 仍链接）+ r26-bytes 0 违反 + R25 17 / R24 12 / R23 22 不回退 + build 绿；桌面 macOS
+release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
+显式延期：canvas 嵌入 + 其它附件（zip/docx）仍降级链接；导出媒体 data-URI 内联（大
+文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
+（compat util / hover）未来整合候选。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -654,7 +680,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
 | ~~**悬停预览（Hover preview）**~~ | **R25 已完成（v0.25，见上）**——features/hover 控制器（三触发源含 live `.cm-live-wikilink`）+ 卡片（复用 `renderMarkdownToHtml`+`hydrateEmbeds`、subpath `resolveSubpath` 序号滚动）+ 编辑视图 Ctrl/Cmd 修饰键 + 设置两项 + compat `registerHoverLinkSource` 真无操作登记 | 余项（按需求驱动）：块引用 `#^id` 子滚动（需 markdown.ts 加块 DOM 标记）/ 插件自渲染 `hoverPopover`/`HoverParent` / 嵌套预览 / 图谱节点 hover / backlinks 片段按钮 hover。 |
-| **PDF 查看器 + PDF/音频/视频嵌入** | `![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]` **全降级为链接**（R12 缺口"PDF/音频/canvas 嵌入均降级链接"；embeds.ts 仅 img/note/math/mermaid 分支）| embeds 管线增 audio→`<audio>` / video→`<video>`（零依赖，走 `readBinary`+blob，R11 先例）；PDF = **一次性依赖决策**（PDF.js ~体积 vs `<embed>`/iframe 内嵌 webview PDF——桌面 WKWebView 原生支持 PDF，浏览器端要 PDF.js）。阅读视图/live/导出三态 + 页码锚点 `#page=N`。 |
+| ~~**PDF 查看器 + PDF/音频/视频嵌入**~~ | **R26 已完成（v0.26，见上）**——音视频原生 `<audio>`/`<video>`、PDF 原生 `<iframe>`（零新依赖，不用 PDF.js）；阅读/live/导出三态 + `#page=N` 锚点 | 余项（按需求驱动）：canvas 嵌入 / 其它附件类型 / 导出媒体瘦身（当前 data-URI 内联）。 |
 | **书签（Bookmarks）** | **完全缺失**（grep 零命中）| core bookmarks store（兼容 `.obsidian/bookmarks.json` 形状：file/folder/heading/block/search/graph 类型 + 分组）+ 侧栏面板（拖拽排序/分组）+ 命令（Bookmark current file/收藏当前 heading）+ compat。 |
 | **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
 | **折叠持久化 + 阅读视图折叠** | **R17 显式债**：折叠状态不持久化（tab 重开/preview 往返丢，grep foldState 零命中）；阅读视图无折叠 | 折叠状态按文件持久化（localStorage 或 `.obsidian` 形状）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）。 |

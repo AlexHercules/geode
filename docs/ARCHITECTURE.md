@@ -71,6 +71,129 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 26 additions — PDF/音视频嵌入（`![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]`）【As-built v0.26】
+
+> **状态：已实现并双端验证（v0.26，2026-06-13）。** 契约（下文）按冻结设计落地，
+> As-built 见本节末「R26 As-built」。
+>
+> 补齐 R12 缺口「PDF/音频/canvas 嵌入
+> 均降级链接」中的 PDF/音频/视频三类。官方校准（obsidian.md/help/How to/Embed files，
+> 2026-06-13）：Obsidian 支持嵌入 audio/video/PDF，PDF 可带 `#page=N`/`#height=N`。
+> **零新依赖**（CLAUDE.md 硬边界 #5）：音视频用原生 `<audio>`/`<video>`，PDF 用原生
+> `<iframe>`（桌面 WKWebView 与浏览器 Chromium 均原生渲染 PDF）——**不引入 PDF.js**。
+
+### 数据安全口径 + 字节级承诺
+
+纯只读渲染：嵌入只 `readBinary`→blob（feature 私有缓存，文件事件失效，R11 先例），
+绝不写任何文件。**改 `core/markdown.ts` 的字节级守卫**：本轮新建
+`.calibration/r26-bytes.mjs`（rebuilt r18-diff 等价物，经 `window.__geodeRenderMarkdown`
+探针渲染 36 例语料）——markdown.ts 改动**只允许改变 `![[x.{audio,video,pdf}]]` 的
+输出**，所有其它用例（含 image/note embed、`![[x.zip]]` 非媒体附件仍降级链接）**字节
+不变**（Part-A 不变量）。改动前已 `--baseline` 快照；改动后 `node r26-bytes.mjs` 断言
+仅媒体用例变化。
+
+### 共享分类（`core/markdown.ts`，与 `IMAGE_EXTS` 同源——单一真值，避免 emission/
+### hydration/live/export 四处漂移）
+
+```ts
+export const IMAGE_EXTS: ReadonlySet<string>; // 既有：png/jpg/jpeg/gif/svg/webp/bmp
+export const AUDIO_EXTS: ReadonlySet<string>; // mp3/wav/m4a/ogg/oga/opus/3gp/flac/aac
+export const VIDEO_EXTS: ReadonlySet<string>; // mp4/webm/ogv/mov/mkv（webm 归 video）
+/** 媒体嵌入分类：pdf / video / audio / null（非媒体——保持降级链接）。video 先于 audio 判（webm 归 video）。*/
+export function fileEmbedKind(ext: string): "audio" | "video" | "pdf" | null;
+/** 路径 → MIME（含 image + audio + video + pdf；未知 → application/octet-stream）。feature blob 缓存与 export 共用，修正媒体 MIME。*/
+export function mimeForPath(path: string): string;
+```
+
+### 渲染管线（emission：`core/markdown.ts`）
+
+`![[...]]` 嵌入决策在 image 分支后、noteEmbeds 分支前插入 file-embed 分支：
+
+```
+if (bang && resolveEmbed) {
+  const resolved = resolveEmbed(target);          // resolveAttachment（非 .md）
+  if (resolved !== null) {
+    const ext = <resolved 扩展名小写>;
+    if (IMAGE_EXTS.has(ext)) → <img class="geode-embed" data-embed-path …>   // 既有，不动
+    if (fileEmbedKind(ext))  → file-embed 占位（下）                          // 新增
+    // 其它附件（zip 等）落空 → 继续 noteEmbeds/legacy link（字节不变）
+  }
+}
+```
+
+file-embed 占位 HTML（异步由 hydration 填充，与 image/note 同构）：
+
+```html
+<span class="geode-embed-file" data-embed-path="<resolved>" data-embed-ext="<ext>"
+  data-embed-subpath="<subpath 或空>" data-embed-display="<display>"></span>
+```
+
+`LinkInfo` 加字段 `fileEmbedPath?: string` + `fileEmbedExt?: string`（复用既有 `subpath`
+承载 PDF `page=N`）。emission 仅此一处改 markdown.ts。
+
+### Hydration（`core/embeds.ts`，新增 `hydrateFile` 分支）
+
+`hydrateEmbeds` 增 `span.geode-embed-file[data-embed-path]` 采集 → `hydrateFile`：
+按 `fileEmbedKind(data-embed-ext)` 派生元素 —— audio→`<audio controls>`、video→
+`<video controls>`、pdf→`<iframe class="geode-embed-pdf">`；`src = await ctx.imageSrc(path)`
+（feature 用 `mimeForPath` 给 blob 正确 MIME，故原生播放器/PDF 可渲染）；pdf 的
+`data-embed-subpath` 非空时 `src += "#" + subpath`（`page=N` 锚点）；失败 → 占位加
+`.geode-embed-failed`、不抛。`ctx.imageSrc` 名义仍是「二进制→url」回调（不改签名）。
+
+### 三态接线（feature owner）
+
+- **阅读视图**：走核心 `hydrateEmbeds`（features/editor/embeds.ts 的 `imageSrc` 用
+  `mimeForPath`，MIME_BY_EXT 旧表删除/改为 import 核心）——零额外接线。
+- **Live preview**（features/editor/livePreview.ts）：内链嵌入检测在 `IMAGE_EXTS`→
+  `EmbedWidget` 后增 `fileEmbedKind`→`FileEmbedWidget`（CM widget，`toDOM` 按 kind 建
+  audio/video/iframe，`getEmbedUrl` 取 blob，pdf 拼 `#subpath`）。
+- **导出**（features/export/export.ts）：`inlineEmbeds` 的 `imageSrc` 用 `mimeForPath`
+  生成 `data:<mime>;base64,…`（媒体以 data-URI 内联，体积偏大但行为正确——记缺口）。
+- **CSS**（features/editor/editor.css）：`.geode-embed-file`/`.geode-embed-pdf`/
+  `audio.geode-embed-file`/`video.geode-embed-file` 尺寸（max-width 100% / pdf 默认
+  高度 / `.cm-live-embed` 同区），CSS 变量。
+
+### Agent 文件所有权（独占）
+
+| agent | 文件 |
+|---|---|
+| **core（chief 亲自，带字节守卫）** | `core/markdown.ts`（ext 集 + `fileEmbedKind` + `mimeForPath` + emission）、`core/embeds.ts`（`hydrateFile`） |
+| editor | `features/editor/embeds.ts`（MIME 改用核心 `mimeForPath`）、`features/editor/livePreview.ts`（`FileEmbedWidget` + 检测）、`features/editor/editor.css`（嵌入样式） |
+| export | `features/export/export.ts`（MIME 改用核心 `mimeForPath`） |
+
+> 显式偏差/缺口：canvas 嵌入仍降级（非本轮）；其它附件（zip/docx 等）仍降级链接；
+> 导出媒体走 data-URI 内联（大文件体积，记缺口）；PDF 不用 PDF.js（浏览器/WKWebView
+> 原生渲染，`#page` 由原生查看器解释，跨平台外观略有差异——可接受）。验收：四条底线 +
+> `r26-bytes` Part-A 不变量 + 浏览器 E2E（音视频/pdf 三态出元素、page 锚点、失败降级）+
+> 桌面 probe（真实 fs blob 渲染——`__geodeRenderMarkdown` 或 DOM 断言）+ r23/r24/r25 套件不回退。
+
+### R26 As-built（实现修订记录，2026-06-13）
+
+实现与契约一致，编排 = chief 亲自做字节敏感的 core（markdown.ts + embeds.ts）+ 1 editor
+agent（live widget + MIME + CSS）+ export（chief，2 行）。**对抗评审 5 维 0 缺陷**
+（emission 仅影响媒体附件、escapeHtml 全覆盖无注入、hydration kind 派发 + 失败降级、
+live `FileEmbedWidget.eq()` 含 path+ext+subpath、webm→video、MIME 全覆盖、CSS 纯变量）。
+
+**关键基建（字节级守卫，偿还 r18-diff 未重建债）**：改 core/markdown.ts 前先落
+`window.__geodeRenderMarkdown(source, sourcePath)` always-on 探针（main.tsx，
+`__geodeHover`/`__geodeRename` 同款）+ `.calibration/r26-bytes.mjs`（36 例语料快照/diff，
+基线数据 `r26-bytes.baseline.json` 入库）。流程：改动**前** `--baseline` 快照 → 改动 →
+diff 断言**仅 4 个媒体用例变化、32 个非媒体用例（含 `![[x.zip]]` 仍降级链接、image/note
+embed、全 R18 方言）字节不变**（Part-A 不变量）——实测 0 违反。这套探针 + 语料是后续
+任何 markdown.ts 改动的复跑守卫（替代未重建的 r18-diff）。
+
+**显式偏差/缺口（入档）**：① iframe 在 PDF 原生查看器渲染失败时不触发 `error` 事件
+（二进制已读成功，故不加 `.geode-embed-failed`——可接受，原生查看器口径）；② 导出媒体
+走 data-URI base64 内联（自包含但大文件体积偏大）；③ canvas 嵌入 + 其它附件（zip/docx）
+仍降级链接（非本轮）；④ 仓内另有两处 MIME 表（`compat/obsidian/util.ts`、
+`features/hover/HoverPreview.tsx`）属未来整合候选，本轮按所有权未动。
+
+**验证**：浏览器 `node .calibration/r26-e2e.mjs` **12/12**（阅读+live 三态出
+audio/video/iframe、`#page=N` 锚点、zip 仍链接）+ `r26-bytes.mjs` 36 例 0 违反；
+R25 17 / R24 12 / R23 22 不回退；生产 build 绿。桌面 macOS release `geode compat-vault`
++ `r26-probe` **5/5**（`__geodeRenderMarkdown` 真实 fs 发射 audio/video/pdf 占位 +
+zip 降级）。
+
 ## Round 25 additions — 悬停预览（Page Preview / Ctrl+hover 页面预览卡片）【As-built v0.25】
 
 > **状态：已实现并双端验证（v0.25，2026-06-13）。** 契约（下文）按冻结设计落地，
