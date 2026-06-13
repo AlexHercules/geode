@@ -212,13 +212,11 @@ export function App() {
       commands.register({
         id: "app:focus-next-pane",
         name: () => t("cmd.focusNextPane"),
-        hotkey: "Mod+Alt+ArrowRight",
         callback: () => workspace.focusAdjacentPane(1),
       }),
       commands.register({
         id: "app:focus-previous-pane",
         name: () => t("cmd.focusPreviousPane"),
-        hotkey: "Mod+Alt+ArrowLeft",
         callback: () => workspace.focusAdjacentPane(-1),
       }),
       commands.register({
@@ -427,6 +425,22 @@ export function App() {
         name: () => t("cmd.reopenClosedTab"),
         hotkey: "Mod+Shift+T",
         callback: () => workspace.reopenClosedTab(),
+      }),
+    );
+    // R37 back/forward navigation history (per-tab). Mod+Alt+Arrow are the
+    // Obsidian-canonical keys (focus-pane lost them above).
+    disposers.push(
+      commands.register({
+        id: "app:navigate-back",
+        name: () => t("cmd.navigateBack"),
+        hotkey: "Mod+Alt+ArrowLeft",
+        callback: () => workspace.navigateBack(),
+      }),
+      commands.register({
+        id: "app:navigate-forward",
+        name: () => t("cmd.navigateForward"),
+        hotkey: "Mod+Alt+ArrowRight",
+        callback: () => workspace.navigateForward(),
       }),
     );
     if (isTauri()) {
@@ -1110,6 +1124,24 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         if (tabId) app.workspace.moveTab(tabId, leaf.id, idx);
       }}
     >
+      <div className="tab-nav">
+        <button
+          className="tab-nav-btn"
+          aria-label={t("app.navigateBack")}
+          disabled={!leaf.activeTabId || !app.workspace.canTabNavigateBack(leaf.activeTabId)}
+          onClick={() => app.workspace.navigateBack()}
+        >
+          <Icon name="arrow-left" size={16} />
+        </button>
+        <button
+          className="tab-nav-btn"
+          aria-label={t("app.navigateForward")}
+          disabled={!leaf.activeTabId || !app.workspace.canTabNavigateForward(leaf.activeTabId)}
+          onClick={() => app.workspace.navigateForward()}
+        >
+          <Icon name="arrow-right" size={16} />
+        </button>
+      </div>
       {leaf.tabs.map((tab, i) => {
         /* the graph tab's stored title is persisted in workspace state —
            ignore it at render time so the label follows the UI locale;

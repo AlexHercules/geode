@@ -543,6 +543,34 @@ textarea:focus {
   color: var(--text-normal);
 }
 
+.tab-nav {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.tab-nav-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tab-nav-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.tab-nav-btn:disabled {
+  color: var(--text-faint);
+  opacity: 0.45;
+  cursor: default;
+}
+
 /* ============ status bar ============ */
 
 .status-bar {

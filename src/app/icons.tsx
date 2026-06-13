@@ -58,6 +58,8 @@ const PATHS: Record<string, string[]> = {
   x: ["M18 6L6 18", "M6 6l12 12"],
   "chevron-right": ["M9 18l6-6-6-6"],
   "chevron-down": ["M6 9l6 6 6-6"],
+  "arrow-left": ["m12 19-7-7 7-7", "M19 12H5"],
+  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   pencil: [
     "M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z",
     "M15 5l4 4",

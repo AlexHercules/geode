@@ -17,6 +17,17 @@ import { basename, stripExtension } from "./vault";
 
 const PERSIST_KEY = "geode.workspace.v1";
 const RECENTLY_CLOSED_MAX = 20;
+const NAV_HISTORY_MAX = 50;
+
+/** R37: one entry in a tab's back/forward navigation history. */
+interface NavLocation {
+  filePath: string;
+  mode: ViewMode;
+}
+interface NavHistory {
+  back: NavLocation[];
+  forward: NavLocation[];
+}
 
 /** A user-closed tab, captured for reopen (Mod+Shift+T). Session-only. */
 interface ClosedTab {
@@ -181,6 +192,11 @@ export class Workspace {
    *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds
    *  it; reactive cleanups (delete/rename/missing) purge it. */
   private recentlyClosed: ClosedTab[] = [];
+  /** Per-tab back/forward navigation history (R37), keyed by TabState.id.
+   *  Session-only (NOT persisted — same stale-path reasoning as recentlyClosed).
+   *  Every mutation coincides with a workspace.state change, so canTabNavigate*
+   *  read fresh under useStore(state) without a dedicated Store. */
+  private tabHistory = new Map<string, NavHistory>();
 
   constructor(private events: EventBus) {
     this.restore();
@@ -194,7 +210,10 @@ export class Workspace {
     // entry survive). Mirrors openVaultFlow's lastActiveFile reset + Document
     // manager's handle invalidation on the same event. (R36 review fix.)
     events.on("vault:changed", ({ reason }) => {
-      if (reason === "load") this.recentlyClosed = [];
+      if (reason === "load") {
+        this.recentlyClosed = [];
+        this.tabHistory.clear();
+      }
     });
   }
 
@@ -222,6 +241,9 @@ export class Workspace {
 
   /** Open a file in a pane (default: active pane). Reuses that pane's tab for the same file unless newTab. */
   openFile(path: string, opts: { newTab?: boolean; paneId?: string } = {}) {
+    const s0 = this.state.get();
+    const targetPaneId = opts.paneId ? paneId0(s0, opts.paneId) : s0.activePaneId;
+    this.recordNavigation(s0, targetPaneId, path, opts.newTab ?? false);
     this.update((s) => {
       const paneId = opts.paneId ? paneId0(s, opts.paneId) : s.activePaneId;
       const target = findLeaf(s.root, paneId) ?? flattenLeaves(s.root)[0];
@@ -317,6 +339,7 @@ export class Workspace {
       return { ...s, root, activePaneId };
     });
     this.emitActiveFile();
+    this.tabHistory.delete(id);
   }
 
   /** Close every markdown tab whose filePath no longer exists. One batched state
@@ -362,6 +385,8 @@ export class Workspace {
     console.info(`[workspace] closed ${stale.size} tab(s) pointing at missing files`);
     // a missing file can't be reopened either — purge it from the reopen stack
     this.recentlyClosed = this.recentlyClosed.filter((c) => c.filePath === null || exists(c.filePath));
+    this.purgeNavLocations((loc) => exists(loc.filePath));
+    this.pruneTabHistory();
     this.emitActiveFile();
     return stale.size;
   }
@@ -578,6 +603,91 @@ export class Workspace {
     return true;
   }
 
+  /* ---------- navigation history (R37) ---------- */
+
+  /** Record the active tab's CURRENT location before openFile replaces it (A→B).
+   *  Mirrors openFile's branch decision: skip new-tab (fresh tab) and skip reuse
+   *  (switching to an already-open file = tab switch, not navigation). */
+  private recordNavigation(s: WorkspaceState, targetPaneId: string, path: string, newTab: boolean) {
+    if (newTab) return;
+    const target = findLeaf(s.root, targetPaneId) ?? flattenLeaves(s.root)[0];
+    if (!target) return;
+    if (target.tabs.some((t) => t.viewType === "markdown" && t.filePath === path)) return; // reuse → tab switch
+    const active = target.tabs.find((t) => t.id === target.activeTabId);
+    if (active && active.viewType === "markdown" && active.filePath && active.filePath !== path) {
+      const h = this.tabHistory.get(active.id) ?? { back: [], forward: [] };
+      h.back.push({ filePath: active.filePath, mode: active.mode });
+      if (h.back.length > NAV_HISTORY_MAX) h.back.shift();
+      h.forward = [];
+      this.tabHistory.set(active.id, h);
+    }
+  }
+
+  /** Cmd/Ctrl+Alt+Left: step the active tab back through its history. */
+  navigateBack() {
+    this.navigate("back");
+  }
+
+  /** Cmd/Ctrl+Alt+Right: step the active tab forward. */
+  navigateForward() {
+    this.navigate("forward");
+  }
+
+  private navigate(dir: "back" | "forward") {
+    const tab = this.getActiveTab();
+    if (!tab || tab.viewType !== "markdown" || tab.filePath === null) return;
+    const h = this.tabHistory.get(tab.id);
+    if (!h) return;
+    const src = dir === "back" ? h.back : h.forward;
+    const dst = dir === "back" ? h.forward : h.back;
+    const target = src.pop();
+    if (!target) return;
+    dst.push({ filePath: tab.filePath, mode: tab.mode });
+    this.tabHistory.set(tab.id, h);
+    this.setTabLocation(tab.id, target.filePath, target.mode);
+  }
+
+  canTabNavigateBack(tabId: string): boolean {
+    return (this.tabHistory.get(tabId)?.back.length ?? 0) > 0;
+  }
+
+  canTabNavigateForward(tabId: string): boolean {
+    return (this.tabHistory.get(tabId)?.forward.length ?? 0) > 0;
+  }
+
+  /** Set a tab's location WITHOUT recording navigation (back/forward use this). */
+  private setTabLocation(tabId: string, filePath: string, mode: ViewMode) {
+    this.update((s) => {
+      const holder = findTabLeaf(s.root, tabId);
+      if (!holder) return s;
+      const root = mapLeaf(s.root, holder.id, (l) => ({
+        ...l,
+        tabs: l.tabs.map((t) =>
+          t.id === tabId ? { ...t, filePath, title: stripExtension(basename(filePath)), mode } : t,
+        ),
+        activeTabId: tabId,
+      }));
+      return { ...s, root, activePaneId: holder.id };
+    });
+    this.emitActiveFile();
+  }
+
+  /** Remove every tab's history entries failing `keep` (delete/missing purge). */
+  private purgeNavLocations(keep: (loc: NavLocation) => boolean) {
+    for (const h of this.tabHistory.values()) {
+      h.back = h.back.filter(keep);
+      h.forward = h.forward.filter(keep);
+    }
+  }
+
+  /** Drop history for tabs that no longer exist (after batch tab removal). */
+  private pruneTabHistory() {
+    const live = new Set(allTabs(this.state.get().root).map((t) => t.id));
+    for (const id of this.tabHistory.keys()) {
+      if (!live.has(id)) this.tabHistory.delete(id);
+    }
+  }
+
   /* ---------- panels / modals / theme ---------- */
 
   setLeftPanel(panel: LeftPanelKind) {
@@ -731,6 +841,9 @@ export class Workspace {
     this.recentlyClosed = this.recentlyClosed.filter(
       (c) => !(c.filePath !== null && (c.filePath === path || c.filePath.startsWith(path + "/"))),
     );
+    // purge deleted-file locations from every tab's nav history, drop dead tabs' history (R37)
+    this.purgeNavLocations((loc) => loc.filePath !== path && !loc.filePath.startsWith(path + "/"));
+    this.pruneTabHistory();
     this.emitActiveFile();
   }
 
@@ -770,6 +883,17 @@ export class Workspace {
       }
       return c;
     });
+    // keep nav-history locations pointing at the renamed path (R37)
+    const remapLoc = (loc: NavLocation): NavLocation =>
+      loc.filePath === oldPath
+        ? { ...loc, filePath: newPath }
+        : loc.filePath.startsWith(oldPath + "/")
+          ? { ...loc, filePath: newPath + loc.filePath.slice(oldPath.length) }
+          : loc;
+    for (const h of this.tabHistory.values()) {
+      h.back = h.back.map(remapLoc);
+      h.forward = h.forward.map(remapLoc);
+    }
     this.emitActiveFile();
   }
 
