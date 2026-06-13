@@ -71,6 +71,217 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 24 additions — 未链接提及（Unlinked Mentions / 反链面板扩展）
+
+> 官方校准（obsidian.md/help/plugins/backlinks，2026-06-13 WebFetch）："Unlinked
+> mentions are backlinks to any unlinked occurrence of the name of the active
+> note"——即活动笔记**名字**（basename + frontmatter aliases）在别的笔记正文里
+> **没被 `[[..]]` 链接**的明文出现。官方 UI：反链面板「Linked mentions」节之下一个
+> 「Unlinked mentions」节，按源文件分组，每个提及有「Link」把该处明文转成
+> wikilink，每个文件组有「Link all」一键链接该文件内全部提及；面板级
+> Collapse results / Show more context / Excluded files 控件作用其上。
+> **R24 范围** = core/unlinkedMentions.ts 匹配引擎 + 链接改写引擎（R16 写纪律）+
+> BacklinksPanel「未链接提及」节（异步扫描 + 每条 Link + 每文件 Link all）+
+> i18n。compat 零改动（官方 Backlinks 插件 API 不在公开 d.ts，无缺口表条目）。
+> **显式偏差/延期**：Excluded files 模式（Geode 无该设置——扫全库除活动文件
+> 自身）；面板级 Collapse/Show-more-context/排序/搜索过滤工具栏（沿用既有 Section
+> 折叠模型，源文件按 path localeCompare 排序，片段取命中行）；点击提及只
+> openFile 不滚动到该 offset（subpath reveal 是 heading/block 锚点，明文 offset
+> 定位延期——minor 偏差）；只匹配 basename + aliases，**不**匹配 headings/标签
+> （官方"name of the active note"口径）。
+
+### 数据安全口径（本轮第一底线——Link 动作写**别的**文件）
+
+「Link」/「Link all」改写的是源文件（可能正在编辑器里打开），一律走 **R16
+linkRewrite 写纪律**：① 模块级 `runTail` 串行化（本模块独立队列；与 rename 引擎
+跨模块重叠为微秒窗口，双方都 flush+ensureFresh+fresh-read+校验，最坏 skip+报告，
+入已知限制）；② 写前 `documents.flushAll()` + `metadata.ensureFresh(openPaths,
+getText)`；③ 真值源 = 打开的 buffer（`documents.get`）否则 `vault.readFresh`
+（**绝不读 content cache**——watcher 防抖窗口内的外部改动对 cache 不可见）；
+④ **从 fresh 内容重新派生提及**（`findUnlinkedMentions` 重扫，offset 构造性正确）
+——扫描期的旧 offset **绝不**直接 splice；⑤ 应用 = 打开 buffer 走
+`handle.applyExternalEdits`（单 CM 事务、undo 一步、标脏 + 防抖保存），关闭文件走
+`vault.modify`（回声指纹抑制）；⑥ 逐文件 try/catch，任何不一致 skip + 报告，
+绝不盲写。扫描（只读 `vault.read`）不碰这些纪律。
+
+### 新模块 `core/unlinkedMentions.ts`（纯 TS 零依赖；core agent 所有）
+
+```ts
+import type { NoteMetadata } from "./types";
+import type { Vault } from "./vault";
+import type { MetadataIndex } from "./metadata";
+import type { DocumentManager } from "./documents";
+
+/** 一处明文提及：[from,to) 为源文件 content 的字节区间，text = 命中的原文 */
+export interface MentionSpan { from: number; to: number; text: string }
+
+/** 活动笔记的匹配词条 = basename（去 .md）+ 全部 aliases；大小写不敏感去重、
+ *  去空白空串。供面板派生一次、对全库源文件复用。 */
+export function deriveMentionTerms(meta: NoteMetadata): string[];
+
+/** 在源文件 content 中找出 terms 的未链接明文出现（冻结语义）：
+ *  - 屏蔽（同长空白替换，offset 与 content 对齐）后扫描：frontmatter 区
+ *    （parseFrontmatter.to）+ 代码围栏/行内代码（maskCodeRegions）+ 既有
+ *    wikilink span（sourceMeta.links 的 from/to）+ 标签 span（sourceMeta.tags
+ *    中 from>0 的 `#tag`，长度 1+tag.length）——故 `[[Name]]`/`#Name`/代码内
+ *    /frontmatter 内的名字都不算未链接提及。
+ *  - 大小写不敏感子串匹配。
+ *  - **边界规则（CJK 感知，冻结）**：定义 isLatinWord(ch) = ch ∈ \p{L}\p{N}_
+ *    且 ch 非 CJK（Han 含扩展/假名/谚文/全角）。某一侧边界**失效**（非词界）
+ *    当且仅当命中串该侧的内缘字符与紧邻外部字符**都** isLatinWord（= 会切断
+ *    一个拉丁词）。两侧都不失效才是合法提及。效果：拉丁词 "Note" 不命中
+ *    "Notebook"（内 e + 外 b 都拉丁 → 失效）；CJK 名 "未链接提及" 命中
+ *    "这是未链接提及的例子"（内/外 Han 非 isLatinWord → 不失效，按子串命中——
+ *    CJK 无词隔，官方同向）；CJK 紧邻拉丁、词紧邻空白/标点/文首尾均合法。
+ *  - **重叠去重**：跨 terms 收集全部候选，按 from 升序、长度降序，左到右贪婪
+ *    取非重叠（取最长，避免嵌套链接）。
+ *  - 永不抛。 */
+export function findUnlinkedMentions(
+  content: string,
+  sourceMeta: NoteMetadata,
+  terms: readonly string[],
+): MentionSpan[];
+
+export interface MentionLinkDeps { vault: Vault; metadata: MetadataIndex; documents: DocumentManager }
+export interface MentionLinkResult {
+  filesChanged: number;
+  mentionsLinked: number;
+  skipped: Array<{ path: string; reason: string }>;
+}
+
+/** 链接源文件内 activePath 的全部当前未链接提及（从 fresh 内容重扫，链接所有）。
+ *  插入文本：surfaceText = 命中原文；若 `resolveLink(surfaceText, sourcePath)
+ *  === activePath` → `[[surfaceText]]`（原文即可解析，含 alias/任意大小写——
+ *  Obsidian 同口径）；否则用消歧全路径 `[[fullPathNoExt|surfaceText]]` 并校验
+ *  其 resolveLink === activePath，再不成则 skip+报告。改写按升序 splice 重建
+ *  字符串、一次 applyExternalEdits/modify。 */
+export function linkAllMentionsInFile(
+  deps: MentionLinkDeps,
+  activePath: string,
+  sourcePath: string,
+): Promise<MentionLinkResult>;
+
+/** 链接源文件内某一处提及：从 fresh 重扫，按 (text, 近似 from) 定位唯一命中
+ *  （精确 from 优先，否则同 text 最近者，容差外 → skip+报告"content changed"）。
+ *  其余写纪律同上。 */
+export function linkOneMention(
+  deps: MentionLinkDeps,
+  activePath: string,
+  sourcePath: string,
+  target: MentionSpan,
+): Promise<MentionLinkResult>;
+```
+
+### `core/metadata.ts` 微调（core agent 所有；行为保持）
+
+导出 `export function maskCodeRegions(s: string): string`（= 现有
+`.replace(CODE_FENCE_RE).replace(INLINE_CODE_RE)` 同长空白逻辑），`parseNote`
+内联处改调它——**纯抽取，字节行为不变**（parseNote 既有语义冻结）。
+`unlinkedMentions.ts` 复用它做屏蔽，避免围栏/行内代码识别两处分叉。
+
+### UI: BacklinksPanel 扩展（features/backlinks/，ui agent 所有）
+
+「Outgoing links」「Tags」之间（或 Linked mentions 之下、Outgoing 之上——
+按官方紧贴 Linked mentions）插入新 `<Section>`「未链接提及」
+（`bl-section-unlinked` testid）：
+
+- **异步扫描**（R21 SearchPanel 先例）：useEffect/useMemo+异步 IIFE，键
+  `[activePath, rev]`；派生 terms（活动 meta），对 `metadata.getAll()` 中
+  `path !== activePath` 的每个源文件 `await vault.read(path)` →
+  `findUnlinkedMentions` → 收集 `{sourcePath, items:[{from,to,text,snippet,
+  markFrom,markTo}]}`（snippet 在 feature 层用 content 现成构造，命中相对偏移
+  渲染 `<mark>`，复用 search 高亮先例）。**可取消 + 陈旧守卫**：闭包内
+  `cancelled` 标志 + 完成时比对 activePath；revision/activePath 变即丢弃在途
+  结果。**Loading 态**：扫描中节标题计数显示占位（`backlinks.scanning` 行）。
+  count = 全部源文件提及总数。section 默认折叠（官方默认折叠未链接节）。
+- **每文件组**：源文件名（点击 openFile）+ 该文件提及计数 + 「Link all」按钮
+  （`bl-link-all` testid，调 `linkAllMentionsInFile`）。
+- **每条提及**：高亮片段（点击 openFile——offset 滚动延期）+ 「Link」按钮
+  （`bl-link-one` testid，调 `linkOneMention`）。
+- **Link 后**：vault 改动 → 索引 reindex → revision bump → 自动重扫，该提及
+  从「未链接」消失、转入「Linked mentions」。Link 期间按钮 busy 守卫（防重入
+  双写，R23 LIFE 教训）；引擎返回 skipped 非空 → console.warn（重扫即反映真相，
+  不弹错；与 linkRewrite 报告口径一致）。
+
+### i18n（dict.panels.ts，backlinks.* 命名空间，ui agent 所有；en/zh 双语）
+
+`backlinks.unlinkedMentions`（"Unlinked mentions"/"未链接提及"）、
+`backlinks.noUnlinked`（"No unlinked mentions"/"没有未链接提及"）、
+`backlinks.scanning`（"Searching…"/"搜索中…"）、`backlinks.linkMention`
+（"Link"/"链接"）、`backlinks.linkAll`（"Link all"/"全部链接"）。
+
+### Demo vault 夹具（core/vault.ts DEMO_FILES + demo-vault 磁盘，core agent 所有）
+
+新增确定性夹具供浏览器 E2E：`Zettelkasten.md`（frontmatter `aliases: [ZK]`）+
+`On Knowledge.md`（正文含未链接 "Zettelkasten" ×N、alias "ZK" ×1、已链接
+`[[Zettelkasten]]` ×1、代码 `` `Zettelkasten` `` ×1 应排除、负向 "Zettelkastens"
+复数应因词界不命中）。磁盘 demo-vault 同步两文件（双端一致先例）。
+
+### Agent 文件所有权（独占）
+
+| agent | 文件 |
+|---|---|
+| core | `core/unlinkedMentions.ts`（新）、`core/metadata.ts`（仅导出 maskCodeRegions + parseNote 内联改调）、`core/vault.ts`（仅 DEMO_FILES 增条目）、`demo-vault/Zettelkasten.md` + `demo-vault/On Knowledge.md`（新） |
+| ui | `features/backlinks/BacklinksPanel.tsx`、`features/backlinks/backlinks.css`、`core/i18n/dict.panels.ts` |
+
+`core/types.ts` 本轮不动（MentionSpan 等类型定义在 unlinkedMentions.ts，ui 从该模块 import）。
+
+### R24 As-built deltas（评审后修订记录）
+
+执行 = Workflow 并行 agent（core 引擎 / ui 面板，独占文件所有权）+ 集成 typecheck。
+评审 5 维 Workflow（数据安全 / 对抗性输入 / 契约符合性 / 生命周期竞态 /
+分层-i18n-性能，18 agent）：**13 finding → 对抗验证 7 确认 / 6 证伪，去重 5 根因
+（2 major + 3 minor）全修复**；浏览器 E2E 另抓 1 个评审漏网的 UI 缺陷（共 6 处修复）：
+
+- **major DS-1（masking 漏洞）**：源文件**首字节**就是 `#tag`（无 frontmatter）时，
+  TAG_RE 的 `^` 空匹配使该正文标签 `from===0`，与合成 frontmatter 标签同值，被
+  `buildMasked` 的 `if (tag.from > 0)` 守卫漏掉——`#Name` 被误报为未链接提及，
+  Link 把合法标签改写成 `#[[Name]]`（关闭文件即静默落盘损坏）。R16 fresh-rederive
+  无济于事（同一 matcher 缺陷）。修复 = 按**实际字节**门控 `content[tag.from] === "#"`
+  （正文标签恒指向 `#`；合成 frontmatter 标签 from=0 指向 `---` 的 `-`，且已被
+  frontmatter 区屏蔽）。**冻结 masking 规则更正**：标签屏蔽判据由 "from>0" 改为
+  "该字节为 `#`"。
+- **major DS-2（写校验缺失）**：`buildLinkInsert` 对 `resolveLink(surfaceText)===
+  activePath` 即输出 `[[surfaceText]]`，但 `resolveLink` 不解析 wikilink 语法而
+  `WIKILINK_RE` 解析——名字/别名含 `# | [ ]`（如 `C#`/`F#`/`a|b`）时 `[[C#]]`
+  回解析为 target "C"，写出**指向错误笔记或损坏**的链接，且**无 R16 那道
+  post-rewrite 断言**兜底（契约声称"完全镜像 R16"实则漏了 linkRewrite.ts:286-295
+  的复解析校验）。修复 = doLink 补 post-rewrite verification：重建串后 `parseNote`
+  复解析，逐 edit 按 post-edit offset 定位插入链接并断言 `resolveLink === activePath`，
+  不符即 throw → 既有 try/catch 转 skip+报告，绝不盲写。此类名 Obsidian 本就非法
+  （标题禁 `# ^ [ ] |`），skip 是忠实结果。**写纪律新增第 ⑤.5 步：应用前 post-rewrite
+  复解析校验。**
+- **minor IN-1（subpath 链接漏屏蔽）**：同文链接 `[[#Heading]]`/`[[#^block]]`
+  无 target，WIKILINK_RE 不收进 `sourceMeta.links`，未被屏蔽——名字命中其中会被
+  误报、Link 写成 `[[#[[Name]]]]`。修复 = buildMasked 增一道
+  `/\[\[#[^[\]]*\]\]/g` 屏蔽（**第 5 个 mask 源**）。
+- **minor LC-1（闪烁）**：扫描占位 `{scanning ? …}` 在每次 revision bump（活动笔记
+  每次自动保存都 bump）把已填充列表整段闪成 "Searching…"，偏离所引 SearchPanel
+  先例。修复 = 门控改 `scanning && unlinked.length === 0`（已有结果时后台重扫不闪）。
+- **minor I18N-1**：zh `backlinks.noUnlinked` 漏全角句号（与同 dict 全部空态串不
+  一致）。修复 = "没有未链接提及。"。
+- **UI-1（E2E 抓出，评审漏网）**：未链接节默认折叠用 `collapsed.unlinked ?? true`，
+  但 collapsed state 初值 `{}`——toggle 的 `!c[key]` 首点算 `!undefined === true`
+  仍折叠，**首次点击展不开**。修复 = 初值 `{ unlinked: true }` + 节 prop 改
+  `!!collapsed.unlinked`（首点 true→false 正常展开）。教训：默认折叠节的折叠态必须
+  显式 seed，不能靠 `?? true` 默认值——toggle 语义会与之打架。
+
+证伪 6（对抗验证驳回，记录于评审产物）：eager 全库扫描（折叠态也扫——计数徽标
+Obsidian 恒显需要，契约冻结）；rev-bump 重扫（正确的最小失效信号，且 cancelled
+标志已合帧）；Link-one/Link-all 同文件并发（引擎 runTail 串行 + fresh-rederive，
+最坏 skip，无数据风险）；开 buffer 链接后 metadata.revision 滞后到防抖保存（全应用
+reindex-on-save 模型，自愈，与 Linked mentions 同口径）；折叠态计数瞬时陈旧（占位
+是 body 行，折叠不可见）；matcher 热循环分配（只读扫描、跨 await 分散、契约采纳
+SearchPanel 同款 per-file 同步匹配）。**性能优化采纳为后续候选**（热循环首字符
+小写门控、保存 burst 去抖 300-500ms——非缺陷，记 ROADMAP）。
+
+验证：浏览器 E2E `.calibration/r24-e2e.mjs` **12/12**（检测 basename+alias / 排除
+既有链接·行内代码·复数词界 / Link-all 改写+surface 保留 / CJK 子串匹配 /
+**DS-1 tag@0 排除** / **DS-2 C# 跳过文件零改动**）；R23 templates E2E 22/22 不回退
+（maskCodeRegions 纯抽取 + DEMO_FILES 仅增条目，零回归）；生产 build 绿。
+桌面 probe（见 OBSIDIAN-COMPAT R24 套件回归）经 `window.__geodeUnlinked` 钩子
+（main.tsx，`__geodeRename` 同款）驱动真实 fs 写。
+
 ## Round 23 additions — 模板系统（Templates 核心插件复刻 + 新建套模板）
 
 > 官方校准（obsidian.md/help/plugins/templates，2026-06-13 WebFetch）：设置三项

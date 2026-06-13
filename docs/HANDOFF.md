@@ -1,8 +1,8 @@
 # 续接提示词（重开对话时直接粘贴）
 
 ```
-继续开发 Geode（/Users/cutealexander/Code/active/geode/geode，Obsidian 复刻桌面应用，
-当前 v0.23.0，开发机 macOS——R23 起迁至本机）。启用 workflows。
+继续开发 Geode（/Users/cutealexander/Code/active/geode/geode，Obsidian 复刻桌面应用,
+当前 v0.24.0，开发机 macOS——R23 起迁至本机）。启用 workflows。
 远端：https://github.com/AlexHercules/geode（私有，origin/master）——每轮收尾提交后
 git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证书决策。
 
@@ -17,17 +17,33 @@ git push。用户口径（2026-06-11）：发布不着急，暂不做渠道/证�
 5. docs/DISTRIBUTION.md — 发布流程（Windows 向，本机仅参考）
 
 候选池执行口径（用户拍板 2026-06-12）：逐项推进，无需再问主线——R19 mermaid ✓、
-R20 主题 CSS ✓、R21 搜索运算符 ✓、R22 Properties ✓、R23 模板系统 ✓，下一项取
-**未链接提及（反链面板扩展）**；其后候选池只剩发布渠道（待用户拍板，暂缓口径
-2026-06-11，不主动启动）与性能远期项。验收沿用四条底线 + OBSIDIAN-COMPAT 套件
-矩阵不回退（macOS 下 = probe 插件方案）。
+R20 主题 CSS ✓、R21 搜索运算符 ✓、R22 Properties ✓、R23 模板系统 ✓、**R24 未链接
+提及 ✓**。**候选池迁移叙事执行队列至此清空**：只剩①真实发布渠道 + Authenticode
+证书（待用户拍板，暂缓口径 2026-06-11，**不主动启动**——每轮提醒 .tauri-keys 风险见
+下）；②性能远期项（图谱 WebGL/Worker、倒排索引、R24 未链接提及扫描去抖+热循环
+门控）；③各轮 polish 余项（按需求驱动）。**下一项无既定主线——开轮前先问用户方向**
+（继续 polish / 取性能项 / 等发布决策）。验收沿用四条底线 + OBSIDIAN-COMPAT 套件
+矩阵不回退（macOS 下 = probe 插件方案）。用户 2026-06-13 口径：全权委托决策，目标
+=复刻 Obsidian——但发布/签名等不可逆外向动作仍须先确认。
 ```
 
 ## 给接续者的三句话背景
 
-- 开发模式已验证二十三轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维
-  评审 + 逐条对抗验证 + 双端运行时实测**。R23（模板系统）评审 13 finding → 12 确认
-  1 证伪（去重 10 根因：1 critical + 1 major）：critical 是 preview→live 翻转与
+- 开发模式已验证二十四轮：**契约先行 + Workflow 并行 agent（独占文件所有权）+ 多维
+  评审 + 逐条对抗验证 + 双端运行时实测**。R24（未链接提及）= core 引擎 + ui 面板两
+  并行 agent，评审 5 维 Workflow 13 finding → 7 确认 6 证伪（去重 5 根因：2 major +
+  3 minor），**外加浏览器 E2E 抓出 1 个评审漏网的 UI 缺陷**（共 6 修复）。两条 major
+  都在写入别的文件的数据安全面：① 源文件首字节 `#tag`（from===0）被 buildMasked 的
+  `from>0` 守卫漏屏蔽 → Link 把标签改写成 `#[[Name]]` 损坏（修复 = 按字节
+  `content[tag.from]==="#"` 门控）；② `buildLinkInsert` 对含 wikilink 元字符的名字
+  （`C#`/`F#`/`a|b`）写出错链且**漏了 R16 的 post-rewrite 复解析断言**（修复 = doLink
+  补复解析校验，不符即 skip+报告——教训：声称"镜像 R16"务必把那道 post-rewrite
+  断言也抄上，否则错链静默落盘）。E2E 抓的 UI 缺陷：默认折叠节用 `collapsed.x ?? true`
+  但 state 初值 `{}`，toggle `!c[key]` 首点 `!undefined===true` 仍折叠 → 首点展不开
+  （教训：默认折叠态必须显式 seed `{x:true}`，别靠 `?? true` 默认值与 toggle 打架）。
+  **R24 还落了一个可复跑写引擎钩子**：`window.__geodeUnlinked.{find,linkAll,linkOne}`
+  （main.tsx，`__geodeRename` 同款 always-on probe——桌面 WKWebView 无 CDP，靠它驱动
+  真实 fs 写校验）。R23（模板系统）评审 13 finding → 12 确认 1 证伪（去重 10 根因：1 critical + 1 major）：critical 是 preview→live 翻转与
   openModal 同一 React commit 时，被重建 EditorPane 的 effect `view.focus()` 在 modal
   autoFocus 之后执行抢走焦点——**键入直接污染正文并自动保存**（修复 = focus 带
   modal 守卫；教训：同 commit「翻模式+开 modal」时重建组件的焦点操作必须查 modal
@@ -44,9 +60,11 @@ R20 主题 CSS ✓、R21 搜索运算符 ✓、R22 Properties ✓、R23 模板�
   `src-tauri/target/release/geode <vault绝对路径>` + probe 插件自检（WKWebView 无
   CDP）——**R23 新纪律：后台启动的 app 里 probe 晚期 await/timer 不可靠（App Nap），
   断言放加载后前几秒、进度 fire-and-forget 写链、挂载断言查 sidebarPanels Store**。
-  可复跑资产（本机）：浏览器 `node .calibration/r23-e2e.mjs` 22 断言（需 dev
-  server）；桌面 compat-vault probe r23-suite(9)/r23-templates(10)，结果文件与
-  Probe Template*.md 重跑前先删、Suite Home.md 重置。R20-R22 的旧 e2e/probe 脚本
+  可复跑资产（本机）：浏览器 `node .calibration/r24-e2e.mjs` 12 断言 /
+  `r23-e2e.mjs` 22 断言（需 dev server）；桌面 compat-vault probe
+  r24-probe(12，经 `__geodeUnlinked` 钩子驱动真实 fs Link 写)/r23-suite(9)/
+  r23-templates(10)，**r24 结果文件 `r24-results.md` 与 `__r24/` 夹具、Probe
+  Template*.md 重跑前先删、Suite Home.md 重置**。R20-R22 的旧 e2e/probe 脚本
   与 `.calibration/r18-diff` 字节级套件**未随迁且未重建**——其套件不变量已由
   r23-suite-probe 覆盖，但**改 core/markdown.ts 前必须先重建 r18-diff**（72+ 用例，
   Part A 33 无新语法字节一致；构建方式见 git 历史 R18 文档或重新生成基线）。

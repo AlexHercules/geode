@@ -537,6 +537,37 @@ await 不可靠）入 ARCHITECTURE R23 + DEVELOPMENT macOS 节。
 显式延期：`{{date+Nd}}` 偏移语法（官方 Templates 页无）；ribbon 按钮；新建
 笔记默认位置设置；模板内嵌套变量展开（单趟口径）。
 
+### R24 — v0.24（2026-06-13）未链接提及（反链面板扩展，R19+ 候选池 #6）
+
+候选池末项（迁移叙事第二梯队收官——清空后只剩发布渠道与性能远期）。官方校准
+（obsidian.md/help/plugins/backlinks，2026-06-13 WebFetch）："Unlinked mentions are
+backlinks to any unlinked occurrence of the name of the active note"——活动笔记名字
+（basename + aliases）在别的笔记正文里没被 `[[..]]` 链接的明文出现；每条「Link」
+转链接、每文件「Link all」、面板控件作用其上。
+**core/unlinkedMentions.ts（新，纯 TS 零依赖）**：matcher（deriveMentionTerms +
+findUnlinkedMentions——**CJK 感知词界**：isLatinWord 双侧都拉丁才算切词，故 "Note"
+不命中 "Notebook" 而 CJK 名按子串命中 Obsidian 同向；buildMasked 屏蔽 frontmatter/
+代码/行内代码/既有 wikilink span/`[[#subpath]]`/正文 `#tag`；重叠取最长贪婪去重）+
+link 引擎（linkAllMentionsInFile/linkOneMention 完整 R16 写纪律：模块 runTail 串行、
+flushAll+ensureFresh、open buffer 或 readFresh 真值源、**从 fresh 重派生 offset**、
+**post-rewrite 复解析校验**、applyExternalEdits/modify、逐文件 skip+报告，绝不盲写）。
+**BacklinksPanel** 新「未链接提及」节（异步全库扫描 = R21 SearchPanel 先例、可取消+
+陈旧守卫、每条 Link + 每文件 Link all、高亮片段、默认折叠）。compat 零改动。
+评审 5 维 Workflow **13 finding → 7 确认 / 6 证伪，去重 5 根因（2 major + 3 minor）
+全修复** + 浏览器 E2E 另抓 1 UI 缺陷（共 6 修复）：major = tag@0 masking 漏洞
+（`#Name` 被 Link 改写成 `#[[Name]]` 损坏标签）+ 写校验缺失（`C#` 类含 wikilink 元
+字符的名字写出错链，补 R16 post-rewrite 断言转 skip）；minor = `[[#subpath]]` 漏屏蔽 /
+重扫闪烁 / zh 漏句号；E2E 抓出默认折叠节首点展不开（`?? true` 与 toggle `!c[key]`
+打架，seed `{unlinked:true}` 修复）。详见 ARCHITECTURE R24 As-built。
+验证：浏览器 E2E `.calibration/r24-e2e.mjs` **12/12**（检测/排除/Link-all 改写+surface
+保留/CJK 子串/tag@0 排除/C# 跳过零改动）+ R23 templates 22/22 不回退 + 生产 build 绿；
+桌面 macOS release 真实 fs probe **r24-probe 12/12**（经 `window.__geodeUnlinked` 钩子
+驱动真实磁盘 Link-all 改写 + surface 保留 + C# 跳过文件字节不变）+ **r23-suite-probe
+9/9 不回退**（5/5 插件加载启用）。
+显式延期：Excluded files 模式（Geode 无该设置）；点击提及滚动到 offset（明文锚点，
+subpath reveal 不适用）；面板级 Collapse/Show-more-context/排序/搜索过滤工具栏；
+matcher 热循环首字符门控 + 保存 burst 去抖（性能优化候选，非缺陷）。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -563,9 +594,9 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~Properties 可视化编辑~~ | **R22 已完成（v0.22，见上）**——余项：侧栏 Properties 视图/全局改名/值建议/text 内链渲染（按需求驱动） |
 | ~~模板系统~~ | **R23 已完成（v0.23，见上）**——余项：`{{date+Nd}}` 偏移/ribbon 按钮/新建默认位置（按需求驱动） |
 | ~~搜索运算符（path:/tag:/file:/正则）~~ | **R21 已完成（v0.21，见上）**——余项：block:/section:/task:*/属性搜索 `[key:value]`/比较运算（按需求驱动） |
-| 未链接提及 | 反链面板扩展 |
-| 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11） |
-| 图谱 WebGL/Worker、倒排索引 | 性能远期 |
+| ~~未链接提及~~ | **R24 已完成（v0.24，见上）**——反链面板「未链接提及」节 + Link/Link-all + CJK 词界；余项：Excluded files / 点击滚动到 offset / Show-more-context（按需求驱动） |
+| 真实发布渠道 + Authenticode 证书 | **用户拍板后随时可做**（暂缓口径 2026-06-11）——**候选池清空后这是唯一待办主线项** |
+| 图谱 WebGL/Worker、倒排索引、未链接提及扫描去抖/热循环门控 | 性能远期（R24 matcher O(n·m) 全库 eager 扫描；10k 下可加首字符门控 + 保存 burst 300-500ms 去抖，已记 As-built） |
 | R18 折叠/数学 polish | callout 标题点击折叠仅阅读视图（live 用 gutter）；跨行 `$$`/块注释 live 淡显不渲染/隐藏；行内脚注 live 零处理（官方同行为）；KaTeX vs MathJax 宏覆盖差异——均显式偏差，见 ARCHITECTURE R18 |
 | R19 mermaid polish | live 不渲染图表 widget（源码呈现——块 widget 需 StateField 跨行 replace，与跨行 `$$` 同因）；主题切换后已渲染图保持旧主题至视图重渲染（R11 stale widget 先例）；compat MarkdownRenderer 输出图表带 data-target 但点击接线调用方自理——均显式偏差，见 ARCHITECTURE R19 |
 
