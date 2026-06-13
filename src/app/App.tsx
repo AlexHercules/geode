@@ -14,6 +14,7 @@ import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { TagsPanel } from "@features/tags";
+import { CalendarPanel } from "@features/calendar";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
@@ -100,7 +101,9 @@ export function App() {
         ? "allproperties"
         : ws.rightPanel === "tags"
           ? "tags"
-          : "backlinks";
+          : ws.rightPanel === "calendar"
+            ? "calendar"
+            : "backlinks";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -672,6 +675,16 @@ export function App() {
               >
                 <Icon name="hash" size={15} />
               </button>
+              <button
+                role="tab"
+                aria-selected={effectiveRight === "calendar"}
+                className={`right-tab${effectiveRight === "calendar" ? " is-active" : ""}`}
+                title={t("app.tabCalendar")}
+                data-testid="right-tab-calendar"
+                onClick={() => app.workspace.setRightPanel("calendar")}
+              >
+                <Icon name="calendar" size={15} />
+              </button>
               {/* plugin-contributed sidebar panels (compat registerView): one tab each */}
               {rightPanels.map((p) => (
                 <button
@@ -696,6 +709,8 @@ export function App() {
                 <AllPropertiesPanel />
               ) : ws.rightPanel === "tags" ? (
                 <TagsPanel />
+              ) : ws.rightPanel === "calendar" ? (
+                <CalendarPanel />
               ) : (
                 <BacklinksPanel />
               )}

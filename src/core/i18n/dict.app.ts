@@ -17,6 +17,7 @@ export const en = {
   "app.tabBacklinks": "Backlinks",
   "app.tabOutline": "Outline",
   "app.tabTags": "Tags",
+  "app.tabCalendar": "Calendar",
   "app.navigateBack": "Navigate back",
   "app.navigateForward": "Navigate forward",
   "app.closeTab": "Close {title}",
@@ -104,6 +105,8 @@ export const en = {
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "Open today's daily note",
+  "cmd.dailyNoteNext": "Open next day's daily note",
+  "cmd.dailyNotePrev": "Open previous day's daily note",
   "cmd.randomNote": "Open random note",
   "plugin.wordCount": "{words} words · {chars} chars",
   "plugin.wordCount.name": "Word count",
@@ -131,6 +134,7 @@ export const zh: Record<keyof typeof en, string> = {
   "app.tabBacklinks": "反向链接",
   "app.tabOutline": "大纲",
   "app.tabTags": "标签",
+  "app.tabCalendar": "日历",
   "app.navigateBack": "导航后退",
   "app.navigateForward": "导航前进",
   "app.closeTab": "关闭 {title}",
@@ -217,6 +221,8 @@ export const zh: Record<keyof typeof en, string> = {
 
   // ---- built-in plugins (src/plugins) ----
   "cmd.dailyNote": "打开今天的日记",
+  "cmd.dailyNoteNext": "打开后一天日记",
+  "cmd.dailyNotePrev": "打开前一天日记",
   "cmd.randomNote": "打开随机笔记",
   "plugin.wordCount": "{words} 词 · {chars} 字符",
   "plugin.wordCount.name": "字数统计",

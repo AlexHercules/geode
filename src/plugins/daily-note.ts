@@ -1,39 +1,19 @@
 import type { AppHandle, GeodePlugin } from "@core/plugins";
 import { t } from "@core/i18n";
+import { addDays, isDailyNotePath, openOrCreateDailyNote, parseDailyStamp } from "@core/dailyNote";
 
-const FOLDER = "Daily Notes";
-
-/** Today's real calendar date as YYYY-MM-DD (local time). */
-function todayStamp(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-async function openToday(app: AppHandle): Promise<void> {
-  const stamp = todayStamp();
-  const path = `${FOLDER}/${stamp}.md`;
-  if (!app.vault.fileExists(path)) {
-    try {
-      await app.vault.createFolder(FOLDER);
-    } catch {
-      // folder probably already exists — fine
-    }
-    try {
-      await app.vault.create(path, `# ${stamp}\n\n`);
-    } catch (err) {
-      console.error("[daily-note] failed to create today's note", err);
-      return;
-    }
-  }
-  app.workspace.openFile(path);
+/** Base date for relative nav: the active file's date IFF it's a real daily note
+ *  (under Daily Notes/), else today — so a stray date-named file elsewhere can't
+ *  hijack the base or silently navigate out of its folder (R43 review fix). */
+function baseDate(app: AppHandle): Date {
+  const active = app.workspace.getActiveFile();
+  const fromActive = active && isDailyNotePath(active) ? parseDailyStamp(active) : null;
+  return fromActive || new Date();
 }
 
 /**
- * Daily notes — Mod+D (⌘D on macOS, Ctrl+D elsewhere) opens (creating if
- * needed) "Daily Notes/YYYY-MM-DD.md" for today's date.
+ * Daily notes — Mod+D opens (creating if needed) today's note; next/prev-day
+ * (no default key) step from the active daily note (or today) by ±1 day.
  */
 export const dailyNotePlugin: GeodePlugin = {
   id: "daily-note",
@@ -42,12 +22,21 @@ export const dailyNotePlugin: GeodePlugin = {
   version: "1.0.0",
 
   onload(app: AppHandle) {
-    // commands.register via the plugin handle auto-tracks the disposer
     app.commands.register({
       id: "daily-note:open-today",
       name: () => t("cmd.dailyNote"),
       hotkey: "Mod+D",
-      callback: () => void openToday(app),
+      callback: () => void openOrCreateDailyNote(app.vault, app.workspace, new Date()),
+    });
+    app.commands.register({
+      id: "daily-note:next-day",
+      name: () => t("cmd.dailyNoteNext"),
+      callback: () => void openOrCreateDailyNote(app.vault, app.workspace, addDays(baseDate(app), 1)),
+    });
+    app.commands.register({
+      id: "daily-note:prev-day",
+      name: () => t("cmd.dailyNotePrev"),
+      callback: () => void openOrCreateDailyNote(app.vault, app.workspace, addDays(baseDate(app), -1)),
     });
   },
 };

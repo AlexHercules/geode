@@ -41,6 +41,7 @@ import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
+import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid } from "@core/dailyNote";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
@@ -437,6 +438,22 @@ async function bootstrap() {
   };
   bracketHost.__geodeBrackets = {
     wrap: (doc, from, to, ch) => markdownWrapInput(doc, from, to, ch),
+  };
+
+  // always-on daily-note probe (R43): pure date helpers for the calendar pane.
+  const dailyHost = globalThis as typeof globalThis & {
+    __geodeDaily?: {
+      stamp: (y: number, m0: number, d: number) => string;
+      path: (y: number, m0: number, d: number) => string;
+      parse: (s: string) => string | null;
+      gridDims: (year: number, month0: number) => { weeks: number; cols: number; first: string; last: string };
+    };
+  };
+  dailyHost.__geodeDaily = {
+    stamp: (y, m0, d) => dailyStamp(new Date(y, m0, d)),
+    path: (y, m0, d) => dailyNotePath(new Date(y, m0, d)),
+    parse: (s) => { const dt = parseDailyStamp(s); return dt ? dailyStamp(dt) : null; },
+    gridDims: (year, month0) => { const g = monthGrid(year, month0); return { weeks: g.length, cols: g[0].length, first: dailyStamp(g[0][0]), last: dailyStamp(g[g.length - 1][6]) }; },
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll

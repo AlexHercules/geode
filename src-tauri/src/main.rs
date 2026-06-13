@@ -220,14 +220,31 @@ fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
 
 #[tauri::command]
 fn vault_create(vault: String, path: String, content: String) -> CmdResult<()> {
+    use std::io::Write as _;
     let abs = safe_join(&vault, &path)?;
-    if abs.exists() {
-        return Err(format!("file already exists: {path}"));
-    }
     if let Some(parent) = abs.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("mkdir parents for {path}: {e}"))?;
     }
-    fs::write(&abs, content).map_err(|e| format!("create {path}: {e}"))
+    // R43 (review fix): create_new is the exclusivity authority — the SAME root
+    // cause R17 hardened for vault_write_binary, missed here. The old exists()-check
+    // + fs::write was check-then-act: between the check and the write an external
+    // process (sync client, another instance) could land a same-named note that
+    // fs::write would TRUNCATE, silently losing user content. openOrCreateDailyNote
+    // (Mod+D / calendar click) puts this on the hot path. create_new reserves the
+    // path atomically (also on case-insensitive filesystems) and returns EEXIST
+    // instead of clobbering; a failed write rolls back so a crash mid-write can only
+    // truncate this brand-new stub, never existing user data.
+    let mut f = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&abs)
+        .map_err(|e| format!("create {path}: {e}"))?;
+    if let Err(e) = f.write_all(content.as_bytes()).and_then(|_| f.sync_all()) {
+        drop(f);
+        let _ = fs::remove_file(&abs);
+        return Err(format!("write {path}: {e}"));
+    }
+    Ok(())
 }
 
 #[tauri::command]

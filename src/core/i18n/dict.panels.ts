@@ -80,6 +80,11 @@ export const en = {
   "tags.empty": "No tags in vault",
   "tags.count": "{count} file(s)",
 
+  // ---- calendar ----
+  "calendar.today": "Today",
+  "calendar.prevMonth": "Previous month",
+  "calendar.nextMonth": "Next month",
+
   // ---- command palette ----
   "palette.aria": "Command palette",
   "palette.placeholder": "Type a command…",
@@ -168,6 +173,11 @@ export const zh: Record<keyof typeof en, string> = {
   "tags.title": "标签",
   "tags.empty": "库中没有标签",
   "tags.count": "{count} 个文件",
+
+  // ---- calendar ----
+  "calendar.today": "今天",
+  "calendar.prevMonth": "上一月",
+  "calendar.nextMonth": "下一月",
 
   // ---- command palette ----
   "palette.aria": "命令面板",
