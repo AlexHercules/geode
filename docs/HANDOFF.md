@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.34.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R34 编辑器内查找 / 替换 ✓ 已交付**（R32+ 候选池 #③：`@codemirror/search` 仅 compat loader 引入、features/editor 未接）。`features/editor/searchCommands.ts`（`registerSearchCommands` 注册 **editor:search Mod+F** + **editor:replace 无默认键**——macOS Cmd+H=隐藏 App 跨端不安全、替换仍可经 Cmd+F 面板到达；`editorSearchPhrases()` 17 个 CM phrase 本地化；`installSearchProbe` `__geodeSearch` 探针）+ `cmExtensions` 加 `search({top})`+`keymap.of(searchKeymap)`+`EditorState.phrases.of(...)`+`.cm-search`/`.cm-searchMatch` 主题（纯 CSS 变量）。**开命令走 app 命令层**（R33 `Prec.highest` 拦截器先处理 Mod+F、searchKeymap 自身 Mod-f 无害遮蔽）。**替换=写路径但零新 vault 写**（走 CM 事务→autosave，命令+探针双双活动文件门控）。`r34-e2e` 15/15（含 autosave 落盘 + 真键入高亮）+ 桌面 `r34-probe` 3/3 + r23–r33 不回退（r33 37/probe12 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ r26-bytes 0 违例。**5 维对抗评审 9 verdict→7 确认→3 根因修复**（探针活动文件门控 / 空查询 no-op / 面板字号走 var）**+ 3 记已知限制**（IME 合成面板 input=CM 上游行为 / Mod+G 被 open-graph 遮蔽 / 选区>100 字符不预填）。**最重要方法论结论：功能依赖 live CM view 时桌面探针无法驱动**（后台 WKWebView 不绘制→React effect 不跑→view/命令都不挂载，foreground 也无效），桌面探针只验「探针嵌入+不崩」，功能真值交浏览器 E2E。
-- **下一项 = R34→R35 = R32+ 候选池 #④ 括号/引号自动配对 + 选区包裹**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）。切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`（加进 `cmExtensions`）；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」（可复用 R33 `toggleWrap`）。**注意 `[[`/`![[` 与既有 wikilink 补全源协同**（别让 closeBrackets 补的 `]` 撞 wikilink 的 `]]`）。其后队列：⑤ 标签页快捷键 → ⑥ 前进/后退导航历史 →（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.35.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R35 括号/引号自动配对 + 选区包裹 ✓ 已交付**（R32+ 候选池 #④：敲 `[` 得 `[` 不补 `]`、源码无 closeBrackets）。按 Obsidian 两设定分两层：**Layer 1 = CM `closeBrackets()`** 管 `( [ { " '`（空选区自动配对 / 选区包裹 / type-over / Backspace 删空配对 / 引号 contraction 安全，= Obsidian「Auto pair brackets」）；**Layer 2 = `core/bracketWrap.ts` 纯函数 `markdownWrapInput`** 管 `* _ \` ~ = $`（仅非空选区 additive 包裹 `*sel*`→`**sel**`、连按累积 `** ~~ == $$`；空选区透传单字符）。接 `cmExtensions`：`markdownWrapHandler`（`Prec.high` inputHandler）+ `closeBrackets()` + `keymap.of(closeBracketsKeymap)`（放 defaultKeymap 之上）+ `__geodeBrackets` 探针（main.tsx，loadExternal 前）。**零新 vault 写路径**（配对/包裹走 CM 事务→autosave，B 类守卫全继承）+ **零新依赖**（`@codemirror/autocomplete` 已在）+ **零 i18n**。**最高风险点 = `[` 配对与 wikilink `]]` 补全协同**：靠 wikilink source 既有 `sliceDoc(to,to+2)==="]]"` 守卫零冲突（敲 `[[`→`[[]]`、补全 accept→单 `]]`、字面 `[[Note]]` 经 type-over 吸收手敲括号 round-trip——**这正是 r23–r34 既有 `[[` 键入断言零回退的原因**，未改 wikilink 源一字）。`r35-e2e` **25/25** + 桌面 `r35-probe` **9/9**（**桌面探针首次能驱动配对真值**：纯函数无需 live view，不同于 R34 search）+ r23–r34 不回退（r34 15 / r33 37 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ r26-bytes 0。**5 维对抗评审 5 finding→0 确认/5 证伪**（2 观察硬化成 E2E 断言：apostrophe contraction + line-start 引号；2 记已知限制：空选区强调符不配对=刻意偏离 / closeBrackets 不按代码块上下文门控=保真 gap）。
+- **下一项 = R35→R36 = R32+ 候选池 #⑤ 标签页快捷键**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）。Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 `nextTab/prevTab/goToTab` + `recentlyClosed` 栈，App.tsx 注册命令 + 默认键（注意 mac `Mod` = Cmd，R32 已就绪）。其后队列：⑥ 前进/后退导航历史 → ⑦ 快速切换器子模式 →（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,24 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R35（括号/引号自动配对 + 选区包裹）核心教训三条**：① **复用 CM 内置（`closeBrackets()`）前先实测它的默认
+  集 + 与既有补全源的协同点**——CM `closeBrackets()` 默认括号集 `( [ { ' "` 恰好 = Obsidian「Auto pair
+  brackets」（零配置即对齐），且引号有自带 quote-before-word 守卫（`don't` 不配对、行首 `'`→`''`，实测锁住）。
+  **最高风险 = `[` 配对撞 wikilink `]]`**：敲 `[[` 得 `[[]]`（CM `before` 集含 `]`），但 wikilink source 既有
+  `sliceDoc(to,to+2)==="]]"?"":"]]"` 守卫已防双补、`anchor=+2` 落到既存 `]]` 后——**未改 wikilink 源一字**。
+  **字面键入 `[[Note]]` 仍得 `[[Note]]`**（`]]` 由 type-over 吸收手敲闭合括号）——这解释了**为何 closeBrackets
+  上线后 r23–r34 所有 `[[` 键入断言零回退**（手敲的闭合括号被 type-over 吃掉，doc 不变）。凡引入 CM input-level
+  扩展，先想清它与既有补全/装饰源在「同一串字符」上的交互，再用既有守卫协作而非各补一遍。② **括号配对 vs
+  markdown 强调符包裹是两套机制，职责切死**：括号/引号交 CM `closeBrackets()`（well-tested，含 type-over /
+  Backspace 删配对 / 选区包裹）；markdown 强调符 `* _ \` ~ = $` 选区包裹自写 `core/bracketWrap.ts` 纯函数
+  （字符集与括号不相交，`Prec.high` inputHandler 先行确定性）。**markdown 包裹仅非空选区触发、保留内层选区 →
+  additive**（`*sel*`→`**sel**`，连按累积 `** ~~ == $$`）；**空选区刻意不配对**（避让行首 `* ` 列表 / 围栏 /
+  CJK——Obsidian 此处自身有 bug 报告，候选池 #④ 明列形态本就是「选中包裹」）。纯决策放 core（镜像 R33
+  `format.ts`/R28）→ `__geodeBrackets` 探针可单测，**桌面探针首次能驱动配对真值**（pure fn 无需 live view，
+  不同于 R34 search 必须 live view → 桌面只能验 present+error-free）。③ **对抗评审「证伪 ≠ 无价值」——把「未测
+  但行为正确」的有效观察硬化成断言**：5 维 5 finding 全证伪，但其中 apostrophe-in-contraction 与 line-start 引号
+  虽属 CM 正确行为、原 E2E 未覆盖 → **补 2 条断言**（don't 不配对 / `'`→`''`）把「未测」转「已测」。另 2 个保真度
+  观察（空选区不配对 / closeBrackets 不按代码块上下文门控）记为**已知限制**（刻意偏离 / 保真 gap，非缺陷）。
 - **R34（编辑器内查找/替换）核心教训三条**：① **功能依赖 live CM view 时，桌面探针根本无法驱动**
   ——本轮首次遇到，实测发现**后台 WKWebView 不绘制 → React effect 永不执行** → EditorPane 建 view 的
   effect 与 App 注册命令的 effect 都不跑（探针实测 `.cm-content` 始终缺席、`editor:*` 命令始终未注册，

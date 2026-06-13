@@ -637,6 +637,29 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R35 — v0.35（2026-06-13）括号/引号自动配对 + 选区包裹（R32+ 候选池 #④）
+
+**实测缺口收口**：敲 `[` 得 `[` 不补 `]`，源码无 closeBrackets。本轮按 Obsidian 两设定分两层接通：
+**Layer 1（括号/引号）= CM `closeBrackets()` 内置**——对 `( [ { " '`（CM 默认集 = Obsidian「Auto pair
+brackets」）提供空选区自动配对、选区包裹、type-over、Backspace 删空配对；引号有 CM 自带的 quote-before-word
+守卫（contraction 安全：`don't` 不配对、行首 `'`→`''`）。**Layer 2（markdown 强调符选区包裹）=
+`core/bracketWrap.ts` 纯函数 `markdownWrapInput`**——对 `* _ \` ~ = $` 仅**非空选区**触发包裹、保留内层选区
+→ additive（`*sel*`→`**sel**`，连按累积 `** ~~ == $$`）；空选区透传单字符（刻意偏离 Obsidian 空配对，避让
+行首列表项 / 围栏 / CJK）。接线 `cmExtensions`：`markdownWrapHandler`（`Prec.high` inputHandler）+
+`closeBrackets()` + `keymap.of(closeBracketsKeymap)`（放 defaultKeymap 之上，Backspace 删配对优先）+
+`__geodeBrackets` 探针（main.tsx，loadExternal 前）。**零新 vault 写路径**（配对/包裹走普通 CM 事务→autosave，
+B 类守卫全继承）+ **零新运行时依赖**（`@codemirror/autocomplete` 已在）+ **零 i18n**（纯键入行为）。
+**最高风险点 = closeBrackets 的 `[` 配对与 wikilink `]]` 补全协同**：靠 wikilink source 既有 `sliceDoc(to,
+to+2)==="]]"` 守卫零冲突（敲 `[[`→`[[]]`、补全 accept→单 `]]`、字面 `[[Note]]` round-trip——type-over
+吸收手敲闭合括号，**这正是 r23–r34 既有 `[[` 键入断言零回退的原因**，未改 wikilink 源一字）。**对抗评审 5 维
+9 agent → 5 finding → 0 确认 / 5 证伪**（2 个「未测但行为正确」观察硬化成 E2E 断言：apostrophe contraction +
+line-start 引号；2 记已知限制：空选区强调符不配对 = 刻意偏离 / closeBrackets 不按代码块上下文门控 = 保真 gap；
+1 证伪 = wikilink 光标 `+2` 在 `]]` 已存时正确）。验证：浏览器 `r35-e2e` **25/25** + 桌面 release
+`r35-probe` **9/9**（探针 present + 纯 wrap 决策在真 WKWebView 正确 + 启动 error-free）+ r23–r34 全套不回退
+（r33 37 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ `r26-bytes` 0 违例 + typecheck/cargo/build 绿。
+**桌面探针首次能驱动配对相关真值**（pure fn，无需 live view；不同于 R34 search 必须 live view → 只能验
+present+error-free）。
+
 ### R34 — v0.34（2026-06-13）编辑器内查找 / 替换（R32+ 候选池 #③）
 
 **实测缺口收口**：`@codemirror/search` 仅 compat loader 引入、features/editor 未接，文内无查找面板。
@@ -942,7 +965,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**① macOS Cmd（Mod）修饰键支持**~~ | **R32 已完成（v0.32，见上）**——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、其余→Ctrl/ctrlKey）+ `matchParsedHotkey(p,e,isMac)` 四态全等 + `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。验证 r32-e2e 24/24（含 live Cmd+P 开面板）+ desktop probe 16/16 真实 runtime。 | 显式延期：compat 外部插件 `Keymap`/`Scope` 热键路径（另一套、自包含）；非 mac `Mod`/`Ctrl` 同 ctrlKey 但 canonical 不同 → 冲突检测不互判（与 Obsidian 一致）。 |
 | ~~**② Markdown 格式化命令 + 快捷键**~~ | **R33 已完成（v0.33，见上）**——`core/format.ts` `applyFormatOp` 唯一入口（13 op：bold/italic/strike/highlight/inline-code 幂等包裹 + 强调符歧义守卫、link、heading 循环、blockquote/bullet/numbered/checklist/code-block/callout 行变换）+ `features/editor/formatCommands.ts` CM dispatch + 注册 13 命令（仅 Mod+B/I/K 默认键）+ `cmExtensions` `Prec.highest` keydown 拦截器（修原生 Cmd+I 扩选区）+ handleKeydown isComposing/defaultPrevented 守卫 + `__geodeFormat` 探针。验证 r33-e2e 37/37 + desktop probe 12/12 真实 runtime。 | 余项（按需求驱动）：toggle-heading 循环 vs 二态（选了循环）；callout/code-block wrap 后选整块非光标定位；选中文本敲 `[`/`*` 包裹（属 ④ closeBrackets）；多光标包裹；非 B/I/K 命令默认无键（用户自绑）。 |
 | ~~**③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）**~~ | **R34 已完成（v0.34，见上）**——`features/editor/searchCommands.ts`（editor:search Mod+F + editor:replace 无默认键 + `editorSearchPhrases()` 17 phrase 本地化 + `__geodeSearch` 探针）+ `cmExtensions` `search({top})`+`searchKeymap`+`EditorState.phrases`+`.cm-search` 主题。开命令走 app 命令层（R33 拦截器先处理）。验证 r34-e2e 15/15（含 autosave 落盘 + 真键入高亮）+ desktop probe 3/3（present+api+error-free）。 | 余项（按需求驱动）：editor:replace 默认键（避 Cmd+H）；IME 合成面板 input（CM 上游）；Mod+G 与 open-graph（findNext 走 Enter/F3）；选区>100 字符预填；查找历史/正则默认；与全库搜索联动。 |
-| **④ 括号/引号自动配对 + 选区包裹** | **缺**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）| 切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」。注意 `[[`/`![[` 与既有 wikilink 补全源协同。 |
+| ~~**④ 括号/引号自动配对 + 选区包裹**~~ | **R35 已完成（v0.35，见上）**——Layer 1 = CM `closeBrackets()`（`( [ { " '` 自动配对+选区包裹+type-over+Backspace 删配对，引号 quote-before-word 守卫）；Layer 2 = `core/bracketWrap.ts` 纯函数 `markdownWrapInput`（`* _ \` ~ = $` 仅非空选区 additive 包裹）；接 `cmExtensions`（`markdownWrapHandler` Prec.high + `closeBrackets()` + `closeBracketsKeymap`）+ `__geodeBrackets` 探针。`[` 配对与 wikilink `]]` 补全靠 `sliceDoc` 守卫零冲突（未改 wikilink 源）。验证 r35-e2e 25/25 + desktop probe 9/9（纯 wrap 决策可在真 WKWebView 驱动）。 | 余项（按需求驱动）：空选区 markdown 强调符配对（刻意偏离，避让列表/围栏/CJK）；closeBrackets 按代码块/数学上下文门控（Obsidian 部分上下文禁配对）；设置开关暴露；多光标包裹。 |
 | **⑤ 标签页快捷键** | **缺**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）| Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 nextTab/prevTab/goToTab + recentlyClosed 栈，App.tsx 注册命令+默认键。 |
 
 #### 第二梯队 — 导航 / 工作区结构

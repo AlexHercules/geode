@@ -172,6 +172,24 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R35 套件回归（2026-06-13，macOS release 二进制 v0.35.0 实测 `r35-probe-vault`）
+
+R35 = 括号/引号自动配对 + 选区包裹（实测缺口：敲 `[` 得 `[` 不补 `]`、源码无 closeBrackets）。**compat API
+表面零代码改动**——全在原生编辑器层（新 `core/bracketWrap.ts` 纯函数 + `cmExtensions` 接 `closeBrackets()`/
+`closeBracketsKeymap`/`markdownWrapHandler` inputHandler）。镜像 Obsidian 两设定：**「Auto pair brackets」**=
+CM `closeBrackets()` 管 `( [ { " '`（自动配对 / 选区包裹 / type-over / Backspace 删配对 / 引号 contraction
+安全）；**「Auto pair Markdown syntax」选区形态**= `core/bracketWrap` 管 `* _ \` ~ = $`（仅非空选区 additive
+包裹）。新增 always-on 探针 `window.__geodeBrackets`（**装在 `loadExternal` 之前**，与 `__geodeFormat`/
+`__geodeSearch` 同列）。macOS probe 实测：新增 **r35-probe 9/9**——**桌面探针首次能驱动「配对相关」真值**：
+R35 的探针面是**纯函数**（`markdownWrapInput`），无需 live CM view，故真二进制能直接验 wrap 决策正确（present +
+纯决策 `*foo*`/`(1,4)`/`` `foo` `` + 空/非标记/括号字符 → null + 启动 error-free）；唯一仍不可驱动的是
+closeBrackets 的 auto-close/type-over（需 live view，R34 结论），交浏览器 r35-e2e。**r34/r33/…/r23 套件不回退**
+（compat 调用面零改动；浏览器 r35-e2e 25/25 + r34 15、r33 37、r32 24、r31 21、r25 17、r24 12、r23 22 全绿；
+`r26-bytes` 0 违例，markdown.ts 未动）。**对抗评审 5 维 5 finding → 0 确认 / 5 证伪**（2 观察硬化成断言：
+apostrophe contraction + line-start 引号；2 记已知限制：空选区强调符不配对=刻意偏离 / closeBrackets 不按上下文
+门控=保真 gap）。**关键回归保证**：closeBrackets 的 `[` 配对靠 wikilink source 既有 `sliceDoc(to,to+2)`
+守卫零冲突——字面 `[[Note]]` 经 type-over 吸收手敲闭合括号仍得 `[[Note]]`，故既有套件所有 `[[` 键入断言不破。
+
 ### R34 套件回归（2026-06-13，macOS release 二进制 v0.34.0 实测 `r34-probe-vault`）
 
 R34 = 编辑器内查找/替换（实测缺口：`@codemirror/search` 仅 compat loader 引入、features/editor 未接）。

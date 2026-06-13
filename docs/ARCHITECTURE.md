@@ -71,6 +71,101 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 35 additions — 括号/引号自动配对 + 选区包裹（auto-close brackets + wrap selection）【As-built v0.35】
+
+> **状态：As-built（2026-06-13）。** R32+ 候选池 #④ = 实测缺口（敲 `[` 得 `[` 不补 `]`；源码无
+> closeBrackets）。本轮**纯 editor 扩展、零新 vault 写路径**（配对/包裹走普通 CM transaction →
+> documents.ts dirty → autosave，**B 类写守卫全继承、无新写路径**）+ **零新运行时依赖**
+> （`@codemirror/autocomplete` 已在）。校准 Obsidian「Auto pair brackets」+「Auto pair Markdown
+> syntax」两设定（含选区包裹）。验证：浏览器 `r35-e2e` **25/25**（7 probe 纯函数 + 18 live：自动配对
+> `( [ { " '`、line-start `'`→`''`、contraction `don't` 不配对、type-over、Backspace 删配对、选区包裹
+> `(foo)`/`*foo*`→`**foo**`/`` `foo` ``、空选区 `*`→单字符、`[[`→`[[]]`、字面 `[[Note]]` round-trip、
+> 补全 accept→单 `]]`、autosave 落盘）+ 桌面 release `r35-probe` **9/9**（探针 present + 纯 wrap 决策在
+> 真 WKWebView 正确 + 启动 error-free）+ r23–r34 全套不回退（r33 37 / r32 24 / r31 21 / r25 17 / r24 12 /
+> r23 22）+ `r26-bytes` 0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。**5 维对抗评审 5 finding →
+> 0 确认 / 5 证伪**（2 个有效观察硬化成 E2E 断言 + 2 记为已知限制；详见 As-built）。
+
+### 设计：两层职责清晰分割
+
+Obsidian 拆成两个独立设定。本轮照此分两层实现，**职责边界钉死防回归**：
+
+- **Layer 1 — 括号/引号（CM `closeBrackets()` 内置，well-tested）**：对 `( [ { " '`（CM
+  `defaultBrackets` 恰为此集）提供：空选区自动配对（`(`→`()` 光标居中）、**选区包裹**（选区+`(`→`(sel)`）、
+  type-over（光标前是 `)` 时再敲 `)` 跳过不重插）、Backspace 删空配对。**全部来自 CM 扩展，无自写逻辑**
+  → 桌面探针无法驱动（R34 结论：依赖 live view），真值交浏览器 E2E。
+- **Layer 2 — Markdown 强调符选区包裹（自写纯函数，core）**：对 `* _ \` ~ = $`，**仅非空选区**触发包裹
+  （`*sel*`，**保留选区 → additive**：再敲 `*` 得 `**sel**`）；**空选区一律透传**（敲单字符）。空选区不配对
+  是**刻意偏离** Obsidian 的 `*`→`*|*`——理由：行首 `* ` 列表项、代码围栏 ` ``` `、CJK 输入都会与空配对
+  冲突（Obsidian 自身此处亦有 bug 报告），选区包裹是候选池 #④ 明列的形态（「选中文本敲 `[`/`*`/`\` ` 包裹」）。
+  纯决策放 `core/bracketWrap.ts` 供探针单测。
+
+### 契约（已实现）
+
+- `core/bracketWrap.ts`（NEW，纯 TS）：
+  - `MARKDOWN_WRAP_CHARS = new Set(["*","_","`","~","=","$"])`（单字符强调符，`** ~~ == $$` 经连按累积）。
+  - `markdownWrapInput(doc: string, from: number, to: number, ch: string): { changes:{from,to,insert}, selection:{anchor,head} } | null`
+    —— `to>from`（非空选区）且 `ch∈MARKDOWN_WRAP_CHARS` → 返回包裹 edit：`insert = ch + doc.slice(from,to) + ch`，
+    新选区 `{anchor: from+1, head: to+1}`（**仍选住内层 sel，光标偏移 +1 让连按再包**）；否则 `null`。
+    纯函数、零副作用，main.tsx 探针与 inputHandler 共用单一真值（镜像 R33 `format.ts` 先例）。
+- `features/editor/cmExtensions.ts`（OWNED by implementer-A）：
+  - import `closeBrackets, closeBracketsKeymap` from `@codemirror/autocomplete`。
+  - `buildEditorExtensions` 数组加三项：
+    1. `Prec.high(EditorView.inputHandler.of(markdownWrapHandler))`——非空选区敲强调符即调
+       `markdownWrapInput`，命中则 `view.dispatch(...)` + `return true`（吞掉默认插入），否则 `return false`。
+       **置于 closeBrackets 之上**：字符集 `* _ \` ~ = $` 与 closeBrackets 的 `( [ { " '` 不相交，
+       但显式 `Prec.high` 保证确定性。
+    2. `closeBrackets()`——放 autocompletion 附近。
+    3. `keymap.of(closeBracketsKeymap)`——**放 `keymap.of([...defaultKeymap, indentWithTab])` 之上**
+       （Backspace 删空配对优先于默认删除）。
+  - **与 wikilink 补全源协同（最高风险点，钉死）**：`[` ∈ closeBrackets → 敲 `[[` 得 `[[]]`（CM `before`
+    集含 `]` → 第二个 `[` 在 `]` 前仍配对）。wikilink `apply` 既有守卫 `sliceDoc(to,to+2)==="]]"?"":"]]"`
+    已防双补 `]]`，`anchor=from+linkText.length+2` 落到既存 `]]` 之后——**guard 已正确，本轮只需 E2E 锁住
+    回归，不改 wikilinkCompletionSource**。字面键入 `[[Note]]`：`[[`→`[[]]`，`Note`→`[[Note]]`，`]]` type-over
+    吸收 → 仍得 `[[Note]]`（既有套件 `[[` 键入断言不破）。`![[` 嵌入同理。
+- `main.tsx`（OWNED by implementer-A）：`window.__geodeBrackets = { wrap: (doc, from, to, ch) => markdownWrapInput(...) }`
+  always-on 探针，**装在 `loadExternal` 之前**（与 `__geodeFormat`/`__geodeSearch` 同位，R27 教训）。
+- i18n：**零新 UI 字符串**（配对/包裹纯键入行为，无面板、无命令名、无 phrase）。
+- 设置项：**本轮不暴露开关**（Obsidian 默认两设定均 ON；与 Obsidian 默认一致即可，toggle 列为余项）。
+
+### 文件所有权表（并行/独占）
+
+| 区 | owner | 改动 |
+|---|---|---|
+| `src/core/bracketWrap.ts` | implementer-A | NEW 纯决策函数 |
+| `src/features/editor/cmExtensions.ts` | implementer-A | import + 3 项接线 + wikilink 协同（不改 wikilink 源）|
+| `src/main.tsx` | implementer-A | `__geodeBrackets` 探针块 |
+| `.calibration/r35-e2e.mjs` / `r35-probe.mjs` / `r35-probe-vault/` | implementer-B | 复用 r34 脚手架 |
+| `docs/*` + 版本三处 | chief 收尾 | — |
+
+> 冻结的唯一跨区契约 = `markdownWrapInput` 签名（探针 + inputHandler + E2E 三方共用）+「`[` 配对归
+> closeBrackets、`]]` 补全归 wikilink source，靠 `sliceDoc(to,to+2)` 守卫协作」。
+
+### As-built 根因教训 + 对抗评审结论
+
+1. **closeBrackets 的 `[` 配对与 wikilink `]]` 补全靠既有 `sliceDoc` 守卫零冲突协作（最高风险点，实测锁住）**：
+   敲 `[[` 得 `[[]]`（CM `before` 集含 `]` → 第二个 `[` 在 `]` 前仍配对）；wikilink `apply` 既有守卫
+   `sliceDoc(to,to+2)==="]]"?"":"]]"` 防双补，`anchor=from+linkText.length+2` 落到既存 `]]` 之后（补全
+   accept → `[[Target]]` 单 `]]`、光标在链接后——实测 E2E 锁住）。**字面键入 `[[Note]]` 仍得 `[[Note]]`**
+   （`[[`→`[[]]`，`Note` 填入，`]]` 由 type-over 吸收）——这解释了**为何 r23–r34 既有套件里所有 `[[` 键入
+   断言零回退**（type-over 吸收掉手敲的闭合括号，doc 不变）。**未改 wikilinkCompletionSource 一字**。
+2. **两层职责切分 = closeBrackets（CM 内置）管括号引号、`core/bracketWrap` 纯函数管 markdown 强调符选区包裹**：
+   字符集不相交（`( [ { " '` vs `* _ \` ~ = $`），`markdownWrapHandler` 用 `Prec.high` 保证确定性先行。
+   markdown 包裹**仅非空选区**触发、保留内层选区 → additive（`*sel*`→`**sel**`，连按累积出 `** ~~ == $$`）。
+   纯决策放 core 供 `__geodeBrackets` 探针单测（镜像 R33 `format.ts`/R28「纯决策核心放 core」先例）——
+   **桌面探针首次能驱动配对相关真值**（pure fn，无需 live view；不同于 R34 的 search 必须 live view）。
+3. **对抗评审 5 维（wikilink 协同 / IME-CJK / 包裹语义 / 数据安全+分层 / Obsidian 保真）9 agent → 5 finding
+   → 0 确认 / 5 证伪**。证伪要点：① wikilink 光标 `+2` 在 `]]` 已存时正确（E2E 实证）；② IME 无需额外守卫
+   ——handler 只认单字符 ASCII 强调符，CJK 合成提交非 ASCII、无法触发，即便触发「包裹」也无损（非破坏路径，
+   不同于 R33 命令误触发路径）；③④⑤ 属保真度观察非缺陷。**响应：把 ②(apostrophe) 类「未测但行为正确」
+   硬化成 E2E 断言**（line-start `'`→`''`、contraction `don't` 不配对——CM quote-before-word 守卫实测生效）。
+4. **记为已知限制（刻意偏离 / CM 上游行为，非缺陷）**：
+   - **空选区不对 markdown 强调符配对**（敲 `*` 得单 `*`，非 Obsidian 的 `*`→`*|*`）——刻意偏离：空配对与
+     行首 `* ` 列表项、代码围栏 ` ``` `、CJK 输入冲突（Obsidian 自身此处亦有 bug 报告），且候选池 #④ 明列
+     形态是「选中文本敲包裹」。括号引号则照常空配对（= Obsidian「Auto pair brackets」）。
+   - **closeBrackets 不按上下文门控**（代码块 / 行内 code / 数学 / frontmatter 内仍配对）——Obsidian 在部分
+     上下文禁用配对，本轮用 CM 默认（全局配对），属保真度 gap、非数据问题。语言感知门控列为余项。
+   - **设置开关未暴露**（Obsidian 默认两设定均 ON，与之一致即可）——toggle 列为余项。
+
 ## Round 34 additions — 编辑器内查找 / 替换（in-editor find/replace）【As-built v0.34】
 
 > **状态：As-built（2026-06-13）。** R32+ 候选池 #③ = 实测缺口（`@codemirror/search` 仅 compat
