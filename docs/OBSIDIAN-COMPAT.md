@@ -172,6 +172,21 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R45 套件回归（2026-06-14，macOS release 二进制 v0.45.0 实测 `r45-probe-vault`）
+
+R45 = 保存的工作区布局（Workspaces，R32+ 候选池第三梯队 #⑭）。对照 Obsidian 核心插件 **Workspaces**：命名保存/切换整个面板布局，
+存到 `<vault>/.obsidian/workspaces.json`。**compat 状态:path-compatible / schema-divergent**——文件落在 Obsidian 同路径、`workspaces`
+键下，但 per-workspace 布局**值是 Geode pane-tree 形状**（非 Obsidian 布局 schema）。**非破坏性**:RMW `root={...parsed}` 保留 `active`
+等 top-level key + Obsidian 原 workspace entry（init 读入 store→persist 全量写回）；Geode 载入 Obsidian 原 entry → `sanitizeState`
+优雅回落默认（不崩）。`core/workspaces.ts` 镜像 R27 bookmarks 持久化（裸 `"workspaces.json"`——adapter 已相对 `.obsidian/` 解析）。
+macOS probe 实测：新增 **r45-probe 6/6**——含 **on-disk 核心**：`__geodeWorkspaces.save("probe-ws")` → Node 直读
+`<vault>/.obsidian/workspaces.json` 确认 `workspaces["probe-ws"].root` pane 树落盘。**r44/r43/…/r24/r27/r36/r37/r39 套件不回退**
+（浏览器 r45-e2e **10/10** + r37 36、r39 17、r36 47、r43 22、r27 22 抽样实测全绿；`r26-bytes` 0）。**3 维对抗评审 10 finding → 6 确认
+（1 major + 5 minor，含 1 doc）逐条修 + 4 证伪**（① captureLayout 误存 theme/fontSize→delete+applyLayout 保留当前外观 ② applyLayout
+不 reconcile→pruneTabHistory+emitActiveFile ③ session 历史残留[同②] ④ enqueue 缺 try/catch+warn→拒写静默→补日志 ⑤ init 失败+persist
+读成功抹盘 Obsidian entry→空-store 守卫 ⑥ WORKSPACES_CONFIG 契约字面量回写；**证伪**:applyLayout 不 flush[EditorPane unmount 已 flush]、
+Modal load null→sanitizeState 回落默认、void persist unhandled[已加日志]）。显式延期：Obsidian 工作区 schema 桥接 / 切换快捷键 / `active` 跟随。
+
 ### R44 套件回归（2026-06-14，macOS release 二进制 v0.44.0 实测 `r44-probe-vault`）
 
 R44 = Note composer 提取选区→新笔记（R32+ 候选池第三梯队 #⑬ extract 切片；compat 面无改动——纯新增 core/feature/command）。

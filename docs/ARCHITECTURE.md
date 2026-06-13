@@ -71,6 +71,69 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 45 additions — 保存的工作区布局（Workspaces）【As-built v0.45】
+
+> **状态：As-built（v0.45 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑭。命名保存/切换整个面板布局（pane 树 + tabs + sidebar 状态），存到
+> `<vault>/.obsidian/workspaces.json`。**关键复用**：Workspace **已有** `persist()` + `sanitizeState(unknown)→WorkspaceState`（容错校验/迁移）+
+> `closeMissingFileTabs(exists)`（剪缺失文件 tab）——命名工作区 = 同一序列化、只换存到磁盘命名槽。持久化**镜像 R27 bookmarks**（串行 RMW +
+> vault-switch race guard + 保留未知 key）。**零新依赖、无 Rust**。**数据安全相关轮**（写 `.obsidian/` 用户配置——非笔记,但须非破坏性 + 容错坏 JSON）。
+> 验证:typecheck 0 · `r45-e2e.mjs` **10/10** · `r45-probe.mjs` **6/6**（含 on-disk `.obsidian/workspaces.json` 验证）· cargo release 真实重建 37s ·
+> 回归 r37/r39/r36/r43/r27-e2e 不回退。
+> **⚠️ 契约字面量修正（评审 F2）**：`WORKSPACES_CONFIG` 不是 `".obsidian/workspaces.json"` 而是**裸 `"workspaces.json"`**——`vault.adapter.readConfig/writeConfig`
+> **已相对 `<vault>/.obsidian/` 解析**（同 bookmarks 的裸 `"bookmarks.json"`）;字面 `.obsidian/...` 会写错到 `.obsidian/.obsidian/`。implementer A 落地时已正确修正。
+
+### As-built（评审根因修复 — 10 finding → 6 确认[1 major + 5 minor,含 1 doc] 全修 + 4 证伪）
+
+对抗评审 3 维 × find→verify。确认并修复:
+
+1. **【major】`captureLayout` 序列化了 `theme`/`fontSize` → 违反契约「不存外观」+ state↔DOM 主题/字号脱钩**：`{...state, modal:null}` 含 theme+fontSize,存进工作区、load 时 `state.set` 写回但 DOM 主题/字号由独立 effect 应用 → 不同步。**修**：`captureLayout` 落 JSON 后 `delete snapshot.theme/fontSize`;`applyLayout` set 前 `next.theme = current.theme; next.fontSize = current.fontSize`（外观全局,saved 布局绝不改它）。
+2. **【minor】`applyLayout` all-exist 常见路径不 emit `active-file:changed`/不重置 `lastActiveFile` → 派生状态（反链/大纲）陈旧**：`closeMissingFileTabs` 只在有文件被剪时触发通知。**修**：`applyLayout` set 后无条件 `this.pruneTabHistory(); this.emitActiveFile();`（对齐 reconcile-with-vault 的结构变更序列）。
+3. **【minor】`applyLayout` 不清 session-only `tabHistory` → 旧布局 tab 的 nav 历史残留/与复用 id 串台**：同 #2 修复（`pruneTabHistory()`）一并解决。
+4. **【minor】`workspaces.ts` `enqueue` 缺 bookmarks `regEnqueue` 的 try/catch+warn → persist 拒写（malformed-file 守卫 throw）被 `void` 调用方静默吞 → store 与磁盘静默分叉、零日志**。**修**：`enqueue` 包 `guarded` try/catch + `console.warn([workspaces] … failed)` 再 rethrow（bookmarks parity）。
+5. **【minor / 数据安全】init 瞬时读失败（store→{}）+ 随后 persist 读成功 → `root.workspaces = store.get()` 只含新存的一个 → 抹掉 Obsidian/其它已存工作区**（desktop IPC 抖动窄窗）。**修**：persist 加守卫——store 空 **且** 磁盘 `workspaces` 非空 → console.warn + return（不覆盖,宁可不写;「内存空但磁盘有」更可能是 init 没成功）。
+6. **【minor / doc】ARCHITECTURE 冻结契约 `WORKSPACES_CONFIG` 字面量 stale**（见上「契约字面量修正」）。本 As-built + 契约块已回写裸值。
+
+> **证伪/by-design（未改）**：① **`applyLayout` 不 await flushAll** —— 证伪:EditorPane unmount 自带 flush,与既有 `closeTab`/`closeMissingFileTabs` 等所有「丢 tab」操作同一数据安全前置,载入工作区关 tab 不比它们更危险,**非新增风险**（我赛前自审误判为缺陷,评审对抗验证纠正）· Modal load 把 null 喂 applyLayout（竞态删除）→ sanitizeState 回落默认,非崩溃 · void persist 的 unhandled rejection（与 #4 同源,#4 已加日志）。
+
+> **教训（写给后续轮）**：① **复用既有序列化要审「全字段语义」**——`{...state, modal:null}` 顺手带走了 theme/fontSize,而工作区**只该存布局**;复制一个状态快照时,逐字段问「这字段属于这次快照的语义吗」（modal=session 已排除,但 theme/fontSize=全局外观漏了）。② **结构性改 state 后要走 reconcile 三件套**——`pruneTabHistory` + `purgeNavLocations` + `emitActiveFile` 是 Workspace 既有的「丢/换 tab 后刷新派生态」惯例,applyLayout 是新的结构变更入口,**漏走惯例 → 派生面板陈旧 + session 态残留**;改 state 树的新方法都要对照既有 close/reconcile 方法补齐这套。③ **「逐字镜像 bookmarks」要把诊断也镜像**——只镜像了 RMW 守卫、漏了 try/catch+warn,导致守卫触发时反而最该有的日志没了;**镜像一个范式 = 连它的可观测性一起抄**。④ **赛前自审会误判**——我预判 flush 缺失为缺陷,评审证伪;**对抗验证「证伪」同样有价值,等它出结果再批量修,别抢修未确认项**。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/workspaces.ts（NEW，镜像 bookmarks.ts 持久化范式）**：
+```ts
+export const WORKSPACES_CONFIG = "workspaces.json"; // readConfig/writeConfig 已相对 <vault>/.obsidian/ 解析(同 bookmarks 裸 "bookmarks.json");字面 ".obsidian/..." 会双套→写错文件
+export const workspacesStore: Store<Record<string, unknown>>; // name → Geode 布局(opaque,保留 Obsidian 原 entry)
+export function initWorkspaces(vault: Vault): Promise<void>;   // 读文件 → 填 store(parse `workspaces` map);main.tsx 在 vault 加载时调(镜像 bookmarks.init)
+export function listWorkspaceNames(): string[];               // store keys 排序
+export function getWorkspaceLayout(name: string): unknown | null;
+export function saveWorkspaceLayout(vault: Vault, name: string, layout: unknown): Promise<void>; // store.set + enqueue 写
+export function deleteWorkspaceLayout(vault: Vault, name: string): Promise<void>;
+```
+持久化范式（逐字镜像 bookmarks）:串行 `enqueue` 队列;写时 vault.isOpen 守卫 + adapter 身份 race guard;RMW 读现有 `{...parsed}` **保留所有 top-level key**(`active` 等),`root.workspaces = workspacesStore.get()`(从 store blast,store 含 init 读入的 Obsidian 原 entry → 全保留);现有 `workspaces` 非对象 → **拒写**(不毁用户文件);坏 JSON catch+warn。
+
+**core/workspace.ts（加 2 方法）**：
+```ts
+captureLayout(): unknown;  // {...state, modal:null} 落 JSON 后 delete theme/fontSize(外观全局,不存;评审 F1)
+applyLayout(raw: unknown, exists: (path: string) => boolean): void; // sanitizeState(raw) → next.theme/fontSize = current(保留当前外观) → state.set → closeMissingFileTabs(exists) → pruneTabHistory() + emitActiveFile()(reconcile 派生态/session 历史,评审 F2/F3) → persist()。设 state 即驱动 EditorPane 重挂载开文件(同 restore())
+```
+**core/types.ts**：`ModalKind` 加 `"workspaces"`。
+
+**features/workspaces/WorkspacesModal.tsx（NEW）+ index + css**：镜像 `features/palette/TemplateSelector.tsx`。列出 `listWorkspaceNames()`(`useStore(workspacesStore)` 反应式),每项 载入(`app.workspace.applyLayout(getWorkspaceLayout(name), app.vault.fileExists)` + closeModal)/删除(`deleteWorkspaceLayout`)按钮 + 顶部文本框「将当前布局存为…」(名非空 → `saveWorkspaceLayout(app.vault, name, app.workspace.captureLayout())`)。Escape + overlay click 关闭。
+
+**app/App.tsx**：`ws.modal === "workspaces" && <WorkspacesModal />`(L744 模态链);注册命令 `workspace:manage`(无默认键,`() => app.workspace.openModal("workspaces")`)。
+**main.tsx**：`workspaces.init(vault)` / `initWorkspaces(vault)` 接线(镜像 bookmarks 在 vault load/switch 处,L554-556 区)+ `__geodeWorkspaces` 探针(`save(name)`/`load(name)`/`list()`/`del(name)` 驱动 core,desktop 可驱动[store/vault 级,非 React effect])。
+**i18n**：`dict.app.ts` `workspaces.title`/`workspaces.saveAs`/`workspaces.save`/`workspaces.load`/`workspaces.delete`/`workspaces.empty`/`workspaces.placeholder`/`cmd.manageWorkspaces`(en+zh)。版本 0.44→0.45。
+
+### 文件所有权（并行 implementer）
+- **A（core + types + main 接线 + 探针）**：`src/core/workspaces.ts`(new) + `src/core/workspace.ts`(captureLayout/applyLayout) + `src/core/types.ts`(ModalKind) + `src/main.tsx`(workspaces.init + `__geodeWorkspaces`)。
+- **B（feature 模态 + app + i18n + 版本）**：`src/features/workspaces/*`(new) + `src/app/App.tsx`(模态渲染 + 命令) + `src/core/i18n/dict.app.ts`(workspaces.* + cmd.manageWorkspaces) + 版本三处。
+- **me（验证）**：`.calibration/r45-e2e.mjs`（模态端到端:save current→list→load→delete + 容错缺失文件 load）+ `.calibration/r45-probe.mjs`（`__geodeWorkspaces` capture→save→**磁盘 `.obsidian/workspaces.json` on-disk 验证** + list/del）。
+
+### 已知偏差（写给后续轮）
+- **Obsidian 工作区 schema 未桥接**：存到 `.obsidian/workspaces.json` 同路径,但 per-workspace 布局值是 **Geode 形状**(非 Obsidian pane 树)。Geode 载入 Obsidian 原 entry → `sanitizeState` 回落默认(优雅降级,不崩);反之 Obsidian 载 Geode entry 亦不识。**path-compatible, schema-divergent**;全 schema 桥接延后。Obsidian 原 entry **非破坏性保留**(RMW blast from store,store 含原 entry)。
+- **不存 theme/fontSize/modal**（外观全局 + modal 是 session;Obsidian 工作区亦只存布局）。
+- **同名 save 覆盖**（Obsidian 同款）。
+
 ## Round 44 additions — Note composer：提取选区 → 新笔记（Extract current selection）【As-built v0.44】
 
 > **状态：As-built（v0.44 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑬ 的 **extract 切片**（#⑬ = 笔记合并/拆分 + 提取替换为链接;本轮做

@@ -637,6 +637,23 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R45 — v0.45（2026-06-14）保存的工作区布局（Workspaces）（R32+ 候选池第三梯队 #⑭）
+`core/workspaces.ts`（NEW，镜像 R27 bookmarks 持久化）：命名布局存到 `<vault>/.obsidian/workspaces.json`（裸
+`"workspaces.json"`——readConfig/writeConfig 已相对 `.obsidian/` 解析）。串行 enqueue 队列 + vault-switch race guard
+（adapter 身份）+ 非破坏性 RMW（`root={...parsed}` 保留 `active` 等 top-level key + Obsidian 原 entry）+ 拒写
+malformed（`workspaces` 非对象）+ **空-store 守卫**（store 空但磁盘有 entry → 不覆盖，防 init 失败抹盘）+ enqueue
+try/catch+warn。导出 `WORKSPACES_CONFIG`/`workspacesStore`/`initWorkspaces`/`listWorkspaceNames`/`getWorkspaceLayout`/
+`saveWorkspaceLayout`/`deleteWorkspaceLayout`。`Workspace.captureLayout`（复用 persist 序列化，**去 theme/fontSize**——外观全局）+
+`applyLayout`（`sanitizeState` 容错 + `closeMissingFileTabs` 剪缺失文件 + `pruneTabHistory`/`emitActiveFile` reconcile +
+**保留当前外观**）。`features/workspaces/WorkspacesModal`（save-current/list/load/delete，`useStore(workspacesStore)` 反应式）+
+`workspace:manage` 命令 + `__geodeWorkspaces` 探针 + i18n + `ModalKind += "workspaces"`。main.tsx 在 vault load/switch
+接 `initWorkspaces`（镜像 bookmarks.init）。**零新依赖、无 Rust。** 验证：typecheck 0 · `r45-e2e.mjs` **10/10** · 桌面
+`r45-probe.mjs` **6/6**（含 on-disk `.obsidian/workspaces.json` 验证 `probe-ws.root` pane 树）· cargo release 真实重建 37s ·
+回归 r37/r39/r36/r43/r27-e2e 不回退。**3 维对抗评审 10 finding → 6 确认（1 major + 5 minor，含 1 doc）逐条修 + 4 证伪**
+（① captureLayout 误存 theme/fontSize→delete + applyLayout 保留当前外观 ② applyLayout 不 emit active-file→pruneTabHistory+emitActiveFile
+③ 同②session 历史 ④ enqueue 缺 try/catch+warn→拒写静默→补日志 ⑤ init 失败+persist 成功抹盘→空-store 守卫 ⑥ 契约字面量回写；
+**证伪**：applyLayout 不 flush[EditorPane unmount 已 flush，与既有 closeTab 同前置]）。显式延期：Obsidian schema 桥接 / 切换快捷键 / `active` 跟随。
+
 ### R44 — v0.44（2026-06-14）Note composer：提取选区 → 新笔记（R32+ 候选池第三梯队 #⑬ extract 切片）
 `core/noteComposer.ts`（NEW，纯函数）：`sanitizeNoteName`（一个字符类同守文件名+wikilink:剥控制符 `\p{Cc}`
 + `[]#^|/\:*?"<>` + 折叠空白 + 去首尾点 + UTF-8 边界裁 ≤200 字节;空/全点→Untitled）/`deriveNoteName`（首非空行,
@@ -1015,7 +1032,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **⑪ 回收站 + 文件恢复快照** | **部分 / 数据安全**（本地 `.trash/` 回收站 **R42 已完成（v0.42，见上）**：Rust `vault_trash`/`vault_list_trash`[仅 std::fs 无新 crate] + vault.ts adapter.trash/listTrash[含 binaryFiles] + Vault.trash/listTrash/restoreFromTrash[restore emit file:renamed 重索引文件夹子项] + Explorer trash 前 flushAll 无损 + compat trash 接通 + `.trash` 自动隐藏。**修永久删=丢数据底线**。r42-e2e 17/17 + r42-probe 10/10[真 fs 验证]；**文件恢复快照[周期内容快照]仍缺**）| 余项切入：snapshots = Rust 周期写 `.geode/snapshots/<file>/<ts>` 副本 + 恢复 UI；系统回收站（需 `trash` crate=新依赖，待用户拍板）；回收站 UI 面板（listTrash/restoreFromTrash 已就绪，restore 原路径需自携）。 |
 | **⑫ 日记日历 + 可配置日记** | **部分**（日历+前后日导航 **R43 已完成（v0.43，见上）**：`core/dailyNote.ts`[dailyStamp/dailyNotePath/parseDailyStamp(basename 锚定)/isDailyNotePath/addDays/sameDay/monthGrid/openOrCreateDailyNote] + `features/calendar/CalendarPanel`[右栏自绘月历,today 高亮/有笔记标记/点击开建/月导航/locale-aware 标签] + daily-note 插件 `next-day`/`prev-day`[isDailyNotePath 门控基准] + `__geodeDaily` 探针。**评审顺手硬化 `vault_create` TOCTOU**[create_new 原子,补 R17 漏网命令]。r43-e2e 22/22 + r43-probe 13/13;**可配置设置 UI[格式/文件夹/模板]仍延后**）| 余项切入：daily-note 设置（格式/文件夹/模板,镜像 settings 模式）；月历周一起可配；周期模板套用到新建日记。 |
 | **⑬ 笔记合并/拆分（Note composer）** | **部分**（提取选区→新笔记+替换为链接 **R44 已完成（v0.44，见上）**：`core/noteComposer.ts`[sanitizeNoteName 守文件名+wikilink+控制符+首尾点+≤200 字节 / deriveNoteName 首标题或首行 / extractedContent / extractReplacement link\|embed] + `features/editor/noteComposerCommands.ts`[`editor:extract-selection`,**create-before-edit** 无损 + await 后乐观锁守卫防错删 + uniquePath 碰撞] + App 注册 + `__geodeComposer` 探针 + i18n。r44-e2e 25/25 + r44-probe 17/17;**合并 merge 仍缺**）| 余项切入：**合并两笔记**（append + 删源 + 把指向源的链接改指目标——需「不移动文件只改链接」的 link-rewrite-only 变体，R16 引擎是 rename-with-link-update[`vault.rename(A,B)` 在 B 存在时覆盖]，须抽出 link-rewrite 核或新写一遍 capture→verify→splice）；extract 自动导航到新笔记；embed 模式命令（core 已支持）。 |
-| **⑭ 保存的工作区布局（Workspaces）** | **缺**（无 serializeLayout/workspaces.json）| 切入：workspace 状态序列化 + `.obsidian/workspaces.json` 兼容 + 切换 UI。 |
+| **⑭ 保存的工作区布局（Workspaces）** | **R45 已完成（v0.45，见上）**：`core/workspaces.ts`（命名持久化到 `.obsidian/workspaces.json`[裸 "workspaces.json"]，镜像 bookmarks 串行 RMW + vault-switch race guard + 保留 Obsidian 原 entry/top-level key + 空-store 守卫不抹盘）+ `Workspace.captureLayout`（复用 persist 序列化，去 theme/fontSize 外观）/`applyLayout`（sanitizeState 容错 + closeMissingFileTabs 剪缺失 + pruneTabHistory/emitActiveFile reconcile + 保留当前外观）+ `WorkspacesModal`（save-current/list/load/delete，`useStore(workspacesStore)` 反应式）+ `workspace:manage` 命令 + `__geodeWorkspaces` 探针。r45-e2e 10/10 + r45-probe 6/6（on-disk）。 | 余项：**Obsidian 工作区 schema 桥接**（当前 path-compatible/schema-divergent，Geode 载 Obsidian entry 回落默认）；切换 UI 加快捷键；workspace.json 的 `active` 跟随。 |
 | **⑮ `obsidian://` URI / 深链** | **缺**（compat 仅 gap-stub）| 桌面 Tauri deep-link + 浏览器降级。 |
 | **⑯ 弹出窗口（Pop-out windows）** | **缺**（compat 明示「single-window host」）| Tauri 多 WebviewWindow——**大工程**，远期。 |
 | **⑰ Canvas 白板** | **缺**（零匹配）| JSONCanvas（`.canvas`）无限画布——**大工程**，远期梯队。 |
