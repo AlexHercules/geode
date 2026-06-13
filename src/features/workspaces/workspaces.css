@@ -1,0 +1,126 @@
+/* Workspaces manager modal (R45). Reuses the shared .modal-overlay/.modal-panel
+   scaffolding from app.css; all colors go through CSS variables. */
+
+.modal-panel.workspaces-panel {
+  width: min(480px, 92vw);
+}
+
+.workspaces-header {
+  padding: 12px 14px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.workspaces-save-row {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.workspaces-save-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.workspaces-save-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.workspaces-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-normal);
+  border: 1px solid var(--border);
+}
+
+.workspaces-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.workspaces-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+  min-height: 0;
+}
+
+.workspaces-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  color: var(--text-normal);
+}
+
+.workspaces-item:hover {
+  background: var(--bg-hover);
+}
+
+.workspaces-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.workspaces-item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.workspaces-btn {
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-normal);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.workspaces-btn:hover {
+  background: var(--bg-hover);
+}
+
+.workspaces-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.workspaces-btn-primary {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
+
+.workspaces-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.workspaces-btn-danger:hover {
+  background: var(--danger);
+  color: var(--text-on-accent);
+  border-color: var(--danger);
+}
+
+.workspaces-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}

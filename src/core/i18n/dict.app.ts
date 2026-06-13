@@ -119,6 +119,15 @@ export const en = {
   "plugin.randomNote.name": "Random note",
   "plugin.randomNote.desc":
     "Open a random markdown note from the vault via the command palette.",
+  // ---- workspaces (src/features/workspaces) ----
+  "cmd.manageWorkspaces": "Manage workspaces",
+  "workspaces.title": "Manage workspaces",
+  "workspaces.saveAs": "Save current layout as…",
+  "workspaces.save": "Save",
+  "workspaces.load": "Load",
+  "workspaces.delete": "Delete",
+  "workspaces.empty": "No saved workspaces yet",
+  "workspaces.placeholder": "Workspace name",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -233,4 +242,13 @@ export const zh: Record<keyof typeof en, string> = {
   "plugin.dailyNote.desc": "使用 Ctrl+D 打开（或创建）今天位于 \"Daily Notes/\" 下的日记。",
   "plugin.randomNote.name": "随机笔记",
   "plugin.randomNote.desc": "通过命令面板打开库中随机一篇 Markdown 笔记。",
+  // ---- workspaces (src/features/workspaces) ----
+  "cmd.manageWorkspaces": "管理工作区",
+  "workspaces.title": "管理工作区",
+  "workspaces.saveAs": "将当前布局保存为…",
+  "workspaces.save": "保存",
+  "workspaces.load": "载入",
+  "workspaces.delete": "删除",
+  "workspaces.empty": "暂无保存的工作区",
+  "workspaces.placeholder": "工作区名称",
 };

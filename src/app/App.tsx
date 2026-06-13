@@ -19,6 +19,7 @@ import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
+import { WorkspacesModal } from "@features/workspaces";
 import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
@@ -463,6 +464,15 @@ export function App() {
         },
       }),
     );
+    // R45 workspaces manager (save / load / delete named layout snapshots).
+    // No default key — Obsidian's core "Workspaces" plugin assigns none.
+    disposers.push(
+      commands.register({
+        id: "workspace:manage",
+        name: () => t("cmd.manageWorkspaces"),
+        callback: () => workspace.openModal("workspaces"),
+      }),
+    );
     if (isTauri()) {
       disposers.push(
         commands.register({
@@ -743,6 +753,7 @@ export function App() {
       {ws.modal === "switcher" && <QuickSwitcher />}
       {ws.modal === "templates" && <TemplateSelector />}
       {ws.modal === "settings" && <SettingsModal />}
+      {ws.modal === "workspaces" && <WorkspacesModal />}
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />

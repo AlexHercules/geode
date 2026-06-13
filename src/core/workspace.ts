@@ -759,6 +759,44 @@ export class Workspace {
     this.update((s) => ({ ...s, modal: null }));
   }
 
+  /* ---------- named workspace layouts (R45) ---------- */
+
+  /** A clean, alias-free JSON snapshot of the current layout (same shape that
+   *  `persist()` serializes: `modal` forced null). Opaque to callers — fed back
+   *  verbatim to `applyLayout`. Deep-copied so no Store internals are aliased. */
+  captureLayout(): unknown {
+    const snapshot = JSON.parse(
+      JSON.stringify({ ...this.state.get(), modal: null }),
+    ) as Record<string, unknown>;
+    // appearance (theme/fontSize) is GLOBAL, not part of a workspace — never
+    // store or restore it (R45 review; Obsidian workspaces save layout only).
+    delete snapshot.theme;
+    delete snapshot.fontSize;
+    return snapshot;
+  }
+
+  /** Restore a previously captured layout. `raw` runs through the same
+   *  `sanitizeState` used by `restore()`, so a malformed/foreign snapshot can
+   *  never corrupt the workspace. Setting `state` drives EditorPane remounts
+   *  (identical to `restore()`); then tabs pointing at now-missing files are
+   *  pruned via `exists`, and the result is persisted. */
+  applyLayout(raw: unknown, exists: (path: string) => boolean): void {
+    const current = this.state.get();
+    const next = sanitizeState(raw);
+    // appearance stays global — a saved layout must never change theme/fontSize
+    // (R45 review): keep the current values regardless of what the snapshot held.
+    next.theme = current.theme;
+    next.fontSize = current.fontSize;
+    this.state.set(next);
+    this.closeMissingFileTabs(exists);
+    // a layout swap is a structural change like reconcile-with-vault: drop session
+    // nav history for tabs not in the new tree, and re-seed lastActiveFile + the
+    // derived panels (backlinks/outline) for the new active tab (R45 review).
+    this.pruneTabHistory();
+    this.emitActiveFile();
+    this.persist();
+  }
+
   /* ---------- properties-in-document display preference (R22) ---------- */
 
   /** "visible" = structured panel, "hidden" = nothing, "source" = raw YAML.

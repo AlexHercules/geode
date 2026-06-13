@@ -36,6 +36,13 @@ import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
+import {
+  initWorkspaces,
+  saveWorkspaceLayout,
+  deleteWorkspaceLayout,
+  getWorkspaceLayout,
+  listWorkspaceNames,
+} from "@core/workspaces";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -263,6 +270,33 @@ async function bootstrap() {
     add: (item, groupPath) => bookmarks.add(item, groupPath),
     move: (from, toGroup, toIndex) => bookmarks.move(from, toGroup, toIndex),
     reload: () => bookmarks.init(vault),
+  };
+
+  // always-on named-workspace probe (R45): drives the real-fs
+  // .obsidian/workspaces.json save/load round-trip + the workspace
+  // capture/apply path from browser/desktop E2E (WKWebView has no CDP — same
+  // pattern as __geodeBookmarks). Assigned BEFORE loadExternal so an external
+  // plugin's onload can capture it synchronously.
+  const wsHost = globalThis as typeof globalThis & {
+    __geodeWorkspaces?: {
+      save: (n: string) => void;
+      load: (n: string) => void;
+      list: () => string[];
+      del: (n: string) => void;
+    };
+  };
+  wsHost.__geodeWorkspaces = {
+    save: (n) => {
+      void saveWorkspaceLayout(app.vault, n, app.workspace.captureLayout());
+    },
+    load: (n) => {
+      const l = getWorkspaceLayout(n);
+      if (l != null) app.workspace.applyLayout(l, (p) => app.vault.fileExists(p));
+    },
+    list: () => listWorkspaceNames(),
+    del: (n) => {
+      void deleteWorkspaceLayout(app.vault, n);
+    },
   };
 
   // always-on explorer drag-to-move probe (R28): drives the real-fs move
@@ -554,6 +588,14 @@ async function bootstrap() {
   void bookmarks.init(vault);
   events.on("vault:changed", ({ reason }) => {
     if (reason === "load") void bookmarks.init(vault);
+  });
+
+  // R45: named workspace layouts (.obsidian/workspaces.json) — same lifecycle
+  // as bookmarks/property types (load on boot, re-read when the vault ROOT
+  // switches). Probe host is assigned EARLIER (before loadExternal).
+  void initWorkspaces(vault);
+  events.on("vault:changed", ({ reason }) => {
+    if (reason === "load") void initWorkspaces(vault);
   });
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
