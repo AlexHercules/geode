@@ -25,11 +25,11 @@ Geode = Obsidian 复刻的本地优先 Markdown 知识库。
 
 ---
 
-## 开场（每次新对话）
+## 开场（用户的标准指令 =「阅读 handoff，继续开发」）
 
-1. 读本文件 → 读 `docs/ROADMAP.md` 末「R25+ 候选池 / 执行队列」确认下一项 → 读 `docs/HANDOFF.md`「给接续者的三句话背景」拿最新状态。
-2. 若用户说「继续开发」：直接进入 `/continue` 轮次编排，**不要等进一步指令**。
-3. 否则用一句话简报当前状态（例：「R24 已交付，下一项 R25 悬停预览，契约已冻结，敲『继续』即开干」）。
+1. 读 `docs/HANDOFF.md` 顶部 **▶ START HERE** 区 = **单一续接入口**（当前状态 + 下一项 + 契约位置）。再扫本文件铁律、`docs/ROADMAP.md` 末候选池；其余按下方「文档地图」**只读相关章节**。
+2. 直接执行 `/continue` 自主整轮，**不要问用户做哪一项**（仅 §自主开发契约 5 条硬边界才停下）。
+3. **每轮收尾必须撰写文档** = 循环闭合的强制环节：刷新 HANDOFF 的 START HERE 状态 + 追加根因教训、ROADMAP 出队、ARCHITECTURE As-built、OBSIDIAN-COMPAT 矩阵，再提交 push。**漏写会被 Stop hook 拦下、本轮结束不了**（这样下次「阅读 handoff」才不会续到过时状态）。详见 `/continue` Step 6。
 
 ---
 

@@ -35,12 +35,17 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
 - 浏览器 E2E 全绿；桌面裸二进制 `./src-tauri/target/release/geode <vault>` + probe 插件自检（遵守 App Nap 时序纪律，见 data-safety skill §D）。
 - OBSIDIAN-COMPAT 套件矩阵**不回退**。
 
-## Step 6 · 收尾
+## Step 6 · 收尾（写文档 = 循环闭合，不可省）
+> **Stop hook 会强制把关**：有未提交改动、或代码改了却没更新 `docs/HANDOFF.md`，本轮**结束不了**。文档必须写全、改动必须提交，循环才闭合（下次「阅读 handoff」才能续上）。
+- **撰写交付文档**：
+  - `docs/HANDOFF.md`：刷新顶部 **START HERE** 区（版本 / 上一轮 / 下一项+契约位置 / 待拍板项）+ 把本轮根因教训追加到「三句话背景」。
+  - `docs/ROADMAP.md`：完成记录 + 候选池出队。
+  - `docs/ARCHITECTURE.md`：本轮 As-built（根因修复记录）。
+  - `docs/OBSIDIAN-COMPAT.md`：套件矩阵不回退。
 - 版本号**三处对齐**（package.json / tauri.conf.json / SettingsModal `APP_VERSION`）。
-- `feat(rXX):` 提交**具体文件**（不用 `git add .`）→ `git push`。
-- 更新 `ROADMAP`（完成记录+出队）/ `ARCHITECTURE`（As-built 根因）/ `HANDOFF`（精简续接词）/ `OBSIDIAN-COMPAT`（矩阵）。
-- 向用户报告：本轮做了什么、修了几个根因、套件状态、**下一项是什么**。
-- `$ARGUMENTS` 要求连做 → 回 Step 0 取下一项；否则停下等用户敲「继续」。
+- 提交：`feat(rXX):` 代码 + `docs(rXX):` 文档（具体文件，不用 `git add .`）→ `git push`。
+- 报告用户：本轮做了什么、修了几个根因、套件状态、**下一项是什么**。
+- `$ARGUMENTS` 要求连做 → 回 Step 0；否则停下等用户下次「阅读 handoff，继续开发」。
 
 ## 🛑 何时必须停下问用户
 仅限 CLAUDE.md 的 5 条硬边界（发布/签名/私钥 · 毁真实 vault · `push --force`/改历史 · 新运行时依赖），或契约冲突无法自裁。**其余一律自主决定、继续往前。**
