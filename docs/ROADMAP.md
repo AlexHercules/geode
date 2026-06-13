@@ -637,6 +637,33 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R34 — v0.34（2026-06-13）编辑器内查找 / 替换（R32+ 候选池 #③）
+
+**实测缺口收口**：`@codemirror/search` 仅 compat loader 引入、features/editor 未接，文内无查找面板。
+本轮接通 CM 原生 search：`features/editor/searchCommands.ts`（`registerSearchCommands` 注册
+**editor:search（Mod+F）** + **editor:replace（无默认键）** + `editorSearchPhrases()` 17 个 CM phrase
+本地化 + `installSearchProbe` `__geodeSearch` 探针）+ `cmExtensions` 加 `search({top:true})` +
+`keymap.of(searchKeymap)` + `EditorState.phrases.of(...)` + editorTheme `.cm-search`/`.cm-searchMatch`
+主题（纯 CSS 变量，字号走 `--editor-font-size`）。i18n：`cmd.searchFile`/`cmd.replaceFile`（dict.app.ts）
++ 17 `editor.search.*`（dict.views.ts）。**开命令走 app 命令层**：R33 `Prec.highest` 拦截器先处理
+Mod+F → searchKeymap 自身 Mod-f 无害遮蔽（不双开）；searchKeymap 仅供面板内键（Enter/Shift-Enter/
+Escape/F3/Mod-d）。与左栏全库 SearchPanel 互不影响（两套）。**editor:replace 无默认键 = 刻意取舍**
+（macOS Cmd+H=隐藏 App、浏览器=历史，绑它跨端不安全；替换仍可经 Cmd+F 面板的 replace 行 + 命令面板
+到达）。**替换=写路径但零新 vault 写**（CM 事务→autosave，命令 + 探针双双活动文件门控 R23 DS-1；
+autosave 落盘实测）。**对抗评审 5 维 9 verdict → 7 确认 → 3 根因修复 + 3 记已知限制**：修复 ①
+`installSearchProbe` 裸用 `getActiveView()` → 加活动文件门控（探针是生产全局、防写错文件）；② 探针
+replaceAll 空查询 CM 会 fall through 到 openSearchPanel → 加 `search===""` no-op 守卫；③ 面板字号
+硬编码 13px → 走 `var(--editor-font-size)`。已知限制（CM 上游行为/设计取舍，非缺陷）：① IME 合成期
+CM 面板 input 的 keydown 自走 runScopeHandlers 不查 isComposing（find-Enter 只读无害、replace 窄边）；
+② Mod+G 被 `app:open-graph` 占用 → CM findNext 遮蔽（findNext 走 Enter/F3/next 按钮）；③ 选区 >100
+字符不预填查找框（CM `defaultQuery` 上限；≤100 字符会预填）。**最重要 As-built 结论：功能依赖 live CM
+view 时桌面探针无法驱动**——后台 WKWebView 不绘制 → React effect 不执行 → EditorPane view 与命令注册
+effect 都不挂载（foreground 也无效），故 R34 桌面探针只验「探针嵌入真二进制 present+全 api + error-free」，
+功能真值交浏览器 E2E（详见 ARCHITECTURE R34 节 + data-safety §D）。验证：浏览器 `r34-e2e` **15/15**
+（8 probe 含 autosave 落盘 + 7 live 含真键入高亮 `.cm-searchMatch`×3）+ 桌面 release `r34-probe` **3/3**
++ r23–r33 全套不回退（r33 37/probe12 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ `r26-bytes` 0
+违例（markdown.ts 未动）+ typecheck/cargo/build 绿。
+
 ### R33 — v0.33（2026-06-13）Markdown 格式化命令 + 快捷键（R32+ 候选池 #②）
 
 **实测缺口收口**：选区按 Cmd/Ctrl-B 不加粗、源码无任何 toggle 命令、markdownKeymap 不含格式化键。
@@ -914,7 +941,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | ~~**① macOS Cmd（Mod）修饰键支持**~~ | **R32 已完成（v0.32，见上）**——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、其余→Ctrl/ctrlKey）+ `matchParsedHotkey(p,e,isMac)` 四态全等 + `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。验证 r32-e2e 24/24（含 live Cmd+P 开面板）+ desktop probe 16/16 真实 runtime。 | 显式延期：compat 外部插件 `Keymap`/`Scope` 热键路径（另一套、自包含）；非 mac `Mod`/`Ctrl` 同 ctrlKey 但 canonical 不同 → 冲突检测不互判（与 Obsidian 一致）。 |
 | ~~**② Markdown 格式化命令 + 快捷键**~~ | **R33 已完成（v0.33，见上）**——`core/format.ts` `applyFormatOp` 唯一入口（13 op：bold/italic/strike/highlight/inline-code 幂等包裹 + 强调符歧义守卫、link、heading 循环、blockquote/bullet/numbered/checklist/code-block/callout 行变换）+ `features/editor/formatCommands.ts` CM dispatch + 注册 13 命令（仅 Mod+B/I/K 默认键）+ `cmExtensions` `Prec.highest` keydown 拦截器（修原生 Cmd+I 扩选区）+ handleKeydown isComposing/defaultPrevented 守卫 + `__geodeFormat` 探针。验证 r33-e2e 37/37 + desktop probe 12/12 真实 runtime。 | 余项（按需求驱动）：toggle-heading 循环 vs 二态（选了循环）；callout/code-block wrap 后选整块非光标定位；选中文本敲 `[`/`*` 包裹（属 ④ closeBrackets）；多光标包裹；非 B/I/K 命令默认无键（用户自绑）。 |
-| **③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）** | **缺**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）| 切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。低成本。 |
+| ~~**③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）**~~ | **R34 已完成（v0.34，见上）**——`features/editor/searchCommands.ts`（editor:search Mod+F + editor:replace 无默认键 + `editorSearchPhrases()` 17 phrase 本地化 + `__geodeSearch` 探针）+ `cmExtensions` `search({top})`+`searchKeymap`+`EditorState.phrases`+`.cm-search` 主题。开命令走 app 命令层（R33 拦截器先处理）。验证 r34-e2e 15/15（含 autosave 落盘 + 真键入高亮）+ desktop probe 3/3（present+api+error-free）。 | 余项（按需求驱动）：editor:replace 默认键（避 Cmd+H）；IME 合成面板 input（CM 上游）；Mod+G 与 open-graph（findNext 走 Enter/F3）；选区>100 字符预填；查找历史/正则默认；与全库搜索联动。 |
 | **④ 括号/引号自动配对 + 选区包裹** | **缺**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）| 切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」。注意 `[[`/`![[` 与既有 wikilink 补全源协同。 |
 | **⑤ 标签页快捷键** | **缺**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）| Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 nextTab/prevTab/goToTab + recentlyClosed 栈，App.tsx 注册命令+默认键。 |
 

@@ -172,6 +172,22 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R34 套件回归（2026-06-13，macOS release 二进制 v0.34.0 实测 `r34-probe-vault`）
+
+R34 = 编辑器内查找/替换（实测缺口：`@codemirror/search` 仅 compat loader 引入、features/editor 未接）。
+**compat API 表面零代码改动**——本轮全在原生编辑器层（新 `features/editor/searchCommands.ts` + `cmExtensions`
+接 `search()`/`searchKeymap`/phrases + editorTheme 面板主题）。镜像 Obsidian：Cmd-F 文内查找（与左栏全库
+SearchPanel 两套互不影响）、面板含 replace 行、匹配全高亮、phrases 本地化（en+zh）。新增 always-on 探针
+`window.__geodeSearch`（**装在 `loadExternal` 之前**，与 `__geodeFormat`/`__geodeHotkey`/`__geodeSlash` 同列）。
+macOS probe 实测：新增 **r34-probe 3/3**——但**本轮明确了桌面探针的边界**：功能依赖 live CM view 时，后台
+WKWebView 不绘制 → React effect 不执行 → EditorPane view/命令注册都不挂载（foreground 也无效，实测），
+故桌面探针只验「探针嵌入真二进制 present+全 api + 启动 error-free」，**功能真值交浏览器 r34-e2e**（真实聚焦
+view：Cmd-F 开面板 / 真键入高亮 ×3 / Escape 关 / 替换 + autosave 落盘）。**r33/r32/…/r23 套件不回退**
+（compat 调用面零改动；浏览器 r34-e2e 15/15 + r33 e2e 37/37、r32 24、r31 21、r25 17、r24 12、r23 22 全绿；
+桌面 r33-probe 12/12 在新二进制复跑；r26-bytes 0 违例，markdown.ts 未动）。**对抗评审 5 维 9 verdict → 7
+确认 → 3 根因修复**（探针活动文件门控 / 空查询 no-op / 面板字号走 var）**+ 3 记已知限制**（IME 合成面板
+input=CM 上游 / Mod+G 被 open-graph 遮蔽 / 选区>100 字符不预填）。
+
 ### R33 套件回归（2026-06-13，macOS release 二进制 v0.33.0 实测 `r33-probe-vault`）
 
 R33 = Markdown 格式化命令 + 快捷键（实测缺口：选区按 Cmd-B 不加粗、无任何 toggle 命令）。**compat API

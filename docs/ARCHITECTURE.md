@@ -71,6 +71,63 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 34 additions — 编辑器内查找 / 替换（in-editor find/replace）【As-built v0.34】
+
+> **状态：As-built（2026-06-13）。** R32+ 候选池 #③ = 实测缺口（`@codemirror/search` 仅 compat
+> loader 引入，features/editor 无 searchKeymap/openSearchPanel）。验证：浏览器 `r34-e2e` **15/15**
+> （8 probe：open/isOpen/replaceAll 全词替换/文档模型/**autosave 落盘**/close；7 live：Cmd+F 开
+> `.cm-search` 面板 / 显示 replace 行 / 本地化标签 / 真键入高亮 `.cm-searchMatch`×3 / Escape 关 /
+> editor:search·replace 注册）+ 桌面 release `r34-probe` **3/3**（present + 全 api + error-free，
+> **见下「桌面探针边界」**）+ r23–r33 全套不回退（r33 37 / r32 24 / r31 21 / r25 17 / r24 12 /
+> r23 22）+ `r26-bytes` 0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。**5 维对抗评审 9
+> verdict → 7 确认 → 3 根因修复 + 3 记为已知限制**（详见 As-built）。
+
+### 契约（已实现）
+
+- `features/editor/searchCommands.ts`（NEW）：
+  - `registerSearchCommands(app, getView)` 注册 **`editor:search`（Mod+F）** + **`editor:replace`（无
+    默认键）**——both `available = getView()!==null`，`getView` 由 App 注入 `getActiveFileEditorView`
+    （活动文件双侧门控）。callback 调 `openSearchPanel(view)`；replace 额外 `focusReplaceField`（rAF
+    后聚焦 `.cm-search [name="replace"]`）。
+  - **`editor:replace` 无默认键是刻意取舍**：macOS Cmd+H = 系统「隐藏 App」、浏览器 = 历史，绑它跨端
+    不安全；替换仍可经 Cmd+F 面板（含 replace 行）+ 命令面板/自定义键到达。
+  - `editorSearchPhrases()`：CM 英文 phrase key → `t()`（17 个，`EditorState.phrases.of` 消费）。
+  - `installSearchProbe(app)`：`window.__geodeSearch {open,isOpen,close,replaceAll}`，**活动文件门控**
+    （镜像 getActiveFileEditorView，防经探针写错文件）+ **empty-search no-op 守卫**。loadExternal 前装。
+- `cmExtensions.ts`：`search({ top: true })` + `keymap.of(searchKeymap)` + `EditorState.phrases.of(editorSearchPhrases())`
+  加入 buildEditorExtensions；editorTheme 加 `.cm-panel.cm-search`/`.cm-searchMatch` 主题（**纯 CSS
+  变量**，字号走 `--editor-font-size`）。**开命令走 app 命令层**（R33 `Prec.highest` 拦截器先处理
+  Mod+F → searchKeymap 自身 Mod-f 被无害遮蔽）；searchKeymap 仅提供面板内键（Enter/Shift-Enter/Escape/
+  F3/Mod-d）。
+- i18n：`dict.app.ts` `cmd.searchFile`/`cmd.replaceFile`；`dict.views.ts` 17 个 `editor.search.*`（en+zh）。
+- 全局搜索（左栏 `features/search` 全库）与本轮**文内 CM 面板**是两套，互不影响。
+
+### As-built 根因教训
+
+1. **桌面探针边界（最重要的方法论结论）**：本轮首次遇到「功能依赖 live CM view」的桌面验证。实测发现
+   **后台 WKWebView 不绘制 → React effect 永不执行** → EditorPane 的建 view effect 与 App 的命令注册
+   effect 都不跑（探针实测：`.cm-content` 始终缺席、`editor:*` 命令始终未注册，**即便用 System Events
+   把窗口 foreground 也无效**）。这正是 data-safety §D「App Nap」的根因，也解释了**为何历轮桌面探针
+   从不驱动 live view**——它们只测 main.tsx 同步装的纯 hook（`__geodeFormat`/`__geodeHotkey` 等）。
+   故 R34 桌面探针**只断言「探针已嵌入真二进制（present + 全 api）+ 启动 error-free」**，功能真值交给
+   浏览器 r34-e2e（真实聚焦 view）。**结论：凡功能依赖 live CM view，桌面探针不可能驱动，必须靠浏览器
+   E2E；桌面探针只验证 main.tsx 同步 wiring + 不崩。**
+2. **探针也是生产全局，必须同样做活动文件门控**：`installSearchProbe` 初版用裸 `getActiveView()`（闩锁字段
+   会陈旧），评审指出经 `__geodeSearch.replaceAll` 可能写到后台非活动文件（DocumentHandle sync →
+   autosave 错文件）。修复 = 镜像 `getActiveFileEditorView` 的 `active.path===getActiveFile()` 双侧门控。
+   **凡 `window.__geode*` 写类探针都要复刻命令层的写守卫，别因为「只是探针」就裸用 getActiveView。**
+3. **CM `replaceAll` 对 invalid query 会「开面板」而非 no-op**：`new SearchQuery({search:""})` → `valid=false`
+   → CM 的 searchCommand 包装器 fall through 到 `openSearchPanel`。探针 replaceAll 加 `search===""` 提前
+   返回（不 dispatch）。
+4. **测试纪律**：① CM 查找框在 `keyup` 提交 query，`page.fill` 不触发 → 高亮测 0，必须 `keyboard.type`
+   真键入（R34 e2e 抓获）；② 桌面探针 setTimeout 长链在后台会被 App Nap 冻结 → flush 永不到 → 改
+   **每条 recFlush 即写（fire-and-forget）+ 短链**（§D 复刻）。
+5. **记为已知限制（非缺陷，多为 CM 上游行为）**：① **IME 合成**——CM 搜索面板 input 的 keydown 自走
+   `runScopeHandlers`、不查 `isComposing`，故 CJK 合成中 Enter 会触发 findNext（find 只读无害；replace
+   字段为窄边）——与 CM 上游一致，未做自定义面板改写；② **Mod+G 被 `app:open-graph` 占用**→ CM
+   searchKeymap 的 Mod-g findNext 被遮蔽（R33 设计：编辑器内 app 命令优先；findNext 走 Enter/F3/next
+   按钮）；③ **选区 >100 字符不预填查找框**（CM `defaultQuery` 上限；≤100 字符会预填 = 免费好行为）。
+
 ## Round 33 additions — Markdown 格式化命令 + 快捷键（formatting commands）【As-built v0.33】
 
 > **状态：As-built（2026-06-13）。** R32+ 候选池 #② = 实测缺口（选区按 Cmd/Ctrl-B 不加粗、

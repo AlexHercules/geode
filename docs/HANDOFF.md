@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.33.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R33 Markdown 格式化命令 + 快捷键 ✓ 已交付**（R32+ 候选池 #②：实测选区按 Cmd-B 不加粗、源码无任何 toggle 命令）。`core/format.ts` 纯变换（**分层落点：放 core 让 main.tsx 探针 import 不耦合 feature**）+ `applyFormatOp(op,text,from,to)` 唯一入口（13 op：bold/italic/strike/highlight/inline-code 包裹 + link + heading 循环 + blockquote/bullet/numbered/checklist/code-block/callout 行变换；**幂等 toggle** + **强调符歧义守卫** `*`≠`**`）+ `features/editor/formatCommands.ts` CM dispatch + 注册 13 命令（仅 **Mod+B/I/K** 有默认键=镜像 Obsidian，余无）+ `__geodeFormat` 探针。**头号坑：原生 contenteditable 的 Cmd+I 会先把选区扩成整行**→ 命令层在 window 冒泡读到整行（Cmd+B 没事 Cmd+I 出错）→ 修复 = `cmExtensions` 加 **`Prec.highest` CM keydown 拦截器路由 `handleKeydown`**（在 CM keymap/原生动作之前、真选区上处理）+ `handleKeydown` 加 **isComposing/defaultPrevented** 两守卫（IME 安全 + 防双触发）。**零新 vault 写路径**（走 CM 事务→autosave，活动文件门控 fail-safe）。`r33-e2e` 37/37 + 桌面 `r33-probe` 12/12 真实 runtime + r23–r32 不回退（r32 24/probe16 / r31 21 / r25 17 / r24 12 / r23 22）+ `r26-bytes` 0 违例 + autosave 落盘实测。**5 维对抗评审 18 verdict→13 确认→去重 4 根因修复**（lineBounds 不变量 / IME / 双触发 / heading 无空格），余证伪。
-- **下一项 = R34 = R32+ 候选池 #③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）。切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。**复用 R33 `Prec.highest` 拦截器经验**：Cmd-F 在编辑器内须在 CM 层处理（别只靠 window）。低成本。其后队列：④ 括号自动配对（closeBrackets）→ ⑤ 标签页快捷键 →（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.34.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R34 编辑器内查找 / 替换 ✓ 已交付**（R32+ 候选池 #③：`@codemirror/search` 仅 compat loader 引入、features/editor 未接）。`features/editor/searchCommands.ts`（`registerSearchCommands` 注册 **editor:search Mod+F** + **editor:replace 无默认键**——macOS Cmd+H=隐藏 App 跨端不安全、替换仍可经 Cmd+F 面板到达；`editorSearchPhrases()` 17 个 CM phrase 本地化；`installSearchProbe` `__geodeSearch` 探针）+ `cmExtensions` 加 `search({top})`+`keymap.of(searchKeymap)`+`EditorState.phrases.of(...)`+`.cm-search`/`.cm-searchMatch` 主题（纯 CSS 变量）。**开命令走 app 命令层**（R33 `Prec.highest` 拦截器先处理 Mod+F、searchKeymap 自身 Mod-f 无害遮蔽）。**替换=写路径但零新 vault 写**（走 CM 事务→autosave，命令+探针双双活动文件门控）。`r34-e2e` 15/15（含 autosave 落盘 + 真键入高亮）+ 桌面 `r34-probe` 3/3 + r23–r33 不回退（r33 37/probe12 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ r26-bytes 0 违例。**5 维对抗评审 9 verdict→7 确认→3 根因修复**（探针活动文件门控 / 空查询 no-op / 面板字号走 var）**+ 3 记已知限制**（IME 合成面板 input=CM 上游行为 / Mod+G 被 open-graph 遮蔽 / 选区>100 字符不预填）。**最重要方法论结论：功能依赖 live CM view 时桌面探针无法驱动**（后台 WKWebView 不绘制→React effect 不跑→view/命令都不挂载，foreground 也无效），桌面探针只验「探针嵌入+不崩」，功能真值交浏览器 E2E。
+- **下一项 = R34→R35 = R32+ 候选池 #④ 括号/引号自动配对 + 选区包裹**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）。切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`（加进 `cmExtensions`）；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」（可复用 R33 `toggleWrap`）。**注意 `[[`/`![[` 与既有 wikilink 补全源协同**（别让 closeBrackets 补的 `]` 撞 wikilink 的 `]]`）。其后队列：⑤ 标签页快捷键 → ⑥ 前进/后退导航历史 →（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,20 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R34（编辑器内查找/替换）核心教训三条**：① **功能依赖 live CM view 时，桌面探针根本无法驱动**
+  ——本轮首次遇到，实测发现**后台 WKWebView 不绘制 → React effect 永不执行** → EditorPane 建 view 的
+  effect 与 App 注册命令的 effect 都不跑（探针实测 `.cm-content` 始终缺席、`editor:*` 命令始终未注册，
+  **即便 System Events 把窗口 foreground 也无效**）。这正是 data-safety §D「App Nap」的根因，也解释了
+  **为何历轮桌面探针从不驱动 live view、只测 main.tsx 同步装的纯 hook**（`__geodeFormat`/`__geodeHotkey`）。
+  结论：**凡功能依赖 live CM view → 桌面探针只能验「探针嵌入真二进制 + 启动不崩」，功能真值交浏览器
+  E2E（真实聚焦 view）**。别再试图在后台桌面窗口里 openFile+驱动编辑器。② **`window.__geode*` 写类探针
+  必须复刻命令层的写守卫**——`installSearchProbe` 初版裸用 `getActiveView()`（闩锁会陈旧），评审指出经
+  `__geodeSearch.replaceAll` 可能写错文件 → 加 `active.path===getActiveFile()` 双侧门控（镜像
+  `getActiveFileEditorView`）。探针是生产全局、不是测试专用，别因「只是探针」就免掉 R23 DS-1 门控。
+  ③ **复用 CM 内置（search/searchKeymap）的两个协同点**：(a) 开命令走 app 命令层（Mod+F），靠 R33
+  `Prec.highest` 拦截器先处理、searchKeymap 自身 Mod-f 无害遮蔽——别两边都绑成双开；(b) **CM 查找框在
+  `keyup` 提交 query → E2E 必须 `keyboard.type` 真键入，`page.fill` 不触发、高亮测 0 假绿**（R34 抓获）。
+  另：CM `replaceAll` 对 invalid query（空查询）会 fall through 到 openSearchPanel 而非 no-op，探针需自守。
 - **R33（Markdown 格式化命令）核心教训三条**：① **编辑器内的命令热键必须在 CM 输入处理链的
   最高优先级拦截，不能只靠 window 冒泡**——原生 contenteditable 会在冒泡到 window 之前改 DOM/选区。
   实测：选 `[0,5]`"Hello" 按 **Cmd+B 干净包裹**，但 **Cmd+I 把整行斜体**（原生先把选区扩成整行）；
