@@ -1,0 +1,52 @@
+name: CI
+
+# 把「构建常绿 + 双端·浏览器侧回归」从「本地记得跑」变成 push 即自动跑——
+# 回归基线不再依赖某台开发机的本地状态（呼应 data-safety skill「换机即失守」风险）。
+on:
+  push:
+    branches: [master, opus]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Typecheck（构建常绿底线 · TS strict 0 错误）
+        run: npm run typecheck
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install calibration harness + Chromium
+        working-directory: .calibration
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Start dev server (:1420)
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:1420 >/dev/null && { echo "dev server up"; break; }
+            sleep 1
+          done
+
+      - name: Browser E2E 回归套件（已交付轮次）
+        run: |
+          node .calibration/r23-e2e.mjs
+          node .calibration/r24-e2e.mjs
+          # R25（悬停预览）交付后，把 r25-e2e.mjs 加到这里。
+
+  # 桌面端（Tauri/Rust + WKWebView probe）不在此 CI：Linux runner 跑 tauri 需大量系统库，
+  # 且桌面 E2E 依赖 probe 插件方案（见 data-safety skill §D）。桌面验证留本地 /continue 流程。

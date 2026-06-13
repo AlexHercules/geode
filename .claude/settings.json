@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./.tauri-keys/**)",
+      "Edit(./.tauri-keys/**)",
+      "Write(./.tauri-keys/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-bash.sh\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

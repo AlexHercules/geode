@@ -6,7 +6,12 @@ src-tauri/gen/
 .DS_Store
 .playwright-mcp/
 bench-vault/
-.calibration/
+# calibration harness — 测试脚本 + 基线数据入库（换机/CI 可复跑）；
+# 仅忽略安装依赖与每轮运行产物。详见 .calibration/README.md
+.calibration/node_modules/
+.calibration/**/*-results.md
+.calibration/__*/
+.calibration/*-vault/
 compat-vault/
 # updater signing keypair — NEVER commit the private key
 .tauri-keys/

@@ -17,14 +17,22 @@
 5. docs/DISTRIBUTION.md — 发布流程（Windows 向，本机仅参考）
 
 候选池执行口径：迁移叙事第二梯队（R19+）已清空；**R25+ 候选池（Obsidian 原生功能补课）
-执行中**——①悬停预览 ✓（R25）。**下一项问用户方向**（用户口径 2026-06-13：不着急
-一口气都做，逐项记录在案，执行顺序待定——每轮开工前问用户取项或按优先级挑）。剩余
-候选（见 ROADMAP「R25+ 候选池」表）：②PDF 查看器 + PDF/音视频嵌入（注：PDF 是一次性
-依赖决策）③书签 Bookmarks ④文件树拖拽移动（接线为主，R16 改写引擎已就绪）⑤折叠
-持久化 + 阅读视图折叠 ⑥Properties 侧栏视图 ⑦斜杠命令 `/` 菜单。另：发布渠道 +
-Authenticode（待拍板，.tauri-keys 私钥未找回，**不主动启动**）+ 性能远期项仍待办。
-验收沿用四条底线 + OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。
-用户全权委托决策，目标=复刻 Obsidian——但发布/签名等不可逆外向动作仍须先确认。
+执行中**——①悬停预览 ✓（R25）。**用户口径改新（2026-06-13）：R25+ 候选池逐项按序
+自主推进，重开对话只读本 handoff 即继续，不再每轮问方向**。**下一项 = ②PDF 查看器 +
+PDF/音视频嵌入（R26）**：音视频零依赖先做（`![[a.mp3]]`/`![[v.mp4]]` → `<audio>`/
+`<video>`，走 `vault.readBinary`+blob，R11 图片嵌入先例，阅读/live/导出三态）；PDF =
+**一次性依赖决策，由该轮自主拍板**（用户全权委托）——桌面 WKWebView 原生支持 PDF
+（`<embed>`/iframe 内嵌），浏览器端需 PDF.js（体积敏感，**倾向零/轻依赖：浏览器端可
+先 lazy-import PDF.js 或先降级链接**），页码锚点 `#page=N`；现状 = R12 缺口「PDF/音频/
+canvas 嵌入均降级链接」，embeds.ts 仅 img/note/math/mermaid 分支。其后按序：③书签
+Bookmarks ④文件树拖拽移动（接线为主，R16 改写引擎已就绪）⑤折叠持久化 + 阅读视图折叠
+⑥Properties 侧栏视图 ⑦斜杠命令 `/` 菜单。另：发布渠道 + Authenticode（待拍板，
+.tauri-keys 私钥未找回，**不主动启动**）+ 性能远期项仍待办。验收沿用四条底线 +
+OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用户全权委托决策，
+目标=复刻 Obsidian——但发布/签名等不可逆外向动作仍须先确认。
+（注：本仓已落 `.claude/commands/continue.md` 自主整轮命令 + `.claude/skills/data-safety`
+写入安全清单 + `.github/workflows/ci.yml` CI + commit-guard hook，校准脚本已入库
+`.calibration/`——换机 `cd .calibration && npm ci && npx playwright install chromium`。）
 ```
 
 ## 给接续者的三句话背景
