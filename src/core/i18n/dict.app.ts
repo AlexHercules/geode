@@ -85,6 +85,7 @@ export const en = {
   "cmd.toggleBulletList": "Toggle bullet list",
   "cmd.toggleNumberedList": "Toggle numbered list",
   "cmd.toggleChecklist": "Toggle checklist",
+  "cmd.toggleCheckbox": "Toggle checkbox status",
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
 
@@ -197,6 +198,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.toggleBulletList": "切换无序列表",
   "cmd.toggleNumberedList": "切换有序列表",
   "cmd.toggleChecklist": "切换任务列表",
+  "cmd.toggleCheckbox": "切换复选框勾选状态",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
 

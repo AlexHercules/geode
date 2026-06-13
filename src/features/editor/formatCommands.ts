@@ -59,6 +59,8 @@ const FORMAT_COMMANDS: ReadonlyArray<FormatCommandSpec> = [
   { id: "editor:toggle-bullet-list", nameKey: "cmd.toggleBulletList", op: "bullet-list" },
   { id: "editor:toggle-numbered-list", nameKey: "cmd.toggleNumberedList", op: "numbered-list" },
   { id: "editor:toggle-checklist", nameKey: "cmd.toggleChecklist", op: "checklist" },
+  // R40 toggle checkbox status (Cmd/Ctrl-L) — Obsidian-canonical default key
+  { id: "editor:toggle-checkbox", nameKey: "cmd.toggleCheckbox", op: "toggle-task", hotkey: "Mod+L" },
   { id: "editor:toggle-code-block", nameKey: "cmd.toggleCodeBlock", op: "code-block" },
   { id: "editor:insert-callout", nameKey: "cmd.insertCallout", op: "callout" },
 ];

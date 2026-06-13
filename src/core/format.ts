@@ -43,7 +43,8 @@ export type FormatOp =
   | "numbered-list"
   | "checklist"
   | "code-block"
-  | "callout";
+  | "callout"
+  | "toggle-task";
 
 /** Inline wrap markers (Obsidian-faithful: asterisks for emphasis, never `_`). */
 const WRAP_MARKERS: Record<string, string> = {
@@ -207,6 +208,43 @@ export function toggleList(
   return lineEdit(start, end, out.join("\n"));
 }
 
+/** A task line: `<indent><list-marker> [<state>]` where state is ANY single
+ *  non-`]` char — so custom checkbox states (`[/]` in-progress, `[-]` cancelled,
+ *  `[>]` …) are recognised and FLIPPED in place rather than treated as plain
+ *  text (R40 review). A single char only: `[text]`/`[]` are not checkboxes. */
+const TASK_BOX_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([^\]])(\])/;
+
+/**
+ * Toggle the checkbox STATUS across the selected lines (Obsidian "Toggle
+ * checkbox status", Cmd/Ctrl-L). Per non-blank line:
+ *   - a task `… [ ] …` ↔ `… [x] …` (flip the mark; existing list marker kept);
+ *   - a non-task line → an unchecked task `<indent>- [ ] <body>` (any existing
+ *     bullet/ordered marker replaced — `* foo`/`1. foo`/`foo` all become
+ *     `- [ ] foo`), matching Obsidian's "make it a checkbox" on first press.
+ * Blank lines are left untouched WHEN the block has any non-blank line; a
+ * selection/cursor that is entirely blank (e.g. an empty line) converts to
+ * `<indent>- [ ] ` (Cmd+L on an empty line starts a checkbox; leading
+ * whitespace is preserved, so `"   "` → `"   - [ ] "`).
+ */
+export function toggleTaskStatus(text: string, from: number, to: number): FormatEdit | null {
+  const { start, end } = lineBounds(text, from, to);
+  const lines = text.slice(start, end).split("\n");
+  const anyNonBlank = lines.some((l) => l.trim() !== "");
+  const out = lines.map((line) => {
+    if (anyNonBlank && line.trim() === "") return line; // keep blank separators
+    if (TASK_BOX_RE.test(line)) {
+      // checked (x/X) → unchecked; any other state (incl. custom [/] [-] [>]) →
+      // checked — matches Obsidian's "toggle checkbox status" (never malformed).
+      return line.replace(TASK_BOX_RE, (_m, pre: string, mark: string, post: string) =>
+        pre + (mark === "x" || mark === "X" ? " " : "x") + post,
+      );
+    }
+    const indent = line.match(INDENT_RE)?.[1] ?? "";
+    return indent + "- [ ] " + stripListMarker(line.slice(indent.length));
+  });
+  return lineEdit(start, end, out.join("\n"));
+}
+
 /**
  * Toggle a blockquote (`> `) across the selected lines. Blockquote markers sit
  * at column 0 (Obsidian convention). All non-blank lines quoted → unquote all;
@@ -323,5 +361,12 @@ export function applyFormatOp(
       return toggleCodeBlock(text, from, to);
     case "callout":
       return toggleCallout(text, from, to);
+    case "toggle-task":
+      return toggleTaskStatus(text, from, to);
+    default: {
+      // exhaustiveness: a new FormatOp without a case fails to compile here
+      const _exhaustive: never = op;
+      return _exhaustive;
+    }
   }
 }
