@@ -71,6 +71,88 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 38 additions — 快速切换器子模式（Quick Switcher `#` heading / `^` block modes）【As-built v0.38】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑦ = 已核实缺口（QuickSwitcher 仅文件名+别名+create，
+> 无 heading/block 模式）。本轮 **复用 `metadata.getAll()` 的 headings/blocks 索引 + `core/fuzzy`**，新增 `#`/`^`
+> 前缀子模式;**零新 vault 写路径**（heading/block 跳转 = `openFile` + `requestReveal`，R14 reveal 机制，BookmarksPanel
+> 先例）+ **零新运行时依赖**。校准 Quick Switcher++ standalone 模式（`#` 全库标题、`^` 全库块）。
+> **按 R33 模式抽纯函数到 core** → 组件 / 浏览器 E2E / 桌面探针共用单一真值。
+> **验证**：typecheck 0 + 浏览器 `r38-e2e` **19/19**（纯搜索 mode/heading/block + 真实模态键入 #/^ → 行 → Enter 导航 +
+> create 行抑制 + browse 活动文件优先 + **block React key 同段两 ^id 不撞 key**）+ 桌面 `r38-probe` **13/13**（纯搜索在
+> 真 metadata 索引 + openFile/requestReveal 导航真值）+ r32-r37 不回退 + `r26-bytes` 0 + cargo/build 绿。
+> **3 维对抗评审 9 finding → 2 确认修复**（block 行 React key 同段两 `^id` 撞键 → 改用 `block.id`;`headingSpan.to`
+> 不准且无消费者读取 → 移除该 helper、heading reveal 改锚 `from`）**+ 7 nit/by-design**（详见 As-built）。
+
+### 契约（冻结）
+
+**core/switcherSearch.ts（NEW，纯函数，已落）**：
+```ts
+export type SwitcherMode = "file" | "heading" | "block";
+export interface HeadingHit { path: string; heading: HeadingRef; indices: number[]; score: number }
+export interface BlockHit { path: string; block: BlockRef; indices: number[]; score: number }
+export function switcherMode(query: string): SwitcherMode;        // 首字符 # → heading, ^ → block, 否则 file
+export function stripSigil(query: string): string;                 // 去前缀 sigil + trim
+export function searchHeadings(metas: NoteMetadata[], query: string, activeFile: string|null, cap?): HeadingHit[];
+export function searchBlocks(metas: NoteMetadata[], query: string, activeFile: string|null, cap?): BlockHit[];
+```
+（`headingSpan` 在 As-built 移除——见下「评审修复」。）
+语义:空 query = browse（活动文件的标题/块**优先排前**，再其余，cap 100）;非空 = `fuzzyMatch` 打分排序（heading 匹
+heading.text、block 匹 block.id）。纯函数、`fuzzyMatch` 纯、`metadata.getAll()` 读已缓存 `byPath`——无副作用。
+
+**features/palette/QuickSwitcher.tsx**：`switcherMode(query)` 选模式;Row 联合加 `heading`/`block` 两 kind;heading/block
+模式调 `searchHeadings/searchBlocks(metadata.getAll(), stripSigil(query), workspace.getActiveFile())` 产行（create 行仅
+file 模式）;渲染 heading 行（`hash` 图标 + fuzzy 高亮标题文本 + 文件 basename）/ block 行（`^id` + basename）;
+**activate**：heading → `openFile(path)` + `requestReveal(path, h.from, h.from)`（reveal 只读 `from`，见 As-built）;
+block → `openFile(path)` + `requestReveal(path, block.from, block.to)`（openFile 自带 modal:null 关闭弹窗，requestReveal
+随后，EditorPane R14 消费）。
+
+**src/main.tsx**：`window.__geodeSwitcher` 探针（loadExternal 前，闭包 metadata+workspace）:
+```ts
+__geodeSwitcher = {
+  mode: (q) => switcherMode(q),
+  headings: (q) => searchHeadings(metadata.getAll(), stripSigil(q), workspace.getActiveFile()).map(h => ({ path: h.path, text: h.heading.text, from: h.heading.from })),
+  blocks: (q) => searchBlocks(metadata.getAll(), stripSigil(q), workspace.getActiveFile()).map(b => ({ path: b.path, id: b.block.id })),
+};
+```
+
+**core/i18n/dict.panels.ts**：加 `switcher.placeholderHeading`/`switcher.placeholderBlock`/`switcher.emptyHeading`/
+`switcher.emptyBlock`（en+zh）。**palette.css**：heading/block 行复用 `.palette-item`，加通用 `.palette-item-icon`（图标）+
+`.palette-block-id`（`^id` 视觉，色走变量）。版本 0.37→0.38。
+
+### 文件所有权（并行 implementer）
+- **core/switcherSearch.ts**：已由 chief 亲自落（冻结签名）。
+- **A（UI+i18n+css）**：`src/features/palette/QuickSwitcher.tsx` + `src/features/palette/palette.css` + `src/core/i18n/dict.panels.ts`。
+- **B（探针+版本）**：`src/main.tsx`（`__geodeSwitcher`）+ 三处版本号。
+- **C（验证，chief 亲自）**：`.calibration/r38-e2e.mjs` + `.calibration/r38-probe.mjs`。
+
+### 已知偏差（写给后续轮）
+- **`^` 块模式按 id 匹配、无文本预览**（`BlockRef` 仅存 id，不含块文本;全库文件内容未加载、逐键读太贵）——显示 `^id — file`;Obsidian 显示块文本。仅活动/已开文件理论上可取文本，为一致性统一不取。
+- **全库 heading/block 索引每键 `getAll()` 迭代**（headings 可达文件数 ×N）——cap 100 限渲染;打分 O(总 headings),大库（10k+）可能数十 ms,记 `__geodePerf`。switcher 为瞬态模态、可接受。
+- **模态打开期 metadata 后台变更不刷新**（query 不变则行不重算）——瞬态模态、可接受。
+- **`#`/`^` 仅作前缀模式切换**（query 首字符）——文件名以 `#`/`^` 开头者无法直接搜（Obsidian 同样以 sigil 为模式）。
+- **非空搜索不 boost 活动文件**（纯 score 排序，仅空 query browse 模式活动文件优先）——合本轮冻结契约;Quick Switcher++
+  对键入查询给活动文件小加权,未来轮可决定是否镜像。
+- **同分跨文件命中顺序非确定**（`getAll()` 按 `byPath` 插入序、8-worker 并发池按 I/O 完成序填充）——纯 `getAll()` 既有
+  属性（graph/backlinks/文件名搜索共享）,非 R38 引入;文件内顺序由稳定排序保留。
+
+### As-built（评审修复 + 教训）
+
+**2 个确认缺陷（已修）**：① **block 行 React key 同段两 `^id` 撞键**——`core/metadata.ts` 块解析把「连续非空行整段」算一个
+paragraph span,同段内两个 `^id` 标记拿到**相同 `from`/`to`（仅 id 不同）**,原 key `b:${path}:${block.from}` 重复 → React
+「same key」警告 + 可能 DOM/选中态错乱（E2E 原夹具块都在独立段落故漏网）。修 = key 改用 `block.id`（文件内唯一,metadata
+对重复 id 保留最后一个）→ `b:${path}:${block.id}`;补 E2E:同段 `^aaa\n^bbb` browse `^` 两行都渲染且**无重复 key 警告**
+（page.on("console") 捕获）。heading 行无此问题（`HEADING_RE` matchAll 各 match index 唯一 → `from` 唯一）。② **`headingSpan.to`
+不准且无消费者读取**——`to = from + level + 1 + text.length` 假设 `#` 后恰好 1 空格 + 用 trim 后 text,对 `#   多空格` / 尾随
+空格偏短;但 **全仓 reveal 链只读 `reveal.from`**（`EditorPane` 滚动/锚点 + `cmExtensions` revealFlash 只携 `{from}`,grep
+`reveal.to` 零命中）→ `to` 是误导性死值。修 = **移除 `headingSpan` helper,heading reveal 改 `requestReveal(path, h.from,
+h.from)`**（诚实锚 `from`,行为不变;block 仍用真实 `block.from/to`,因 BlockRef.to 准确无害）。
+
+**根因教训**：① **「段落近似」的块 span 让同段多块共享坐标——凡用 `block.from`/`to` 当唯一键必出错,用 `block.id`**（id 才是
+块的身份）。② **导出一个「看起来精确」但无人消费的 span 是负债**——`requestReveal` 形参收 `(from,to)` 但 reveal 只用 `from`,
+헤딩 span 的 `to` 既不准又没人读 → 与其 fabricate 不如锚 `from`、把不确定性显式化。**延续 R33 抽纯函数到 core 让 #/^ 搜索
+可被探针 + E2E 单测**（9 finding 中 7 为 nit/by-design,2 确认缺陷均 minor 且 E2E 补断言锁住）。
+
 ## Round 37 additions — 前进/后退导航历史（back/forward navigation history）【As-built v0.37】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑥ = 已核实缺口（`workspace.ts` 仅 `lastActiveFile`，

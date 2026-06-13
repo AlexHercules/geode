@@ -172,6 +172,19 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R38 套件回归（2026-06-14，macOS release 二进制 v0.38.0 实测 `r38-probe-vault`）
+
+R38 = 快速切换器子模式（已核实缺口：QuickSwitcher 仅文件名+别名+create，无 heading/block 模式）。**compat API 表面零代码
+改动**——新增 `core/switcherSearch.ts`（纯函数 `#`全库标题/`^`全库块搜索，复用 `metadata.getAll()` + `core/fuzzy`）+
+QuickSwitcher.tsx（模式解析 + render + `openFile`/`requestReveal` 跳转）+ `main.tsx` `__geodeSwitcher` 探针 + i18n/css。
+校准 Quick Switcher++ standalone（`#`/`^`）。**按 R33 模式抽纯函数到 core** → 组件/E2E/探针单一真值。macOS probe 实测:
+新增 **r38-probe 13/13**——桌面在**真 metadata 索引**驱动纯 `#`/`^` 搜索（mode 解析 + 标题/块命中 + browse）+ `openFile`/
+`requestReveal` 导航真值;活模态（真实键入 `#` 的 React 组件）= live-view 路径,交浏览器 r38-e2e。**r37/r36/…/r23 套件
+不回退**（compat 调用面零改动；浏览器 r38-e2e **19/19** + r37 36、r36 47、r35 25、r34 15、r33 37、r32 24 全绿；`r26-bytes` 0
+违例,markdown.ts 未动）。**3 维对抗评审 9 finding → 2 确认修复**（block 行 React key 同段两 `^id` 撞键 → 改用 `block.id`
+[E2E 补「同段两块无重复 key 警告」断言];`headingSpan.to` 不准且全仓无消费者读 `reveal.to` → 移除 helper、heading reveal
+锚 `from`）**+ 7 nit/by-design**（同分非确定序=getAll 既有属性 / 非空搜索不 boost 活动文件=合契约 / CSS 类名 As-built 对齐）。
+
 ### R37 套件回归（2026-06-14，macOS release 二进制 v0.37.0 实测 `r37-probe-vault`）
 
 R37 = 前进/后退导航历史（已核实缺口：`workspace.ts` 仅 `lastActiveFile`、无 per-tab 导航栈）。**compat API 表面零代码

@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.37.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R37 前进/后退导航历史 ✓ 已交付**（R32+ 候选池第二梯队 #⑥：`workspace.ts` 原仅 `lastActiveFile`、无 per-tab 导航栈）。校准 Obsidian 官方默认键 **`Mod+Alt+←/→`**（`Ctrl+Alt+←/→` win；与 Geode 自创的 `focus-next/prev-pane` 冲突 → **navigate 拿 canonical 键、focus-pane 改无默认键**,命令仍在面板可自绑）。实现:`core/workspace.ts` per-tab `tabHistory: Map<tabId,{back,forward}>`(session-only、NAV_HISTORY_MAX=50);`openFile` 起始 `recordNavigation`(精确镜像三分支:replace 才记旧 location+清 forward,reuse/new-tab 不记);`navigateBack/Forward`(活动 tab 上回放)+`canTabNavigateBack/Forward(tabId)`+`setTabLocation`(改位不记录);**5 处清理**(closeTab delete、delete purge+prune、rename remap、missing prune、**vault 切换 clear**)。App.tsx 2 命令 + TabBar 加 back/forward 箭头按钮(`disabled` 走 `canTabNavigate*`,**反应式靠 useStore(state)——每次历史变更都伴随 state 变更,无需独立 Store**);icons.tsx 加 arrow-left/right。**零新 vault 写路径**(导航只改 tab.filePath)+ **零新依赖** + **零新探针**(store 直驱 `app.workspace`,热键复用 `__geodeHotkey.match`)。**与 R36 recentlyClosed 两套独立栈**(导航历史=访问序、reopen=关闭序)。`r37-e2e` **36/36** + 桌面 `r37-probe` **18/18** + r32-r36 不回退 + r26-bytes 0。**3 维对抗评审 12 finding → 0 确认缺陷**(核心「recordNavigation 镜像 openFile」逐分支证伪 + 1 行为偏差记入已知偏差[split 不复制历史] + 2 证伪硬化成断言[mode 恢复 + forward 栈 purge])。
-- **下一项 = R37→R38 = R32+ 候选池第二梯队 #⑦ 快速切换器子模式 / 文内标题跳转**（QuickSwitcher 现仅文件名+别名+create，无 heading `#`/block `^`/symbol 模式）。Obsidian：键入 `#`→标题模式、`^`→块模式、Ctrl/Cmd+O 文件。切入：QuickSwitcher 加**前缀模式解析**（query 以 `#`/`^` 开头切模式）+ 复用 outline/`metadata` 的 headings/blocks 索引。其后队列：⑧ 固定/堆叠标签+链接面板 → ⑨ 键盘切换复选框（Cmd/Ctrl-L 复用 `preview.ts` toggleTaskOnLine）→（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.38.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R38 快速切换器子模式 ✓ 已交付**（R32+ 候选池第二梯队 #⑦：QuickSwitcher 原仅文件名+别名+create）。校准 Quick Switcher++ standalone 模式:`#`→**全库标题搜索**、`^`→**全库块搜索**（首字符 sigil 切模式）。实现:**抽纯函数到 `core/switcherSearch.ts`**（`switcherMode`/`stripSigil`/`searchHeadings`/`searchBlocks`，复用 `metadata.getAll()` 索引 + `core/fuzzy`，空 query browse=活动文件优先、非空=fuzzy 打分）→ 组件/E2E/探针单一真值（R33 模式）;QuickSwitcher.tsx Row 联合加 heading/block、mode-aware placeholder/empty、render(hash 图标+fuzzy 高亮)、activate(`openFile`+`requestReveal` 跳转,BookmarksPanel 先例);`main.tsx` `__geodeSwitcher` 探针。**零新 vault 写路径**(跳转纯读+导航)+ **零新依赖**。`r38-e2e` **19/19** + 桌面 `r38-probe` **13/13** + r32-r37 不回退 + r26-bytes 0。**3 维对抗评审 9 finding → 2 确认修复**（block 行 React key 同段两 `^id` 撞键→改用 `block.id`;`headingSpan.to` 不准且无消费者→移除、heading reveal 锚 `from`）+ 7 nit/by-design。
+- **下一项 = R38→R39 = R32+ 候选池第二梯队 #⑧ 固定标签页 + 堆叠标签 + 链接面板**（workspace 状态无 pinned/stacked/linkedGroup 字段）。Obsidian:Pin（固定后点链接另开新 tab 不替换）、Stack notes（标签堆叠）、Open linked view（local graph/backlinks/outline 跟随某 tab）。切入:`workspace.ts` 状态扩字段 + TabBar 右键菜单 + linked view。**多子特性、可切片**——R39 可只取一个 coherent slice（如 **pinned tabs**:`TabState.pinned` + openFile 在 pinned 活动 tab 时强制 newTab + TabBar pin 图标/右键），其余（stack/linked）入后续轮。其后队列:⑨ 键盘切换复选框（Cmd/Ctrl-L 复用 `preview.ts` `toggleTaskOnLine`）→（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,17 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R38（快速切换器子模式）核心教训三条**：① **「段落近似」的块 span 让同段多块共享 `from`/`to`——凡拿
+  `block.from` 当 React key / 唯一标识必撞,用 `block.id`**（id 才是块身份;metadata 对重复 id 保留最后一个）。同段
+  `^aaa\\n^bbb` 两块 BlockRef 坐标完全相同,原 key `b:${path}:${from}` 重复 → React「same key」警告。E2E 原夹具块都在
+  独立段落故漏网 → 补「同段两块 browse 无重复 key 警告」断言（`page.on("console")` 捕获）。**凡用解析出的坐标当唯一键,
+  先想清解析粒度会不会让多个实体共享坐标**。② **导出一个「看起来精确」但无人消费的值是负债**——`headingSpan.to`
+  假设 `#` 后 1 空格、用 trim 后 text,对多空格/尾随空格偏短;但全仓 reveal 链只读 `reveal.from`（grep `reveal.to` 零命中）
+  → `to` 既不准又没人读。与其 fabricate 一个精确感的 span,不如锚 `from`、移除 helper、把不确定性显式化。**加导出前先
+  grep 谁会读它;没人读的「精确值」是误导**。③ **React 组件里的纯逻辑抽到 core 才能被探针 + E2E 单测**（R33 模式延续）:
+  switcher 的 #/^ 搜索抽成 `core/switcherSearch.ts` 纯函数 → `__geodeSwitcher` 探针在真二进制驱动 + 浏览器 E2E 驱动活模态,
+  两端共用单一真值。**凡「React 组件内的决策逻辑」想要双端可测,先把纯部分拎到 core**。**9 finding → 2 确认缺陷均 minor、
+  E2E 补断言锁住**:契约先行 + 纯函数抽取让缺陷集中在「UI 渲染键」「导出值精度」这种边角,核心搜索/导航零缺陷。
 - **R37（前进/后退导航历史）核心教训三条**：① **当新逻辑「镜像」既有函数的分支决策时,逐分支对照证伪
   是评审的硬要求**——`recordNavigation` 必须只在 openFile 的 replace 分支记一次旧 location(reuse=切 tab、
   new-tab=新 tab 都不记)。评审核心担忧正是「镜像是否精确」,逐分支核对:reuse 判据
