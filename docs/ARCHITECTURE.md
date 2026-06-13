@@ -27,7 +27,7 @@ Path aliases: `@core/*`, `@features/*`, `@app/*`, `@compat/*` (see tsconfig).
 - `core/vault.ts` — `Vault` (use this, never the adapter): `tree` store, `read/readCached/modify/create/createFolder/rename/remove`, `getFiles()/getMarkdownFiles()/fileExists/uniquePath`. Adapters: Tauri (desktop fs) & Memory (browser demo/E2E).
 - `core/metadata.ts` — `MetadataIndex`: `revision` store (subscribe via `useStore` to re-render on index change), `getMetadata(path)`, `resolveLink(target, fromPath)`, `getBacklinks(path)`, `getOutgoingLinks(path)`, `getTagMap()`, `getGraph()`, plus `parseNote()` pure parser.
 - `core/workspace.ts` — `Workspace`: `state` store (`WorkspaceState`), `openFile(path, {newTab})`, `openGraph()`, `closeTab/setActiveTab/setTabMode/toggleActiveTabMode`, `setLeftPanel/toggle*Sidebar`, `openModal/closeModal`, `setTheme/toggleTheme/setFontSize`, `getActiveTab()/getActiveFile()`.
-- `core/commands.ts` — `CommandRegistry`: `register({id, name, hotkey?, callback})` → disposer, `execute(id)`, `list()`, `revision` store. Hotkeys handled globally by App shell.
+- `core/commands.ts` — `CommandRegistry`: `register({id, name, hotkey?, callback})` → disposer, `execute(id)`, `list()`, `revision` store. Hotkeys handled globally by App shell. Hotkey grammar (R32): `Mod` = Cmd on macOS / Ctrl elsewhere (distinct from physical `Ctrl`/`Meta`); exports `isMacPlatform`, `parseHotkey`/`matchHotkey`/`normalizeHotkey`/`hotkeyFromEvent`, `formatHotkey(hotkey, isMac?)` (display: ⌘P on mac, Ctrl+P elsewhere), `matchParsedHotkey(p, e, isMac)` + `KeyEventLike`.
 - `core/plugins.ts` — `GeodePlugin { id, name, onload(app: AppHandle), onunload? }`, `PluginManager` (`list()`, `enable/disable`, `statusBarItems` store). `AppHandle.ui.setStatusBarItem(id, text)`.
 
 ## Using app context in feature components
@@ -70,6 +70,101 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 | `plugins/index.ts` | `BUILTIN_PLUGINS: GeodePlugin[]` | — |
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
+
+## Round 32 additions — macOS Cmd（Mod）修饰键支持【As-built v0.32】
+
+> **状态：As-built（2026-06-13）。** 实现与下方契约一致。验证：浏览器 `r32-e2e` 24/24（20
+> grammar 双分支 probe + 4 live：Cmd+P 开面板 / Ctrl+P 不开 / 面板 ⌘ 字形 / Cmd+, 开设置）+
+> 桌面 release `r32-probe` 16/16 真实 WKWebView runtime（isMac=true + 双平台分支）+ r23–r31
+> 全套不回退 + r30/r31 desktop probe 10/10 + r26-bytes 0 违例 + typecheck/cargo/build 绿。
+> **对抗评审 8 维功能正确性全证伪为非问题**（四态匹配 / 编辑器 Cmd 剪贴板不撞 / 可编辑守卫 /
+> 捕获 / 冲突检测 / 字形 / 分层 / KeyEventLike 结构类型），仅 2 项收口（版本三处对齐 +
+> daily-note JSDoc 陈旧注释）。
+>
+> **As-built 教训（环境）：改前端但不改 Rust 时，`cargo build --release` 可能 0.40s「完成」
+> 却不重嵌前端资产**——Tauri `generate_context!` 在编译期读 dist，若 `.rs` 源未变 cargo 不重编、
+> 嵌入资产保持陈旧（`strings 二进制 | grep __geodeHotkey` 因 brotli 压缩恒为 0，不是有效校验）。
+> 修复 = `touch src-tauri/src/main.rs` 强制重编含 `generate_context!` 的 crate；**唯一可靠校验 =
+> 跑 probe**（probe 命中即资产已更新）。
+>
+> R32+ 候选池 #① = **头号缺口**（实测 Ctrl+P 开命令面板、
+> **Cmd+P 无反应**）。官方校准（obsidian.md help "Hotkeys"，2026-06-13 复核）：Obsidian
+> 热键语法用 **`Mod`** 作平台主修饰符——**macOS 解析为 ⌘（Cmd/metaKey），Windows/Linux 解析
+> 为 Ctrl**；`Ctrl` 永远指物理 Control（即使 mac），`Meta` 永远指 ⌘/Win 键。本轮把 Geode
+> 命令层从「写死 Mod=Ctrl、三处拒 `metaKey`」改为镜像该语义。**纯键路由，零 vault 写**（data-safety
+> §B/§C 不适用；唯一持久化是既有 `geode.hotkeyOverrides` localStorage，形状不变）。
+
+### 设计（契约）
+
+**修饰符语法（canonical hotkey 字符串）** — `Mod` 升为一等修饰符，**不再** collapse 成 `Ctrl`：
+- `Mod` = 平台主键（match 时：mac→`metaKey`，非 mac→`ctrlKey`）。
+- `Ctrl` = 物理 Control（任何平台都查 `ctrlKey`）。
+- `Meta` = ⌘/Win 键（任何平台都查 `metaKey`）。`Alt`/`Shift` 不变。
+- canonical 顺序：`Mod` → `Ctrl` → `Meta` → `Alt` → `Shift` → key。
+  `normalizeHotkey("mod+p")→"Mod+P"`、`"ctrl+p"→"Ctrl+P"`（两者**不同** canonical，mac 下解析到
+  不同物理键 → 不互判冲突，正确）。**旧存 `Ctrl+*` override 保持物理 Ctrl 语义，不迁移**。
+
+**平台探测** — `core/commands.ts` 内 `detectMacPlatform()`（`/Mac|iPhone|iPad|iPod/` test
+`navigator.platform||userAgent`，try/catch→false），模块加载时求值一次存 `isMacPlatform`。
+（与 `features/hover/hoverController.ts:isApplePlatform`、`compat/util.ts:isMacOS` 同源，但
+core 不能 import features/compat → 各自独立一份，可接受的小重复。）
+
+**纯函数签名（平台显式入参，便于双分支确定性测试）** — core/commands.ts 导出：
+```ts
+export interface ParsedHotkey {
+  wantMod: boolean; wantCtrl: boolean; wantMeta: boolean;
+  wantShift: boolean; wantAlt: boolean; key: string; isFunctionKey: boolean;
+}
+export function parseHotkey(hotkey: string): ParsedHotkey;          // 平台无关
+export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean;   // 用 isMacPlatform
+export function hotkeyFromEvent(e: KeyboardEvent): string | null;        // 用 isMacPlatform
+export function normalizeHotkey(hotkey: string): string;                 // 平台无关
+export function formatHotkey(hotkey: string, isMac?: boolean): string;   // 新增：显示用
+// 内部（probe 暴露）：matchParsedHotkey(p, e, isMac)，isMac 默认 isMacPlatform
+```
+
+- **`matchParsedHotkey(p, e, isMac)`**：四态全等比对——
+  `needMeta = (isMac && p.wantMod) || p.wantMeta`；`needCtrl = (!isMac && p.wantMod) || p.wantCtrl`；
+  要求 `e.metaKey===needMeta && e.ctrlKey===needCtrl && e.shiftKey===p.wantShift && e.altKey===p.wantAlt`，
+  再比 key（含 `Space`/`PUNCT_CODES` 物理码回退）。**故 mac 下 `Ctrl+P` 不触发 `Mod+P` 绑定**（needCtrl=false
+  但 e.ctrlKey=true）→ 镜像 Obsidian「Ctrl+P 在 mac 无效」。
+- **`handleKeydown`**：删 `if(e.metaKey) return false`；可编辑元素守卫扩为
+  `hasModifier = wantMod||wantCtrl||wantMeta||wantAlt`（裸键/纯 Shift 仍不在输入框触发）。
+- **`hotkeyFromEvent`**（设置捕获）：主修饰符录成 `Mod`——mac 把 `metaKey`→`Mod`、非 mac 把
+  `ctrlKey`→`Mod`；mac 上单独的 `ctrlKey`（无 meta）→ `Ctrl`。可绑定门控扩为
+  `e.ctrlKey||e.metaKey||e.altKey||isFunctionKey`（之前漏 meta）。
+- **`formatHotkey`**：display only，不进存储。非 mac：`Mod`→`Ctrl`、`+` 连接（`Mod+Shift+E`→`Ctrl+Shift+E`）。
+  mac：Apple 顺序 `⌃⌥⇧⌘` 后接 key，无分隔符（`Mod+P`→`⌘P`、`Mod+Shift+E`→`⇧⌘E`、`Mod+Alt+ArrowRight`→`⌥⌘→`）；
+  常见命名键映射符号（箭头→↑↓←→、Enter→↵、Backspace→⌫、Space→␣、Escape→⎋、Tab→⇥）。
+
+**默认键改 `Mod+…` 语义**（mac 下即 ⌘）：`app/App.tsx` 13 处 + `plugins/daily-note.ts` 1 处
+`"Ctrl+…"`→`"Mod+…"`（命令面板/快速切换/新建/切换模式/源码/图谱/设置/关 tab/分屏×2/聚焦窗格×2/加属性/日记）。
+**无一为 `Mod+C/V/X/A/Z`** → 编辑器 Cmd 剪贴板/全选/撤销不被命令层吞（matchParsed 要求修饰符全等，
+Cmd+C 不匹配任何 `Mod+*`；不匹配则 `handleKeydown` 返回 false，事件流向 CM/浏览器）。
+
+**显示接线**：`features/palette/CommandPalette.tsx:116` 与 `features/settings/SettingsModal.tsx`
+hotkey chip 把 raw `effective` 改走 `formatHotkey(effective)`；设置页 capture 提示文案按平台呈现
+`⌘`/`Ctrl`。冲突检测 `findHotkeyConflicts` 仍比 `normalizeHotkey`（canonical，平台无关），不变。
+
+**probe 钩子**（桌面双分支确定性自检，镜像 R31 `__geodeSlash`）：`main.tsx` 装
+`window.__geodeHotkey = { parse, match, format, normalize, isMac }`，`match(hotkey, eventInit, isMac)`
+与 `format(hotkey, isMac)` 显式收平台 → 同一二进制内同时验 mac 与非 mac 两分支（host 是 mac 也能测 Ctrl 分支）。
+
+### 文件所有权（本轮串行：core 语法先冻结，消费方随后）
+
+| 区 | 文件 | 改动 |
+|---|---|---|
+| **core 语法**（先） | `core/commands.ts` | isMacPlatform + Mod 一等化 + 4 函数对齐 + formatHotkey 新增 |
+| 默认键 | `app/App.tsx`、`plugins/daily-note.ts` | `Ctrl+…`→`Mod+…` |
+| 显示 | `features/palette/CommandPalette.tsx`、`features/settings/SettingsModal.tsx` | `formatHotkey` 接线 + 平台文案 |
+| probe | `src/main.tsx` | `window.__geodeHotkey` always-on 钩子 |
+| i18n | `core/i18n/dict.*.ts` | 设置页 capture 文案（按需）|
+
+### 显式取舍 / 边界
+- mac 下 `Ctrl+P` 不再开面板（Obsidian 同此，物理 Ctrl ≠ Mod）——这是**修复**不是回退。
+- 非 mac 下 `Mod` 与 `Ctrl` 都映射 `ctrlKey`，运行时同键但 canonical 不同 → 冲突检测不互判（与 Obsidian 存储模型一致，显式小偏差）。
+- compat 插件热键路径（Obsidian `Keymap`/`Scope` for 外部插件）**本轮不动**——那是另一套（compat 自包含、features 不 import），属独立缺口，按需后续。
+- `Mod+W`=Cmd+W、`Mod+N`=Cmd+N 等：`handleKeydown` 命中即 `preventDefault`，压住 webview/OS 默认（与 Obsidian 同）。
 
 ## Round 31 additions — 斜杠命令 `/` 菜单（slash command menu）【契约冻结 v0.30→v0.31】
 

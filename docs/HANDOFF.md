@@ -4,10 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.31.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R31 斜杠命令 `/` 菜单 ✓ 已交付**（**分层关键**：R6 EditorSuggest 在 compat、features 绝不 import compat → 改镜像原生 `[[` wikilink 的 CM6 `@codemirror/autocomplete` 路径；`features/editor/slashCommands.ts` `slashCommandSource` 追加进 `cmExtensions` autocompletion override；`core/fuzzy.ts` 从 palette 迁入复用；`__geodeSlash` 探针装 loadExternal 前）。评审 **1 critical + 1 major 全修**（① **C1 菜单不随输入过滤**：`filter:false`+`validFor` 冻结列表、初版 E2E 一次性快打被去抖掩盖假绿 → 去 `validFor` 让 CM 每键重查源；② **M1 slash 在未闭合 `[[` 内 co-fire** → `slashTrigger` 加 `[[` 未闭合守卫）；`r31-e2e` 21/21（含 C1 增量过滤锁 + M1 抑制锁）+ 桌面 probe 10/10 真实 runtime + `r26-bytes` 0 违例（markdown.ts 未动）
-- **调研轮（2026-06-13，零代码）已交付**：R25+ 候选池清空后，全面盘点 Obsidian 原生差距 → **新建 ROADMAP「R32+ 候选池」共 21 项**（按用户重点「键盘/编辑交互」优先分四梯队）+ OBSIDIAN-COMPAT「原生功能差距全景调研」运行时实测纪录。4 explorer 盘点 + dev :1420 实测 6 项交互。
-- **下一项 = R32 = ① macOS Cmd（Mod）修饰键支持**（R32+ 候选池首项，**实测 Cmd+P 无反应 = 头号缺口**：`commands.ts` 三处拒 metaKey、Mod 写死=Ctrl）。其后按候选池序：② 格式化快捷键（Cmd-B/I/K）→ ③ 编辑器内查找替换 → ④ 括号自动配对 → ⑤ 标签页快捷键 → …（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.32.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R32 macOS Cmd（Mod）修饰键支持 ✓ 已交付**（R32+ 候选池 #① **头号缺口**：迁移前 Cmd+P 无反应）。镜像 Obsidian `Mod` 语义——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、Win/Linux→Ctrl/ctrlKey；`Ctrl` 永远物理 Control、`Meta` 永远 ⌘/Win）+ `matchParsedHotkey(p,e,isMac)` **四态全等**（故 mac 下 `Ctrl+P` 不触发 `Mod+P`=镜像 Obsidian）+ 新 `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 13+1 处 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。**纯键路由零 vault 写**。评审 8 维功能正确性全证伪、仅收口版本+陈旧注释。`r32-e2e` 24/24（含 live Cmd+P 开面板）+ 桌面 `r32-probe` 16/16 真实 runtime + r23–r31 不回退 + `r26-bytes` 0 违例（markdown.ts 未动）。
+- **下一项 = R33 = R32+ 候选池 #② Markdown 格式化命令 + 快捷键**（**实测缺**：选区按 Cmd/Ctrl-B 不加粗；源码无 toggleBold/wrapSelection）。Obsidian 默认 Cmd/Ctrl-B 粗、-I 斜（仅 `*`/`**`）、Cmd-K 链接 + toggle heading/quote/code/callout/checklist 命令。切入：新 `features/editor/formatCommands.ts` 选区包裹/切换纯函数（**幂等 toggle**：已包裹则脱）+ 注册 app 命令（**复用 R32 `Mod+…` 语义**）+ 默认键。其后队列：③ 编辑器内查找替换（Cmd-F，`@codemirror/search` 已装未接）→ ④ 括号自动配对（closeBrackets）→ ⑤ 标签页快捷键 →（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +57,21 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 ```
 
 ## 给接续者的三句话背景
+
+- **R32（macOS Cmd/Mod 修饰键）核心教训三条**：① **`Mod` 必须升为一等修饰符 + 「四态全等」
+  比对**——旧码把 `Mod` collapse 成 `Ctrl`、丢了平台语义。正确 = canonical 保留 `Mod`/`Ctrl`/`Meta`
+  三者各异，match 时按平台解析（mac `Mod`→metaKey、其余 `Mod`→ctrlKey），且**逐一全等比
+  `metaKey/ctrlKey/shiftKey/altKey` 四态**。四态全等是两件事的关键：mac 下 `Ctrl+P` 自然不触发
+  `Mod+P`（needCtrl=false 但 e.ctrlKey=true → 不匹配 = 镜像 Obsidian），**且** 编辑器 Cmd+C/V/X/A/Z
+  绝不被命令层误吞（不匹配任何 `Mod+*` → `handleKeydown` 返 false → 事件流向 CM/浏览器）。删
+  `if(e.metaKey) return false` 后务必核：无任何默认键是 `Mod+C/V/X/A/Z`。② **双平台分支用「纯函数
+  显式收 isMac + always-on 探针」做确定性双测**——host 恒是 mac，真实按键测不到非 mac 分支 → 把平台
+  作显式入参（`matchParsedHotkey(p,e,isMac)`/`formatHotkey(h,isMac)`）+ `window.__geodeHotkey` 探针
+  暴露 → **单 mac 二进制同帧验 mac 与非 mac 两分支**（镜像 R31 `__geodeSlash` 纯 gate / 单一真值
+  思路）。③ **环境坑：改前端不改 Rust → `cargo build --release` 可能 0.4s「假完成」却不重嵌资产**
+  ——Tauri `generate_context!` 编译期读 dist，`.rs` 源未变 cargo 不重编、嵌入资产陈旧。修复 =
+  `touch src-tauri/src/main.rs` 强制重编；**唯一可靠校验 = 跑 probe**（`strings 二进制|grep` 因
+  brotli 压缩恒 0，绝非有效校验，新旧二进制都是 0）。
 
 - **原生差距全景调研轮（2026-06-13，R31 末，零代码）核心三条**：① **实际测试胜过静态扫描**
   ——explorer 静态 grep `insertNewlineContinueMarkup` 查不到 → 误报「列表续行缺失」，但 dev :1420

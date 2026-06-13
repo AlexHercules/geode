@@ -172,6 +172,21 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R32 套件回归（2026-06-13，macOS release 二进制 v0.32.0 实测 `r32-probe-vault`）
+
+R32 = macOS Cmd（Mod）修饰键支持（**头号缺口**：迁移前 Cmd+P 无反应、仅 Ctrl 通）。**compat API
+表面零代码改动**——本轮全在原生命令层（`core/commands.ts` 热键语法 + `app`/`features` 显示/默认键）。
+镜像 Obsidian `Mod` 语义：mac→⌘（metaKey）、Win/Linux→Ctrl（ctrlKey）；`Ctrl` 永远物理 Control、
+`Meta` 永远 ⌘/Win；`matchParsedHotkey` 四态全等比对 → mac 下 `Ctrl+P` 不触发 `Mod+P` 绑定（镜像
+Obsidian）。新增 always-on 探针 `window.__geodeHotkey`（**装在 `loadExternal` 之前**，与
+`__geodeSlash`/`__geodeRename`/`__geodeProperties`/`__geodeFold` 同列）；`match`/`format` 显式收
+`isMac` → 单二进制双平台分支确定性自检。macOS probe 实测：新增 **r32-probe 16/16**——真实 WKWebView
+runtime：`isMac=true` 实测 + normalize（Mod≠Ctrl）+ 双平台 match 分支 + format 字形（⇧⌘E / Ctrl+Shift+E
+/ ⌥⌘→）。**r31/r30/r29/…/r23 套件不回退**（compat 调用面零改动；浏览器 r32-e2e 24/24 含 live Cmd+P
+开面板 / Ctrl+P 不开 / 面板 ⌘ 字形 / Cmd+, 开设置；r23–r31 浏览器 22/12/17/12/22/23/19/25/21 全绿；
+r30/r31 desktop probe 10/10）。缺口表无变化（compat 外部插件 `Keymap`/`Scope` 热键路径是独立管线，
+本轮不动——记为有意分流而非缺口）。
+
 ### R31 套件回归（2026-06-13，macOS release 二进制 v0.31.0 实测 `r31-probe-vault`）
 
 R31 = 斜杠命令 `/` 菜单（编辑器输入 `/` 弹命令菜单、实时过滤、执行删 query）。**compat API

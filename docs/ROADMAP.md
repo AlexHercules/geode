@@ -637,6 +637,32 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R32 — v0.32（2026-06-13）macOS Cmd（Mod）修饰键支持（R32+ 候选池 #① = **头号缺口**）
+
+**实测头号缺口收口**：迁移前 Ctrl+P 开命令面板、**Cmd+P 无反应**——`core/commands.ts` 三处
+`if(e.metaKey) return false` 写死拒 Meta、`Mod` collapse 成 `Ctrl`。本轮镜像 Obsidian 热键
+语法：**`Mod` 升一等修饰符**（mac→⌘/metaKey、Win/Linux→Ctrl/ctrlKey），`Ctrl` 永远物理
+Control，`Meta` 永远 ⌘/Win。官方校准（obsidian.md help "Hotkeys"，2026-06-13 复核）。
+**纯键路由，零 vault 写**（data-safety §B/§C 不适用；唯一持久化 = 既有 `geode.hotkeyOverrides`
+localStorage，形状不变）。改动：① `core/commands.ts` `detectMacPlatform`/`isMacPlatform` +
+`normalizeHotkey`（Mod≠Ctrl 各保留、新序 Mod→Ctrl→Meta→Alt→Shift）+ `parseHotkey`（导出，
+`wantMod/wantCtrl/wantMeta`）+ `matchParsedHotkey(p,e,isMac)`（**四态全等比对**，故 mac 下
+`Ctrl+P` 不触发 `Mod+P` 绑定）+ `matchHotkey`/`hotkeyFromEvent`（删 metaKey 拒绝、主修饰符录成
+可移植 `Mod`）+ 新 `formatHotkey`（mac→Apple 字形 ⌃⌥⇧⌘、非 mac→`Ctrl+`）+ `KeyEventLike`
+结构类型；② `app/App.tsx` 13 + `plugins/daily-note.ts` 1 默认键 `Ctrl+…`→`Mod+…`（无一为
+`Mod+C/V/X/A/Z` → 编辑器剪贴板/全选/撤销不被命令层吞）；③ `CommandPalette`/`SettingsModal`
+显示走 `formatHotkey` + 设置页 capture 文案按平台呈现 `⌘`/`⌥`；④ `main.tsx` `__geodeHotkey`
+探针（`match`/`format` 显式收 `isMac` → 单二进制双平台分支确定性自检）。**对抗评审 8 维功能正确性
+全部证伪为非问题**（四态匹配 / 编辑器 Cmd 剪贴板不撞 / 可编辑守卫 / 捕获 / 冲突检测 / 字形 /
+分层 / 结构类型），仅 2 项收口：版本三处对齐 + daily-note JSDoc 陈旧注释。验证：浏览器
+`r32-e2e` **24/24**（20 grammar 双分支 probe + 4 live：**Cmd+P 开面板 / Ctrl+P 不开（镜像
+Obsidian）/ 面板 ⌘ 字形 / Cmd+, 开设置**）+ 桌面 release **probe 16/16** 真实 WKWebView runtime
+（isMac=true 实测 + 双平台分支）+ r23–r31 全套不回退（22/12/17/12/22/23/19/25/21）+ r30/r31
+desktop probe 10/10 + `r26-bytes` 0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。
+**显式取舍**：mac 下 Ctrl+P 不再开面板（Obsidian 同此=修复非回退）；非 mac `Mod` 与 `Ctrl`
+同映 ctrlKey、canonical 不同 → 冲突检测不互判（与 Obsidian 存储模型一致，显式小偏差）；compat
+插件热键路径（外部插件 `Keymap`/`Scope`）本轮不动（另一套、自包含，按需后续）。
+
 ### R31 — v0.31（2026-06-13）斜杠命令 `/` 菜单（R25+ 候选池 #⑦ = **候选池清空**）
 
 编辑器输入 `/`（行首/空白后）弹命令菜单、随输入实时过滤、Enter/点击执行并删除 `/query`。
@@ -853,7 +879,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **① macOS Cmd（Mod）修饰键支持** | **缺**（**实测** Ctrl+P 开命令面板、**Cmd+P 无反应**）——`core/commands.ts:97/255/287` 三处 `if (e.metaKey) return false`，注释「Mod === Ctrl on Windows」**写死 Mod=Ctrl、拒绝 Meta**；默认键全拼 `Ctrl+…` 仅认物理 Control。CM 编辑器 `defaultKeymap` 经 CM 把 Mod 解析为 Cmd（Cmd+A/Z 在编辑器可用）→ **与 app 命令层割裂** | **头号缺口**（macOS 优先机的迁移用户 Cmd 肌肉记忆全废）。切入：commands.ts 引入 `isMac` + Mod 归一（mac 把 Meta 当 Mod、Win/Linux 把 Ctrl 当 Mod）；`hotkeyFromEvent`/`matchHotkey`/`parseHotkey`/`normalizeHotkey` 全链对齐 + 默认键改 `Mod+…` 语义；Hotkeys 设置页按平台呈现 `⌘`/`Ctrl`。纯键路由，不碰 vault 写。 |
+| ~~**① macOS Cmd（Mod）修饰键支持**~~ | **R32 已完成（v0.32，见上）**——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、其余→Ctrl/ctrlKey）+ `matchParsedHotkey(p,e,isMac)` 四态全等 + `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。验证 r32-e2e 24/24（含 live Cmd+P 开面板）+ desktop probe 16/16 真实 runtime。 | 显式延期：compat 外部插件 `Keymap`/`Scope` 热键路径（另一套、自包含）；非 mac `Mod`/`Ctrl` 同 ctrlKey 但 canonical 不同 → 冲突检测不互判（与 Obsidian 一致）。 |
 | **② Markdown 格式化命令 + 快捷键** | **缺**（**实测** 选区 "Hello" 按 Ctrl+B 不加粗；源码无 toggleBold/wrapSelection/toggle-heading 任何命令；markdownKeymap 不含格式化键）| Obsidian 默认：Cmd/Ctrl-B 粗、Cmd/Ctrl-I 斜（仅 `*`/`**` 记法）、Cmd-K 链接，另有 toggle heading/quote/code/callout/checklist 命令（可绑键）。切入：新 `features/editor/formatCommands.ts` 选区包裹/切换纯函数（幂等 toggle：已包裹则脱）+ 注册 app 命令（依赖 ① 的 Mod 归一）+ 默认键。 |
 | **③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）** | **缺**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）| 切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。低成本。 |
 | **④ 括号/引号自动配对 + 选区包裹** | **缺**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）| 切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」。注意 `[[`/`![[` 与既有 wikilink 补全源协同。 |
