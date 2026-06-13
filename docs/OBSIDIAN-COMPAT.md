@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R47 套件回归（2026-06-14，macOS release 二进制 v0.47.0 实测 `r47-probe-vault`）
+
+R47 = 笔记合并（Note composer merge，R32+ 候选池第三梯队 #⑬ 另一半 → **#⑬ 完成**）。对照 Obsidian 核心插件 **Note Composer** 的
+「Merge current file with another file」：当前笔记追加进目标 + 指向当前笔记的链接全改指目标 + 删当前笔记（入 `.trash`）。**数据安全关键轮**。
+`linkRewrite.ts` 加 `{move}` 选项复用 R16 verified rewrite（不移动文件）+ `core/noteMerge.ts mergeNotes`（append-before-trash 无损 +
+live-buffer 读防 flush 失败丢编辑 + `vault.trash` 可恢复删）+ QuickSwitcher merge 模式 + `editor:merge-file` 命令。macOS probe 实测：
+新增 **r47-probe 7/7**——含 **on-disk 数据安全终态**：`__geodeMerge.merge()` → Node 直读磁盘确认 target 含两者内容、source 物理移到
+`.trash/`（内容保留、可恢复）、referrer `[[source]]` → `[[target]]`（无悬空链）。**r46/r45/…/r24/r28/r42/r44 套件不回退**（浏览器
+r47-e2e **11/11** + r28 23、r24 12、r44 25、r42 17 抽样实测全绿——**frozen R16 引擎 `{move}` refactor 不破 rename 路径**；`r26-bytes` 0）。
+**3 维对抗评审（数据安全 + frozen 引擎重点）12 finding → 4 确认（全 major）逐条修 + 8 证伪**（① merge 丢弃 `result.skipped`→悬空链无告警→
+consume+notice ② promise 链无 `.catch`→静默失败→catch+notice ③ `flushAll` 失败读旧磁盘→丢未保存编辑→live-buffer 读 ④ merge-file 命令
+switcher 已开→`mergeTargetMode` 泄漏→守卫；**证伪**：脏 target buffer 覆盖、modify/trash 不入队[minor]、不剥源 frontmatter[Obsidian 同款]）。
+显式延期：merge 拆分（split，Obsidian 无独立命令）/ 确认对话框 / extract 自动导航 / embed 命令。
+
 ### R46 套件回归（2026-06-14，macOS release 二进制 v0.46.0 实测 `r46-probe-vault`）
 
 R46 = `obsidian://` URI 深链（零依赖 in-app 切片，R32+ 候选池第三梯队 #⑮）。对照 Obsidian URI scheme `obsidian://open|new|search`。

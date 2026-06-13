@@ -71,6 +71,61 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 47 additions — 笔记合并（Note composer merge）【As-built v0.47】
+
+> **状态：As-built（v0.47 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑬ 的**另一半**（R44 做了 extract）——**#⑬ 至此完成**。Obsidian「Merge
+> current file with another file」：当前笔记内容**追加进目标** + **指向当前笔记的链接全改指目标** + **删当前笔记（入 `.trash`）**。**数据安全关键轮**
+> （多文件写 + link 改写 + 删文件）。**关键复用 + refactor**：R16 引擎是 rename-with-link-update（`vault.rename(A,B)` 在 B 存在时拒绝）→ 给
+> `doLinkUpdate` 加 **`{move}` 选项**,`move:false` 跳过 rename + remap 用 identity,**复用同一 verified capture→splice→post-rewrite-reassert 引擎**
+> （绝不重写一遍那道断言）。**零新依赖、无 Rust**。验证:typecheck 0 · `r47-e2e.mjs` **11/11** · `r47-probe.mjs` **7/7**（含 **on-disk 数据安全终态**:
+> target 含两者/source 入 `.trash`/referrer 链改写）· cargo release 真实重建 37s · 回归 r28/r24/r44/r42-e2e 不回退（frozen 引擎不破）。
+
+### As-built（评审根因修复 — 12 finding → 4 确认[全 major,去重] 全修 + 8 证伪）
+
+对抗评审 3 维（数据安全 + frozen 引擎重点）× find→verify。**frozen 引擎 refactor 经证实不破 rename 路径**（r28/r24/r42/r44 全绿）。确认并修复:
+
+1. **【major / 数据安全】merge 丢弃 `LinkRewriteResult.skipped` → source trash 后悬空链无告警**：QuickSwitcher merge 分支 `.then(() => openFile)` 不读 `result.skipped`;被 skip 的 referrer（post-rewrite 断言不符,绝不盲写）仍留 `[[source]]`,而 source 已 trash → 悬空链,用户毫不知情。Explorer rename 路径有 `showLinkUpdateNotice` toast,merge 漏了。**修**：consume `result.skipped` → `showMergeNotice(t("switcher.mergeLinksSkipped",{count}))`（镜像 Explorer DOM toast,带 `data-testid`,因跨 feature 不能 import 故 QuickSwitcher 内重实现）。
+2. **【major】merge promise 链无 `.catch` → modify/readFresh/trash 抛错变 unhandledrejection + 静默失败**（modal 已关,用户只见「没反应」）。**修**：`.catch(err => { console.error; showMergeNotice(t("switcher.mergeFailed")); })`,失败不 openFile。
+3. **【major / 数据丢失】`flushAll` 失败（source 是锁定/只读活动脏编辑器）→ `readFresh` 读旧磁盘字节 → 合并陈旧内容 + trash source → 未保存编辑丢失**。**修**：`flushAll` 包 try/catch（不抛出 merge）+ 读 source/target 走 **live buffer 优先**（`documents.get(p)?.getText() ?? readFresh(p)`,镜像 linkRewrite 的 `handle?.getText() ?? readFresh`）——buffer 是真值,flush 失败也不丢未保存编辑。
+4. **【major】merge-file 命令在 switcher 已开时触发（用户绑热键可达）→ `mergeTargetMode` 泄漏到下次开 switcher → 意外合并**：switcher 已挂载则 `openModal` 不 remount → mount-consume effect 不重跑 → store 留值 → 下次普通开 switcher 消费它 → 把活动文件意外合并掉（+trash!）。**修**：命令 `if (modal === "switcher") return`（已开则 no-op,store 永不置→无泄漏）。
+
+> **证伪/by-design（未改）**：① **target 是脏编辑器时陈旧 buffer 覆盖 merge** —— 证伪（merge target 通常非活动文件;watcher 对 non-dirty editor 才 reload；且 F3 的 buffer-read 已覆盖）· **mergeNotes 的 modify/trash 不在 runTail 队列** —— 真但 minor（merge 用户触发、罕见并发;append-before-trash 兜底）· **不剥离源 frontmatter** —— 非缺陷（Obsidian merge 亦保留;用户可手删）· consume-once StrictMode（已用 useState 快照 + useEffect 清,dev 验证通过）。
+
+> **教训（写给后续轮）**：① **复用既有引擎要复用它的「全部消费契约」,不只是核心逻辑**——merge 复用了 R16 的 verified rewrite,却漏了 R16 调用方都遵守的「读 `result.skipped` 并告警」契约（Explorer/AllProperties/Backlinks 都做了,merge 漏）。**接一个返回「部分失败报告」的 API,必须把报告消费掉**（数据安全的「非静默损坏」底线）。② **fire-and-forget promise 链必须 `.catch`**——`void p.then(...)` 吞掉 rejection 成 unhandledrejection,用户零反馈;凡 UI 触发的 async 副作用都要 catch + 用户可见反馈。③ **「读后写」的读要走 live buffer 不走磁盘**——`flushAll` 可能失败（锁定/只读）,之后 `readFresh` 读到的是 flush 前的旧字节,合并+删源 = 丢未保存编辑;**buffer 是真值,`documents.get()?.getText() ?? readFresh()` 是既有范式**（linkRewrite 早有,merge 该一开始就抄）。④ **一次性 Store「mount 消费」要防「已挂载不 remount」**——命令置 store + openModal,若 modal 已是该值则组件不 remount、consume 不触发、store 泄漏;命令侧加 `if (already-open) return` 守卫。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/linkRewrite.ts（refactor，已落）**：`doRenameWithLinkUpdate` → `doLinkUpdate(deps, oldPath, newPath, move)`;新增导出
+`rewriteLinksForMerge(deps, fromPath, toPath)`（= `doLinkUpdate(...,false)` 走同一 `runTail` 串行队列）。`move:false` 改动:① 跳过
+`vault.rename`;② `remap` = identity（不移文件,referrer 留原路径,含 source 自身——其 body 已追加进 target,两处都改写）;③ **始终改写**
+（忽略 `autoUpdateLinks` toggle——merge 留悬空链=数据丢失）。其余（capture / stillResolves / 验证 splice / post-rewrite reassert）原样复用。
+
+**core/noteMerge.ts（NEW，已落）**：
+```ts
+export const mergeTargetMode: Store<string | null>;  // 一次性:merge 命令置 source path,switcher mount 消费
+export async function mergeNotes(deps: LinkRewriteDeps, sourcePath: string, targetPath: string): Promise<LinkRewriteResult | null>;
+```
+`mergeNotes` 流程（**数据安全**）:① `source===target` 或一方缺失 → null;② `documents.flushAll()`（脏编辑器先落盘）;③ `readFresh` 两者;
+④ `vault.modify(target, target.trimEnd + "\n\n" + source.trimStart + "\n")`（**追加,target 原内容全保留**）;⑤ `metadata.ensureFresh([target])`
+（追加的链接先索引）;⑥ `rewriteLinksForMerge(deps, source, target)`（**source 仍在,capture 可解析**）;⑦ `vault.trash(source)`（**可恢复删,R42,在改写之后**）。
+**追加先于删除 → 失败最坏=内容重复,绝不丢失。**
+
+**features/palette/QuickSwitcher.tsx**：mount 时 `const [mergeSource] = useState(() => { const m = mergeTargetMode.get(); mergeTargetMode.set(null); return m; })`（**mount 即消费,Escape 取消不泄漏**）;`activate(row)` 顶部:`mergeSource !== null && row.kind==="file" && row.file.path !== mergeSource` → `closeModal()` + `void mergeNotes({vault, metadata, documents}, mergeSource, row.file.path).then(() => app.workspace.openFile(row.file.path))` + return（选自身=no-op）。placeholder 在 merge 模式显 `t("switcher.placeholderMerge")`。
+**app/App.tsx**：注册 `editor:merge-file`（无默认键,`available: () => getActiveFile()!==null`,callback: `mergeTargetMode.set(activeFile); openModal("switcher")`)。
+**main.tsx**：`__geodeMerge` 探针（`merge: (s, t) => { void mergeNotes({vault, metadata, documents}, s, t); }`,desktop 可驱动核心[store/vault 级]）。
+**i18n**：`cmd.mergeFile` + `switcher.placeholderMerge`（en+zh）。版本 0.46→0.47。
+
+### 文件所有权（并行）
+- **me（核心引擎,已落 + 验证）**：`src/core/linkRewrite.ts`(refactor) + `src/core/noteMerge.ts`(new) + `.calibration/r47-*`。
+- **B（UI + 命令 + i18n + 版本）**：`src/features/palette/QuickSwitcher.tsx`(merge 模式) + `src/app/App.tsx`(editor:merge-file) + `src/core/i18n/dict.app.ts`(cmd.mergeFile) + `src/core/i18n/dict.panels.ts`(switcher.placeholderMerge,**核对在哪个 dict**) + 版本三处。
+- **A（探针）**：`src/main.tsx`(`__geodeMerge`,import mergeNotes from @core/noteMerge + 复用既有 vault/metadata/documents)。
+
+### 已知偏差（写给后续轮）
+- **autoUpdateLinks toggle 对 merge 无效**（merge 始终改写,留悬空链=数据丢失,刻意）。
+- **跳过的 referrer**（R16 post-rewrite 断言不符→skip+report）合并后留悬空 `[[source]]`,但 source 已入 `.trash` 可恢复;skip 经 result 报告（非静默损坏）。
+- **无合并确认对话框**（直接合并;source 入 `.trash` 可恢复兜底）。
+- **merge 模式 placeholder 外的视觉提示弱**（仅占位符文案;无显式 merge 横幅）。
+
 ## Round 46 additions — `obsidian://` URI 深链（零依赖 in-app 切片）【As-built v0.46】
 
 > **状态：As-built（v0.46 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑮。`obsidian://open|new|search` 深链。**本轮做零依赖 in-app 切片**：纯 URI
