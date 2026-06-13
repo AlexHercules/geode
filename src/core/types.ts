@@ -137,7 +137,7 @@ export interface TabState {
 /** Built-in panel ids plus dynamic sidebar-panel ids (plugin contributions, R5).
  *  `(string & {})` keeps the literal autocomplete while accepting any string. */
 export type LeftPanelKind = "explorer" | "search" | "bookmarks" | (string & {});
-export type RightPanelKind = "backlinks" | "outline" | (string & {});
+export type RightPanelKind = "backlinks" | "outline" | "allproperties" | (string & {});
 export type ModalKind = "palette" | "switcher" | "settings" | "templates" | null;
 export type ThemeKind = "dark" | "light";
 

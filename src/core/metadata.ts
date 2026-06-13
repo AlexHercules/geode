@@ -243,6 +243,8 @@ export class MetadataIndex {
   } | null = null;
   /** R22: lazy vault-wide frontmatter key list, cached per revision */
   private propertyKeysCache: { rev: number; keys: string[] } | null = null;
+  /** R30: lazy vault-wide frontmatter key → file count, cached per revision */
+  private propertyKeyCountsCache: { rev: number; counts: Map<string, number> } | null = null;
 
   constructor(
     private vault: Vault,
@@ -573,6 +575,62 @@ export class MetadataIndex {
     const keys = [...seen.values()].sort();
     this.propertyKeysCache = { rev, keys };
     return keys;
+  }
+
+  /**
+   * R30: every frontmatter key → number of files that use it. Authored casing
+   * (first-seen wins, case-insensitively deduplicated like getPropertyKeys);
+   * a file using the same key twice (impossible in a parsed map, but defensive)
+   * counts once. Lazily computed and cached per index revision.
+   */
+  getPropertyKeyCounts(): Map<string, number> {
+    const rev = this.revision.get();
+    if (this.propertyKeyCountsCache?.rev === rev) return this.propertyKeyCountsCache.counts;
+    const casing = new Map<string, string>(); // lowercased → first-seen casing
+    const counts = new Map<string, number>(); // authored casing → file count
+    for (const meta of this.byPath.values()) {
+      const fields = meta.frontmatter?.fields;
+      if (!fields) continue;
+      const seenInFile = new Set<string>(); // lowercased keys counted in THIS file
+      for (const key of Object.keys(fields)) {
+        const lower = key.toLowerCase();
+        if (seenInFile.has(lower)) continue;
+        seenInFile.add(lower);
+        let authored = casing.get(lower);
+        if (authored === undefined) {
+          authored = key;
+          casing.set(lower, authored);
+        }
+        counts.set(authored, (counts.get(authored) ?? 0) + 1);
+      }
+    }
+    this.propertyKeyCountsCache = { rev, counts };
+    return counts;
+  }
+
+  /**
+   * R30: distinct frontmatter VALUES used for `key` anywhere in the vault, for
+   * value-suggestion datalists. Key matched case-insensitively; values rendered
+   * as authored strings, value-level case-sensitively deduplicated (Obsidian
+   *口径), sorted lexicographically. Not cached (per-key, small call surface).
+   */
+  getPropertyValues(key: string): string[] {
+    const lower = key.toLowerCase();
+    const seen = new Set<string>();
+    for (const meta of this.byPath.values()) {
+      const fields = meta.frontmatter?.fields;
+      if (!fields) continue;
+      for (const k of Object.keys(fields)) {
+        if (k.toLowerCase() !== lower) continue;
+        const v = fields[k];
+        if (Array.isArray(v)) {
+          for (const item of v) if (item !== "") seen.add(item);
+        } else if (v !== "") {
+          seen.add(v);
+        }
+      }
+    }
+    return [...seen].sort();
   }
 
   /** Global graph including unresolved (phantom) nodes. */

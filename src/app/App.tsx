@@ -9,6 +9,7 @@ import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
 import { EditorPane } from "@features/editor/EditorPane";
 import { GraphView } from "@features/graph/GraphView";
+import { AllPropertiesPanel } from "@features/allproperties/AllPropertiesPanel";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
@@ -92,7 +93,9 @@ export function App() {
     ? activeRightPanel.id
     : ws.rightPanel === "outline"
       ? "outline"
-      : "backlinks";
+      : ws.rightPanel === "allproperties"
+        ? "allproperties"
+        : "backlinks";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -555,6 +558,16 @@ export function App() {
               >
                 <Icon name="list" size={15} />
               </button>
+              <button
+                role="tab"
+                aria-selected={effectiveRight === "allproperties"}
+                className={`right-tab${effectiveRight === "allproperties" ? " is-active" : ""}`}
+                title={t("app.tabAllProperties")}
+                data-testid="right-tab-allproperties"
+                onClick={() => app.workspace.setRightPanel("allproperties")}
+              >
+                <Icon name="book-open" size={15} />
+              </button>
               {/* plugin-contributed sidebar panels (compat registerView): one tab each */}
               {rightPanels.map((p) => (
                 <button
@@ -575,6 +588,8 @@ export function App() {
                 <SidebarPanelHost key={activeRightPanel.id} panel={activeRightPanel} />
               ) : ws.rightPanel === "outline" ? (
                 <OutlinePanel />
+              ) : ws.rightPanel === "allproperties" ? (
+                <AllPropertiesPanel />
               ) : (
                 <BacklinksPanel />
               )}

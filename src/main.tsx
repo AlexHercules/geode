@@ -15,6 +15,7 @@ import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
+import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
   findUnlinkedMentions,
@@ -302,6 +303,25 @@ async function bootstrap() {
   foldHost.__geodeFold = {
     save: (path, info) => saveFoldInfo(path, info),
     load: (path) => loadFoldInfo(path),
+  };
+
+  // always-on properties probe (R30): drives the real-fs global property rename
+  // + the vault-wide aggregation queries from browser/desktop E2E (WKWebView has
+  // no CDP — desktop verifies the multi-file frontmatter rewrite through this
+  // hook; same pattern as __geodeRename / __geodeUnlinked). Assigned BEFORE
+  // loadExternal so an external plugin's onload can capture it synchronously.
+  const propertiesHost = globalThis as typeof globalThis & {
+    __geodeProperties?: {
+      rename: (oldKey: string, newKey: string) => Promise<PropertyRewriteResult>;
+      values: (key: string) => string[];
+      keyCounts: () => Array<[string, number]>;
+    };
+  };
+  propertiesHost.__geodeProperties = {
+    rename: (oldKey, newKey) =>
+      renamePropertyAcrossVault({ vault, metadata, documents }, oldKey, newKey),
+    values: (key) => metadata.getPropertyValues(key),
+    keyCounts: () => [...metadata.getPropertyKeyCounts().entries()],
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault

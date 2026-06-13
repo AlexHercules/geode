@@ -114,6 +114,8 @@ function ScalarInput(props: {
   stored: string;
   placeholder: string;
   ariaLabel: string;
+  /** R30: value-suggestion datalist id (text only; undefined = no suggestions) */
+  listId?: string;
   /** returns false when the edit was rejected — the draft resets to stored */
   commitText: (raw: string) => boolean;
 }) {
@@ -143,6 +145,7 @@ function ScalarInput(props: {
       className="property-input"
       type={props.inputType}
       value={draft}
+      list={props.listId}
       placeholder={props.placeholder}
       aria-label={props.ariaLabel}
       data-testid={`property-value-${props.keyName}`}
@@ -366,6 +369,8 @@ function ValueEditor(props: {
   entry: PropertyEntry;
   effType: PropertyType;
   tagListId: string;
+  /** R30: vault-wide value suggestions for this key (text + multitext) */
+  valueListId: string;
   /** returns false when the edit was rejected (builder null) */
   commitValue: (key: string, value: PropertyValue) => boolean;
 }) {
@@ -426,7 +431,7 @@ function ValueEditor(props: {
           placeholder={placeholder}
           ariaLabel={ariaLabel}
           removeLabel={t("editor.deleteProperty")}
-          listId={effType === "tags" ? props.tagListId : undefined}
+          listId={effType === "tags" ? props.tagListId : effType === "multitext" ? props.valueListId : undefined}
           stripHash={effType === "tags"}
           commit={(items) => commit(items)}
         />
@@ -442,6 +447,7 @@ function ValueEditor(props: {
       stored={valueAsString(entry.value)}
       placeholder={placeholder}
       ariaLabel={ariaLabel}
+      listId={props.valueListId}
       commitText={(raw) => commit(raw === "" ? null : raw)}
     />
   );
@@ -752,10 +758,22 @@ export function PropertiesPanel(props: {
               />
             </div>
             <div className="property-value">
+              {/* R30: per-key vault-wide value suggestions — only text &
+                  multitext consume a value datalist, so only they pay the
+                  getPropertyValues scan. index-based id: property keys may
+                  contain spaces, invalid in an element id / list= reference. */}
+              {(effType === "text" || effType === "multitext") && (
+                <datalist id={`${uid}-val-${idx}`}>
+                  {app.metadata.getPropertyValues(entry.key).map((v) => (
+                    <option key={v} value={v} />
+                  ))}
+                </datalist>
+              )}
               <ValueEditor
                 entry={entry}
                 effType={effType}
                 tagListId={tagListId}
+                valueListId={`${uid}-val-${idx}`}
                 commitValue={commitValue}
               />
             </div>

@@ -1,0 +1,1 @@
+export { AllPropertiesPanel } from "./AllPropertiesPanel";
