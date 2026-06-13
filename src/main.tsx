@@ -30,6 +30,7 @@ import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
+import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -284,6 +285,23 @@ async function bootstrap() {
       filesChanged: result.filesChanged,
       skipped: result.skipped.length,
     };
+  };
+
+  // always-on fold-persistence probe (R29): drives the localStorage save/load
+  // round-trip from browser/desktop E2E (WKWebView has no CDP — same pattern as
+  // __geodeBookmarks / __geodeExplorerMove). foldInfoFromState/foldRangesFromInfo
+  // need a live EditorState so are exercised in-editor, not exposed raw here;
+  // save/load round-trip is enough for the desktop probe. Assigned BEFORE
+  // loadExternal so an external plugin's onload can capture it synchronously.
+  const foldHost = globalThis as typeof globalThis & {
+    __geodeFold?: {
+      save: (path: string, info: FoldInfo) => void;
+      load: (path: string) => FoldInfo | null;
+    };
+  };
+  foldHost.__geodeFold = {
+    save: (path, info) => saveFoldInfo(path, info),
+    load: (path) => loadFoldInfo(path),
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault

@@ -888,6 +888,50 @@ iframe.geode-embed-pdf {
   display: none;
 }
 
+/* R29: reading-view heading fold. Headings become clickable (collapse their
+   section); a subtle chevron appears on hover in the left margin (reserved
+   gutter via padding so the heading text never shifts). Scoped to the editor
+   pane's reading view (.markdown-reading-view) ONLY — NOT bare .markdown-rendered,
+   which hover-preview cards AND the compat MarkdownRenderer also use (the click
+   delegation is gated on previewContentRef → the affordance would be dead there).
+   Chevron mirrors the callout border-arrow idiom; rotates right→down when
+   collapsed. */
+.markdown-reading-view :is(h1, h2, h3, h4, h5, h6) {
+  cursor: pointer;
+  position: relative;
+}
+
+.markdown-reading-view :is(h1, h2, h3, h4, h5, h6)::before {
+  content: "";
+  position: absolute;
+  left: -1.1em;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  /* pointing down = expanded */
+  transform: rotate(45deg);
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    transform 0.15s ease;
+}
+
+.markdown-reading-view :is(h1, h2, h3, h4, h5, h6):hover::before,
+.markdown-reading-view :is(h1, h2, h3, h4, h5, h6).is-collapsed::before {
+  opacity: 1;
+}
+
+.markdown-reading-view :is(h1, h2, h3, h4, h5, h6).is-collapsed::before {
+  /* pointing right = collapsed */
+  transform: rotate(-45deg);
+}
+
+.geode-heading-folded {
+  display: none;
+}
+
 /* --- per-type colors (frozen palette; alias table frozen in the contract).
    Selector lists cover the reading view (.callout) AND the live-preview
    line decorations (.cm-callout-line) in one pass. The live default lives

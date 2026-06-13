@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { foldEffect } from "@codemirror/language";
 import type { DocumentHandle } from "@core/documents";
+import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import type { PropertyEdit } from "@core/properties";
 import type { TabState, ViewMode } from "@core/types";
 import { useI18n } from "@core/i18n";
@@ -50,6 +52,59 @@ function saveSession(tabId: string, patch: Partial<PaneSession>): void {
     previewScrollTop: prev?.previewScrollTop ?? 0,
     ...patch,
   });
+}
+
+/**
+ * R29: reading-view heading fold. Pure runtime DOM class toggle on the rendered
+ * preview — a re-render returns to the authored (unfolded) state, so reading-view
+ * folds are NOT persisted and do NOT share the editor's per-file FoldInfo (the
+ * DOM→source-line mapping needed for that would require markdown.ts to emit
+ * data-line, deliberately out of scope this round — see ARCHITECTURE R29 显式偏差).
+ * Module-level (not re-created per render); mirrors the callout fold idiom above.
+ */
+function headingLevel(el: Element): number | null {
+  const m = /^H([1-6])$/.exec(el.tagName);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Hide/show one heading's section: its following siblings up to (but not
+ * including) the next heading of same-or-higher level (the section boundary).
+ * On expand, nested still-collapsed sub-headings keep their own sub-sections
+ * hidden (they own their `.is-collapsed` state independently).
+ */
+function setSectionFolded(heading: HTMLElement, folded: boolean): void {
+  const level = headingLevel(heading);
+  if (level === null) return;
+  let node: Element | null = heading.nextElementSibling;
+  while (node) {
+    const nl = headingLevel(node);
+    if (nl !== null && nl <= level) break; // section boundary
+    if (folded) {
+      node.classList.add("geode-heading-folded");
+    } else {
+      node.classList.remove("geode-heading-folded");
+      // nested collapsed heading: reveal the heading itself but keep its
+      // sub-section hidden, then skip past that sub-section.
+      if (nl !== null && node.classList.contains("is-collapsed")) {
+        let sub: Element | null = node.nextElementSibling;
+        while (sub) {
+          const sl = headingLevel(sub);
+          if (sl !== null && sl <= nl) break;
+          sub.classList.add("geode-heading-folded");
+          sub = sub.nextElementSibling;
+        }
+        node = sub;
+        continue;
+      }
+    }
+    node = node.nextElementSibling;
+  }
+}
+
+function toggleHeadingFold(heading: HTMLElement): void {
+  const folded = heading.classList.toggle("is-collapsed");
+  setSectionFolded(heading, folded);
 }
 
 /**
@@ -242,6 +297,15 @@ export function EditorPane({ tab }: { tab: TabState }) {
         },
       });
       view.scrollDOM.scrollTop = saved.scrollTop;
+    }
+    // R29: restore persisted folds (per-file, Obsidian-shape FoldInfo in
+    // localStorage). foldEffect carries no docChanged → no autosave, no dirty.
+    // Survives preview↔editor + tab close/reopen (live↔source already kept in
+    // EditorState via base-list markdownFolding).
+    const foldInfo = loadFoldInfo(handle.path);
+    if (foldInfo?.folds.length) {
+      const ranges = foldRangesFromInfo(view.state, foldInfo);
+      if (ranges.length) view.dispatch({ effects: ranges.map((r) => foldEffect.of(r)) });
     }
     // report the focused view — the compat Editor shim consumes it
     const onFocusIn = () => app.documents.setActiveView(view, handle.path);
@@ -533,6 +597,18 @@ export function EditorPane({ tab }: { tab: TabState }) {
       if (calloutTitle && !el.closest("a")) {
         e.preventDefault();
         calloutTitle.closest(".callout")?.classList.toggle("is-collapsed");
+        return;
+      }
+
+      // R29: reading-view heading fold — click a heading to collapse its section
+      // (siblings until the next heading of same-or-higher level). Pure DOM class
+      // toggle (no doc write); a re-render returns to authored state (reading-view
+      // fold not persisted — see ARCHITECTURE R29 显式偏差). Links inside the
+      // heading fall through to the link delegations below.
+      const heading = el.closest<HTMLElement>("h1, h2, h3, h4, h5, h6");
+      if (heading && previewContentRef.current?.contains(heading) && !el.closest("a")) {
+        e.preventDefault();
+        toggleHeadingFold(heading);
         return;
       }
 

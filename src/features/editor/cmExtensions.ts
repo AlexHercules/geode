@@ -34,6 +34,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { t as tr } from "@core/i18n";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
+import { foldPersistence } from "./foldPersistence";
 import { livePreview, propertiesHostFacet } from "./livePreview";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -353,5 +354,8 @@ export function buildEditorExtensions(opts: {
     // EditorState and must survive live<->source reconfigures
     attachmentIngest(app, getPath),
     markdownFolding(),
+    // R29 — capture fold state to localStorage (base list like markdownFolding:
+    // must survive live<->source reconfigures); restore happens in EditorPane
+    foldPersistence(getPath),
   ];
 }
