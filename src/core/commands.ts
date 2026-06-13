@@ -114,6 +114,14 @@ export class CommandRegistry {
    * Hotkeys are parsed once per registry change (hot path: every keystroke).
    */
   handleKeydown(e: KeyboardEvent): boolean {
+    // R33: never fire a command mid-IME-composition (CJK input fires keydown with
+    // isComposing/keyCode 229) — the editor now routes every keydown here, so this
+    // guard protects Chinese/Japanese typing from a stray command match.
+    if (e.isComposing) return false;
+    // R33: if an earlier handler already owned the key (e.g. the editor's
+    // Prec.highest interceptor matched + preventDefault'd it), don't re-run it on
+    // the window listener. Robust against either ordering = no double-fire.
+    if (e.defaultPrevented) return false;
     const editable = isEditableTarget(e.target);
     for (const [id, parsed] of this.parsedHotkeys()) {
       // a binding without a non-typing modifier (bare key / Shift+key) would

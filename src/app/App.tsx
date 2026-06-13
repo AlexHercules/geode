@@ -20,6 +20,7 @@ import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/Settin
 import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
+import { registerFormatCommands } from "@features/editor/formatCommands";
 import { isTauri } from "@core/vault";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
@@ -364,6 +365,12 @@ export function App() {
         },
       }),
     ];
+    // R33 markdown formatting commands (bold/italic/link + toggle heading/quote/
+    // code/callout/list). getView resolves the ACTIVE-FILE view only (R23 DS-1):
+    // a format command never mutates a background/non-active file.
+    disposers.push(
+      ...registerFormatCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+    );
     if (isTauri()) {
       disposers.push(
         commands.register({

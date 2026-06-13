@@ -61,6 +61,21 @@ export const en = {
   "cmd.insertDate": "Insert current date",
   "cmd.insertTime": "Insert current time",
 
+  // ---- markdown formatting commands (R33) ----
+  "cmd.toggleBold": "Toggle bold",
+  "cmd.toggleItalic": "Toggle italic",
+  "cmd.insertLink": "Insert Markdown link",
+  "cmd.toggleStrikethrough": "Toggle strikethrough",
+  "cmd.toggleHighlight": "Toggle highlight",
+  "cmd.toggleInlineCode": "Toggle inline code",
+  "cmd.toggleHeading": "Cycle heading level",
+  "cmd.toggleBlockquote": "Toggle blockquote",
+  "cmd.toggleBulletList": "Toggle bullet list",
+  "cmd.toggleNumberedList": "Toggle numbered list",
+  "cmd.toggleChecklist": "Toggle checklist",
+  "cmd.toggleCodeBlock": "Toggle code block",
+  "cmd.insertCallout": "Insert callout",
+
   // ---- template selector modal (R23) ----
   "templates.aria": "Template picker",
   "templates.placeholder": "Find a template…",
@@ -141,6 +156,21 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.newNoteFromTemplate": "从模板新建笔记",
   "cmd.insertDate": "插入当前日期",
   "cmd.insertTime": "插入当前时间",
+
+  // ---- markdown formatting commands (R33) ----
+  "cmd.toggleBold": "切换粗体",
+  "cmd.toggleItalic": "切换斜体",
+  "cmd.insertLink": "插入 Markdown 链接",
+  "cmd.toggleStrikethrough": "切换删除线",
+  "cmd.toggleHighlight": "切换高亮",
+  "cmd.toggleInlineCode": "切换行内代码",
+  "cmd.toggleHeading": "循环切换标题级别",
+  "cmd.toggleBlockquote": "切换引用",
+  "cmd.toggleBulletList": "切换无序列表",
+  "cmd.toggleNumberedList": "切换有序列表",
+  "cmd.toggleChecklist": "切换任务列表",
+  "cmd.toggleCodeBlock": "切换代码块",
+  "cmd.insertCallout": "插入标注",
 
   // ---- template selector modal (R23) ----
   "templates.aria": "模板选择",

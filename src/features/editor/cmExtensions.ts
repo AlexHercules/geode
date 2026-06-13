@@ -17,7 +17,7 @@ import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, LanguageSupport, foldService, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { type Compartment, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { type Compartment, Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -337,6 +337,19 @@ export function buildEditorExtensions(opts: {
 }): Extension[] {
   const { app, getPath, mode, modeCompartment } = opts;
   return [
+    // R33 — route command hotkeys through the app command layer (R32) while the
+    // editor is focused, at the HIGHEST precedence so it runs BEFORE CM's own
+    // keymaps and the browser's native contenteditable shortcuts. Without this,
+    // a native Cmd+I expands the selection to the whole line before the
+    // window-level listener reads it (bold-on-selection worked, but italic
+    // italicised the whole line). handleKeydown preventDefault + stopPropagation
+    // when it owns the key, so the window listener never double-fires; when it
+    // returns false CM proceeds normally (typing, Cmd+A select-all, etc.).
+    Prec.highest(
+      EditorView.domEventHandlers({
+        keydown: (e) => app.commands.handleKeydown(e),
+      }),
+    ),
     propertiesHostFacet.of(opts.propertiesHost ?? null),
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
     revealFlashField,

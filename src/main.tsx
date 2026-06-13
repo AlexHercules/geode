@@ -37,6 +37,7 @@ import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
+import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
@@ -366,6 +367,20 @@ async function bootstrap() {
     normalize: (hotkey) => normalizeHotkey(hotkey),
     format: (hotkey, isMac) => formatHotkey(hotkey, isMac),
     match: (hotkey, e, isMac) => matchParsedHotkey(parseHotkey(hotkey), e, isMac),
+  };
+
+  // always-on markdown-formatting probe (R33): exposes the pure core/format
+  // transforms so browser/desktop E2E can assert every wrap/toggle behavior
+  // deterministically (the live command path — Cmd+B in a real CM editor — is
+  // exercised by the browser E2E). Same pure-gate approach as __geodeSlash /
+  // __geodeHotkey; assigned BEFORE loadExternal.
+  const formatHost = globalThis as typeof globalThis & {
+    __geodeFormat?: {
+      apply: (op: FormatOp, text: string, from: number, to: number) => FormatEdit | null;
+    };
+  };
+  formatHost.__geodeFormat = {
+    apply: (op, text, from, to) => applyFormatOp(op, text, from, to),
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault
