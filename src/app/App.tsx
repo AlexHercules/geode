@@ -443,6 +443,18 @@ export function App() {
         callback: () => workspace.navigateForward(),
       }),
     );
+    // R39 pin active tab (no default key — Obsidian has none; also via tab double-click)
+    disposers.push(
+      commands.register({
+        id: "app:toggle-pin",
+        name: () => t("cmd.togglePin"),
+        available: () => workspace.getActiveTab() != null,
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (tab) workspace.toggleTabPin(tab.id);
+        },
+      }),
+    );
     if (isTauri()) {
       disposers.push(
         commands.register({
@@ -1153,8 +1165,10 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           role="tab"
           aria-selected={tab.id === leaf.activeTabId}
           className={`tab${tab.id === leaf.activeTabId ? " is-active" : ""}${
-            dropIndex === i ? " tab-drop-before" : ""
-          }${dropIndex === leaf.tabs.length && i === leaf.tabs.length - 1 ? " tab-drop-after" : ""}`}
+            tab.pinned ? " is-pinned" : ""
+          }${dropIndex === i ? " tab-drop-before" : ""}${
+            dropIndex === leaf.tabs.length && i === leaf.tabs.length - 1 ? " tab-drop-after" : ""
+          }`}
           draggable
           onDragStart={(e) => {
             e.dataTransfer.setData(TAB_MIME, tab.id);
@@ -1164,10 +1178,16 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           }}
           onDragEnd={() => setDraggingTabId(null)}
           onClick={() => app.workspace.setActiveTab(tab.id)}
+          onDoubleClick={() => app.workspace.toggleTabPin(tab.id)}
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
           title={tab.filePath ?? title}
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
+          {tab.pinned && (
+            <span className="tab-pin" aria-label={t("app.pinnedTab")} title={t("app.pinnedTab")}>
+              <Icon name="pin" size={12} />
+            </span>
+          )}
           <span className="tab-title">{title}</span>
           <button
             className="tab-close"

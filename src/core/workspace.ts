@@ -36,6 +36,8 @@ interface ClosedTab {
   mode: ViewMode;
   /** the pane it was closed from — reopen prefers it if it still exists */
   paneId: string;
+  /** R39: restore pin state on reopen (Obsidian restores a reopened tab's pin). */
+  pinned?: boolean;
 }
 let tabCounter = 0;
 let paneCounter = 0;
@@ -255,8 +257,10 @@ export class Workspace {
         return { ...s, root, activePaneId: target.id, modal: null };
       }
       const active = target.tabs.find((t) => t.id === target.activeTabId);
-      // replace the active markdown tab's content (Obsidian default behaviour)
-      if (active && active.viewType === "markdown" && !opts.newTab) {
+      // replace the active markdown tab's content (Obsidian default behaviour) —
+      // UNLESS it is pinned (R39): a pinned tab is never replaced, so fall through
+      // to the new-tab branch (open the file in a fresh tab).
+      if (active && active.viewType === "markdown" && !opts.newTab && !active.pinned) {
         root = mapLeaf(root, target.id, (l) => ({
           ...l,
           tabs: l.tabs.map((t) =>
@@ -319,6 +323,7 @@ export class Workspace {
         filePath: closing.filePath,
         mode: closing.mode,
         paneId: holder0.id,
+        pinned: closing.pinned,
       });
       if (this.recentlyClosed.length > RECENTLY_CLOSED_MAX) this.recentlyClosed.shift();
     }
@@ -430,6 +435,20 @@ export class Workspace {
     }
   }
 
+  /** R39: toggle a tab's pinned flag. A pinned tab is not replaced by openFile
+   *  (links/navigation open a new tab instead). Persisted via update(). */
+  toggleTabPin(id: string) {
+    this.update((s) => {
+      const holder = findTabLeaf(s.root, id);
+      if (!holder) return s;
+      const root = mapLeaf(s.root, holder.id, (l) => ({
+        ...l,
+        tabs: l.tabs.map((t) => (t.id === id ? { ...t, pinned: !t.pinned } : t)),
+      }));
+      return { ...s, root };
+    });
+  }
+
   /* ---------- pane management ---------- */
 
   setActivePane(paneId: string) {
@@ -447,7 +466,10 @@ export class Workspace {
     const srcTab = source?.tabs.find((t) => t.id === source.activeTabId);
     // graph view is a global singleton tab — duplicating it would break openGraph
     if (!source || !srcTab || srcTab.viewType === "graph") return null;
-    const dup: TabState = { ...srcTab, id: newTabId() };
+    // a split copy is a NEW tab instance → it does not inherit the source's pin
+    // (R39 review; Obsidian pins are per-tab-instance, mirrors R37 "split doesn't
+    // copy nav history").
+    const dup: TabState = { ...srcTab, id: newTabId(), pinned: undefined };
     const fresh = makeLeaf([dup], dup.id);
     this.update((s) => {
       const root = splitLeafInTree(s.root, source.id, direction, fresh);
@@ -600,6 +622,10 @@ export class Workspace {
     if (tab && tab.filePath === entry.filePath && tab.mode !== entry.mode) {
       this.setTabMode(tab.id, entry.mode);
     }
+    // R39: restore pin state (Obsidian reopens a closed tab with its pin intact)
+    if (entry.pinned && tab && tab.filePath === entry.filePath && !tab.pinned) {
+      this.toggleTabPin(tab.id);
+    }
     return true;
   }
 
@@ -614,7 +640,9 @@ export class Workspace {
     if (!target) return;
     if (target.tabs.some((t) => t.viewType === "markdown" && t.filePath === path)) return; // reuse → tab switch
     const active = target.tabs.find((t) => t.id === target.activeTabId);
-    if (active && active.viewType === "markdown" && active.filePath && active.filePath !== path) {
+    // a pinned tab is not replaced (R39) → its content doesn't change → don't
+    // record a phantom navigation on it (openFile will spawn a new tab instead).
+    if (active && active.viewType === "markdown" && active.filePath && active.filePath !== path && !active.pinned) {
       const h = this.tabHistory.get(active.id) ?? { back: [], forward: [] };
       h.back.push({ filePath: active.filePath, mode: active.mode });
       if (h.back.length > NAV_HISTORY_MAX) h.back.shift();
@@ -1046,7 +1074,9 @@ function sanitizeTab(raw: unknown): TabState | null {
   const mode: ViewMode =
     t.mode === "preview" ? "preview" : t.mode === "source" ? "source" : "live";
   if (typeof t.filePath !== "string" && t.filePath !== null) return null;
-  return { id: t.id, viewType: t.viewType, filePath: t.filePath, mode, title: t.title };
+  const tab: TabState = { id: t.id, viewType: t.viewType, filePath: t.filePath, mode, title: t.title };
+  if (t.pinned === true) tab.pinned = true; // R39: persist pin state (omit when false)
+  return tab;
 }
 
 function sanitizeNode(

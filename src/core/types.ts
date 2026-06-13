@@ -132,6 +132,9 @@ export interface TabState {
   filePath: string | null;
   mode: ViewMode;
   title: string;
+  /** R39: a pinned tab is not replaced by openFile — links/navigation open a new
+   *  tab instead. Persisted; absent = not pinned. */
+  pinned?: boolean;
 }
 
 /** Built-in panel ids plus dynamic sidebar-panel ids (plugin contributions, R5).

@@ -513,6 +513,24 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* R39 pinned-tab indicator (double-click a tab to toggle) */
+.tab-pin {
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* a pinned tab dims its close button (revealed on hover) — nudges toward
+   Obsidian's "hide X on pinned" without preventing close */
+.tab.is-pinned .tab-close {
+  opacity: 0.35;
+}
+
+.tab.is-pinned:hover .tab-close {
+  opacity: 1;
+}
+
 .tab-close {
   display: grid;
   place-items: center;
