@@ -13,6 +13,7 @@ import { AllPropertiesPanel } from "@features/allproperties/AllPropertiesPanel";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
+import { TagsPanel } from "@features/tags";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
@@ -97,7 +98,9 @@ export function App() {
       ? "outline"
       : ws.rightPanel === "allproperties"
         ? "allproperties"
-        : "backlinks";
+        : ws.rightPanel === "tags"
+          ? "tags"
+          : "backlinks";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -659,6 +662,16 @@ export function App() {
               >
                 <Icon name="book-open" size={15} />
               </button>
+              <button
+                role="tab"
+                aria-selected={effectiveRight === "tags"}
+                className={`right-tab${effectiveRight === "tags" ? " is-active" : ""}`}
+                title={t("app.tabTags")}
+                data-testid="right-tab-tags"
+                onClick={() => app.workspace.setRightPanel("tags")}
+              >
+                <Icon name="hash" size={15} />
+              </button>
               {/* plugin-contributed sidebar panels (compat registerView): one tab each */}
               {rightPanels.map((p) => (
                 <button
@@ -681,6 +694,8 @@ export function App() {
                 <OutlinePanel />
               ) : ws.rightPanel === "allproperties" ? (
                 <AllPropertiesPanel />
+              ) : ws.rightPanel === "tags" ? (
+                <TagsPanel />
               ) : (
                 <BacklinksPanel />
               )}

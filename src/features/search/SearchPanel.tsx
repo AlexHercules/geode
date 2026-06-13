@@ -150,6 +150,14 @@ export function SearchPanel() {
     return () => window.clearTimeout(t);
   }, [query]);
 
+  const searchReq = useStore(app.workspace.searchRequest);
+  useEffect(() => {
+    if (searchReq !== null) {
+      setQuery(searchReq);
+      app.workspace.searchRequest.set(null);
+    }
+  }, [searchReq, app.workspace]);
+
   const trimmed = debounced.trim();
   // tag BROWSER only for a whole-query bare `#…` token; anything else (spaces,
   // operators) goes through the query parser, where `#tag` means tag:tag.

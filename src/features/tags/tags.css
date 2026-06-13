@@ -1,0 +1,9 @@
+.tags-panel { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+.tags-panel-header { padding: 10px 12px 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.tags-empty { padding: 16px 12px; color: var(--text-faint); font-size: 13px; }
+.tags-list { overflow-y: auto; padding: 0 6px 8px; }
+.tag-row { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border-radius: 6px; color: var(--text-normal); cursor: pointer; text-align: left; }
+.tag-row:hover { background: var(--bg-hover); }
+.tag-row-icon { display: inline-flex; color: var(--text-faint); flex-shrink: 0; }
+.tag-row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tag-row-count { color: var(--text-faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }

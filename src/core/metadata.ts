@@ -207,8 +207,12 @@ export function parseNote(path: string, content: string): NoteMetadata {
   // frontmatter contributes tags + aliases to the index
   const fm = frontmatter?.fields ?? {};
   const aliases = asList(fmField(fm, "aliases") ?? fmField(fm, "alias"));
-  for (const t of asList(fmField(fm, "tags") ?? fmField(fm, "tag"))) {
-    tags.push({ tag: t.replace(/^#/, ""), from: 0 });
+  for (const raw of asList(fmField(fm, "tags") ?? fmField(fm, "tag"))) {
+    // frontmatter can author junk (`["#", "bad space"]`); a real tag is non-empty
+    // and whitespace-free — drop the rest so the index / Tags pane / `#` completion
+    // never surface broken tag tokens (R41 review).
+    const tag = raw.replace(/^#/, "").trim();
+    if (tag !== "" && !/\s/.test(tag)) tags.push({ tag, from: 0 });
   }
 
   return {
@@ -245,6 +249,9 @@ export class MetadataIndex {
   private propertyKeysCache: { rev: number; keys: string[] } | null = null;
   /** R30: lazy vault-wide frontmatter key → file count, cached per revision */
   private propertyKeyCountsCache: { rev: number; counts: Map<string, number> } | null = null;
+  /** R41: tag → file-set cache, keyed on the index revision (the `#` completion
+   *  hot path + Tags pane both call getTagMap per keystroke/render). */
+  private tagMapCache: { rev: number; map: Map<string, Set<string>> } | null = null;
 
   constructor(
     private vault: Vault,
@@ -544,6 +551,8 @@ export class MetadataIndex {
 
   /** tag (no '#') -> paths that contain it */
   getTagMap(): Map<string, Set<string>> {
+    const rev = this.revision.get();
+    if (this.tagMapCache?.rev === rev) return this.tagMapCache.map;
     const map = new Map<string, Set<string>>();
     for (const meta of this.byPath.values()) {
       for (const t of meta.tags) {
@@ -552,6 +561,7 @@ export class MetadataIndex {
         set.add(meta.path);
       }
     }
+    this.tagMapCache = { rev, map };
     return map;
   }
 

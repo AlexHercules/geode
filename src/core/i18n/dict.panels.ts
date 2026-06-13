@@ -75,6 +75,11 @@ export const en = {
   "outline.expandSection": "Expand section",
   "outline.collapseSection": "Collapse section",
 
+  // ---- tags ----
+  "tags.title": "Tags",
+  "tags.empty": "No tags in vault",
+  "tags.count": "{count} file(s)",
+
   // ---- command palette ----
   "palette.aria": "Command palette",
   "palette.placeholder": "Type a command…",
@@ -158,6 +163,11 @@ export const zh: Record<keyof typeof en, string> = {
   "outline.ariaTree": "文档大纲",
   "outline.expandSection": "展开小节",
   "outline.collapseSection": "折叠小节",
+
+  // ---- tags ----
+  "tags.title": "标签",
+  "tags.empty": "库中没有标签",
+  "tags.count": "{count} 个文件",
 
   // ---- command palette ----
   "palette.aria": "命令面板",

@@ -49,6 +49,7 @@ import { foldPersistence } from "./foldPersistence";
 import { livePreview, propertiesHostFacet } from "./livePreview";
 import { editorSearchPhrases } from "./searchCommands";
 import { slashCommandSource } from "./slashCommands";
+import { tagCompletionSource } from "./tagCompletion";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /** Dispatched when the metadata index changes so wikilink resolution re-runs. */
@@ -463,7 +464,7 @@ export function buildEditorExtensions(opts: {
     markdownWrapHandler,
     closeBrackets(),
     autocompletion({
-      override: [wikilinkCompletionSource(app), slashCommandSource(app)],
+      override: [wikilinkCompletionSource(app), slashCommandSource(app), tagCompletionSource(app)],
       icons: false,
     }),
     wikilinkDecorations(app, getPath),

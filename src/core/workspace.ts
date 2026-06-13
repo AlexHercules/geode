@@ -189,6 +189,9 @@ export class Workspace {
    *  then clears it back to null. Session-only — not persisted. Set AFTER
    *  openFile so the consuming pane already targets `path`. */
   readonly revealTarget = new Store<{ path: string; from: number; to: number } | null>(null);
+  /** R41: one-shot search request — the Tags pane (or any caller) seeds a query
+   *  and opens the search panel; SearchPanel consumes it then clears. Session-only. */
+  readonly searchRequest = new Store<string | null>(null);
   private flushers = new Set<() => void | Promise<void>>();
   /** Most-recent-LAST stack of user-closed tabs for Mod+Shift+T. Session-only —
    *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds
@@ -286,6 +289,12 @@ export class Workspace {
    *  effects; call AFTER openFile(path) so the target pane is already there. */
   requestReveal(path: string, from: number, to: number): void {
     this.revealTarget.set({ path, from, to });
+  }
+
+  /** Open the left search panel seeded with `query` (e.g. `#tag` from the Tags pane). */
+  requestSearch(query: string) {
+    this.searchRequest.set(query);
+    this.setLeftPanel("search");
   }
 
   openGraph() {

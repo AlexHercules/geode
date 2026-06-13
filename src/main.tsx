@@ -44,6 +44,7 @@ import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from 
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
+import { tagCandidates, tagTrigger } from "@features/editor/tagCompletion";
 import { installSearchProbe } from "@features/editor/searchCommands";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
@@ -375,6 +376,19 @@ async function bootstrap() {
   slashHost.__geodeSlash = {
     trigger: (before) => slashTrigger(before),
     candidates: (query) => slashCandidates(app, query).map((c) => c.id),
+  };
+
+  // always-on tag-completion probe (R41): pure trigger + candidate ranking for the
+  // editor `#` tag completion. Assigned BEFORE loadExternal (same as __geodeSlash).
+  const tagHost = globalThis as typeof globalThis & {
+    __geodeTag?: {
+      trigger: (before: string) => { query: string } | null;
+      candidates: (query: string) => string[];
+    };
+  };
+  tagHost.__geodeTag = {
+    trigger: (before) => tagTrigger(before),
+    candidates: (query) => tagCandidates([...metadata.getTagMap().keys()], query),
   };
 
   // always-on hotkey-grammar probe (R32): `match` and `format` take an explicit
