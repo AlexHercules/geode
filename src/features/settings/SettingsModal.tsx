@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
-import { getCommandName, hotkeyFromEvent } from "@core/commands";
+import { getCommandName, hotkeyFromEvent, formatHotkey, isMacPlatform } from "@core/commands";
 import {
   pagePreviewEnabled,
   pagePreviewRequireModifier,
@@ -36,7 +36,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.31.0";
+const APP_VERSION = "0.32.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -797,9 +797,9 @@ function HotkeysSection() {
         {t("settings.hotkeysNote1")}
         <em>{t("settings.customize")}</em>
         {t("settings.hotkeysNote2")}
-        <code>Ctrl</code>
+        <code>{isMacPlatform ? "⌘" : "Ctrl"}</code>
         {t("settings.hotkeysNote3")}
-        <code>Alt</code>
+        <code>{isMacPlatform ? "⌥" : "Alt"}</code>
         {t("settings.hotkeysNote4")}
         <code>Backspace</code>
         {t("settings.hotkeysNote5")}
@@ -847,7 +847,7 @@ function HotkeysSection() {
                     <span className="hotkey-chip is-capturing">{t("settings.hotkeyCapture")}</span>
                   ) : effective !== null ? (
                     <span className={`hotkey-chip${conflicts.length > 0 ? " has-conflict" : ""}`}>
-                      {effective}
+                      {formatHotkey(effective)}
                     </span>
                   ) : (
                     <span className="hotkey-chip is-empty">{t("settings.hotkeyNotSet")}</span>

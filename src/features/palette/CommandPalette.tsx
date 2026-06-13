@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useApp } from "@app/AppContext";
 import { useStore } from "@core/store";
 import { locale, useI18n } from "@core/i18n";
-import { getCommandName } from "@core/commands";
+import { getCommandName, formatHotkey } from "@core/commands";
 import type { Command } from "@core/types";
 import { fuzzyMatch, toSegments, type FuzzyMatch } from "@core/fuzzy";
 import "./palette.css";
@@ -113,7 +113,7 @@ export function CommandPalette() {
                     ),
                   )}
                 </span>
-                {row.hotkey && <span className="palette-hotkey">{row.hotkey}</span>}
+                {row.hotkey && <span className="palette-hotkey">{formatHotkey(row.hotkey)}</span>}
               </div>
             ))
           )}

@@ -4,6 +4,25 @@ import { Store } from "./store";
 const OVERRIDES_KEY = "geode.hotkeyOverrides";
 
 /**
+ * Platform primary-modifier resolution (R32). Obsidian's `Mod` modifier is Cmd
+ * (metaKey) on macOS and Ctrl (ctrlKey) everywhere else; `Ctrl` always means the
+ * physical Control key (even on a Mac) and `Meta` always means the ⌘/Win key.
+ * Detected once at module load — the host platform does not change at runtime.
+ * (core may not import features/compat, so this intentionally duplicates
+ * features/hover/hoverController.isApplePlatform and compat/util.isMacOS.)
+ */
+function detectMacPlatform(): boolean {
+  try {
+    if (typeof navigator === "undefined") return false;
+    return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+  } catch {
+    return false;
+  }
+}
+
+export const isMacPlatform = detectMacPlatform();
+
+/**
  * CommandRegistry — every user-facing action registers here so the command
  * palette, hotkeys, and plugins all share one source of truth.
  *
@@ -90,17 +109,20 @@ export class CommandRegistry {
 
   /**
    * Match a KeyboardEvent against registered hotkeys (effective: overrides win).
-   * Hotkey format: "Ctrl+Shift+P", "Ctrl+,", "F2" (Mod === Ctrl on Windows).
+   * Hotkey format: "Mod+Shift+P", "Mod+,", "F2". `Mod` resolves to Cmd (metaKey)
+   * on macOS and Ctrl (ctrlKey) elsewhere (R32); `Ctrl` is always physical Control.
    * Hotkeys are parsed once per registry change (hot path: every keystroke).
    */
   handleKeydown(e: KeyboardEvent): boolean {
-    if (e.metaKey) return false; // Meta is not part of the hotkey grammar
     const editable = isEditableTarget(e.target);
     for (const [id, parsed] of this.parsedHotkeys()) {
-      // a binding without Ctrl/Alt (bare key / Shift+key) would swallow
-      // normal typing — never fire those while an editable element has focus
-      if (editable && !parsed.wantCtrl && !parsed.wantAlt && !parsed.isFunctionKey) continue;
-      if (!matchParsedHotkey(parsed, e)) continue;
+      // a binding without a non-typing modifier (bare key / Shift+key) would
+      // swallow normal typing — never fire those while an editable element has
+      // focus. Mod/Ctrl/Meta/Alt all count (R32: Mod = Cmd on macOS).
+      const hasModifier =
+        parsed.wantMod || parsed.wantCtrl || parsed.wantMeta || parsed.wantAlt;
+      if (editable && !hasModifier && !parsed.isFunctionKey) continue;
+      if (!matchParsedHotkey(parsed, e, isMacPlatform)) continue;
       const cmd = this.commands.get(id);
       if (!cmd) continue;
       if (cmd.available?.() === false) continue; // context-gated (e.g. needs an editor)
@@ -155,9 +177,12 @@ export function getCommandName(cmd: Command): string {
 }
 
 /**
- * Canonical hotkey spelling: modifiers ordered Ctrl, Alt, Shift (Mod → Ctrl),
- * key cased like KeyboardEvent.key for named keys and uppercased for single
- * characters: "shift+ctrl+p" → "Ctrl+Shift+P", "ctrl+arrowright" → "Ctrl+ArrowRight".
+ * Canonical hotkey spelling: modifiers ordered Mod, Ctrl, Meta, Alt, Shift, key
+ * cased like KeyboardEvent.key for named keys and uppercased for single
+ * characters: "shift+mod+p" → "Mod+Shift+P", "ctrl+arrowright" → "Ctrl+ArrowRight".
+ * `Mod` (platform primary) is preserved DISTINCT from physical `Ctrl` (R32) — so
+ * "Mod+P" and "Ctrl+P" are different canonical strings (on macOS they resolve to
+ * Cmd vs physical Control, two different physical keys).
  */
 export function normalizeHotkey(hotkey: string): string {
   const parts = hotkey.split("+").map((p) => p.trim()).filter((p) => p.length > 0);
@@ -165,8 +190,10 @@ export function normalizeHotkey(hotkey: string): string {
   const rawKey = parts[parts.length - 1];
   const mods = new Set(parts.slice(0, -1).map((p) => p.toLowerCase()));
   const out: string[] = [];
-  if (mods.has("ctrl") || mods.has("mod")) out.push("Ctrl");
-  if (mods.has("alt")) out.push("Alt");
+  if (mods.has("mod")) out.push("Mod");
+  if (mods.has("ctrl") || mods.has("control")) out.push("Ctrl");
+  if (mods.has("meta")) out.push("Meta");
+  if (mods.has("alt") || mods.has("option")) out.push("Alt");
   if (mods.has("shift")) out.push("Shift");
   out.push(normalizeKeyName(rawKey));
   return out.join("+");
@@ -220,8 +247,13 @@ const PUNCT_CODES: Record<string, string> = {
   "=": "Equal",
 };
 
-interface ParsedHotkey {
+export interface ParsedHotkey {
+  /** platform primary modifier (Cmd on macOS, Ctrl elsewhere) */
+  wantMod: boolean;
+  /** physical Control (any platform) */
   wantCtrl: boolean;
+  /** ⌘/Win key (any platform) */
+  wantMeta: boolean;
   wantShift: boolean;
   wantAlt: boolean;
   /** lowercased key name */
@@ -229,31 +261,52 @@ interface ParsedHotkey {
   isFunctionKey: boolean;
 }
 
-function parseHotkey(hotkey: string): ParsedHotkey {
+/** Structural subset of KeyboardEvent that hotkey matching reads — lets the R32
+ *  `__geodeHotkey` probe pass a plain object. A real KeyboardEvent satisfies it. */
+export interface KeyEventLike {
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+  key: string;
+  code?: string;
+}
+
+/** Parse a canonical hotkey string into its modifier requirements (platform-agnostic). */
+export function parseHotkey(hotkey: string): ParsedHotkey {
   const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
   const key = parts[parts.length - 1];
   const mods = new Set(parts.slice(0, -1));
   return {
-    wantCtrl: mods.has("ctrl") || mods.has("mod"),
+    wantMod: mods.has("mod"),
+    wantCtrl: mods.has("ctrl") || mods.has("control"),
+    wantMeta: mods.has("meta"),
     wantShift: mods.has("shift"),
-    wantAlt: mods.has("alt"),
+    wantAlt: mods.has("alt") || mods.has("option"),
     key,
     isFunctionKey: /^f\d{1,2}$/.test(key),
   };
 }
 
-function matchParsedHotkey(p: ParsedHotkey, e: KeyboardEvent): boolean {
-  if (e.ctrlKey !== p.wantCtrl || e.shiftKey !== p.wantShift || e.altKey !== p.wantAlt) {
-    return false;
-  }
+/**
+ * Four-state exact modifier compare (R32). `Mod` resolves per platform:
+ *  - mac:    Mod → metaKey      (Ctrl stays physical ctrlKey)
+ *  - others: Mod → ctrlKey      (Meta stays physical metaKey)
+ * Requiring exact equality means e.g. mac `Ctrl+P` does NOT fire a `Mod+P`
+ * binding (needCtrl=false but e.ctrlKey=true) — mirrors Obsidian.
+ */
+export function matchParsedHotkey(p: ParsedHotkey, e: KeyEventLike, isMac: boolean): boolean {
+  const needMeta = (isMac && p.wantMod) || p.wantMeta;
+  const needCtrl = (!isMac && p.wantMod) || p.wantCtrl;
+  if (e.metaKey !== needMeta || e.ctrlKey !== needCtrl) return false;
+  if (e.shiftKey !== p.wantShift || e.altKey !== p.wantAlt) return false;
   if (e.key.toLowerCase() === p.key) return true;
   if (p.key === "space" && e.key === " ") return true;
   return PUNCT_CODES[p.key] !== undefined && e.code === PUNCT_CODES[p.key];
 }
 
 export function matchHotkey(hotkey: string, e: KeyboardEvent): boolean {
-  if (e.metaKey) return false; // Meta combos never match the Ctrl/Alt/Shift grammar
-  return matchParsedHotkey(parseHotkey(hotkey), e);
+  return matchParsedHotkey(parseHotkey(hotkey), e, isMacPlatform);
 }
 
 function isEditableTarget(t: EventTarget | null): boolean {
@@ -275,26 +328,79 @@ const CODE_TO_BASE: Record<string, string> = Object.fromEntries(
 /**
  * Build a candidate hotkey from a captured KeyboardEvent (settings capture
  * mode), or null when the event must NOT become a binding:
- *  - Meta combos are outside the grammar (keep waiting for another chord)
  *  - modifier-only chords never bind
- *  - bare printable keys (no Ctrl/Alt) would swallow normal typing — only
- *    function keys may bind without Ctrl/Alt
+ *  - bare printable keys (no Ctrl/Alt/Meta) would swallow normal typing — only
+ *    function keys may bind without a non-typing modifier
+ * The platform primary modifier records as portable `Mod` (mac: metaKey → Mod;
+ * elsewhere: ctrlKey → Mod) so a binding captured on one OS resolves correctly
+ * on another. A *separate* physical Ctrl on mac (ctrl held without Cmd) records
+ * as `Ctrl`; the Win/Super key on non-mac records as `Meta`. (R32)
  * Shifted punctuation is normalized back to the physical base character via
  * e.code so the candidate matches default bindings (PUNCT_CODES grammar) and
  * conflict detection compares like with like.
  */
 export function hotkeyFromEvent(e: KeyboardEvent): string | null {
-  if (e.metaKey) return null;
   if (MODIFIER_KEY_NAMES.has(e.key)) return null;
   let key = e.key === " " ? "Space" : e.key;
   const base = CODE_TO_BASE[e.code];
   if (base !== undefined) key = base;
   if (key === "+") return null; // not representable in the "+"-separated grammar
-  if (!e.ctrlKey && !e.altKey && !/^f\d{1,2}$/i.test(key)) return null;
+  if (!e.ctrlKey && !e.altKey && !e.metaKey && !/^f\d{1,2}$/i.test(key)) return null;
   const parts: string[] = [];
-  if (e.ctrlKey) parts.push("Ctrl");
+  if (isMacPlatform) {
+    if (e.metaKey) parts.push("Mod"); // ⌘ = platform primary
+    if (e.ctrlKey) parts.push("Ctrl"); // physical Control, distinct from ⌘
+  } else {
+    if (e.ctrlKey) parts.push("Mod"); // Ctrl = platform primary
+    if (e.metaKey) parts.push("Meta"); // Win/Super key (rare)
+  }
   if (e.altKey) parts.push("Alt");
   if (e.shiftKey) parts.push("Shift");
   parts.push(key);
   return normalizeHotkey(parts.join("+"));
 }
+
+/**
+ * Format a canonical hotkey for display (R32). Non-mac: `Mod` → `Ctrl`, keep the
+ * "+"-separated spelling ("Mod+Shift+E" → "Ctrl+Shift+E"). Mac: Apple-HIG glyphs
+ * in order ⌃⌥⇧⌘ then the key, no separator ("Mod+P" → "⌘P", "Mod+Alt+ArrowRight"
+ * → "⌥⌘→"). Display only — never written to storage.
+ */
+export function formatHotkey(hotkey: string, isMac: boolean = isMacPlatform): string {
+  const canonical = normalizeHotkey(hotkey);
+  if (!canonical) return "";
+  const parts = canonical.split("+");
+  const key = parts[parts.length - 1];
+  const mods = parts.slice(0, -1);
+  if (!isMac) {
+    return [...mods.map((m) => (m === "Mod" ? "Ctrl" : m)), key].join("+");
+  }
+  const ordered = MAC_MOD_ORDER.filter((m) => mods.includes(m)).map((m) => MAC_MOD_GLYPH[m]);
+  return ordered.join("") + (MAC_KEY_GLYPH[key] ?? key);
+}
+
+/** Apple-HIG modifier order: Control, Option, Shift, Command. */
+const MAC_MOD_ORDER = ["Ctrl", "Alt", "Shift", "Mod", "Meta"] as const;
+const MAC_MOD_GLYPH: Record<string, string> = {
+  Ctrl: "⌃",
+  Alt: "⌥",
+  Shift: "⇧",
+  Mod: "⌘",
+  Meta: "⌘",
+};
+const MAC_KEY_GLYPH: Record<string, string> = {
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  Enter: "↵",
+  Backspace: "⌫",
+  Delete: "⌦",
+  Space: "␣",
+  Escape: "⎋",
+  Tab: "⇥",
+  PageUp: "⇞",
+  PageDown: "⇟",
+  Home: "↖",
+  End: "↘",
+};

@@ -32,8 +32,8 @@ async function openToday(app: AppHandle): Promise<void> {
 }
 
 /**
- * Daily notes — Ctrl+D opens (creating if needed) "Daily Notes/YYYY-MM-DD.md"
- * for today's date.
+ * Daily notes — Mod+D (⌘D on macOS, Ctrl+D elsewhere) opens (creating if
+ * needed) "Daily Notes/YYYY-MM-DD.md" for today's date.
  */
 export const dailyNotePlugin: GeodePlugin = {
   id: "daily-note",
@@ -46,7 +46,7 @@ export const dailyNotePlugin: GeodePlugin = {
     app.commands.register({
       id: "daily-note:open-today",
       name: () => t("cmd.dailyNote"),
-      hotkey: "Ctrl+D",
+      hotkey: "Mod+D",
       callback: () => void openToday(app),
     });
   },

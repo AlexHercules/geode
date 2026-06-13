@@ -116,19 +116,19 @@ export function App() {
       commands.register({
         id: "app:command-palette",
         name: () => t("cmd.commandPalette"),
-        hotkey: "Ctrl+P",
+        hotkey: "Mod+P",
         callback: () => workspace.openModal("palette"),
       }),
       commands.register({
         id: "app:quick-switcher",
         name: () => t("cmd.quickSwitcher"),
-        hotkey: "Ctrl+O",
+        hotkey: "Mod+O",
         callback: () => workspace.openModal("switcher"),
       }),
       commands.register({
         id: "app:new-note",
         name: () => t("cmd.newNote"),
-        hotkey: "Ctrl+N",
+        hotkey: "Mod+N",
         callback: () => {
           void (async () => {
             const path = vault.uniquePath("", "Untitled");
@@ -140,13 +140,13 @@ export function App() {
       commands.register({
         id: "app:toggle-mode",
         name: () => t("cmd.toggleMode"),
-        hotkey: "Ctrl+E",
+        hotkey: "Mod+E",
         callback: () => workspace.toggleActiveTabMode(),
       }),
       commands.register({
         id: "app:toggle-source",
         name: () => t("cmd.toggleSource"),
-        hotkey: "Ctrl+Shift+E",
+        hotkey: "Mod+Shift+E",
         callback: () => workspace.toggleActiveSourceMode(),
       }),
       commands.register({
@@ -162,7 +162,7 @@ export function App() {
       commands.register({
         id: "app:open-graph",
         name: () => t("cmd.openGraph"),
-        hotkey: "Ctrl+G",
+        hotkey: "Mod+G",
         callback: () => workspace.openGraph(),
       }),
       commands.register({
@@ -173,7 +173,7 @@ export function App() {
       commands.register({
         id: "app:open-settings",
         name: () => t("cmd.openSettings"),
-        hotkey: "Ctrl+,",
+        hotkey: "Mod+,",
         callback: () => workspace.openModal("settings"),
       }),
       commands.register({
@@ -189,7 +189,7 @@ export function App() {
       commands.register({
         id: "app:close-tab",
         name: () => t("cmd.closeTab"),
-        hotkey: "Ctrl+W",
+        hotkey: "Mod+W",
         callback: () => {
           const tab = workspace.getActiveTab();
           if (tab) workspace.closeTab(tab.id);
@@ -198,25 +198,25 @@ export function App() {
       commands.register({
         id: "app:split-right",
         name: () => t("cmd.splitRight"),
-        hotkey: "Ctrl+\\",
+        hotkey: "Mod+\\",
         callback: () => void workspace.splitActivePane("row"),
       }),
       commands.register({
         id: "app:split-down",
         name: () => t("cmd.splitDown"),
-        hotkey: "Ctrl+Shift+\\",
+        hotkey: "Mod+Shift+\\",
         callback: () => void workspace.splitActivePane("column"),
       }),
       commands.register({
         id: "app:focus-next-pane",
         name: () => t("cmd.focusNextPane"),
-        hotkey: "Ctrl+Alt+ArrowRight",
+        hotkey: "Mod+Alt+ArrowRight",
         callback: () => workspace.focusAdjacentPane(1),
       }),
       commands.register({
         id: "app:focus-previous-pane",
         name: () => t("cmd.focusPreviousPane"),
-        hotkey: "Ctrl+Alt+ArrowLeft",
+        hotkey: "Mod+Alt+ArrowLeft",
         callback: () => workspace.focusAdjacentPane(-1),
       }),
       commands.register({
@@ -246,7 +246,7 @@ export function App() {
       commands.register({
         id: "editor:add-property",
         name: () => t("cmd.addProperty"),
-        hotkey: "Ctrl+;",
+        hotkey: "Mod+;",
         callback: () => {
           // no file in the active tab → no-op (contract)
           const tab = workspace.getActiveTab();

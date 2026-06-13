@@ -10,7 +10,15 @@ import {
   setObsidianSnippet,
   setObsidianTheme,
 } from "@compat/obsidian/themes";
-import { CommandRegistry } from "@core/commands";
+import {
+  CommandRegistry,
+  formatHotkey,
+  isMacPlatform,
+  matchParsedHotkey,
+  normalizeHotkey,
+  parseHotkey,
+  type KeyEventLike,
+} from "@core/commands";
 import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
@@ -339,6 +347,25 @@ async function bootstrap() {
   slashHost.__geodeSlash = {
     trigger: (before) => slashTrigger(before),
     candidates: (query) => slashCandidates(app, query).map((c) => c.id),
+  };
+
+  // always-on hotkey-grammar probe (R32): `match` and `format` take an explicit
+  // `isMac` so the desktop/browser probe can assert BOTH platform branches from a
+  // single binary on a mac host (mirrors __geodeSlash's pure-gate approach). The
+  // live command layer (handleKeydown) uses the detected isMacPlatform.
+  const hotkeyHost = globalThis as typeof globalThis & {
+    __geodeHotkey?: {
+      isMac: boolean;
+      normalize: (hotkey: string) => string;
+      format: (hotkey: string, isMac: boolean) => string;
+      match: (hotkey: string, e: KeyEventLike, isMac: boolean) => boolean;
+    };
+  };
+  hotkeyHost.__geodeHotkey = {
+    isMac: isMacPlatform,
+    normalize: (hotkey) => normalizeHotkey(hotkey),
+    format: (hotkey, isMac) => formatHotkey(hotkey, isMac),
+    match: (hotkey, e, isMac) => matchParsedHotkey(parseHotkey(hotkey), e, isMac),
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault
