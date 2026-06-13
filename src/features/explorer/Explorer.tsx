@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
-import { isTauri, parentPath } from "@core/vault";
+import { isTauri, parentPath, basename } from "@core/vault";
+import { EXPLORER_MIME, findFolder, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
@@ -41,19 +42,6 @@ function flattenVisible(root: FolderNode, expanded: Set<string>): Row[] {
   };
   walk(root, 0);
   return rows;
-}
-
-function findFolder(root: FolderNode, path: string): FolderNode | null {
-  if (path === "") return root;
-  const walk = (folder: FolderNode): FolderNode | null => {
-    for (const child of folder.children) {
-      if (child.kind !== "folder") continue;
-      if (child.path === path) return child;
-      if (path.startsWith(child.path + "/")) return walk(child);
-    }
-    return null;
-  };
-  return walk(root);
 }
 
 function collectFolderPaths(root: FolderNode): string[] {
@@ -189,6 +177,10 @@ export function Explorer() {
   const [selected, setSelected] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  /* R28 drag-to-move: source path being dragged; current drop folder
+     (null = none/illegal, "" = vault root, "a/b" = that folder) */
+  const [draggingPath, setDraggingPath] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const treeRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -411,6 +403,86 @@ export function Explorer() {
     setSelected(newPath);
   };
 
+  /* ---------------- R28 drag-to-move ---------------- */
+
+  /** Move `fromPath` into the folder implied by `hoveredPath` (folder → itself,
+   *  file → its parent, null → root). Reuses the R16/R27 write throat
+   *  `renameWithLinkUpdate` — NO new write path; only the four guards
+   *  (no-op / self-descendant via resolveDropTarget, collision, stale) decide
+   *  whether to call it. Contract: ARCHITECTURE "Round 28 additions". */
+  const moveNode = async (fromPath: string, hoveredPath: string | null) => {
+    if (!tree) return;
+    // stale guard: the dragged node may have been moved/deleted by an external
+    // watcher mid-drag — re-verify against the live vault before any write
+    if (!app.vault.fileExists(fromPath) && !app.vault.folderExists(fromPath)) return;
+    const target = resolveDropTarget(tree, fromPath, hoveredPath);
+    if (target === null) return; // no-op / into self / descendant
+    if (wouldCollide(tree, fromPath, target)) {
+      showLinkUpdateNotice(t("explorer.moveCollision", { name: basename(fromPath) }));
+      return;
+    }
+    const name = basename(fromPath);
+    const newPath = target ? `${target}/${name}` : name;
+    const isFolder = findFolder(tree, fromPath) !== null;
+    try {
+      const result = await renameWithLinkUpdate(
+        { vault: app.vault, metadata: app.metadata, documents: app.documents },
+        fromPath,
+        newPath,
+      );
+      if (result.linksRewritten > 0) {
+        console.info(
+          `[explorer] moved + updated ${result.linksRewritten} link(s) in ${result.filesChanged} file(s)`,
+        );
+      }
+      if (result.skipped.length > 0) {
+        showLinkUpdateNotice(t("explorer.linkUpdateSkipped", { count: result.skipped.length }));
+      }
+    } catch (err) {
+      console.error("[explorer] move failed", err);
+      return;
+    }
+    if (isFolder) setExpanded((prev) => remapPaths(prev, fromPath, newPath));
+    expandAncestors(newPath); // open the destination folder so the item is visible
+    setSelected(newPath);
+  };
+
+  const isExplorerDrag = (e: React.DragEvent) => e.dataTransfer.types.includes(EXPLORER_MIME);
+
+  const hoveredPathFromEvent = (e: React.DragEvent): string | null =>
+    (e.target as HTMLElement).closest?.(".explorer-item")?.getAttribute("data-path") ?? null;
+
+  const onTreeDragOver = (e: React.DragEvent) => {
+    if (!isExplorerDrag(e)) return;
+    e.preventDefault();
+    if (!tree || !draggingPath) {
+      e.dataTransfer.dropEffect = "none";
+      return;
+    }
+    const target = resolveDropTarget(tree, draggingPath, hoveredPathFromEvent(e));
+    e.dataTransfer.dropEffect = target === null ? "none" : "move";
+    setDropTarget((prev) => (prev === target ? prev : target));
+  };
+
+  const onTreeDrop = (e: React.DragEvent) => {
+    if (!isExplorerDrag(e)) return;
+    e.preventDefault();
+    const fromPath = e.dataTransfer.getData(EXPLORER_MIME);
+    const hovered = hoveredPathFromEvent(e);
+    setDropTarget(null);
+    setDraggingPath(null);
+    if (fromPath) void moveNode(fromPath, hovered);
+  };
+
+  const onTreeDragLeave = (e: React.DragEvent) => {
+    if (!isExplorerDrag(e)) return;
+    // child→child transitions fire dragleave on the parent; only clear when the
+    // pointer truly left the tree (relatedTarget outside / null = left window)
+    const related = e.relatedTarget as Node | null;
+    if (related && treeRef.current?.contains(related)) return;
+    setDropTarget(null);
+  };
+
   const collapseOrExpandAll = () => {
     setExpanded(anyExpanded ? new Set() : new Set(allFolders));
   };
@@ -465,16 +537,30 @@ export function Explorer() {
     const isActive = !isFolder && node.path === activeFile;
     const isSelected = node.path === selected;
     const isRenaming = node.path === renaming;
+    const isDragging = node.path === draggingPath;
+    const isDropTarget = dropTarget !== null && dropTarget !== "" && node.path === dropTarget;
     const label = isFolder ? node.name : node.basename;
 
     return (
       <div
         key={node.path}
-        className={`explorer-item${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}`}
+        className={`explorer-item${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
         data-testid="explorer-item"
         data-path={node.path}
         data-hover-path={isFolder ? undefined : node.path}
         style={{ paddingLeft: 4 + depth * 14 }}
+        draggable={!isRenaming}
+        onDragStart={(e) => {
+          e.dataTransfer.setData(EXPLORER_MIME, node.path);
+          e.dataTransfer.effectAllowed = "move";
+          // defer state update one tick — a same-frame re-render cancels the
+          // drag in Chromium (R3 tab-drag precedent)
+          window.setTimeout(() => setDraggingPath(node.path), 0);
+        }}
+        onDragEnd={() => {
+          setDraggingPath(null);
+          setDropTarget(null);
+        }}
         onClick={() => {
           if (!isRenaming) activateNode(node);
         }}
@@ -554,11 +640,14 @@ export function Explorer() {
 
       <div
         ref={treeRef}
-        className="explorer-tree"
+        className={`explorer-tree${dropTarget === "" ? " is-drop-root" : ""}`}
         tabIndex={0}
         role="tree"
         onKeyDown={onTreeKeyDown}
         onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
+        onDragOver={onTreeDragOver}
+        onDrop={onTreeDrop}
+        onDragLeave={onTreeDragLeave}
       >
         {tree === null ? (
           <div className="explorer-empty">{t("explorer.noVault")}</div>

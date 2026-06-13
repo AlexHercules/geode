@@ -28,7 +28,8 @@ import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
-import { isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
+import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
+import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -244,6 +245,45 @@ async function bootstrap() {
     add: (item, groupPath) => bookmarks.add(item, groupPath),
     move: (from, toGroup, toIndex) => bookmarks.move(from, toGroup, toIndex),
     reload: () => bookmarks.init(vault),
+  };
+
+  // always-on explorer drag-to-move probe (R28): drives the real-fs move
+  // through the SAME decision core the Explorer drop handler uses
+  // (resolveDropTarget + wouldCollide, single source of truth) + the R16 write
+  // throat. WKWebView has no CDP, so desktop verifies the four guards + move
+  // through this hook (same pattern as __geodeRename). Assigned BEFORE
+  // loadExternal so an external plugin's onload can capture it synchronously.
+  const explorerMoveHost = globalThis as unknown as {
+    __geodeExplorerMove?: (
+      fromPath: string,
+      hoveredPath: string | null,
+    ) => Promise<{
+      moved: boolean;
+      reason?: string;
+      target?: string;
+      linksRewritten?: number;
+      filesChanged?: number;
+      skipped?: number;
+    }>;
+  };
+  explorerMoveHost.__geodeExplorerMove = async (fromPath, hoveredPath) => {
+    const tree = vault.tree.get();
+    if (!tree) return { moved: false, reason: "no-tree" };
+    if (!vault.fileExists(fromPath) && !vault.folderExists(fromPath)) {
+      return { moved: false, reason: "stale" };
+    }
+    const target = resolveDropTarget(tree, fromPath, hoveredPath);
+    if (target === null) return { moved: false, reason: "invalid" };
+    if (wouldCollide(tree, fromPath, target)) return { moved: false, reason: "collision" };
+    const newPath = target ? `${target}/${basename(fromPath)}` : basename(fromPath);
+    const result = await renameWithLinkUpdate({ vault, metadata, documents }, fromPath, newPath);
+    return {
+      moved: true,
+      target: newPath,
+      linksRewritten: result.linksRewritten,
+      filesChanged: result.filesChanged,
+      skipped: result.skipped.length,
+    };
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault

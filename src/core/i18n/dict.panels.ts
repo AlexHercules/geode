@@ -20,6 +20,7 @@ export const en = {
   "explorer.deleteConfirmFile": 'Delete "{name}"?',
   "explorer.deleteConfirmFolder": 'Delete folder "{name}" and all its contents?',
   "explorer.linkUpdateSkipped": "{count} file(s) skipped during link update — see console",
+  "explorer.moveCollision": 'A file or folder named "{name}" already exists here',
 
   // ---- search ----
   "search.title": "Search",
@@ -102,6 +103,7 @@ export const zh: Record<keyof typeof en, string> = {
   "explorer.deleteConfirmFile": "删除“{name}”？",
   "explorer.deleteConfirmFolder": "删除文件夹“{name}”及其全部内容？",
   "explorer.linkUpdateSkipped": "链接更新跳过 {count} 个文件——详见控制台",
+  "explorer.moveCollision": "此处已存在名为“{name}”的文件或文件夹",
 
   // ---- search ----
   "search.title": "搜索",

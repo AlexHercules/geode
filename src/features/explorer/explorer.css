@@ -81,6 +81,22 @@
   color: var(--accent);
 }
 
+/* R28 drag-to-move (mirrors BookmarksPanel .is-drop-into) */
+.explorer-item.is-dragging {
+  opacity: 0.4;
+}
+
+.explorer-item.is-drop-target {
+  background: var(--accent-muted);
+  color: var(--text-normal);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* dropping into the vault root (empty space / below the rows) */
+.explorer-tree.is-drop-root {
+  box-shadow: inset 0 0 0 2px var(--accent-muted);
+}
+
 .explorer-name {
   flex: 1;
   min-width: 0;

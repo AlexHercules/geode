@@ -903,6 +903,13 @@ export class MemoryVaultAdapter implements VaultAdapter {
   }
 
   async rename(oldPath: string, newPath: string): Promise<void> {
+    // mirror the Tauri backend's `to.exists()` guard (src-tauri vault_rename):
+    // never silently clobber an existing target. Normal renames are collision-
+    // checked upstream; this closes the narrow race where a concurrent external
+    // change drops a same-named file into the destination mid-move (R28 review).
+    if (oldPath !== newPath && (this.files.has(newPath) || this.folders.has(newPath))) {
+      throw new Error(`target already exists: ${newPath}`);
+    }
     if (this.files.has(oldPath)) {
       const content = this.files.get(oldPath)!;
       this.files.delete(oldPath);
