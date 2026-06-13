@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.38.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R38 快速切换器子模式 ✓ 已交付**（R32+ 候选池第二梯队 #⑦：QuickSwitcher 原仅文件名+别名+create）。校准 Quick Switcher++ standalone 模式:`#`→**全库标题搜索**、`^`→**全库块搜索**（首字符 sigil 切模式）。实现:**抽纯函数到 `core/switcherSearch.ts`**（`switcherMode`/`stripSigil`/`searchHeadings`/`searchBlocks`，复用 `metadata.getAll()` 索引 + `core/fuzzy`，空 query browse=活动文件优先、非空=fuzzy 打分）→ 组件/E2E/探针单一真值（R33 模式）;QuickSwitcher.tsx Row 联合加 heading/block、mode-aware placeholder/empty、render(hash 图标+fuzzy 高亮)、activate(`openFile`+`requestReveal` 跳转,BookmarksPanel 先例);`main.tsx` `__geodeSwitcher` 探针。**零新 vault 写路径**(跳转纯读+导航)+ **零新依赖**。`r38-e2e` **19/19** + 桌面 `r38-probe` **13/13** + r32-r37 不回退 + r26-bytes 0。**3 维对抗评审 9 finding → 2 确认修复**（block 行 React key 同段两 `^id` 撞键→改用 `block.id`;`headingSpan.to` 不准且无消费者→移除、heading reveal 锚 `from`）+ 7 nit/by-design。
-- **下一项 = R38→R39 = R32+ 候选池第二梯队 #⑧ 固定标签页 + 堆叠标签 + 链接面板**（workspace 状态无 pinned/stacked/linkedGroup 字段）。Obsidian:Pin（固定后点链接另开新 tab 不替换）、Stack notes（标签堆叠）、Open linked view（local graph/backlinks/outline 跟随某 tab）。切入:`workspace.ts` 状态扩字段 + TabBar 右键菜单 + linked view。**多子特性、可切片**——R39 可只取一个 coherent slice（如 **pinned tabs**:`TabState.pinned` + openFile 在 pinned 活动 tab 时强制 newTab + TabBar pin 图标/右键），其余（stack/linked）入后续轮。其后队列:⑨ 键盘切换复选框（Cmd/Ctrl-L 复用 `preview.ts` `toggleTaskOnLine`）→（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.39.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R39 固定标签页 pinned tabs ✓ 已交付**（R32+ 候选池第二梯队 **#⑧ 的 pinned 切片**；#⑧ 三子特性=固定/堆叠/链接,本轮只取「固定」,**stack/linked 延后**）。实现:`TabState.pinned?:boolean`(持久化);`core/workspace.ts` openFile replace 分支 + recordNavigation 都加 `&& !active.pinned`(固定活动 tab → 不替换 → 落新 tab 分支、不记 phantom 历史);`toggleTabPin`;`sanitizeTab` 读 pinned;split dup 剔除 pin、reopen 恢复 pin(`ClosedTab.pinned`)。App.tsx `app:toggle-pin` 命令(无默认键)+ TabBar 双击切换(Obsidian 手势)+ pin 图标 + `.tab.is-pinned .tab-close` 淡显;icons `pin`。**零新 vault 写路径**(pin 是 workspace 标志)+ **零新依赖** + **零新探针**(store 直驱)。`r39-e2e` **17/17** + 桌面 `r39-probe` **8/8** + r32-r38 不回退 + r26-bytes 0。**3 维对抗评审 9 finding → 3 确认修复**(split 副本继承 pin→剔除 / `.tab.is-pinned` CSS 缺失→补 / reopen 丢 pin→ClosedTab 存 pin 恢复)+ 6 nit/证伪。
+- **下一项 = R39→R40 = R32+ 候选池第二梯队 #⑨ 键盘切换复选框**（仅鼠标点 `cm-live-checkbox`,无键命令）。Obsidian「Toggle checkbox status」(Cmd/Ctrl-L)。切入:复用 `preview.ts` 的 `toggleTaskOnLine`(已有,阅读视图点选复选框用它)接**编辑器命令** `editor:toggle-checklist`(或 toggle-checkbox)+ 默认键 `Mod+L`,作用当前行/选区(把 `- [ ]`↔`- [x]`,非任务行可选转成 `- [ ]`)。**注意**:这是编辑器命令(依赖 live CM view)→ 纯变换逻辑抽 core(镜像 R33 format)、桌面探针验纯函数、浏览器 E2E 验真编辑器键入(R34 结论:live-view 功能桌面探针不可驱动)。**#⑧ 余项**(stacked tabs / linked view=local graph·backlinks·outline 跟随某 tab)延后,见 ROADMAP。其后队列见 ROADMAP R32+ 候选池(第三梯队 ⑩ 标签面板+`#`补全 起)。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,16 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R39（固定标签页）核心教训三条**：① **「复制实例」vs「移动实例」对 per-instance 状态处理相反**——`moveTab` 复用
+  原 tab 对象(pinned/历史应随之迁移,对),`splitActivePane` 用 `{...srcTab, id:newTabId()}` 复制**新实例**(per-instance
+  态如 pinned、导航历史**不应继承**,需显式剔除 `pinned: undefined`)。R37 漏了 split 不复制历史、R39 漏了 split 不该继承
+  pin——**同根:凡 `{...tab, id:newId()}` 克隆,先问哪些字段是「这个 tab 实例独有」不该带过去**。② **加了 class hook 就得
+  有 CSS 消费它,否则是死 hook、契约承诺落空**——`is-pinned` 挂上 DOM 却无 `.tab.is-pinned{}` 规则,评审 grep 出来。加视觉
+  class 时同帧加规则(本轮顺势让固定 tab 的关闭 X 淡显,兼向 Obsidian 靠拢)。③ **新增字段要顺 tab 生命周期全链问「跟不跟」**
+  ——pinned 在 rename/move/sanitize 都靠 `{...t}` 自动透传(对),唯 **reopen(重建新 tab)** 与 **split(复制)** 需显式处理:
+  reopen 要把 pin 存进 `ClosedTab` 再恢复、split 要剔除。评审逐路径(close→reopen / rename / move / split / sanitize)核查正是
+  抓这两处的方法。**openf 维 0 finding**:openFile×pin 的核心交互(显式 newTab/reuse/graph/同文件)契约先行设计周全、零缺陷;
+  缺陷全在「实例克隆」「class hook」「reopen 重建」这些**生命周期边角**——延续 R38:核心逻辑稳,缺陷集中在边角,评审逐路径抓全。
 - **R38（快速切换器子模式）核心教训三条**：① **「段落近似」的块 span 让同段多块共享 `from`/`to`——凡拿
   `block.from` 当 React key / 唯一标识必撞,用 `block.id`**（id 才是块身份;metadata 对重复 id 保留最后一个）。同段
   `^aaa\\n^bbb` 两块 BlockRef 坐标完全相同,原 key `b:${path}:${from}` 重复 → React「same key」警告。E2E 原夹具块都在

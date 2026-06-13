@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R39 套件回归（2026-06-14，macOS release 二进制 v0.39.0 实测 `r39-probe-vault`）
+
+R39 = 固定标签页（#⑧ 的 pinned 切片；stack/linked 延后）。**compat API 表面零代码改动**——`core/types.ts`（`TabState.pinned`）
++ `core/workspace.ts`（openFile/recordNavigation 加 `!active.pinned`、`toggleTabPin`、sanitizeTab、split 剔除/reopen 恢复 pin）
++ `app/App.tsx`（`app:toggle-pin` 命令 + TabBar 双击 + pin 图标）+ icons/i18n/css。校准 Obsidian「Pin」语义 + 双击手势。
+**零新 window 探针**——pin 是 store 操作,探针/E2E 直驱 `app.workspace`。macOS probe 实测:新增 **r39-probe 8/8**——桌面直驱
+真 store（toggleTabPin + openFile-respects-pin 固定活动 tab → 新 tab 不替换 + recordNav skip + 未固定仍替换）;命令/双击/持久化
+= React/reload 路径,交浏览器 r39-e2e。**r38/r37/…/r23 套件不回退**（compat 调用面零改动；浏览器 r39-e2e **17/17** + r38 19、
+r37 36、r36 47、r35 25、r34 15、r33 37、r32 24 全绿；`r26-bytes` 0 违例,markdown.ts 未动）。**3 维对抗评审 9 finding → 3 确认
+修复**（split 副本继承 pin → dup 剔除;`.tab.is-pinned` CSS 缺失 → 补「固定 tab 关闭 X 淡显」;reopen 关闭的固定 tab 丢 pin →
+`ClosedTab.pinned` 捕获+恢复）**+ 6 nit/by-design/证伪**（graph 可固定=Obsidian 允许记偏差 / sanitizeTab `===true` 等价 /
+双击 draggable 真实 Chromium 照常 fire dblclick=Playwright 合成限制 E2E 用 dispatchEvent / openFile 守卫非回退 / 固定 tab 自身
+back-forward 可移离=已记偏差）。openf 维 **0 finding**（openFile×pin 核心交互契约先行零缺陷,缺陷全在实例克隆/class hook/reopen 边角）。
+
 ### R38 套件回归（2026-06-14，macOS release 二进制 v0.38.0 实测 `r38-probe-vault`）
 
 R38 = 快速切换器子模式（已核实缺口：QuickSwitcher 仅文件名+别名+create，无 heading/block 模式）。**compat API 表面零代码

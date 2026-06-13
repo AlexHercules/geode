@@ -71,6 +71,71 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 39 additions — 固定标签页（pinned tabs）【As-built v0.39】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑧ 的 **pinned-tabs 切片**（#⑧ 三子特性 = 固定/堆叠/链接面板；
+> 本轮只取「固定」一个 coherent slice，stack/linked 入后续轮）。本轮 **纯 workspace store + 命令注册，零新 vault 写路径**
+> （pin 只改 `TabState.pinned` 标志 + 影响 openFile 建 tab 决策，不写 `.md`）+ **零新运行时依赖** + **零新 window 探针**
+> （store 操作 → 探针/E2E 直驱 `app.workspace`）。校准 Obsidian 「Pin」语义 + 双击 tab 切换固定的手势。
+> **验证**：typecheck 0 + 浏览器 `r39-e2e` **17/17**（toggleTabPin + openFile-respects-pin + recordNav skip + 未固定仍替换 +
+> 双击切换 UI + 命令 + **split 副本不继承 pin + reopen 恢复 pin** + reload 持久化）+ 桌面 `r39-probe` **8/8**（store 直驱真二进制）
+> + r32-r38 不回退 + `r26-bytes` 0 + cargo/build 绿。**3 维对抗评审 9 finding → 3 确认修复 + 6 nit/by-design/证伪**（详见 As-built）。
+
+### 契约（冻结）
+
+**core/types.ts**：`TabState` 加 `pinned?: boolean`（可选,持久化;缺省 = 未固定）。
+
+**core/workspace.ts**：
+- **openFile replace 分支加守卫**：`if (active && active.viewType === "markdown" && !opts.newTab && !active.pinned)` ——
+  活动 tab **已固定** → 不替换其内容，落到 new-tab 分支（= 在新 tab 打开,Obsidian Pin 行为）。reuse 分支不变（同文件已开
+  仍切过去,固定与否无关）。
+- **recordNavigation 同步加 `&& !active.pinned`**：固定 tab 不会被替换 → 不能把它的 location 记进导航历史（否则 phantom 记录）。
+- `toggleTabPin(tabId: string)`：翻转该 tab 的 `pinned`（`this.update` + 不动 activeTabId/emitActiveFile 非必需——纯标志,
+  但走 update 以持久化 + 触发 UI 重渲染）。
+- `sanitizeTab`：读 `pinned`（`typeof t.pinned === "boolean" ? t.pinned : undefined`),纳入持久化往返。
+
+**app/App.tsx**：注册 `app:toggle-pin`（`name:()=>t("cmd.togglePin")`,无默认键,`available:()=>workspace.getActiveTab()!=null`,
+callback 翻转活动 tab pin）;**TabBar**：tab `onDoubleClick` → `toggleTabPin(tab.id)`（Obsidian 双击手势）;`tab.pinned` 时
+className 加 `is-pinned` + 标题前渲染 `pin` 图标（指示,非按钮）。close 按钮保留（固定 tab 仍可关 = 显式偏差）。
+
+**app/icons.tsx**：加 `pin`（Lucide）。**core/i18n/dict.app.ts**：`cmd.togglePin`（en/zh）+ `app.pinnedTab`（pin 图标 aria/title）。
+**styles/app.css**：`.tab.is-pinned` 视觉（pin 图标色走变量）。版本 0.38→0.39。
+
+**探针/E2E（无新 window 全局）**：`app.workspace.toggleTabPin` + `openFile`-respects-pin（固定活动 tab openFile 别文件 → tab 数 +1
+而非替换）直驱 store 读 `getPanes()[].tabs` 真值;命令层（App-effect）交浏览器 E2E。
+
+### 文件所有权（chief 亲自，小而集中）
+- core/types.ts + core/workspace.ts + app/App.tsx + app/icons.tsx + core/i18n/dict.app.ts + styles/app.css + 3 版本 + `.calibration/r39-*`。
+
+### 已知偏差（写给后续轮）
+- **固定 tab 的关闭 X 淡显（hover 显），但仍可关闭**（R39 评审后:`.tab.is-pinned .tab-close` opacity 0.35 / hover 1，兼向 Obsidian「固定隐 X」靠拢，但不阻止关闭）。
+- **固定 tab 自身的 back/forward 仍可导航**（pin 只挡「外部 openFile 替换」,不挡 tab 自己的历史回放;`navigateBack`/`setTabLocation` 直改 filePath 绕过 openFile）——Obsidian 固定更严格;本轮取最小 pin 语义。具体翻车序列见 As-built。
+- **toggle 仅双击 + 命令**（无右键上下文菜单——避免引入菜单框架;双击 = Obsidian 手势）。
+- **graph tab 也可被固定**（双击/命令无 viewType 守卫）——Obsidian 本就允许固定任意 tab;Geode 内 graph 永不被 openFile 替换,故固定 graph 是 inert 指示（无害,不加守卫以保持 Obsidian「任意 tab 可固定」语义）。
+- **#⑧ 的 stack / linked-view 子特性未做**（入后续轮）。
+
+### As-built（评审修复 + 教训）
+
+**3 个确认缺陷（已修）**：① **`splitActivePane` 分屏副本继承 pinned**——`dup = {...srcTab, id:newTabId()}` 把 `pinned:true`
+带进新副本（Obsidian pin 是 per-tab-instance,split 副本不继承）。修 = dup 时 `pinned: undefined`（镜像 R37「split 不复制
+历史」)。② **契约承诺的 `.tab.is-pinned` CSS 缺失（死 class hook）**——初版只加 `.tab-pin`（图标 span）,`is-pinned` class 挂上
+DOM 却无 CSS 消费。修 = 加 `.tab.is-pinned .tab-close{opacity:.35}` + `:hover{opacity:1}`（既兑现契约视觉,又兼向 Obsidian
+「固定隐 X」靠拢）。③ **reopen 关闭的固定 tab 丢 pin**——`ClosedTab` 不存 pinned,`reopenClosedTab` 走 `openFile(newTab)` 建无
+pin 的新 tab。修 = `ClosedTab` 加 `pinned?`、closeTab 捕获、reopen 后 `if(entry.pinned) toggleTabPin`。
+
+**6 个 nit/by-design/证伪**：sanitizeTab 落地 `if(t.pinned===true)`（省 false 字段,与契约文本 `typeof==="boolean"` **行为等价**
+——全仓 pinned 读取皆真值判断,false vs 缺省不可观测;旧无字段持久数据迁移安全,reload round-trip 已验）;graph 可固定（记
+已知偏差,Obsidian 允许）;双击 draggable tab 真实 Chromium 照常 fire dblclick（Playwright 合成限制 → E2E 用 `dispatchEvent`
+派发真 dblclick 验 handler 接通）;openFile/recordNav 加 `!active.pinned` 对现有 tab（pinned=undefined→`!undefined`=true）行为
+不变（= r32-r38 不回退根因）;固定 tab 自身 back/forward 仍可移离（已记偏差,具体序列:a→b 导航后在 b 固定→back 把固定 tab
+变回 a,与 pin 语义矛盾,本轮最小语义接受）。
+
+**根因教训**：① **复制实例 vs 移动实例对「实例级状态」处理不同**——`moveTab` 复用原 tab 对象（pin 应随之迁移,对）,`split`
+复制新实例（pin/历史这类 per-instance 态不应继承,需显式剔除）。R37 split-history + R39 split-pin 同根。② **契约写了
+「.tab.is-pinned 视觉」就必须有 CSS 消费它,否则是死 hook**——加 class 钩子时同步加消费它的规则,别让契约承诺落空。
+③ **tab 生命周期全链（close→reopen / rename / move / split / sanitize）都要问「这个新字段跟不跟」**——pinned 在 rename/move/
+sanitize 都正确透传,唯 reopen（重建新 tab）+ split（复制）需显式处理,评审逐路径核查抓出这两处。
+
 ## Round 38 additions — 快速切换器子模式（Quick Switcher `#` heading / `^` block modes）【As-built v0.38】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑦ = 已核实缺口（QuickSwitcher 仅文件名+别名+create，
