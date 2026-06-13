@@ -473,6 +473,7 @@ export function Explorer() {
         className={`explorer-item${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}`}
         data-testid="explorer-item"
         data-path={node.path}
+        data-hover-path={isFolder ? undefined : node.path}
         style={{ paddingLeft: 4 + depth * 14 }}
         onClick={() => {
           if (!isRenaming) activateNode(node);

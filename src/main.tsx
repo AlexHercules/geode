@@ -26,6 +26,7 @@ import {
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
+import { renderMarkdownToHtml } from "@core/markdown";
 import { isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
@@ -181,6 +182,23 @@ async function bootstrap() {
       linkAllMentionsInFile({ vault, metadata, documents }, activePath, sourcePath),
     linkOne: (activePath, sourcePath, target) =>
       linkOneMention({ vault, metadata, documents }, activePath, sourcePath, target),
+  };
+
+  // always-on hover-preview probe (R25): drive the real-fs page-preview render
+  // path from browser/desktop E2E (WKWebView has no CDP — desktop verifies the
+  // render through this hook; same pattern as __geodeRename / __geodeUnlinked).
+  // Resolves the raw target relative to sourcePath, reads the resolved note and
+  // returns the rendered HTML; unresolved → null (no "uncreated" card).
+  const hoverHost = globalThis as unknown as {
+    __geodeHover?: (rawTarget: string, sourcePath: string) => Promise<string | null>;
+  };
+  hoverHost.__geodeHover = async (rawTarget, sourcePath) => {
+    const path = metadata.resolveLink(rawTarget, sourcePath);
+    if (!path) return null;
+    const content = await vault.read(path);
+    return renderMarkdownToHtml(content, (tg) => metadata.resolveLink(tg, path), {
+      noteEmbeds: true,
+    });
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault

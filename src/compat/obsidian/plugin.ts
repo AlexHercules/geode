@@ -372,6 +372,8 @@ export abstract class Plugin extends Component {
   settings?: unknown;
   private _uiCounter = 0;
   private _commandDisposers = new Map<string, () => void>();
+  /** R25: hover link source ids registered via registerHoverLinkSource (no-op registry). */
+  private _hoverLinkSources = new Set<string>();
 
   constructor(app: App, manifest: PluginManifest) {
     super();
@@ -616,8 +618,16 @@ export abstract class Plugin extends Component {
     reportGap(this.manifest.id, "Plugin.registerEditorExtension");
   }
 
-  registerHoverLinkSource(_id: string, _info: unknown): void {
-    reportGap(this.manifest.id, "Plugin.registerHoverLinkSource");
+  /**
+   * R25: real no-op registry. Geode's global hover preview already covers any
+   * plugin-rendered `a.internal-link`, so no plugin participation is needed —
+   * we just record the source id and return (no gap).
+   *
+   * GAP: plugin self-rendered previews (`hoverPopover` / `HoverParent`, where a
+   * plugin mounts its own popover) remain unimplemented — out of R25 scope.
+   */
+  registerHoverLinkSource(id: string, _info: unknown): void {
+    this._hoverLinkSources.add(id);
   }
 
   /** Called only on explicit user enable in real Obsidian — default no-op. */

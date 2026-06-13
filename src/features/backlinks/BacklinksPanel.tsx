@@ -298,6 +298,7 @@ export function BacklinksPanel() {
                     className="bl-source-name"
                     title={b.sourcePath}
                     data-testid="bl-source"
+                    data-hover-path={b.sourcePath}
                     onClick={() => app.workspace.openFile(b.sourcePath)}
                   >
                     <Icon name="file-text" size={13} />
@@ -343,6 +344,7 @@ export function BacklinksPanel() {
                         className="bl-source-name"
                         title={g.sourcePath}
                         data-testid="bl-source"
+                        data-hover-path={g.sourcePath}
                         onClick={() => app.workspace.openFile(g.sourcePath)}
                       >
                         <Icon name="file-text" size={13} />
@@ -416,6 +418,7 @@ export function BacklinksPanel() {
                     className={"bl-out" + (resolvedPath ? "" : " is-unresolved")}
                     title={resolvedPath ?? t("backlinks.createTitle", { name: link.target })}
                     data-testid="bl-outgoing"
+                    data-hover-path={resolvedPath ?? undefined}
                     onClick={() =>
                       resolvedPath
                         ? app.workspace.openFile(resolvedPath)

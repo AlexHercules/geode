@@ -43,6 +43,15 @@ export const en = {
   "settings.propertiesHidden": "Hidden",
   "settings.propertiesSource": "Source",
 
+  // ---- settings: page preview (R25) ----
+  "settings.pagePreviewHeading": "Page preview",
+  "settings.pagePreview": "Enable page preview",
+  "settings.pagePreviewDesc":
+    "Show a preview card of the target note when hovering over an internal link.",
+  "settings.pagePreviewModifier": "Require Ctrl/Cmd to hover",
+  "settings.pagePreviewModifierDesc":
+    "When on, every preview requires holding Ctrl (Cmd on macOS) while hovering.",
+
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "Files & links",
   "settings.autoUpdateLinks": "Automatically update internal links",
@@ -225,6 +234,14 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.propertiesVisible": "可见",
   "settings.propertiesHidden": "隐藏",
   "settings.propertiesSource": "源码",
+
+  // ---- settings: page preview (R25) ----
+  "settings.pagePreviewHeading": "页面预览",
+  "settings.pagePreview": "启用页面预览",
+  "settings.pagePreviewDesc": "悬停在内部链接上时，显示目标笔记的预览卡片。",
+  "settings.pagePreviewModifier": "要求按住 Ctrl/Cmd",
+  "settings.pagePreviewModifierDesc":
+    "开启后，所有预览都需要在悬停时按住 Ctrl（macOS 为 Cmd）。",
 
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "文件与链接",

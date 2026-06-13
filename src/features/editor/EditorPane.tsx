@@ -687,7 +687,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
   return (
     // R20: "workspace-leaf"/"markdown-*" classes mirror Obsidian's DOM for
     // community theme CSS — resident, additive only (contract)
-    <div className="editor-pane workspace-leaf" data-testid="editor-pane">
+    // data-leaf-path lets the R25 hover controller resolve internal links
+    // against the note in THIS pane (not the globally-active file), so hovering
+    // a link in a non-focused split previews the correct target.
+    <div
+      className="editor-pane workspace-leaf"
+      data-testid="editor-pane"
+      data-leaf-path={tab.filePath ?? undefined}
+    >
       <div className="editor-header">
         <div className="editor-title" title={tab.filePath ?? undefined}>
           {tab.title}

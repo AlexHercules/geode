@@ -15,6 +15,7 @@ import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
+import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { isTauri } from "@core/vault";
@@ -549,6 +550,9 @@ export function App() {
       {ws.modal === "switcher" && <QuickSwitcher />}
       {ws.modal === "templates" && <TemplateSelector />}
       {ws.modal === "settings" && <SettingsModal />}
+
+      {/* hover preview card (R25) — mounts the document-level hover controller */}
+      <HoverPreview />
     </div>
   );
 }

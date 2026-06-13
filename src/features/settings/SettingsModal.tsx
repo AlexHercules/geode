@@ -3,6 +3,12 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import { getCommandName, hotkeyFromEvent } from "@core/commands";
+import {
+  pagePreviewEnabled,
+  pagePreviewRequireModifier,
+  setPagePreviewEnabled,
+  setPagePreviewRequireModifier,
+} from "@core/hover";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
 import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
 import {
@@ -30,7 +36,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.24.0";
+const APP_VERSION = "0.25.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -133,6 +139,9 @@ function AppearanceSection() {
   const tplTimeFormat = useStore(templateTimeFormat);
   /* R22: in-document properties display (visible | hidden | source) */
   const propsDisplay = useStore(app.workspace.propertiesInDocument);
+  /* R25: page preview (hover) — settings Stores from core/hover */
+  const pagePreview = useStore(pagePreviewEnabled);
+  const pagePreviewModifier = useStore(pagePreviewRequireModifier);
   /* R20: Obsidian CSS compat — via the AppContext handle (features never import @compat) */
   const obsidianCss = useStore(app.obsidianCss.state);
   const obsidianEnabled = obsidianCss.enabled;
@@ -327,6 +336,43 @@ function AppearanceSection() {
           <option value="hidden">{t("settings.propertiesHidden")}</option>
           <option value="source">{t("settings.propertiesSource")}</option>
         </select>
+      </div>
+
+      {/* ---- R25: page preview (hover) ---- */}
+      <h2 className="settings-heading">{t("settings.pagePreviewHeading")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.pagePreview")}</div>
+          <div className="setting-desc">{t("settings.pagePreviewDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${pagePreview ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={pagePreview}
+          aria-label={t("settings.pagePreview")}
+          data-testid="settings-page-preview"
+          onClick={() => setPagePreviewEnabled(!pagePreview)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.pagePreviewModifier")}</div>
+          <div className="setting-desc">{t("settings.pagePreviewModifierDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${pagePreviewModifier ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={pagePreviewModifier}
+          aria-label={t("settings.pagePreviewModifier")}
+          data-testid="settings-page-preview-modifier"
+          onClick={() => setPagePreviewRequireModifier(!pagePreviewModifier)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
 
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>

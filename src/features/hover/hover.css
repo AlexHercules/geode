@@ -1,0 +1,32 @@
+/* ============ Hover preview card (R25 Page Preview) ============
+ * Fixed-position card raised by the hover controller. Colors go through CSS
+ * variables only; typography reuses the reading view (.preview-content). The
+ * card sits above editor content and below modals/menus. */
+
+.hover-preview {
+  position: fixed;
+  z-index: 60;
+  box-sizing: border-box;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* width / left / top / max-height are set inline by the positioner */
+}
+
+/* reading-view typography is provided by the reused .preview-content class;
+ * the card just supplies padding + a comfortable reading measure */
+.hover-preview .hover-preview-content {
+  padding: 12px 16px;
+  font-size: 0.94em;
+}
+
+/* tighten the first/last child margins so the card has no dead space */
+.hover-preview .hover-preview-content > :first-child {
+  margin-top: 0;
+}
+.hover-preview .hover-preview-content > :last-child {
+  margin-bottom: 0;
+}
