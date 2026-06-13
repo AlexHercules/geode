@@ -17,7 +17,15 @@ import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, LanguageSupport, foldService, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
-import { type Compartment, Prec, StateEffect, StateField, type Extension } from "@codemirror/state";
+import { search, searchKeymap } from "@codemirror/search";
+import {
+  type Compartment,
+  EditorState,
+  Prec,
+  StateEffect,
+  StateField,
+  type Extension,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
@@ -36,6 +44,7 @@ import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
 import { foldPersistence } from "./foldPersistence";
 import { livePreview, propertiesHostFacet } from "./livePreview";
+import { editorSearchPhrases } from "./searchCommands";
 import { slashCommandSource } from "./slashCommands";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -135,6 +144,48 @@ const editorTheme = EditorView.theme({
     fontSize: "0.85em",
   },
   ".cm-completionMatchedText": { textDecoration: "none", color: "var(--accent)" },
+  /* ---- search/replace panel (R34) — themed to match Geode, CSS vars only ---- */
+  ".cm-panels": {
+    background: "var(--bg-panel)",
+    color: "var(--text-normal)",
+    borderColor: "var(--border)",
+  },
+  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--border)" },
+  ".cm-panels.cm-panels-bottom": { borderTop: "1px solid var(--border)" },
+  // scale with the editor font-size setting (no hardcoded px — R34 review fix)
+  ".cm-panel.cm-search": { padding: "8px 10px", fontFamily: "inherit", fontSize: "var(--editor-font-size)" },
+  ".cm-panel.cm-search label": { fontSize: "calc(var(--editor-font-size) * 0.85)", color: "var(--text-muted)" },
+  ".cm-panel.cm-search .cm-textfield": {
+    background: "var(--bg-input, var(--bg-modal))",
+    color: "var(--text-normal)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: "5px",
+    padding: "3px 7px",
+    fontFamily: "inherit",
+  },
+  ".cm-panel.cm-search .cm-textfield:focus": {
+    outline: "none",
+    borderColor: "var(--accent)",
+  },
+  ".cm-panel.cm-search .cm-button": {
+    background: "var(--bg-modal)",
+    color: "var(--text-normal)",
+    border: "1px solid var(--border-strong)",
+    borderRadius: "5px",
+    backgroundImage: "none",
+    padding: "3px 9px",
+    cursor: "pointer",
+  },
+  ".cm-panel.cm-search .cm-button:hover": { background: "var(--accent-muted)" },
+  ".cm-panel.cm-search button[name='close']": {
+    color: "var(--text-muted)",
+    cursor: "pointer",
+  },
+  ".cm-searchMatch": {
+    background: "var(--accent-muted)",
+    outline: "1px solid var(--border-strong)",
+  },
+  ".cm-searchMatch-selected": { background: "var(--accent)", color: "var(--text-on-accent)" },
 });
 
 /* ---------------- markdown highlight style (live-preview feel) ---------------- */
@@ -360,6 +411,16 @@ export function buildEditorExtensions(opts: {
     placeholder(tr("editor.placeholder")),
     editorTheme,
     keymap.of([...defaultKeymap, indentWithTab]),
+    // R34 — in-editor find/replace. The panel UI + state; searchKeymap provides
+    // in-panel keys (Enter=next, Shift-Enter=prev, Escape=close, F3, Mod-d). The
+    // OPEN commands (Mod+F editor:search) go through the app command layer
+    // (registerSearchCommands) so they reach the palette + are rebindable, and
+    // the R33 Prec.highest interceptor handles them before this keymap (its own
+    // Mod-f is harmlessly shadowed). Phrases localized via EditorState.phrases
+    // (build-time, like the placeholder — R8 locale-switch caveat applies).
+    search({ top: true }),
+    keymap.of(searchKeymap),
+    EditorState.phrases.of(editorSearchPhrases()),
     autocompletion({
       override: [wikilinkCompletionSource(app), slashCommandSource(app)],
       icons: false,

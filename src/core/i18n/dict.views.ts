@@ -190,6 +190,25 @@ export const en = {
   "editor.embedMissingHeading": 'Heading "{heading}" not found in {name}',
   "editor.embedMissingBlock": 'Block "^{block}" not found in {name}',
 
+  // ---- in-editor find/replace panel (R34): CM @codemirror/search phrases ----
+  "editor.search.find": "Find",
+  "editor.search.replace": "Replace",
+  "editor.search.next": "next",
+  "editor.search.previous": "previous",
+  "editor.search.all": "all",
+  "editor.search.matchCase": "match case",
+  "editor.search.regexp": "regexp",
+  "editor.search.byWord": "by word",
+  "editor.search.replaceBtn": "replace",
+  "editor.search.replaceAll": "replace all",
+  "editor.search.close": "close",
+  "editor.search.currentMatch": "current match",
+  "editor.search.gotoLine": "Go to line",
+  "editor.search.go": "go",
+  "editor.search.onLine": "on line",
+  "editor.search.replacedOnLine": "replaced match on line $",
+  "editor.search.replacedMatches": "replaced $ matches",
+
   // ---- export ----
   "export.success": 'Exported "{name}"',
   "export.failed": "Export failed: {error}",
@@ -371,6 +390,25 @@ export const zh: Record<keyof typeof en, string> = {
   "editor.embedCircular": "循环嵌入：{name}",
   "editor.embedMissingHeading": "在 {name} 中找不到标题 \"{heading}\"",
   "editor.embedMissingBlock": "在 {name} 中找不到块 \"^{block}\"",
+
+  // ---- in-editor find/replace panel (R34): CM @codemirror/search phrases ----
+  "editor.search.find": "查找",
+  "editor.search.replace": "替换",
+  "editor.search.next": "下一个",
+  "editor.search.previous": "上一个",
+  "editor.search.all": "全部",
+  "editor.search.matchCase": "区分大小写",
+  "editor.search.regexp": "正则表达式",
+  "editor.search.byWord": "全字匹配",
+  "editor.search.replaceBtn": "替换",
+  "editor.search.replaceAll": "全部替换",
+  "editor.search.close": "关闭",
+  "editor.search.currentMatch": "当前匹配",
+  "editor.search.gotoLine": "跳转到行",
+  "editor.search.go": "跳转",
+  "editor.search.onLine": "于第",
+  "editor.search.replacedOnLine": "已替换第 $ 行的匹配",
+  "editor.search.replacedMatches": "已替换 $ 处匹配",
 
   // ---- export ----
   "export.success": "已导出“{name}”",

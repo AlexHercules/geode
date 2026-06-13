@@ -76,6 +76,10 @@ export const en = {
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
 
+  // ---- in-editor find/replace (R34) ----
+  "cmd.searchFile": "Search current file",
+  "cmd.replaceFile": "Search & replace in current file",
+
   // ---- template selector modal (R23) ----
   "templates.aria": "Template picker",
   "templates.placeholder": "Find a template…",
@@ -171,6 +175,10 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.toggleChecklist": "切换任务列表",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
+
+  // ---- in-editor find/replace (R34) ----
+  "cmd.searchFile": "在当前文件中查找",
+  "cmd.replaceFile": "在当前文件中查找替换",
 
   // ---- template selector modal (R23) ----
   "templates.aria": "模板选择",

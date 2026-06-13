@@ -42,6 +42,7 @@ import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from 
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
+import { installSearchProbe } from "@features/editor/searchCommands";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -382,6 +383,11 @@ async function bootstrap() {
   formatHost.__geodeFormat = {
     apply: (op, text, from, to) => applyFormatOp(op, text, from, to),
   };
+
+  // always-on find/replace probe (R34): drives the CM search panel + replaceAll
+  // on the active view from browser/desktop E2E (WKWebView has no CDP). Assigned
+  // BEFORE loadExternal, same as __geodeFormat/__geodeHotkey/__geodeSlash.
+  installSearchProbe(app);
 
   // load vault: memory adapter is always ready; desktop restores the last vault
   if (adapter.kind === "memory") {

@@ -21,6 +21,7 @@ import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
+import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri } from "@core/vault";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
@@ -370,6 +371,11 @@ export function App() {
     // a format command never mutates a background/non-active file.
     disposers.push(
       ...registerFormatCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+    );
+    // R34 in-editor find/replace commands (Mod+F search; replace = no default key,
+    // macOS reserves Cmd+H). Same active-file gating as format commands.
+    disposers.push(
+      ...registerSearchCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
     );
     if (isTauri()) {
       disposers.push(
