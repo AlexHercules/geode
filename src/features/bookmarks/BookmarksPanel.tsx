@@ -8,6 +8,7 @@ import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import { bookmarks } from "@core/bookmarks";
 import type { BookmarkItem } from "@core/bookmarks";
+import { basename, stripExtension } from "@core/vault";
 import "./bookmarks.css";
 
 /** Private DnD MIME — foreign drags (files, text, tabs) are ignored. */
@@ -27,16 +28,10 @@ interface DropTarget {
   intoGroup: boolean;
 }
 
-/** basename of a vault path ("a/b/c.md" -> "c.md", "a/b" -> "b"). */
-function basename(path: string): string {
-  const i = path.lastIndexOf("/");
-  return i === -1 ? path : path.slice(i + 1);
-}
-
-/** strip the markdown filename extension for display ("c.md" -> "c"). */
+/** display label for a note path: basename without extension (shared core
+ *  helpers — same composition core/workspace.ts uses for tab titles). */
 function fileLabel(path: string): string {
-  const base = basename(path);
-  return base.endsWith(".md") ? base.slice(0, -3) : base;
+  return stripExtension(basename(path));
 }
 
 const keyOf = (indexPath: ReadonlyArray<number>): string => JSON.stringify(indexPath);

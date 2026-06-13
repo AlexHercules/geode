@@ -5,7 +5,7 @@
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
 - 版本 **v0.27.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R27 书签 Bookmarks ✓ 已交付**（`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+分组，序列化 RMW 保真 + 侧栏面板拖拽/分组/右键 + 4 命令 + 探针；零新依赖；评审 1 minor+1 nit 全修；E2E 抓获并修掉 1 个 `move()` 数据丢失根因；`r27-e2e` 22 断言入库）
+- 上一轮：**R27 书签 Bookmarks ✓ 已交付**（`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+分组，序列化 RMW 保真 + 侧栏面板拖拽/分组/右键 + 4 命令 + 探针；零新依赖；评审 1 minor+1 nit 全修；E2E 抓获并修掉 1 个 `move()` 数据丢失根因；`r27-e2e` 22 断言入库）。**收尾另跑 `/simplify`（4 agent 并行）：采纳 4 项无行为变更清理**（面板复用 `@core/vault` basename/stripExtension；`editAtPath` 合并 remove/update 双walker；parse 未知类型双分支合一；App.tsx 抽 `cursorContext` 共用 heading/block 命令前导）——22 断言不回退；显式跳过需跨 diff 的项（共享菜单 CSS/`isPlainObject`/提 openWikilink 入 core）
 - **下一项 = R28｜文件树拖拽移动**（Explorer 无 drag → 文件拖到文件夹 = `vault.rename`，R16 改写引擎已就绪，纯接线；五分区/插入指示线借 R3 tab 拖拽先例 + 跨文件夹防撞；数据安全重轮=移动即改名竞态全覆盖——细则见 `docs/ROADMAP.md` R25+ 候选池表）
 - 其后按序：⑤折叠持久化 → ⑥Properties 侧栏 → ⑦斜杠命令
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回

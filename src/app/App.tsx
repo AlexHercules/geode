@@ -645,6 +645,17 @@ function insertNowAtSelection(
   });
 }
 
+/** The active-file editor's path + parsed metadata + cursor offset, or null
+ *  when there is no active editor file / no metadata (R27 shared preamble for
+ *  the bookmark-heading / bookmark-block commands). */
+function cursorContext(app: ReturnType<typeof useApp>) {
+  const active = getActiveFileEditorView(app);
+  if (!active) return null;
+  const meta = app.metadata.getMetadata(active.path);
+  if (!meta) return null;
+  return { path: active.path, meta, cursor: active.view.state.selection.main.head };
+}
+
 /** The heading the editor cursor is currently under (R27 bookmark-heading):
  *  the last heading whose start offset is <= the cursor. Returns the path +
  *  Obsidian-shape subpath ("#" + heading text); null when no active editor
@@ -652,18 +663,15 @@ function insertNowAtSelection(
 function headingUnderCursor(
   app: ReturnType<typeof useApp>,
 ): { path: string; subpath: string } | null {
-  const active = getActiveFileEditorView(app);
-  if (!active) return null;
-  const meta = app.metadata.getMetadata(active.path);
-  if (!meta || meta.headings.length === 0) return null;
-  const cursor = active.view.state.selection.main.head;
+  const ctx = cursorContext(app);
+  if (!ctx || ctx.meta.headings.length === 0) return null;
   let hit: { text: string } | null = null;
-  for (const h of meta.headings) {
-    if (h.from <= cursor) hit = h;
+  for (const h of ctx.meta.headings) {
+    if (h.from <= ctx.cursor) hit = h;
     else break;
   }
   if (!hit) return null;
-  return { path: active.path, subpath: `#${hit.text}` };
+  return { path: ctx.path, subpath: `#${hit.text}` };
 }
 
 /** The block the editor cursor sits inside (R27 bookmark-block): a block whose
@@ -673,14 +681,11 @@ function headingUnderCursor(
 function blockUnderCursor(
   app: ReturnType<typeof useApp>,
 ): { path: string; subpath: string } | null {
-  const active = getActiveFileEditorView(app);
-  if (!active) return null;
-  const meta = app.metadata.getMetadata(active.path);
-  if (!meta || meta.blocks.length === 0) return null;
-  const cursor = active.view.state.selection.main.head;
-  const hit = meta.blocks.find((b) => b.from <= cursor && cursor <= b.to);
+  const ctx = cursorContext(app);
+  if (!ctx || ctx.meta.blocks.length === 0) return null;
+  const hit = ctx.meta.blocks.find((b) => b.from <= ctx.cursor && ctx.cursor <= b.to);
   if (!hit) return null;
-  return { path: active.path, subpath: `#^${hit.id}` };
+  return { path: ctx.path, subpath: `#^${hit.id}` };
 }
 
 /* ---------------- pieces ---------------- */

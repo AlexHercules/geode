@@ -180,15 +180,10 @@ function collectExtra(
 function parseItem(raw: unknown): BookmarkItem | null {
   if (!isPlainObject(raw)) return null;
   const type = raw.type;
-  if (typeof type !== "string") {
-    // No usable type — keep the whole object so a write round-trips it.
-    return {
-      type: UNKNOWN_TYPE_MARKER as "graph",
-      _extra: { ...raw },
-    } as unknown as BookmarkItem;
-  }
-  if (!KNOWN_TYPES.has(type)) {
-    // Known to be foreign: carry every field (incl. real `type`) in `_extra`.
+  // No usable type, or a type this model doesn't know (a future/foreign
+  // Obsidian bookmark kind): keep the whole object verbatim so a write
+  // round-trips it — the real `type` + every field live in `_extra`.
+  if (typeof type !== "string" || !KNOWN_TYPES.has(type)) {
     return {
       type: UNKNOWN_TYPE_MARKER as "graph",
       _extra: { ...raw },
@@ -337,46 +332,46 @@ function insertInto(
   return next;
 }
 
-/** Return a new tree with the item at `path` removed. No-op (returns a shallow
- *  clone) if the path is invalid. */
-function removeAtPath(
+/** Walk to the item addressed by `path` and apply `leafFn(arr, idx)` to its
+ *  container array at the leaf (splice to remove, assign to replace). Clones
+ *  only the spine down to the mutation point; an invalid path no-ops (returns
+ *  a shallow clone). `removeAtPath`/`updateAtPath` are thin wrappers. */
+function editAtPath(
   items: ReadonlyArray<BookmarkItem>,
   path: ReadonlyArray<number>,
+  leafFn: (arr: BookmarkItem[], idx: number) => void,
 ): BookmarkItem[] {
   if (path.length === 0) return items.slice();
   const idx = path[0];
   const next = items.slice();
   if (idx < 0 || idx >= next.length) return next;
   if (path.length === 1) {
-    next.splice(idx, 1);
+    leafFn(next, idx);
     return next;
   }
   const target = next[idx];
   if (!target || target.type !== "group") return next;
-  next[idx] = { ...target, items: removeAtPath(target.items, path.slice(1)) };
+  next[idx] = { ...target, items: editAtPath(target.items, path.slice(1), leafFn) };
   return next;
 }
 
-/** Return a new tree with a transform applied to the item at `path`. The
- *  transform returns a replacement item, or null to leave it unchanged. */
+/** Return a new tree with the item at `path` removed. No-op if path invalid. */
+function removeAtPath(
+  items: ReadonlyArray<BookmarkItem>,
+  path: ReadonlyArray<number>,
+): BookmarkItem[] {
+  return editAtPath(items, path, (arr, idx) => arr.splice(idx, 1));
+}
+
+/** Return a new tree with `fn` applied to the item at `path`. No-op if invalid. */
 function updateAtPath(
   items: ReadonlyArray<BookmarkItem>,
   path: ReadonlyArray<number>,
   fn: (item: BookmarkItem) => BookmarkItem,
 ): BookmarkItem[] {
-  if (path.length === 0) return items.slice();
-  const idx = path[0];
-  const next = items.slice();
-  if (idx < 0 || idx >= next.length) return next;
-  const target = next[idx];
-  if (!target) return next;
-  if (path.length === 1) {
-    next[idx] = fn(target);
-    return next;
-  }
-  if (target.type !== "group") return next;
-  next[idx] = { ...target, items: updateAtPath(target.items, path.slice(1), fn) };
-  return next;
+  return editAtPath(items, path, (arr, idx) => {
+    arr[idx] = fn(arr[idx]);
+  });
 }
 
 function clampIndex(idx: number, len: number): number {
