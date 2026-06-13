@@ -36,6 +36,7 @@ import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
 import { foldPersistence } from "./foldPersistence";
 import { livePreview, propertiesHostFacet } from "./livePreview";
+import { slashCommandSource } from "./slashCommands";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /** Dispatched when the metadata index changes so wikilink resolution re-runs. */
@@ -346,7 +347,10 @@ export function buildEditorExtensions(opts: {
     placeholder(tr("editor.placeholder")),
     editorTheme,
     keymap.of([...defaultKeymap, indentWithTab]),
-    autocompletion({ override: [wikilinkCompletionSource(app)], icons: false }),
+    autocompletion({
+      override: [wikilinkCompletionSource(app), slashCommandSource(app)],
+      icons: false,
+    }),
     wikilinkDecorations(app, getPath),
     tagPlugin,
     wikilinkClickHandler(app, getPath),

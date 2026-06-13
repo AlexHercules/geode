@@ -1,6 +1,7 @@
 /**
- * Shared fuzzy subsequence matcher for the palette modals
- * (command palette + quick switcher).
+ * Shared fuzzy subsequence matcher (core util — pure, no deps). Used by the
+ * palette modals (command palette / quick switcher / template selector) and the
+ * editor slash-command menu (R31), so it lives in core for cross-feature reuse.
  */
 
 export interface FuzzyMatch {

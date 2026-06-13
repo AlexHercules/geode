@@ -6,7 +6,7 @@ import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import type { FileNode } from "@core/types";
 import { allTabs } from "@core/workspace";
-import { fuzzyMatch, toSegments } from "./fuzzy";
+import { fuzzyMatch, toSegments } from "@core/fuzzy";
 import "./palette.css";
 
 type Row =

@@ -32,6 +32,7 @@ import { renderMarkdownToHtml } from "@core/markdown";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
+import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -322,6 +323,22 @@ async function bootstrap() {
       renamePropertyAcrossVault({ vault, metadata, documents }, oldKey, newKey),
     values: (key) => metadata.getPropertyValues(key),
     keyCounts: () => [...metadata.getPropertyKeyCounts().entries()],
+  };
+
+  // always-on slash-command probe (R31): drives the trigger gate + candidate
+  // ranking from browser/desktop E2E (WKWebView has no CDP — same pattern as
+  // __geodeRename). The full apply flow (type `/` → run command → delete query)
+  // is exercised by the browser E2E in a real CM editor. Assigned BEFORE
+  // loadExternal so an external plugin's onload can capture it synchronously.
+  const slashHost = globalThis as typeof globalThis & {
+    __geodeSlash?: {
+      trigger: (before: string) => { query: string } | null;
+      candidates: (query: string) => string[];
+    };
+  };
+  slashHost.__geodeSlash = {
+    trigger: (before) => slashTrigger(before),
+    candidates: (query) => slashCandidates(app, query).map((c) => c.id),
   };
 
   // load vault: memory adapter is always ready; desktop restores the last vault

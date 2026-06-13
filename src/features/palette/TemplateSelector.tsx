@@ -9,7 +9,7 @@ import {
   templatePickerMode,
   type TemplateInfo,
 } from "@core/templates";
-import { fuzzyMatch, toSegments } from "./fuzzy";
+import { fuzzyMatch, toSegments } from "@core/fuzzy";
 import "./palette.css";
 
 /**

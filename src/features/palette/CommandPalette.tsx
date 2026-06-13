@@ -5,7 +5,7 @@ import { useStore } from "@core/store";
 import { locale, useI18n } from "@core/i18n";
 import { getCommandName } from "@core/commands";
 import type { Command } from "@core/types";
-import { fuzzyMatch, toSegments, type FuzzyMatch } from "./fuzzy";
+import { fuzzyMatch, toSegments, type FuzzyMatch } from "@core/fuzzy";
 import "./palette.css";
 
 interface Row {
