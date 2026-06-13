@@ -172,6 +172,21 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R46 套件回归（2026-06-14，macOS release 二进制 v0.46.0 实测 `r46-probe-vault`）
+
+R46 = `obsidian://` URI 深链（零依赖 in-app 切片，R32+ 候选池第三梯队 #⑮）。对照 Obsidian URI scheme `obsidian://open|new|search`。
+**本轮做 in-app 部分**：`core/obsidianUri.ts` 纯解析器 + `obsidianUriHandler` 执行器 + 笔记内 `obsidian://` 链接点击在 Geode 内路由。
+**🛑 OS 级 deep-link（点 Geode 外的 obsidian:// 唤起 app）延后**——需 `tauri-plugin-deep-link` 新 crate = 硬边界#5，待用户拍板（Cargo.toml
+现仅 dialog/updater/process）。compat `Plugin.registerObsidianProtocolHandler` 仍 gap-stub（内置 in-app 处理非插件路由）。macOS probe
+实测：新增 **r46-probe 9/9**——含 **on-disk 核心**：`__geodeUri.handle("obsidian://new?...")` → Node 直读 `<vault>/ProbeNew.md`
+确认内容落盘。**r45/r44/…/r24/r25/r28/r33 套件不回退**（浏览器 r46-e2e **18/18** + r44 25、r43 22、r28 23、r24 12、r25 17、r33 37、r45 10
+抽样实测全绿；`r26-bytes` 0）。**3 维对抗评审（安全重点）12 finding → 5 确认（全 minor）逐条修 + 7 证伪**——**安全攻击面全证伪**：路径穿越被
+Rust `safe_join` 拒、EditorPane obsidian:// 分支置于通用 preventDefault 前**强化** R19 SEC-1、`/^obsidian:/i` gate 与 `url.protocol` 口径一致且
+不一致项落安全侧、`open` 穿越经 openWikilink 被 basename 中和、`search` query 复用已硬化搜索管线。确认修复（全 robustness）：① `obsidian://open`
+对不存在文件经 openWikilink 静默建笔记→`resolveLink` gate ② Memory `createFile` 无路径守卫（双端分歧）→core `Vault.create` 加 `assertSafeRelPath`
+③ `new` 文件名控制符→同守卫 ④ create 失败仍 openFile 幽灵 tab→`fileExists` 守卫 ⑤ `??` 遮蔽空 `file=`→`||`。显式延期：OS scheme 注册（待拍板）/
+CM live preview 点击 hook / 跨库 vault 路由 / plugin protocol 接通。
+
 ### R45 套件回归（2026-06-14，macOS release 二进制 v0.45.0 实测 `r45-probe-vault`）
 
 R45 = 保存的工作区布局（Workspaces，R32+ 候选池第三梯队 #⑭）。对照 Obsidian 核心插件 **Workspaces**：命名保存/切换整个面板布局，

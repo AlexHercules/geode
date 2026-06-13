@@ -71,6 +71,65 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 46 additions — `obsidian://` URI 深链（零依赖 in-app 切片）【As-built v0.46】
+
+> **状态：As-built（v0.46 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑮。`obsidian://open|new|search` 深链。**本轮做零依赖 in-app 切片**：纯 URI
+> 解析器 + 动作执行器 + 笔记内 `obsidian://` 链接点击在 Geode 内路由（开文件/标题/块、建笔记、搜索）。**🛑 OS 级 deep-link 延后（待用户拍板）**——
+> 点击 Geode 外的 `obsidian://` 链接唤起/聚焦 app 需 `tauri-plugin-deep-link` **新运行时依赖 = 硬边界#5**（Cargo.toml 现仅 dialog/updater/process,无 deep-link）→ 本轮不引入。
+> 零依赖部分(解析器)即未来 OS handler 的可复用核。**零新依赖、无 Rust**。复用 `openWikilink(app, target, fromPath, subpath?)`(连 `#heading`/`#^block` reveal)。
+> 验证:typecheck 0 · `r46-e2e.mjs` **18/18** · `r46-probe.mjs` **9/9**（含 on-disk `obsidian://new` 建文件）· cargo release 真实重建 37s · 回归 r44/r43/r28/r24/r25/r33/r45 不回退。
+
+### As-built（评审根因修复 — 12 finding → 5 确认[全 minor] 全修 + 7 证伪;安全攻击面全证伪）
+
+对抗评审 3 维（安全重点）× find→verify。**安全无 critical/major**：穿越被 `safe_join`(拒 `..`/绝对)+ `create_new` 原子 + `fileExists` 守卫挡住;EditorPane 的 obsidian:// 分支放在通用 `preventDefault` 之前 **强化**(非削弱) R19 SEC-1;`/^obsidian:/i` gate 与 `url.protocol==="obsidian:"` 口径一致(URL 自动小写 protocol)且不一致项都落安全侧;open 穿越经 `openWikilink` 被 basename 中和;search query 复用已硬化的搜索管线。确认并修复（全 minor robustness）:
+
+1. **`obsidian://open` 对不存在/跨库 file 经 `openWikilink` 静默建笔记**（Obsidian `open` 只开不建）：`openWikilink` 的 wikilink 语义是 resolve→若不存在则 create。**修**：`open` 分支先 `app.metadata.resolveLink(target, from) === null → return false`(只开既有,绝不建)。
+2. **`MemoryVaultAdapter.createFile` 无路径守卫 → 双端分歧 + 纵深防御缺口**：穿越/控制符只被 Rust `safe_join`(IPC 边界)挡,Memory 端 `new?file=../x` 进内存 map;一旦新增非 Tauri 写路径(如 OS deep-link 直驱 handler)就失守。**修**：core `Vault.create` 入口加 `assertSafeRelPath`(拒空/绝对/`..` 段/控制符 U+0000–U+001F·U+007F,**charCode 扫描非裸字节 regex**)——双端共用、所有 create caller 继承。连带覆盖 #3「new 文件名无清洗（控制符/换行）」。
+3. **`new` 文件名未清洗（控制符/换行/超长）**：同 #2 核心守卫拦控制符/换行;超长属各 fs 行为,try/catch 兜住。（既有 `core/attachments.ts sanitizeFileName`/`ILLEGAL_NAME_CHARS` 是同类先例。）
+4. **`new` create 失败后仍无条件 `openFile` → 幽灵 tab**（指向不存在文件的坏 tab）：**修**：create 后 `if (!vault.fileExists(path)) return false`,只在确实存在才 open。
+5. **`open`/`new` 用 `??` 致 present-but-empty `file=` 遮蔽 path/name**（`file=""` 非 null,`??` 不 fallthrough）：**修**：`file || path` / `file || name`（空串 falsy → fallthrough，"首个非空者胜"）。
+
+> **教训（写给后续轮）**：① **`obsidian://open` ≠ wikilink 点击**——复用 `openWikilink` 顺手继承了它「不存在就建」的语义,但 URI 的 `open` 必须只开既有(Obsidian 口径 + 不可信外部输入不该建文件);**复用一个「带副作用」的 helper 前,先问它的副作用是否属于新调用方的语义**(R45「复用序列化审全字段」同源教训)。② **`??` vs `||` 对用户输入 fallback**——`a ?? b` 只在 null/undefined 落 b,present-but-empty `""` 会遮蔽 b;「首个**非空**者胜」要用 `||`。③ **纵深防御放核心、别只放边界**——路径穿越只被 Rust IPC 边界 `safe_join` 挡,Memory adapter 无守卫,新写路径(URI handler)一来就双端分歧;把路径安全契约下沉到 `core/Vault.create`,所有 adapter + 所有 caller 自动继承。④ **数值控制符范围写成 escape 会渲染成裸字节**（R44 重犯）——`[ -]` 经 Write/Edit 可能落成 NUL/US 裸字节(破 grep/diff);**用 charCode 扫描(`ch.charCodeAt(0) < 0x20`)而非控制符 regex 范围**。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/obsidianUri.ts（NEW，纯解析器）**：
+```ts
+export type ObsidianAction =
+  | { kind: "open"; vault?: string; file?: string; path?: string; heading?: string; block?: string }
+  | { kind: "new"; vault?: string; file?: string; name?: string; content?: string }
+  | { kind: "search"; vault?: string; query?: string }
+  | { kind: "unknown"; action: string; params: Record<string, string> };
+export function parseObsidianUri(uri: string): ObsidianAction | null; // 非 obsidian:// → null
+```
+实现:`new URL(uri)`(try/catch→null);`protocol !== "obsidian:"` → null;`action = url.hostname`(或 pathname 去斜杠);`url.searchParams` 自动百分号解码;switch(action) → open/new/search/unknown。纯函数,无 app。
+
+**features/editor/obsidianUriHandler.ts（NEW）**：
+```ts
+export async function handleObsidianUri(app: GeodeApp, uri: string): Promise<boolean>; // 处理了返回 true
+```
+`parseObsidianUri(uri)` → switch（**已纳评审修复**）:
+- `open`:target = file **`||`** path（评审 #5:`||` 非 `??`,空串 fallthrough）,无→false;from = activeFile ?? "";**`app.metadata.resolveLink(target, from) === null` → return false**（评审 #1:只开既有、绝不建,不继承 openWikilink 的 create 语义）;subpath = heading ? "#"+heading : block ? "#^"+block : undefined;`await openWikilink(app, target, from, subpath)`;true。
+- `new`:name = file **`||`** name,无→false;path = name 带 .md 否则 +".md";`!vault.fileExists(path)` → try `vault.create(path, content ?? "")`(R43 原子 + **core `assertSafeRelPath` 守卫**拒穿越/控制符,失败 console.error);**`!vault.fileExists(path)` → return false**（评审 #4:不开幽灵 tab）;`workspace.openFile(path)`;true。
+- `search`:`workspace.requestSearch(query ?? "")`;true。
+- `unknown`/其它:false。
+- **core `Vault.create` 入口加 `assertSafeRelPath(path)`**（评审 #2,新增）：拒空/绝对/`..`/控制符,双端(Memory+Tauri)一致。
+（**vault 参数不强制**:单库 in-app 处理当前库;跨库路由属延后的 OS deep-link 范畴,记已知偏差。）
+
+**features/editor/EditorPane.tsx**：anchor 点击分支(约 L666-672,现对非 `https?:` anchor `preventDefault`)加:`href.startsWith("obsidian://")` → `e.preventDefault()` + `void handleObsidianUri(app, href)` + return（先于通用 preventDefault）。
+**main.tsx**：`__geodeUri` 探针(`parse: (uri)=>parseObsidianUri(uri)` 纯 + `handle: (uri)=>{ void handleObsidianUri(app, uri); }`);import parse from @core + handle from @features/editor。版本 0.45→0.46。
+
+### 文件所有权（并行 implementer）
+- **A（core 解析器 + main 探针）**：`src/core/obsidianUri.ts`(new) + `src/main.tsx`(`__geodeUri`,import parse[@core] + handle[@features/editor])。
+- **B（执行器 + EditorPane hook + 版本）**：`src/features/editor/obsidianUriHandler.ts`(new) + `src/features/editor/EditorPane.tsx`(点击 hook) + 版本三处。
+- **me（验证）**：`.calibration/r46-e2e.mjs`（解析对/错、open?file 开文件、open?file&heading reveal、search 开面板、笔记内 obsidian:// 链接点击路由）+ `.calibration/r46-probe.mjs`（`__geodeUri.parse` 纯 + `new` 动作 **on-disk 建文件**验证）。
+
+### 已知偏差（写给后续轮）
+- **🛑 OS 级 deep-link 延后(待用户拍板)**：`tauri-plugin-deep-link` 新 crate = 硬边界#5。本轮仅 in-app（笔记内链接 + 探针驱动）。
+- **vault 参数不强制**：单库处理当前库;跨库窗口路由 = OS deep-link 范畴,延后。
+- **live preview(CM)链接点击未 hook**：仅阅读视图 anchor 点击路由;CM 编辑器内 obsidian:// 点击走 CM 机制,延后（与既有外链点击同口径）。
+- **plugin `registerObsidianProtocolHandler` 仍 gap-stub**：内置 in-app 处理非插件路由;插件自定义 action 注册延后。
+
 ## Round 45 additions — 保存的工作区布局（Workspaces）【As-built v0.45】
 
 > **状态：As-built（v0.45 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑭。命名保存/切换整个面板布局（pane 树 + tabs + sidebar 状态），存到

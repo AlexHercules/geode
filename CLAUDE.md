@@ -2,7 +2,7 @@
 
 Geode = Obsidian 复刻的本地优先 Markdown 知识库。
 **Tauri 2 (Rust 壳) + React 18 + TypeScript(strict) + Vite + CodeMirror 6**。
-当前 v0.45.0 · 开发机 macOS（本仓库路径即开发路径）· 远端 `github AlexHercules/geode`（私有, 分支 `opus` → `origin/opus`）。
+当前 v0.46.0 · 开发机 macOS（本仓库路径即开发路径）· 远端 `github AlexHercules/geode`（私有, 分支 `opus` → `origin/opus`）。
 核心使命：复刻 Obsidian 核心体验，本地优先 / 键盘优先 / 插件可拓展；商业主轴 = **Obsidian 插件生态一键迁移**（兼容层 shim 分 Tier）。详见 `docs/ROADMAP.md`「核心使命」。
 
 ---

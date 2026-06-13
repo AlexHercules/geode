@@ -637,6 +637,20 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R46 — v0.46（2026-06-14）`obsidian://` URI 深链（零依赖 in-app 切片）（R32+ 候选池第三梯队 #⑮）
+`core/obsidianUri.ts`（NEW，纯解析器）：`parseObsidianUri(uri)` → `open/new/search/unknown` 动作（`new URL` +
+protocol 严判 + searchParams 百分号解码）。`features/editor/obsidianUriHandler.ts`：`handleObsidianUri(app, uri)`
+执行——`open`（`resolveLink` gate **只开既有不建** + `openWikilink` 复用 `#heading`/`#^block` reveal）/`new`
+（`vault.create` + `fileExists` 守卫）/`search`（`requestSearch`）。EditorPane anchor 点击 hook（`obsidian://` →
+`preventDefault` + 路由 in-app，置于通用 preventDefault 前**强化** R19 SEC-1）。`__geodeUri` 探针。**core `Vault.create`
+加 `assertSafeRelPath`**（拒空/绝对/`..`/控制符，双端 Memory+Tauri 一致，纵深防御下沉）。**🛑 OS 级 deep-link 延后**
+（`tauri-plugin-deep-link` 新 crate = 硬边界#5，待用户拍板）。**零新依赖、无 Rust。** 验证：typecheck 0 ·
+`r46-e2e.mjs` **18/18** · 桌面 `r46-probe.mjs` **9/9**（含 on-disk `obsidian://new` 建文件）· cargo release 真实重建 37s ·
+回归 r44/r43/r28/r24/r25/r33/r45 不回退。**3 维对抗评审（安全重点）12 finding → 5 确认（全 minor）逐条修 + 7 证伪**
+（安全攻击面**全证伪**：穿越被 safe_join、SEC-1 被强化、scheme 口径一致、search 管线硬化；修：① open 经 openWikilink 静默建笔记→resolveLink
+gate ② Memory createFile 无路径守卫→core assertSafeRelPath ③ new 文件名控制符→同②守卫 ④ create 失败仍 openFile 幽灵 tab→fileExists 守卫
+⑤ `??` 遮蔽空 file=→`||`）。显式延期：OS scheme 注册（待拍板）/ CM live preview 点击 hook / 跨库路由 / plugin protocol 接通。
+
 ### R45 — v0.45（2026-06-14）保存的工作区布局（Workspaces）（R32+ 候选池第三梯队 #⑭）
 `core/workspaces.ts`（NEW，镜像 R27 bookmarks 持久化）：命名布局存到 `<vault>/.obsidian/workspaces.json`（裸
 `"workspaces.json"`——readConfig/writeConfig 已相对 `.obsidian/` 解析）。串行 enqueue 队列 + vault-switch race guard
@@ -1033,7 +1047,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **⑫ 日记日历 + 可配置日记** | **部分**（日历+前后日导航 **R43 已完成（v0.43，见上）**：`core/dailyNote.ts`[dailyStamp/dailyNotePath/parseDailyStamp(basename 锚定)/isDailyNotePath/addDays/sameDay/monthGrid/openOrCreateDailyNote] + `features/calendar/CalendarPanel`[右栏自绘月历,today 高亮/有笔记标记/点击开建/月导航/locale-aware 标签] + daily-note 插件 `next-day`/`prev-day`[isDailyNotePath 门控基准] + `__geodeDaily` 探针。**评审顺手硬化 `vault_create` TOCTOU**[create_new 原子,补 R17 漏网命令]。r43-e2e 22/22 + r43-probe 13/13;**可配置设置 UI[格式/文件夹/模板]仍延后**）| 余项切入：daily-note 设置（格式/文件夹/模板,镜像 settings 模式）；月历周一起可配；周期模板套用到新建日记。 |
 | **⑬ 笔记合并/拆分（Note composer）** | **部分**（提取选区→新笔记+替换为链接 **R44 已完成（v0.44，见上）**：`core/noteComposer.ts`[sanitizeNoteName 守文件名+wikilink+控制符+首尾点+≤200 字节 / deriveNoteName 首标题或首行 / extractedContent / extractReplacement link\|embed] + `features/editor/noteComposerCommands.ts`[`editor:extract-selection`,**create-before-edit** 无损 + await 后乐观锁守卫防错删 + uniquePath 碰撞] + App 注册 + `__geodeComposer` 探针 + i18n。r44-e2e 25/25 + r44-probe 17/17;**合并 merge 仍缺**）| 余项切入：**合并两笔记**（append + 删源 + 把指向源的链接改指目标——需「不移动文件只改链接」的 link-rewrite-only 变体，R16 引擎是 rename-with-link-update[`vault.rename(A,B)` 在 B 存在时覆盖]，须抽出 link-rewrite 核或新写一遍 capture→verify→splice）；extract 自动导航到新笔记；embed 模式命令（core 已支持）。 |
 | **⑭ 保存的工作区布局（Workspaces）** | **R45 已完成（v0.45，见上）**：`core/workspaces.ts`（命名持久化到 `.obsidian/workspaces.json`[裸 "workspaces.json"]，镜像 bookmarks 串行 RMW + vault-switch race guard + 保留 Obsidian 原 entry/top-level key + 空-store 守卫不抹盘）+ `Workspace.captureLayout`（复用 persist 序列化，去 theme/fontSize 外观）/`applyLayout`（sanitizeState 容错 + closeMissingFileTabs 剪缺失 + pruneTabHistory/emitActiveFile reconcile + 保留当前外观）+ `WorkspacesModal`（save-current/list/load/delete，`useStore(workspacesStore)` 反应式）+ `workspace:manage` 命令 + `__geodeWorkspaces` 探针。r45-e2e 10/10 + r45-probe 6/6（on-disk）。 | 余项：**Obsidian 工作区 schema 桥接**（当前 path-compatible/schema-divergent，Geode 载 Obsidian entry 回落默认）；切换 UI 加快捷键；workspace.json 的 `active` 跟随。 |
-| **⑮ `obsidian://` URI / 深链** | **缺**（compat 仅 gap-stub）| 桌面 Tauri deep-link + 浏览器降级。 |
+| **⑮ `obsidian://` URI / 深链** | **部分**（in-app 切片 **R46 已完成（v0.46，见上）**：`core/obsidianUri.ts` 纯解析器[parseObsidianUri → open/new/search/unknown] + `features/editor/obsidianUriHandler.ts`[handleObsidianUri 执行:open→resolveLink gate+openWikilink reveal、new→vault.create、search→requestSearch] + EditorPane 笔记内 obsidian:// 链接点击路由 + `__geodeUri` 探针 + core `Vault.create` 加 `assertSafeRelPath` 路径守卫。r46-e2e 18/18 + r46-probe 9/9。**🛑 OS 级 deep-link 待用户拍板**[`tauri-plugin-deep-link` 新 crate=硬边界#5]）| 余项切入：**OS scheme 注册**（须用户批准新依赖 `tauri-plugin-deep-link`，或评估 Tauri 2 内置 scheme 能力）→ Rust 收 URL → 转发 handleObsidianUri；live preview(CM) 链接点击 hook；跨库 vault 路由；plugin `registerObsidianProtocolHandler` 接通。 |
 | **⑯ 弹出窗口（Pop-out windows）** | **缺**（compat 明示「single-window host」）| Tauri 多 WebviewWindow——**大工程**，远期。 |
 | **⑰ Canvas 白板** | **缺**（零匹配）| JSONCanvas（`.canvas`）无限画布——**大工程**，远期梯队。 |
 
