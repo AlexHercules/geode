@@ -71,6 +71,64 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 43 additions — 日记日历 + 前/后一日导航（Calendar pane + daily-note nav）【As-built v0.43】
+
+> **状态：As-built（v0.43 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑫ 的 **日历切片**（#⑫ = 日记日历 + 可配置日记;本轮做日历 +
+> 前后日导航,**可配置设置 UI 延后**,沿用现有 "Daily Notes/YYYY-MM-DD" 约定）。**零新依赖**;**意外动了 1 处 Rust**（评审发现
+> `vault_create` 历史 TOCTOU 薄弱点被本轮摆上热路径 → 顺手硬化,见下「As-built」）。侧栏月历**自绘**(CSS grid,无日历库)。
+> 验证:typecheck 0 · `r43-e2e.mjs` **22/22** · `r43-probe.mjs` **13/13** · cargo release 真实重建 37s · 回归 r42-probe 10 + r41-e2e 21 不回退。
+
+### As-built（评审根因修复 — 8 条确认 finding 全 minor,逐条已修）
+
+对抗评审 3 维 × find→verify:9 findings,**8 确认（全 minor）+ 1 证伪**（`key=toISOString()`/UTC/分层/颜色/tree 反应式 → 无缺陷）。逐条修复:
+
+1. **`parseDailyStamp` 跑整 path → 父目录日期遮蔽真名**（契约违反 L87「从 basename 抽」）。实测 `"2020-01-01-backup/2026-06-14.md"`→`2020-01-01`、`"12025-06-14.md"`→`2025-06-14`（5 位年 over-match）、`"meeting-2026-06-14-notes.md"`→误匹配。**修**：取 `basename` 再跑 + 锚定 `^(\d{4})-(\d{2})-(\d{2})(?:\.md)?$`。（`parseDailyStamp` 唯一外部用户 = `main.tsx` `__geodeDaily` 探针,喂裸 stamp 仍通过。）
+2. **子文件夹日记 next/prev 静默逃出原文件夹**（同根因）：`Archive/2026-06-14.md` 被识别为日记 → next-day 落到 `Daily Notes/2026-06-15.md`。**修**：新增 `isDailyNotePath(path)`（要求 `DAILY_FOLDER + "/"` 前缀 **且** basename 是合法 stamp）门控 `baseDate()`——只有**真**日记才作导航基准,否则回落今天。一并修掉 #1 与「嵌入日期非日记文件误判」(#7)。
+3. **`vault_create` 桌面端 `exists()`-then-`fs::write` 截断窗口**（data-safety / 第一底线）：与 R17 为 `vault_write_binary` 修的**同一根因**,当年独漏此命令;`openOrCreateDailyNote`(Mod+D/点日历)把它摆上热路径。外部进程在 check↔write 间落地同名文件 → `fs::write` 截断丢内容。**修**：改 `OpenOptions::new().write(true).create_new(true).open()` + `write_all` + `sync_all` + 失败 `remove_file` 回滚（逐字对齐 write_binary 的 R17 范式）。「绝不截断已存在用户数据」升为系统调用级保证。无 TS 依赖旧错误串（grep 确认,浏览器路径走 MemoryVault 自抛）。
+4. **create 失败仅 console.error 不 openFile**：竞态下文件其实已存在却静默无响应。**修**：catch 中 `if (vault.fileExists(path))` 仍 `openFile`,只有真不存在才 return。
+5. **月名/星期 locale 裸读 localStorage**（首次运行 zh 浏览器无 `geode.locale` 时与 UI 语言不一致）。**修**：走 i18n `locale` Store（`useStore(locale)`,`useI18n` 本已订阅 → 切语言即重渲）。
+6. **上/下月 aria-label 硬编码英文**（违反 UI 字符串一律 `t()` 铁律）。**修**：`calendar.prevMonth`/`calendar.nextMonth` i18n 键（en+zh）。
+7. （= #1/#2 同根因,已随 `isDailyNotePath` 门控修掉。）
+8. **`monthLabel` 每渲染重建 `Intl.DateTimeFormat` 未 memo**（与同组件 `weekdays` 的 `useMemo` 不一致）。**修**：包 `useMemo([intlLocale, view.year, view.month0])`。
+
+> **教训（写给后续轮）**：① 历史命令的薄弱根因会被新功能「重新激活」——R17 只硬化了 binary 写,普通 `vault_create` 漏网,直到日历把它摆上热路径才暴露;**修一类根因时要全命令面扫一遍同类**。② 正则抽日期**必锚定到 basename**,否则父目录/嵌入数字 over-match;契约写「从 basename」实现却跑整 path = 注释与实现脱节的经典坑。③「识别为日记」与「在哪个文件夹」是两件事——导航基准要**双重门控**（文件夹前缀 + 文件名形态）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/dailyNote.ts（NEW，纯函数 + 一个 app-helper）**：
+```ts
+export const DAILY_FOLDER = "Daily Notes";
+export function dailyStamp(date: Date): string;        // 本地 YYYY-MM-DD
+export function dailyNotePath(date: Date): string;     // Daily Notes/YYYY-MM-DD.md
+export function parseDailyStamp(path: string): Date | null;  // 从 BASENAME 锚定抽 YYYY-MM-DD(?:.md)? → 本地午夜 Date / null（评审硬化）
+export function isDailyNotePath(path: string): boolean;       // DAILY_FOLDER/ 前缀 + 合法 stamp basename → 门控 next/prev 导航基准（评审新增）
+export function addDays(date: Date, n: number): Date;
+export function sameDay(a: Date, b: Date): boolean;
+export function monthGrid(year: number, month0: number): Date[][];  // 6×7,周日起,含相邻月填充,各 cell 本地午夜
+export function openOrCreateDailyNote(vault: Vault, workspace: Workspace, date: Date): Promise<void>; // 不存在则建 (folder+`# stamp\n\n`) 再 openFile;create 失败但文件已存在(竞态)仍 openFile
+```
+（`Vault`/`Workspace` 从 core import;`openOrCreateDailyNote` 取显式 vault+workspace 参数 → plugin[AppHandle] 与 feature[GeodeApp] 都可调,解耦。）
+
+**plugins/daily-note.ts**：`openToday` refactor 为 `openOrCreateDailyNote(app.vault, app.workspace, new Date())`;新增 `daily-note:next-day` / `daily-note:prev-day`（无默认键）——基准 `baseDate()` = 活动文件**经 `isDailyNotePath` 门控**确为真日记时取 `parseDailyStamp(activeFile)`、否则今天,`addDays(±1)` 后 openOrCreate。保留 `open-today`（Mod+D）。
+
+**features/calendar/CalendarPanel.tsx（NEW）+ index + css**：右侧栏面板。state = 显示中的 {year, month0}（初始今天）。`useStore(vault.tree)` 反应式。`monthGrid` 渲染 6×7;每格:日数 + today 高亮(`sameDay`) + 有笔记标记(`vault.fileExists(dailyNotePath(cell))`)+ 相邻月 dim(`cell.getMonth()!==month0`);点击 → `openOrCreateDailyNote(app.vault, app.workspace, cell)`。头部:月名+年（`Intl.DateTimeFormat` locale-aware,零 i18n 键）+ 上/下月 + 「今天」按钮。
+
+**app/App.tsx**：右 ribbon `calendar` tab（`data-testid="right-tab-calendar"`,icon `calendar`,`setRightPanel("calendar")`）+ body 分支 + effectiveRight 分支。**icons.tsx 加 `calendar`**（Lucide）。
+**main.tsx**：`__geodeDaily` 探针（纯 helpers:dailyStamp/dailyNotePath/parseDailyStamp/monthGrid 维度）。
+**i18n**：`dict.app.ts` `app.tabCalendar`;`dict.panels.ts` `calendar.today`。版本 0.42→0.43。
+
+### 文件所有权（并行 implementer）
+- **A（core+plugin+probe）**：`src/core/dailyNote.ts`(new) + `src/plugins/daily-note.ts` + `src/main.tsx`(`__geodeDaily`)。
+- **B（日历面板+app）**：`src/features/calendar/*`(new) + `src/app/App.tsx`(右面板) + `src/app/icons.tsx`(calendar 图标) + `src/core/i18n/dict.app.ts`(app.tabCalendar) + `src/core/i18n/dict.panels.ts`(calendar.today)。
+- **me（验证）**：`.calibration/r43-e2e.mjs`（pure helpers + 面板渲染/today/有笔记/点击开建/月导航 + next/prev-day 命令）+ `.calibration/r43-probe.mjs`（__geodeDaily 纯 helpers + daily-note 命令 store 真值）。
+
+### 已知偏差（写给后续轮）
+- **可配置日记设置 UI 延后**（格式/文件夹/模板写死 "Daily Notes/YYYY-MM-DD";#⑫ 另一半）。
+- **月历周日起**（非 locale-aware 周起点;Obsidian 可配周一起,延后）。
+- **有笔记标记按 fileExists 逐格查**（一个月 ≤42 格,vault.fileExists 是 cache 查,廉价）。
+- **create 真失败仅 console.error**（无 toast——Geode core 尚无 notice infra;评审 #4 残留,加 notice 超本轮范围）。
+- **次/前日导航不保留来源文件夹**：只认 `DAILY_FOLDER` 下的真日记作基准,非默认布局（用户把日记组织进别处）下 next/prev 回落今天/写回 `Daily Notes`,非数据风险;可配置文件夹随 #⑫ 另一半再议。
+
 ## Round 42 additions — 回收站（本地 `.trash/` recoverable delete）【As-built v0.42】
 
 > **状态：As-built（2026-06-14）。数据安全关键轮（已加载 data-safety skill）。** R32+ 候选池第三梯队 #⑪ 的 **trash 切片**

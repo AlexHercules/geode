@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R43 套件回归（2026-06-14，macOS release 二进制 v0.43.0 实测 `r43-probe-vault`）
+
+R43 = 日记日历 + 前/后一日导航（R32+ 候选池第三梯队 #⑫ 日历切片；compat 面无改动——纯新增 core/feature/plugin）。新
+`core/dailyNote.ts`（纯函数 + `openOrCreateDailyNote`）+ `features/calendar/CalendarPanel`（右栏自绘月历，对照 Obsidian 官方
+Calendar 插件：月格 + today 高亮 + 有笔记标记 + 点日开/建 + 上/下月）+ daily-note 插件 `next-day`/`prev-day`（`isDailyNotePath`
+门控）。**这是 Geode 自家日历**（与 R5/R6 compat 矩阵里挂载的第三方 `calendar 1.5.10` 插件并存，互不冲突；第三方插件点日仍依赖
+daily-notes 内部插件探测）。**评审顺手硬化 `vault_create` TOCTOU**（`create_new` 原子，补 R17 漏网命令）。macOS probe 实测：新增
+**r43-probe 13/13**（真实 WKWebView 上 `__geodeDaily` 纯 helpers：stamp/path/parse[含 basename over-match 守卫]/gridDims）。
+**r42/r41/…/r24/r28/r31 套件不回退**（浏览器 r43-e2e **22/22** + r42-probe 10、r41-e2e 21 抽样实测全绿；`r26-bytes` 0）。
+**3 维对抗评审 9 finding → 8 确认（全 minor）逐条修 + 1 证伪**（parseDailyStamp 整 path over-match→basename 锚定 / 子文件夹
+日记导航逃逸→isDailyNotePath 双门控 / `vault_create` TOCTOU 截断→`create_new` 原子+rollback / create 失败竞态仍 open / 月名星期
+locale 走 i18n Store / aria-label 走 t() / monthLabel useMemo；证伪：`key=toISOString()`/UTC 边界/分层/颜色/tree 反应式无缺陷）。
+显式延期：可配置日记设置 UI（格式/文件夹/模板）= #⑫ 另一半；月历周一起；create 真失败仅 console.error（core 无 toast infra）。
+
 ### R42 套件回归（2026-06-14，macOS release 二进制 v0.42.0 实测 `r42-probe-vault`）
 
 R42 = 回收站 本地 `.trash/`（数据安全关键轮；已核实缺口：删除=永久、compat `trash*` 仅 stub）。**compat trash gap 部分关闭**

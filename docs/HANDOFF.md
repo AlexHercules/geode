@@ -4,10 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.42.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R42 回收站 本地 `.trash/` ✓ 已交付（数据安全关键轮）**（R32+ 候选池第三梯队 **#⑪ 的 trash 切片**;#⑪=回收站+文件恢复快照,**快照延后**）。**修永久删=丢数据底线违规**:删除原走 Rust `vault_delete`(`fs::remove_*` 永久)→ 改 `vault_trash`(移到 `<vault>/.trash/`,**可恢复**)。**零新 crate**(仅 `std::fs`;系统回收站[需 trash crate]显式不做)。Rust 加 `vault_trash`/`vault_list_trash`;vault.ts 加 adapter.trash/listTrash(Tauri invoke + Memory move,含 binaryFiles)+ Memory listTree skip `.` 前缀 + Vault.trash/listTrash/restoreFromTrash(restore emit `file:renamed` 让文件夹子项重索引);Explorer 删除走 trash(+ trash 前 flushAll 无损)+ compat trash 接通。`.trash` 自动隐藏(tree walk skip `.`)。`r42-e2e` **17/17** + 桌面 `r42-probe` **10/10(含真 fs:文件物理移到 .trash、内容保留、restore 回原位)** + r24/r28/r31-r41 不回退 + r26-bytes 0。**3 维对抗评审 18 finding → 5 修复(3 major:Memory binary trash/文件夹含 binary/文件夹 restore 重索引 + 2 defensive:空路径守卫/trash 前 flush)**。
-- **下一项 = R42→R43 = R32+ 候选池第三梯队 #⑫ 日记日历 + 可配置日记**（daily-note 插件仅命令、格式写死、无日历/模板/前后日导航）。切入:① daily-note 设置(格式/文件夹/模板,镜像 settings 模式)+ ② 侧栏月历(**自绘,零依赖**——SVG/CSS grid 画月格,点日期开/建当日笔记,有笔记的日期高亮)+ ③ 前/后一日命令。**零新依赖、无 Rust**(纯前端,clean 轮)。**#⑪ 余项**(文件恢复快照=周期内容快照,数据安全相关,延后)+ **#⑧ 余项**(stacked tabs / linked view)仍延后。其后队列:⑬ note composer → ⑭ workspaces →（全队列见 ROADMAP R32+ 候选池第三/四梯队）。① `features/tags/TagsPanel`(右栏,镜像 R30 allproperties,`useStore(metadata.revision)` 反应式,getTagMap 建列表/计数降序/点击 `requestSearch`);② `features/editor/tagCompletion.ts`(`#` 补全源,镜像 R31 slashCommands:`tagTrigger`/`tagCandidates`/`tagCompletionSource`,gate `(^|[\s(])` 同 metadata)→ cmExtensions override 三源 + `__geodeTag` 探针;③ 新增 consume-once `workspace.searchRequest` Store + `requestSearch`(点标签注入搜索,SearchPanel 消费)。**零新依赖**。`r41-e2e` **21/21** + 桌面 `r41-probe` **11/11** + r24/r31-r40 不回退 + r26-bytes 0。**3 维对抗评审 19 finding → 3 确认修复**(getTagMap 加 revision 缓存防补全热路径全扫 / 退化 frontmatter 标签 `["#","bad space"]` 索引层过滤 / `(#tag` 补全 gate 对齐 `(^|[\s(])`)+ 16 nit/证伪。
-- **下一项 = R41→R42 = R32+ 候选池第三梯队 #⑪ 回收站 + 文件恢复快照**（删除=永久;compat `trash*` 仅 stub;无 `.trash`/快照）。Obsidian:删除入 `.trash` + 定期快照(File recovery)。切入:Rust 后端 `move-to-.trash`(`<vault>/.trash/` 用 `std::fs::rename`,**无需新 crate** → 不撞「新依赖」硬边界)+ 删除命令改走 trash + 可选周期快照(`.geode/snapshots/` 写副本,亦无新依赖)。**⚠️ 数据安全关键轮:必加载 data-safety skill 全清单**(删除竞态、回声指纹、TOCTOU);**先评估是否需新依赖**——若基本 trash 用既有 Rust fs 即可(预判可以),则不撞硬边界;若快照/trash 库确需新 crate→停下问用户(硬边界#5)。**#⑧ 余项**(stacked tabs / linked view)仍延后。其后队列:⑫ 日记日历 → ⑬ note composer →（全队列见 ROADMAP）。
+- 版本 **v0.43.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R43 日记日历 + 前/后一日导航 ✓ 已交付**（R32+ 候选池第三梯队 **#⑫ 的日历切片**;#⑫=日记日历+可配置日记,**可配置设置 UI 延后**,沿用 "Daily Notes/YYYY-MM-DD"）。新 `core/dailyNote.ts`（纯函数 + `openOrCreateDailyNote` app-helper）;`features/calendar/CalendarPanel`（右栏自绘月历:today 高亮/有笔记标记/点击开建/上下月+今天/locale-aware 标签）+ App 右 ribbon `calendar` tab + icons;daily-note 插件 `next-day`/`prev-day`（`isDailyNotePath` 门控基准）+ `__geodeDaily` 探针。**评审顺手修数据安全**:`vault_create` 桌面端 `exists()`-then-`fs::write` TOCTOU 截断（R17 为 `write_binary` 修过的同根因、独漏此命令;日历把它摆上热路径）→ 改 `create_new` 原子+rollback。**零新依赖**。`r43-e2e` **22/22** + 桌面 `r43-probe` **13/13** + 回归 r42-probe 10 / r41-e2e 21 不回退。**3 维对抗评审 9 finding → 8 确认（全 minor）逐条修 + 1 证伪**（parseDailyStamp 整 path over-match→basename 锚定 / 子文件夹日记导航逃逸→isDailyNotePath 双门控 / vault_create TOCTOU→create_new / create 失败竞态仍 open / locale 走 Store / aria t() / monthLabel memo）。
+- **下一项 = R43→R44 = R32+ 候选池第三梯队 #⑬ 笔记合并/拆分（Note composer）**（Obsidian:合并两笔记 / 按标题或选区拆分为新笔记 / 提取选区替换为链接）。切入:`core` 文本操作（纯函数:split-at-heading / split-at-selection / extract-to-note）+ **复用 R16 改写引擎 `renameWithLinkUpdate`/link 改写**（合并/拆分要同步更新指向被动笔记的链接）+ 命令注册（无默认键）。**⚠️ 数据安全相关**:动 vault 多文件写 + link 改写 → 必加载 data-safety skill（R16 五步算法、改写复解析断言、flush-before-move）。**零新依赖预判可行**（纯前端 + 既有引擎）。**#⑫ 余项**（可配置日记设置 UI=格式/文件夹/模板）+ **#⑪ 余项**（恢复快照）+ **#⑧ 余项**（stacked/linked view）仍延后。其后队列:⑭ workspaces → ⑮ obsidian:// URI →（全队列见 ROADMAP R32+ 候选池第三/四梯队）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +58,15 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R43（日记日历 + 前后日导航）核心教训三条**：① **修一类数据安全根因要全命令面扫同类**——R17 评审硬化了
+  `vault_write_binary` 的 check-then-act（`create_new` 原子）,但普通 `vault_create` 当年漏网;直到 R43 日历把它摆上热路径
+  （Mod+D / 点日历高频 create）评审才揪出同款 TOCTOU 截断窗口。**历史薄弱根因会被新功能「重新激活」;改一处原子写时,grep 全部
+  `fs::write`/`exists()`-then-write 同类命令一并硬化。** ② **正则抽日期必锚定到 basename**——`parseDailyStamp` 对整 path 跑
+  `/(\d{4})-(\d{2})-(\d{2})/` → 父目录日期（`2020-01-01-backup/2026-06-14.md`→2020）、5 位年（`12025-06-14`→2025）、嵌入数字全
+  over-match;契约写「从 basename 抽」实现却跑整 path = **注释与实现脱节**的经典坑。取 `slice(lastIndexOf("/")+1)` + `^…$` 锚定。
+  ③ **「是不是日记」与「在哪个文件夹」是两件正交事**——next/prev 导航基准只认 `DAILY_FOLDER` 下的真日记,加 `isDailyNotePath`
+  **双门控**（文件夹前缀 + 文件名形态）,否则任意带日期名的文件都会劫持基准、静默把用户从其文件夹「拽」回 Daily Notes。
+  对抗评审「证伪≠无价值」再验证:9 finding 8 真（全 minor,无 critical/major）——小功能的缺陷密度也不低,find→verify 值回票价。
 - **R42（回收站 .trash · 数据安全关键轮）核心教训三条**：① **改 vault IO 操作必须双 adapter（Memory + Tauri）+ 三类
   实体（files/folders/binaryFiles）全覆盖**——B 初版 Memory.trash 只处理 files/folders,漏 binaryFiles → 浏览器删图片附件
   静默 throw(桌面 Rust fs::rename 不挑内容、没漏)。文件夹递归也漏 binaryFiles 子项 → listTree 复活孤儿文件夹。**凡动

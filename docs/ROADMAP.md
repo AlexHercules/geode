@@ -637,6 +637,22 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R43 — v0.43（2026-06-14）日记日历 + 前/后一日导航（R32+ 候选池第三梯队 #⑫ 日历切片）
+`core/dailyNote.ts`（NEW，纯函数 + 1 app-helper）：`dailyStamp`/`dailyNotePath`/`parseDailyStamp`
+（basename 锚定 `^YYYY-MM-DD(?:.md)?$`）/`isDailyNotePath`（DAILY_FOLDER 前缀门控）/`addDays`/`sameDay`/
+`monthGrid`（6×7 周日起含邻月填充）/`openOrCreateDailyNote`（不存在则建再 open，竞态下文件已存在仍 open）。
+`features/calendar/CalendarPanel`（右栏自绘月历：today 高亮、有笔记标记、点击开/建当日笔记、上/下月+今天
+导航、月名/星期走 i18n `locale` Store）+ App.tsx 右 ribbon `calendar` tab + icons `calendar`。daily-note
+插件 refactor + `next-day`/`prev-day`（无默认键，`isDailyNotePath` 门控基准日）。`__geodedaily` 探针。
+**评审顺手修数据安全**：`vault_create` 桌面端 `exists()`-then-`fs::write` TOCTOU 截断窗口（R17 为
+`write_binary` 修过的同一根因，独漏此命令；日历把它摆上热路径）→ 改 `create_new` 原子 + rollback。
+**零新依赖。** 验证：typecheck 0 · `r43-e2e.mjs` **22/22** · 桌面 `r43-probe.mjs` **13/13**（真实 WKWebView
+纯 helpers）· cargo release 真实重建 37s · 回归 r42-probe 10 + r41-e2e 21 不回退。**3 维对抗评审 9 finding
+→ 8 确认（全 minor）逐条修 + 1 证伪**（parseDailyStamp 整 path over-match→basename 锚定 / 子文件夹日记
+导航逃逸→isDailyNotePath 双门控 / vault_create TOCTOU→create_new / create 失败竞态仍 open / locale 走
+Store / aria t() / monthLabel memo）。显式延期：可配置日记设置 UI（格式/文件夹/模板）= #⑫ 另一半；月历周一起；
+create 真失败仅 console.error（core 无 toast infra）。
+
 ### R35 — v0.35（2026-06-13）括号/引号自动配对 + 选区包裹（R32+ 候选池 #④）
 
 **实测缺口收口**：敲 `[` 得 `[` 不补 `]`，源码无 closeBrackets。本轮按 Obsidian 两设定分两层接通：
@@ -983,7 +999,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | ~~**⑩ 标签面板 + 编辑器 `#` 标签补全**~~ | **R41 已完成（v0.41，见上）**——`features/tags/TagsPanel`（右栏，`useStore(metadata.revision)`，getTagMap 计数降序，点击 `workspace.requestSearch("#"+tag)`）+ `features/editor/tagCompletion.ts`（`#` 补全源镜像 slashCommands，gate `(^|[\s(])`，`__geodeTag` 探针）+ cmExtensions override 三源 + 新增 `searchRequest` consume-once Store。getTagMap 加 revision 缓存、frontmatter 退化标签索引层过滤。r41-e2e 21/21 + r41-probe 11/11。 | 余项（按需求驱动）：标签计数=文件数非出现数；CJK 仅 BMP 表意（三正则同步）；code 内仍弹补全（三源共有）；标签重命名/层级折叠；面板搜索框过滤。 |
 | **⑪ 回收站 + 文件恢复快照** | **部分 / 数据安全**（本地 `.trash/` 回收站 **R42 已完成（v0.42，见上）**：Rust `vault_trash`/`vault_list_trash`[仅 std::fs 无新 crate] + vault.ts adapter.trash/listTrash[含 binaryFiles] + Vault.trash/listTrash/restoreFromTrash[restore emit file:renamed 重索引文件夹子项] + Explorer trash 前 flushAll 无损 + compat trash 接通 + `.trash` 自动隐藏。**修永久删=丢数据底线**。r42-e2e 17/17 + r42-probe 10/10[真 fs 验证]；**文件恢复快照[周期内容快照]仍缺**）| 余项切入：snapshots = Rust 周期写 `.geode/snapshots/<file>/<ts>` 副本 + 恢复 UI；系统回收站（需 `trash` crate=新依赖，待用户拍板）；回收站 UI 面板（listTrash/restoreFromTrash 已就绪，restore 原路径需自携）。 |
-| **⑫ 日记日历 + 可配置日记** | **部分**（daily-note 插件仅命令、格式写死、无日历/模板/前后日导航）| 切入：daily-note 设置（格式/文件夹/模板）+ 侧栏月历（自绘，零依赖）+ 前/后一日命令。 |
+| **⑫ 日记日历 + 可配置日记** | **部分**（日历+前后日导航 **R43 已完成（v0.43，见上）**：`core/dailyNote.ts`[dailyStamp/dailyNotePath/parseDailyStamp(basename 锚定)/isDailyNotePath/addDays/sameDay/monthGrid/openOrCreateDailyNote] + `features/calendar/CalendarPanel`[右栏自绘月历,today 高亮/有笔记标记/点击开建/月导航/locale-aware 标签] + daily-note 插件 `next-day`/`prev-day`[isDailyNotePath 门控基准] + `__geodeDaily` 探针。**评审顺手硬化 `vault_create` TOCTOU**[create_new 原子,补 R17 漏网命令]。r43-e2e 22/22 + r43-probe 13/13;**可配置设置 UI[格式/文件夹/模板]仍延后**）| 余项切入：daily-note 设置（格式/文件夹/模板,镜像 settings 模式）；月历周一起可配；周期模板套用到新建日记。 |
 | **⑬ 笔记合并/拆分（Note composer）** | **缺** | Obsidian：合并两笔记、按标题/选区拆分为新笔记、提取并替换为链接。切入：core 文本操作 + 复用 `renameWithLinkUpdate`/link 改写。 |
 | **⑭ 保存的工作区布局（Workspaces）** | **缺**（无 serializeLayout/workspaces.json）| 切入：workspace 状态序列化 + `.obsidian/workspaces.json` 兼容 + 切换 UI。 |
 | **⑮ `obsidian://` URI / 深链** | **缺**（compat 仅 gap-stub）| 桌面 Tauri deep-link + 浏览器降级。 |
