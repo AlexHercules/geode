@@ -600,6 +600,28 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | R18 折叠/数学 polish | callout 标题点击折叠仅阅读视图（live 用 gutter）；跨行 `$$`/块注释 live 淡显不渲染/隐藏；行内脚注 live 零处理（官方同行为）；KaTeX vs MathJax 宏覆盖差异——均显式偏差，见 ARCHITECTURE R18 |
 | R19 mermaid polish | live 不渲染图表 widget（源码呈现——块 widget 需 StateField 跨行 replace，与跨行 `$$` 同因）；主题切换后已渲染图保持旧主题至视图重渲染（R11 stale widget 先例）；compat MarkdownRenderer 输出图表带 data-target 但点击接线调用方自理——均显式偏差，见 ARCHITECTURE R19 |
 
+### R25+ 候选池（Obsidian 原生功能补课，2026-06-13 与用户登记）
+
+> 背景：R24 后迁移叙事第二梯队（R19+）执行队列清空。与用户盘点「Geode 距离
+> Obsidian 还缺的原生功能」，登记下列**第三梯队候选池**。用户口径（2026-06-13）：
+> **不着急一口气都做，但要逐项记录在案**；执行顺序待定——每轮开工前问用户取项
+> 或按优先级挑。验收沿用四条底线 + 官方校准（docs.obsidian.md WebFetch）+ 双端
+> probe 不回退。下表「当前状态」均经 2026-06-13 代码核实。
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **悬停预览（Hover preview）** | **完全缺失**——无 hover 卡片；compat 的 `hoverPopover`/`registerHoverLinkSource` 也是空 stub（grep 零命中）| core hover 贡献点 + 预览卡片（复用 `renderMarkdownToHtml` + embeds 水合 + blob 缓存）+ 触发源（内链/反链/explorer/未链接提及，Ctrl/Cmd+hover）+ 悬停延迟/跟随/边界翻转 + compat `hoverPopover` 接通。无新依赖。 |
+| **PDF 查看器 + PDF/音频/视频嵌入** | `![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]` **全降级为链接**（R12 缺口"PDF/音频/canvas 嵌入均降级链接"；embeds.ts 仅 img/note/math/mermaid 分支）| embeds 管线增 audio→`<audio>` / video→`<video>`（零依赖，走 `readBinary`+blob，R11 先例）；PDF = **一次性依赖决策**（PDF.js ~体积 vs `<embed>`/iframe 内嵌 webview PDF——桌面 WKWebView 原生支持 PDF，浏览器端要 PDF.js）。阅读视图/live/导出三态 + 页码锚点 `#page=N`。 |
+| **书签（Bookmarks）** | **完全缺失**（grep 零命中）| core bookmarks store（兼容 `.obsidian/bookmarks.json` 形状：file/folder/heading/block/search/graph 类型 + 分组）+ 侧栏面板（拖拽排序/分组）+ 命令（Bookmark current file/收藏当前 heading）+ compat。 |
+| **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
+| **折叠持久化 + 阅读视图折叠** | **R17 显式债**：折叠状态不持久化（tab 重开/preview 往返丢，grep foldState 零命中）；阅读视图无折叠 | 折叠状态按文件持久化（localStorage 或 `.obsidian` 形状）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）。 |
+| **Properties 侧栏视图** | **R22 显式延期**：全库属性浏览/全局改名/值建议/text 内链渲染 | 侧栏 All Properties 视图（全库 key 聚合，R22 `getPropertyKeys` 已备）+ 全局重命名（types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律）+ 值建议（datalist 跨库取值）。 |
+| **斜杠命令 `/` 菜单** | **缺失**（grep slashCommand/SlashMenu 零命中）| 编辑器输入 `/` 触发命令菜单（复用 R6 EditorSuggest 管线 + commands registry 过滤/执行）；官方校准 Obsidian slash command 范围。 |
+
+> 注：上表外，发布渠道 + Authenticode 证书（待用户拍板，`.tauri-keys` 私钥未找回）
+> 与性能远期项（图谱 WebGL/Worker、倒排索引、R24 扫描去抖+热循环门控）见 R19+ 表
+> 末两行，仍属待办；各轮 polish 余项见 R19+ 表与「已知技术债」。
+
 ## 已知技术债
 
 - R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/
