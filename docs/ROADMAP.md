@@ -637,6 +637,34 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R30 — v0.30（2026-06-13）Properties 侧栏视图（R25+ 候选池 #⑥ / R22 显式延期收口）
+
+补齐 R22 显式延期三件：①侧栏 All Properties 视图 ②全局属性改名 ③属性值跨库建议。官方校准
+（obsidian.md core plugin "Properties view"）：右侧栏 tab、全库属性名列表（类型图标 + 使用
+计数）、右键属性 → Rename（全库改名）。**core/metadata.ts**：`getPropertyKeyCounts()`（key→
+文件数，case-insensitive 归并 + per-file dedup，独立缓存 per revision）+ `getPropertyValues(key)`
+（全库去重值，list 展平、空串过滤、case-insensitive 配 key——值建议数据源）。**core/propertyRewrite.ts**
+（新，零依赖）：`renamePropertyAcrossVault` **逐字镜像 R16 `linkRewrite.ts` 的 verified-rewrite
+五步纪律**——flushAll+ensureFresh 收敛 → metadata 发现 affected → 逐文件读 fresh（开着读 buffer
+否则 readFresh，绝不 cache）→ `buildRenameProperty`（绝不手写 YAML）+ post-rewrite 复解析断言
+→ 开文件 `applyExternalEdits` / 关文件 `vault.modify` → per-file skip+report、module `runTail`
+串行；types.json carry（regChain RMW 保未知键，前向兼容不清理）。**features/allproperties/**（新）：
+右侧栏面板（filter + 类型图标 + key 名 + 计数 badge + 点击展开文件列表点开 + 右键菜单全局改名走
+`window.prompt`）。**PropertiesPanel.tsx**：text/multitext 值编辑器接 per-key 值 datalist（index-based
+id 避 key 含空格、仅这两类型渲染省扫描），R22 单 splice/20k 闸/提交语义零回归。**App.tsx** 右 tab
++ dispatch、**types.ts** RightPanelKind += allproperties、**main.tsx** `__geodeProperties` 探针（装
+loadExternal 前）。**对抗评审 7 维：1 critical + 2 minor 全修**：① **【C1 critical】case-only 改名
+（Author→author）每文件静默失败 → 整轮报 noop**——post-rewrite「旧键须消失」断言大小写不敏感，
+把合法小写键误判残留。修复 = 仅 `from.toLowerCase()!==to.toLowerCase()` 才跑该检查（教训：凡
+「旧标识须消失」类断言遇 case-only 改名必短路）；② **【m1】** 值 datalist 原对所有类型渲染 + 每渲染
+全库扫描 → 收窄到 text/multitext；③ **【m3】** 删死 i18n 键 + menu 接 aria-label。显式保留（m2）：
+开文件改名计数滞后至 autosave flush（关文件立即，纯视觉）。验证：浏览器 `.calibration/r30-e2e.mjs`
+**25/25** + 桌面 release **probe 10/10**（真实 fs：聚合 + 全局改名值字节保真 + case-only C1 实测）+
+R29 19 / R27 22 不回退 + `r26-bytes` 0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。
+显式延期（候选池余项）：跨库属性删除（destructive 全库写）/ 类型侧栏内联改 / search 集成（点 key
+注入 `[key]`，R21 属性搜索本延期）/ 改名后旧 types.json key 清理 / 值建议类型化（number/date）/
+开文件改名计数即时刷新。
+
 ### R29 — v0.29（2026-06-13）折叠持久化 + 阅读视图折叠（R25+ 候选池 #⑤ / R17 显式债收口）
 
 补齐 R17「折叠态零持久化」债 + 阅读视图标题折叠。官方校准（WebFetch 核实）：Obsidian 折叠态
@@ -774,7 +802,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~**书签（Bookmarks）**~~ | **R27 已完成（v0.27，见上）**——`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+嵌套组（序列化 RMW 保真未知键 + carrier round-trip）+ 侧栏面板（递归树/拖拽重排移组/右键改名删除新建组/点击导航）+ 4 命令 + `__geodeBookmarks` 探针 | 余项（按需求驱动）：文件改名/删除联动更新书签路径 / search 书签注入 query / block 自动铸 `^id` / 折叠态持久化 / `app.internalPlugins` bookmarks instance API。 |
 | ~~**文件树拖拽移动**~~ | **R28 已完成（v0.28，见上）**——`core/explorerMove.ts` 决策核心（resolveDropTarget 四守卫 + wouldCollide）+ Explorer HTML5 DnD（行 draggable + 容器级 dragover/drop + moveNode 走 `renameWithLinkUpdate`）+ `MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust + `__geodeExplorerMove` 探针 | 余项（按需求驱动）：虚拟化大库 auto-scroll / 拖多选 / 拖到标签页打开 / 移动期源行 dim 打磨。 |
 | ~~**折叠持久化 + 阅读视图折叠**~~ | **R29 已完成（v0.29，见上）**——`core/foldStore.ts`（镜像 Obsidian `{folds,lines}` 0-based 行形状，存 localStorage `geode.fold.<path>`，零新 vault 写路径）+ `features/editor/foldPersistence.ts`（ViewPlugin 防抖捕获 + destroy flush）+ EditorPane mount 恢复（foldEffect 无 docChanged→不触发 autosave）+ 阅读视图标题折叠点击委托（嵌套独立，纯 DOM toggle）+ `__geodeFold` 探针 | 余项（按需求驱动）：阅读视图折叠持久化 + 与编辑器共享 FoldInfo（需 markdown.ts 给 heading emit `data-line`，改字节管线）/ 文件删除/改名时清理孤儿 fold key / 行数漂移内容级对账 / list-indent 折叠的 reading 视图。 |
-| **Properties 侧栏视图** | **R22 显式延期**：全库属性浏览/全局改名/值建议/text 内链渲染 | 侧栏 All Properties 视图（全库 key 聚合，R22 `getPropertyKeys` 已备）+ 全局重命名（types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律）+ 值建议（datalist 跨库取值）。 |
+| ~~**Properties 侧栏视图**~~ | **R30 已完成（v0.30，见下）**——`core/propertyRewrite.ts`（renamePropertyAcrossVault 镜像 R16 verified-rewrite）+ `metadata.getPropertyKeyCounts/getPropertyValues` + `features/allproperties/` 右侧栏面板（类型图标+计数+展开文件列表+右键全局改名）+ PropertiesPanel 值建议 datalist + `__geodeProperties` 探针 | 余项（按需求驱动）：跨库属性删除 / 类型侧栏内联改 / search 集成（点 key 注入 `[key]`）/ 改名后旧 types.json key 清理 / 值建议类型化 / 开文件改名计数即时刷新（m2 滞后）。 |
 | **斜杠命令 `/` 菜单** | **缺失**（grep slashCommand/SlashMenu 零命中）| 编辑器输入 `/` 触发命令菜单（复用 R6 EditorSuggest 管线 + commands registry 过滤/执行）；官方校准 Obsidian slash command 范围。 |
 
 > 注：上表外，发布渠道 + Authenticode 证书（待用户拍板，`.tauri-keys` 私钥未找回）

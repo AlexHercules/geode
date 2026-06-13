@@ -4,10 +4,10 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.29.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R29 折叠持久化 + 阅读视图折叠 ✓ 已交付**（`core/foldStore.ts` 镜像 Obsidian `{folds,lines}` 0-based 行形状、存 localStorage `geode.fold.<path>`、**零新 vault 写路径/零新依赖/不动 markdown.ts 字节管线**；`foldPersistence.ts` ViewPlugin 防抖捕获 + destroy flush；EditorPane mount 恢复（foldEffect **无 docChanged→不触发 autosave**）+ 阅读视图标题折叠点击委托（嵌套独立，纯 DOM toggle）；`__geodeFold` 探针装 loadExternal 前）。评审 1 major + 2 minor 全修（① CSS 泄漏：标题样式裸挂 `.markdown-rendered` 被 hover 卡片/compat 复用 → 收窄 `.markdown-reading-view`；② `foldRangesFromInfo` 加整数/非负守卫防篡改 throw；③ 探针去 `peek` 对齐契约）；`r29-e2e` 19/19 + 桌面 probe 4/4 + `r26-bytes` 0 违例
-- **下一项 = ⑥Properties 侧栏视图**（R22 显式延期：侧栏 All Properties 视图 = 全库 key 聚合，`getPropertyKeys` 已备 R22；全局重命名 = types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律；值建议 = datalist 跨库取值——细则见 `docs/ROADMAP.md` R25+ 候选池表）
-- 其后按序：⑦斜杠命令 `/` 菜单
+- 版本 **v0.30.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R30 Properties 侧栏视图 ✓ 已交付**（`core/propertyRewrite.ts` `renamePropertyAcrossVault` **逐字镜像 R16 verified-rewrite**：读 fresh/绝不 cache、`buildRenameProperty` 绝不手写 YAML、post-rewrite 复解析断言、per-file skip+report、`runTail` 串行、types.json carry；`metadata.getPropertyKeyCounts/getPropertyValues` 聚合；`features/allproperties/` 右侧栏面板=filter+类型图标+计数+展开文件列表+右键全局改名 `window.prompt`；`PropertiesPanel` text/multitext 值 datalist；`__geodeProperties` 探针装 loadExternal 前）。评审 **1 critical + 2 minor 全修**（① **C1 case-only 改名静默失败**：post-rewrite「旧键须消失」断言大小写不敏感 → 仅 `from.toLowerCase()!==to.toLowerCase()` 才检查；② 值 datalist 收窄到 text/multitext；③ 删死 i18n 键 + menu aria-label）；`r30-e2e` 25/25 + 桌面 probe 10/10 真实 fs + `r26-bytes` 0 违例（markdown.ts 未动）
+- **下一项 = ⑦斜杠命令 `/` 菜单**（缺失，grep slashCommand/SlashMenu 零命中：编辑器输入 `/` 触发命令菜单，复用 R6 EditorSuggest 管线 + commands registry 过滤/执行；官方校准 Obsidian slash command 范围——细则见 `docs/ROADMAP.md` R25+ 候选池表末行）
+- 其后：R25+ 候选池清空后 = 发布渠道 + Authenticode（待拍板）+ 性能远期项
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,22 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R30（Properties 侧栏视图）核心教训两条**：① **「旧标识须消失」类 post-rewrite 断言遇
+  case-only 改名必须短路**——全局属性改名 `Author`→`author` 时，post-rewrite 断言
+  `hasVisibleKey(rewritten, from)`（大小写不敏感）会把合法的小写键误判成「旧键残留」→ throw
+  → **每个文件落 skip、整轮报 noop**（C1 critical，对抗评审抓获，静态 + E2E 双证）。Obsidian
+  **支持** case-only 属性改名，故这是行为缺失。修复 = 仅 `from.toLowerCase()!==to.toLowerCase()`
+  才跑该检查（`to`-visible 检查已证成功，builder 撞名守卫已防重复）。**凡「改名/移动后旧名须不
+  再存在」的断言，case-only 变更是天然反例——大小写不敏感的存在性检查会把成功误判成失败。**
+  ② **全库批量写 = R16/R24 verified-rewrite 纪律的逐字复刻，一道都不能省**：读 fresh（开着的
+  文件读 buffer 否则 `vault.readFresh`，**绝不 cache**——watcher 防抖窗口让 cache 陈旧）、每写前
+  post-rewrite 复解析断言（never blind-write）、per-file try/catch skip+report 不毒化队列、module
+  `runTail` 串行化（两并发改名共享文件会 read→write 交错互删）、**绝不手写 YAML 恒走
+  `buildRenameProperty`**、计数仅写成功后自增；评审专设「逐行对照 `linkRewrite.ts`」一维。新增
+  写路径**继承 `vault.modify` 的 FNV 自写指纹抑回声 + `applyExternalEdits` 的 canonical/buffer
+  一致守卫**（B 类写清单全继承）。`metadata.getPropertyKeyCounts` 用**独立缓存字段**（不 clobber
+  `getPropertyKeys` 的 `propertyKeysCache`）按 revision 失效；面板默认折叠用 `Set.has`（非
+  `?? true`，R24 教训）；值 datalist 用 index-based id（key 可含空格，非法作 id/`list=`）。
 - **R29（折叠持久化 + 阅读视图折叠）核心教训三条**：① **reading 类 CSS 别挂裸
   `.markdown-rendered` / `.preview-content`——这俩被 hover 预览卡片复用**（HoverPreview.tsx
   的卡片 className = `hover-preview-content preview-content markdown-preview-view

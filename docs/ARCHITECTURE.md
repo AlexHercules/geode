@@ -71,6 +71,176 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 30 additions — Properties 侧栏视图（All Properties view + 全局改名 + 值建议）【契约冻结 v0.30】
+
+> **状态：契约冻结（2026-06-13）。** R25+ 候选池 #⑥ / R22 显式延期项收口。R22
+> 交付了**文档内**属性面板（live + reading 双模式编辑），但显式延期了三件：
+> ①侧栏「All Properties」视图（全库属性浏览）②全局重命名（一个 key 跨全库文件改名 +
+> types.json）③属性值跨库建议（datalist）。本轮三件一并补齐。官方校准（obsidian.md
+> core plugin "Properties view" + obsidian.d.ts，2026-06-13 复核）：右侧栏 tab、全库
+> 属性名列表（类型图标 + 使用计数）、右键属性 → Rename（全库改名）。
+>
+> **数据安全总原则（本轮第一底线，评审必设维度）**：全局改名 = **R16/R24 verified-rewrite
+> 纪律的逐字复刻**——never blind-write、读 fresh（开着的文件读 buffer 而非 cache）、
+> 每文件 `buildRenameProperty`（**绝不手写 YAML**）+ post-rewrite 复解析断言、per-file
+> try/catch skip+report、module-level `runTail` 串行化、types.json RMW 保未知键。改名
+> **绝不重排/重写未被改的字节**（只 splice 单个 key 文本，值字节不动）。
+
+### Core: `core/metadata.ts` 两个聚合查询（core agent 所有，parseNote/parseFrontmatter 零改动）
+
+```ts
+/** R30: 每个 frontmatter key → 使用它的文件数（authored casing 同 getPropertyKeys，
+ *  大小写不敏感归并取首见）。惰性缓存 per revision（getPropertyKeys 先例）。 */
+getPropertyKeyCounts(): Map<string, number>;
+/** R30: 给定 key 在全库 frontmatter 中出现过的去重值（string 化、原文呈现、
+ *  字典序）。string[] 直接进、string 标量直接进；用于值建议 datalist。
+ *  大小写不敏感匹配 key；值层面大小写敏感去重（Obsidian 同口径）。不缓存
+ *  （按 key 调用、调用面小）。 */
+getPropertyValues(key: string): string[];
+```
+- 数据源 = `meta.frontmatter?.fields`（`Record<string, string | string[]>`，metadata 的
+  简化子集——只有 string/string[]，无 bool/number/null 区分，聚合够用）。
+- `getPropertyKeyCounts` 与 `getPropertyKeys` 共享同一 lower→authored 归并，但额外累加
+  计数（同一文件同一 key 计 1）。
+
+### Core: 新模块 `core/propertyRewrite.ts`（纯 TS，零新依赖；core agent 所有）
+
+```ts
+export interface PropertyRewriteSkip { path: string; reason: string }
+export interface PropertyRewriteResult {
+  filesChanged: number; propertiesRenamed: number; skipped: PropertyRewriteSkip[];
+}
+export interface PropertyRewriteDeps {
+  vault: Vault; metadata: MetadataIndex; documents: DocumentManager;
+}
+/** 把 frontmatter 属性键 oldKey 在全库每个用到它的文件里改名为 newKey，并更新
+ *  types.json 注册表。镜像 R16 renameWithLinkUpdate 的 verified-rewrite 五步纪律。
+ *  返回 {filesChanged, propertiesRenamed, skipped}。绝不抛——逐文件 skip+report。 */
+export function renamePropertyAcrossVault(
+  deps: PropertyRewriteDeps, oldKey: string, newKey: string,
+): Promise<PropertyRewriteResult>;
+```
+**五步算法（逐字镜像 `linkRewrite.ts` 纪律）**：
+1. **入口 guard**：`oldKey`/`newKey` trim 后等值（大小写不敏感）→ 直接返回空 result；
+   `newKey` 非法（`isInsertableKey` 在 properties.ts 内部，这里靠 `buildRenameProperty`
+   返回 null 兜住）。module-level `runTail` 串行化（R16/R24 先例，失败不毒化后继）。
+2. **capture（写前收敛）**：`await documents.flushAll()` →
+   `await metadata.ensureFresh(documents.getOpenPaths(), p => documents.get(p)?.getText())`
+   （让未保存编辑可见于发现扫描）。然后遍历 `metadata.getAll()`，凡 `frontmatter.fields`
+   含 oldKey（大小写不敏感）的 path 收进 affected 集合。空集 → 返回空 result。
+3. **逐文件 verified rewrite（串行 for-of，绝不并发）**：
+   - 真值源 = `documents.get(path)?.getText() ?? await vault.readFresh(path)`（**never cache**）。
+   - `const edit = buildRenameProperty(content, oldKey, newKey)`；null → `continue`
+     （key 不在该文件 / opaque / 撞名——非错误，静默跳过，不计 skip）。
+   - `const rewritten = content.slice(0,edit.from) + edit.insert + content.slice(edit.to)`。
+   - **post-rewrite 断言**：`parseProperties(rewritten)` 必须非 null 且 entries 中存在
+     newKey 的可见条目、且不再存在 oldKey；否则 `throw`（落 skip+report，绝不写盘）。
+   - 写：开着的文件 `handle.applyExternalEdits([edit])`（CM 事务，一个 undo 步 + 触发
+     autosave）；关着的 `await vault.modify(path, rewritten)`（FNV 指纹抑回声）。
+   - per-file try/catch：异常 → `result.skipped.push({path, reason})` + `console.warn`，
+     绝不中断队列。`filesChanged++ / propertiesRenamed++` 仅在写成功后。
+4. **types.json 注册表**：`const oldType = propertyTypes.get(oldKey)`；若有 →
+   `await propertyTypes.assign(newKey, oldType)`（regChain 串行 RMW 保未知键，R22 先例）。
+   非致命：失败仅 warn，文件改名已成功。（不主动 unassign oldKey——types.json 前向兼容。）
+5. **return** result。
+
+> **与 R16 的差异**：R16 改的是 wikilink 正文引用（跨文件指向同一被改名文件）；R30 改的是
+> 每个文件**自己的** frontmatter key（互不指向）。所以 R30 无「rename on disk」中间步、无
+> 引用解析断言，只有「逐文件 key 文本 splice + 复解析确认」。affected 发现走 metadata 索引
+> （frontmatter.fields 已含 key），不需 capture 期建引用图。
+
+### Core: `core/types.ts` + i18n（core agent 所有）
+
+- `RightPanelKind` 追加 `"allproperties"`：`"backlinks" | "outline" | "allproperties" | (string & {})`。
+- 新 `core/i18n/dict.allproperties.ts`（namespace `allproperties.*`）：`title`/`empty`/
+  `filterPlaceholder`/`usageCount`（`{count} 个文件`复数）/`rename`/`renamePrompt`/
+  `renameDone`（`{changed} 改 / {skipped} 跳`）/`renameNoop`/`noFiles` 等；en + zh 双表，
+  注册进 i18n dict 索引。`dict.app.ts` 加 `app.tabAllProperties`（tab title）。
+
+### UI: `features/allproperties/`（ui agent 所有）— 右侧栏面板
+
+`AllPropertiesPanel.tsx` + `allproperties.css` + `index.ts`。**只 import core + app/AppContext + app/icons**（分层铁律；绝不 import 别的 feature）。
+
+- **渲染**：`useStore(app.metadata.revision)` + `useStore(propertyTypes.revision)` 触发重算。
+  `const counts = app.metadata.getPropertyKeyCounts()`；按 key 名（已含计数）渲染行：
+  类型图标（`effectivePropertyType(key, sample, propertyTypes.get(key))`——sample 取该 key
+  首个值用于推断）+ key 名 + 使用计数 badge。顶部 filter input（大小写不敏感子串过滤 key）。
+- **空态**：库内零属性 → `allproperties.empty` 提示行。
+- **行展开（自包含导航）**：点击行 toggle 展开，列出用到该 key 的文件（遍历
+  `metadata.getAll()` 筛 `frontmatter.fields` 含该 key，取 basename，字典序）；点文件
+  `app.workspace.openFile(path)`。默认折叠态**显式 seed**（R24 教训：用 `expanded.has(key)`
+  Set 判定，不靠 `?? true`）。
+- **全局改名（右键菜单，镜像 BookmarksPanel 内联菜单模式）**：行 `onContextMenu` → 绝对
+  定位菜单 div（state 驱动，document click/Escape 关闭）→ "Rename property" →
+  `window.prompt(renamePrompt, key)` 取 newKey → `renamePropertyAcrossVault(deps, key, newKey)`
+  → 结果用 `app.notices`（或 console + 面板自刷新）报告 `renameDone {changed,skipped}`。
+  改名后 metadata.revision 随 vault.modify/applyExternalEdits 自然 bump → 面板重渲染。
+- **testid 面（冻结）**：`allproperties-panel`、`ap-filter`、`ap-row-<key>`、`ap-count-<key>`、
+  `ap-file-<basename>`、`ap-menu`、`ap-rename`。
+- **App.tsx 集成**：`RightPanelKind` 已加 → 右 tab 栏加 "allproperties" 按钮（icon
+  `book-open` 或 `file-text`——选 `book-open` 区别于 backlinks=link / outline=list）+
+  `effectiveRight` 三元加分支 + `right-panel-body` dispatch 加 `ws.rightPanel==="allproperties"`
+  → `<AllPropertiesPanel />`。
+
+### UI: `features/editor/PropertiesPanel.tsx` 值建议 datalist（ui agent 所有，R22 契约**最小增量**）
+
+- text / multitext 值编辑器附 per-key 值 datalist：`ValueEditor` 的 text fallback
+  （`ScalarInput inputType="text"`）与 `ChipsValue`（multitext，非 tags）接受可选
+  `valueListId`，指向面板内渲染的 `<datalist id={...}>`（值 = `metadata.getPropertyValues(key)`）。
+  tags 的 datalist 保持 R22 既有 tagListId 不变（标签建议 ≠ 值建议）。
+- **不动**：number/checkbox/date/datetime/tags/aliases 的编辑语义、提交路径、单 splice
+  不变量、20k 闸 `canCreatePropertiesBlock` 全部 R22 冻结不回归。datalist 纯建议、非约束
+  （用户可输入任意值）。每 key 一个 `<datalist>`（id 含 uid + key 哈希避撞）。
+
+### 探针（ui agent 所有，main.tsx，装在 `plugins.loadExternal` 之前 —— R27 教训）
+
+`window.__geodeProperties = { rename(oldKey,newKey), values(key), keyCounts() }` always-on
+钩子，驱动桌面 probe 真实 fs 全局改名 + 聚合查询校验。
+
+### 显式延期（候选池余项，记 ROADMAP）
+
+跨库属性**删除**（destructive 全库写，数据安全面更大，本轮不做）；属性**类型**侧栏内联改
+（仍走文档内面板）；search 集成（点 key 注入 `[key]` 搜索——R21 属性搜索本就延期）；改名
+后旧 types.json key 不清理（前向兼容保留）；值建议不含 number/date 类型化建议（按 string
+呈现）。
+
+### As-built（根因修复记录，2026-06-13）
+
+实现与契约一致，对抗评审 7 维抓获 **1 critical + 2 minor，全修**：
+
+- **【C1 critical】case-only 改名（`Author`→`author`）对每个文件静默失败 → 整轮报
+  "renameNoop"**。根因：post-rewrite「旧键须消失」断言 `hasVisibleKey(rewritten, from)`
+  是**大小写不敏感**的（`hasVisibleKey` 两侧 `toLowerCase`）。case-only 改名后文件里
+  合法地仍有小写键（那正是被改名的条目），断言把它误判成「旧键残留」→ throw → 每个
+  文件落 skip、`filesChanged:0`。Obsidian **支持** case-only 属性改名，故这是行为缺失而
+  非仅报错。修复 = 仅当 `from.toLowerCase() !== to.toLowerCase()` 才跑「旧键须消失」检查
+  （`to`-visible 检查已证明成功，buildRenameProperty 的撞名守卫已防重复）。**教训：凡
+  「改名后旧标识须消失」类 post-rewrite 断言，遇 case-only 改名必须短路——大小写不敏感
+  的「存在性」检查会把成功误判成失败。** 已加 `r30-e2e` case-only 回归 + 桌面 probe 实测。
+- **【m1 minor】值建议 datalist 对所有类型都渲染 + 每渲染全库扫描**。`getPropertyValues`
+  （未缓存、全 `getAll()` 扫描）原本对每个条目无差别 inline 调用，而仅 text/multitext 消费
+  `valueListId`。修复 = datalist 仅在 `effType==="text"||"multitext"` 时渲染（其余类型零
+  扫描）。
+- **【m3 minor】死 i18n 键**（title/noFiles/usageCount 未用）已删；`menu` 接上菜单
+  `aria-label`。
+
+**显式保留（m2，非缺陷）**：开着的文件经全局改名走 `applyExternalEdits`（CM 事务），
+metadata 重索引要等防抖 autosave flush 后才发生 → 侧栏计数对**开着的**文件短暂滞后（关着的
+走 `vault.modify` 立即 bump）。纯视觉滞后、无数据风险，autosave（~数百 ms）后自愈。
+
+**写安全 7 维 clean**（评审逐行对照 `linkRewrite.ts`）：读 fresh（开着读 buffer 否则
+`vault.readFresh`，绝不 cache）、每写前 post-rewrite 复解析断言、per-file try/catch
+skip+report 不毒化队列、module `runTail` 串行、绝不手写 YAML（恒走 buildRenameProperty）、
+计数仅写成功后自增；types.json carry 经 regChain RMW + vault-switch 守卫、前向兼容不清理；
+聚合 case-insensitive 归并 + per-file dedup、独立 `propertyKeyCountsCache`（不 clobber
+`propertyKeysCache`）按 revision 失效；分层（仅 import core/app、TypeIcon 路径复制避免跨
+feature）、CSS 全 `var()`、串全 `t()`；面板默认折叠用 `Set.has`（非 `?? true`，R24 教训）。
+
+**验证**：`r30-e2e` **25/25**（聚合/全局改名 byte-safe/撞名 skip/no-op/case-only C1/开文件
+buffer 路径/面板 tab+filter+展开+点开/值 datalist）+ 桌面 release probe **10/10**（真实 fs：
+keyCounts/values + 全局改名值字节保真 + case-only 实测）+ r29 19 / r27 22 不回退 + r26-bytes
+0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。
+
 ## Round 29 additions — 折叠持久化 + 阅读视图折叠（Fold persistence + reading-view fold）【契约冻结 v0.29】
 
 > **状态：契约冻结（2026-06-13）。** R25+ 候选池 #⑤ / R17 显式债收口。R17 折叠
