@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.40.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R40 键盘切换复选框 ✓ 已交付**（R32+ 候选池第二梯队 #⑨：仅鼠标点复选框,无键命令）。**整套复用 R33 format 基建**:`core/format.ts` 加纯 op `toggle-task` + `toggleTaskStatus`(任务行翻转勾选、非任务行转 `- [ ]`、空行/缩进规则),经既有 `applyFormatOp` 接通 → 既有 `__geodeFormat.apply` 探针**自动可驱动(零新探针)**;`formatCommands.ts` 注册 `editor:toggle-checkbox`(`Mod+L`)走既有 applyFormat→CM 事务→autosave(活动文件门控)+ R33 keydown 拦截器。**零新 vault 写路径/零新依赖/零新文件**。`r40-e2e` **19/19** + 桌面 `r40-probe` **11/11** + r32-r39 不回退 + r26-bytes 0。**3 维对抗评审 10 finding → 1 确认修复(3 reviewer 一致):自定义复选框态 `[/]`/`[-]`/`[>]` 被当非任务→prepend 出畸形双方框** → `TASK_BOX_RE` 状态类 `[ xX]`→`[^\]]`(任意单字符态就地翻转、不误伤多字符 `[text]`)+ 翻转规则「checked→空/其余→x」。+ 9 nit/证伪。
-- **下一项 = R40→R41 = R32+ 候选池第三梯队 #⑩ 标签面板 + 编辑器 `#` 标签补全**（`metadata.getTagMap()` 已有数据无面板消费;编辑器无 `#` 补全源）。切入:① 新 `features/tags` 右/左侧栏面板(全库标签 + 计数 + 点击搜索,镜像 bookmarks/allproperties 面板)消费 `metadata.getTagMap()`;② 编辑器加 `#` CompletionSource(**镜像 R31 `/` slashCommands + `[[` wikilink 补全源**,features 绝不 import compat),复用 getTagMap 候选。**注意 R31 结论**:CM 补全源是 live-view → 纯候选逻辑抽 core 可探针单测、补全 accept 走浏览器 E2E。**#⑧ 余项**(stacked tabs / linked view)+ #⑪ 回收站(数据安全相关,可能需 Rust 后端依赖决策)仍延后,见 ROADMAP。其后队列见 ROADMAP R32+ 候选池第三/四梯队。
+- 版本 **v0.41.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R41 标签面板 + 编辑器 `#` 标签补全 ✓ 已交付**（R32+ 候选池第三梯队 #⑩）。① `features/tags/TagsPanel`(右栏,镜像 R30 allproperties,`useStore(metadata.revision)` 反应式,getTagMap 建列表/计数降序/点击 `requestSearch`);② `features/editor/tagCompletion.ts`(`#` 补全源,镜像 R31 slashCommands:`tagTrigger`/`tagCandidates`/`tagCompletionSource`,gate `(^|[\s(])` 同 metadata)→ cmExtensions override 三源 + `__geodeTag` 探针;③ 新增 consume-once `workspace.searchRequest` Store + `requestSearch`(点标签注入搜索,SearchPanel 消费)。**零新依赖**。`r41-e2e` **21/21** + 桌面 `r41-probe` **11/11** + r24/r31-r40 不回退 + r26-bytes 0。**3 维对抗评审 19 finding → 3 确认修复**(getTagMap 加 revision 缓存防补全热路径全扫 / 退化 frontmatter 标签 `["#","bad space"]` 索引层过滤 / `(#tag` 补全 gate 对齐 `(^|[\s(])`)+ 16 nit/证伪。
+- **下一项 = R41→R42 = R32+ 候选池第三梯队 #⑪ 回收站 + 文件恢复快照**（删除=永久;compat `trash*` 仅 stub;无 `.trash`/快照）。Obsidian:删除入 `.trash` + 定期快照(File recovery)。切入:Rust 后端 `move-to-.trash`(`<vault>/.trash/` 用 `std::fs::rename`,**无需新 crate** → 不撞「新依赖」硬边界)+ 删除命令改走 trash + 可选周期快照(`.geode/snapshots/` 写副本,亦无新依赖)。**⚠️ 数据安全关键轮:必加载 data-safety skill 全清单**(删除竞态、回声指纹、TOCTOU);**先评估是否需新依赖**——若基本 trash 用既有 Rust fs 即可(预判可以),则不撞硬边界;若快照/trash 库确需新 crate→停下问用户(硬边界#5)。**#⑧ 余项**(stacked tabs / linked view)仍延后。其后队列:⑫ 日记日历 → ⑬ note composer →（全队列见 ROADMAP）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,17 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R41（标签面板 + `#` 补全）核心教训三条**：① **「首次直接消费某个既有索引 API 的 keys」会暴露该索引一直容忍的脏数据**
+  ——`getTagMap()` 一直把 frontmatter `tags: ["#","bad space"]` 的空串/带空格键收进来(行内 tag 因 TAG_RE 的 `+` 永不脏,
+  无人注意),R41 的标签面板/补全首次直接 `[...keys()]` 消费 → 空名行 + `#bad space` 畸形补全。根因修在**索引层**(parseNote
+  过滤),而非各消费点防御。**消费一个老 API 的原始输出前,先想它的所有数据来源会不会塞进非法值**。② **CM 补全源故意省
+  validFor → 每键重跑 → 调的索引 API 必须有缓存**:`getTagMap` 原每键全库重建+sort(兄弟 `getPropertyKeys` 早有 revision
+  缓存,唯它漏),补全热路径退化。加 revision 缓存(返回缓存 Map,消费方只读——同 getPropertyKeyCounts 口径)。**把一个 O(库)
+  函数挂到「每键」热路径前,先确认它有 revision/版本缓存**。③ **同一识别规则散在多处(索引 / 装饰 / 补全)必须用同一正则
+  gate**:`#tag` 的前导 gate 在 metadata 索引+装饰是 `(^|[\s(])`、补全初版写成 `(^|\s)` → `(#tag` 被索引却不弹补全。对齐到
+  同一 gate。**复制一个正则去新场景时,grep 同概念的其它正则,对齐字符类/gate,别让"识别"与"补全/装饰"漂移**(CJK 字符类
+  `一-鿿` 三处同步是正面例子)。**19 finding → 3 确认修复全在「消费老索引暴露脏数据 / 热路径缓存 / 多正则漂移」三类边角**:
+  核心补全+面板逻辑(镜像 R31/R30)零缺陷,印证「复用成熟基建缺陷面极小」。
 - **R40（键盘切换复选框）核心教训三条**：① **「翻转既有 X」的正则别把状态类写死成已知集**——`toggle-task` 的
   `TASK_BOX_RE` 初版只认 `[ xX]`,导致 Obsidian 自定义复选框态 `[/]`/`[-]`/`[>]` 落进「非任务→新建复选框」分支,prepend 出
   畸形双方框 `- [ ] [/] x`(无效 markdown + 非幂等)。3 个 reviewer 一致命中。修 = 状态类放宽到 `[^\]]`(任意单字符态都识别

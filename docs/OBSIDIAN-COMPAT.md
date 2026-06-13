@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R41 套件回归（2026-06-14，macOS release 二进制 v0.41.0 实测 `r41-probe-vault`）
+
+R41 = 标签面板 + 编辑器 `#` 标签补全（已核实缺口：getTagMap 无面板消费、无 `#` 补全源）。**compat API 表面零代码改动**
+——新 `features/tags/TagsPanel`（右栏，镜像 R30 allproperties，消费 getTagMap，点击 `requestSearch`）+ `features/editor/
+tagCompletion.ts`（`#` 补全源镜像 R31 slashCommands → cmExtensions override 三源 + `__geodeTag` 探针）+ `core/workspace.ts`
+新增 consume-once `searchRequest` Store + `requestSearch`（程序化搜索注入，SearchPanel 消费）+ metadata 加 getTagMap revision
+缓存 + frontmatter 退化标签过滤。**零新依赖**。macOS probe 实测：新增 **r41-probe 11/11**——桌面驱动纯补全逻辑（trigger/
+candidates，真 metadata 索引）+ searchRequest store 真值（SearchPanel 后台不挂载 → store 保持设值）；live `#` 弹窗+accept +
+标签面板点击 = React 路径交浏览器 r41-e2e。**r40/r39/…/r24/r31 套件不回退**（compat 调用面零改动；浏览器 r41-e2e **21/21** +
+r40 19、r39 17、r38 19、r37 36、r36 47、r35 25、r34 15、r33 37、r32 24、r31 21、r24 12 全绿；`r26-bytes` 0 违例）。**3 维对抗
+评审 19 finding → 3 确认修复**（getTagMap 加 revision 缓存防 `#` 补全每键全库重建 / 退化 frontmatter 标签 `["#","bad space"]`
+索引层过滤防泄漏进面板+补全 / `(#tag` 补全 gate 对齐 metadata `(^|[\s(])`）**+ 16 nit/by-design/证伪**（三补全源对重叠输入
+互斥 / CJK 仅 BMP 三正则同步 / 标签计数=文件数同 SearchPanel / code 内弹补全为三源共有 gap）。
+
 ### R40 套件回归（2026-06-14，macOS release 二进制 v0.40.0 实测 `r40-probe-vault`）
 
 R40 = 键盘切换复选框（Toggle checkbox status, Cmd/Ctrl-L；已核实缺口：仅鼠标点复选框、无键命令）。**compat API 表面

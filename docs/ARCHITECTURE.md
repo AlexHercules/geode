@@ -71,6 +71,84 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 41 additions — 标签面板 + 编辑器 `#` 标签补全（Tags pane + `#` tag completion）【As-built v0.41】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第三梯队 #⑩ = 已核实缺口（`metadata.getTagMap()` 有数据无面板消费;
+> 编辑器无 `#` 补全源）。两部分同属「标签」：**① 标签面板**（右栏,镜像 R30 allproperties）+ **② `#` 补全源**（镜像 R31
+> slashCommands / `[[` wikilink）。**零新运行时依赖**;新增**一个 consume-once Store**（`searchRequest`,镜像 revealTarget）
+> 实现「点标签 → 注入搜索」（SearchPanel 已有 `#tag` 浏览,只缺外部注入）。
+> **验证**：typecheck 0 + 浏览器 `r41-e2e` **21/21**（纯补全 trigger/candidates + 面板渲染/计数降序/点击注入 + live `#`
+> 弹窗+Enter + 退化 frontmatter 标签排除 + `(#` 触发）+ 桌面 `r41-probe` **11/11**（纯逻辑 + searchRequest store 真值）+
+> r24/r31-r40 不回退 + `r26-bytes` 0 + cargo/build 绿。**3 维对抗评审 19 finding → 3 确认修复 + 16 nit/by-design/证伪**（详见 As-built）。
+
+### 契约（冻结）
+
+**core/workspace.ts — 搜索注入（consume-once，镜像 revealTarget/addPropertyRequest）**：
+```ts
+readonly searchRequest = new Store<string | null>(null);
+/** Open the left search panel and seed its query (e.g. `#tag` from the Tags pane). */
+requestSearch(query: string): void   // searchRequest.set(query); setLeftPanel("search")
+```
+SearchPanel 消费：`useStore(workspace.searchRequest)` → useEffect 非空时 `setQuery(req)` + `workspace.searchRequest.set(null)`。
+
+**features/tags/TagsPanel.tsx（NEW）+ index.ts + tags.css** — 右侧栏面板：`useStore(metadata.revision)` 反应式;从
+`getTagMap(): Map<string,Set<string>>` 建列表，**按计数降序、同计数按名称升序**;每行渲染 `#tag` + 计数（set.size），
+点击 → `workspace.requestSearch("#" + tag)`;空态 `t("tags.empty")`。
+
+**app/App.tsx** — 右 ribbon 加 `tags` tab（`data-testid="right-tab-tags"`,icon `hash`,`title=t("app.tabTags")`,
+`setRightPanel("tags")`）+ body 分支 `ws.rightPanel === "tags" ? <TagsPanel/>`。`RightPanelKind` 已含 `(string & {})` → "tags" 合法。
+
+**features/editor/tagCompletion.ts（NEW）** — 镜像 slashCommands：
+```ts
+export const TAG_RE = /(^|[\s(])(#[A-Za-z0-9_\/\-一-鿿]*)$/;  // # + tag chars，行首/空白/( 后（同 metadata gate）
+export function tagTrigger(before: string): { query: string } | null;  // 命中→query(去 #)；inside [[ 抑制
+export function tagCandidates(tags: string[], query: string): string[]; // 空 query=按名升序;非空=fuzzy 打分
+export function tagCompletionSource(app: GeodeApp);  // getTagMap keys → tagCandidates → 插入 #tag
+```
+触发：单个 `#` + 可选 tag 字符（`##`/`# `(heading) 不触发——多 `#` 或 `#`+空格不匹配;**已知 gap**：裸 `#` 起标题时
+闪一下标签列表,空格即关）。apply：替换 `#query` 段为 `#fulltag`。
+
+**cmExtensions.ts** — `autocompletion.override` 数组追加 `tagCompletionSource(app)`（现 `[wikilink, slash]` → 加 tag）。
+**main.tsx** — `__geodeTag` 探针（loadExternal 前）：`{ trigger:(before)=>tagTrigger(before), candidates:(query)=>tagCandidates([...metadata.getTagMap().keys()], query) }`。
+**i18n** — `dict.panels.ts`：`tags.title`/`tags.empty`/`tags.count`;`dict.app.ts`：`app.tabTags`（ribbon tooltip）。版本 0.40→0.41。
+
+### 文件所有权（并行 implementer）
+- **A（编辑器补全）**：`src/features/editor/tagCompletion.ts`(new) + `src/features/editor/cmExtensions.ts`(加 source) + `src/main.tsx`(`__geodeTag`)。
+- **B（标签面板+app）**：`src/features/tags/*`(new) + `src/app/App.tsx`(右面板) + `src/core/i18n/dict.panels.ts`(tags.*) + `src/core/i18n/dict.app.ts`(app.tabTags)。
+- **C（搜索注入+版本）**：`src/core/workspace.ts`(searchRequest+requestSearch) + `src/features/search/SearchPanel.tsx`(消费) + 三处版本号。
+- **me（验证）**：`.calibration/r41-e2e.mjs` + `.calibration/r41-probe.mjs`。
+
+### 探针/E2E 策略
+- `#` 补全纯逻辑（tagTrigger/tagCandidates）→ `__geodeTag` 探针双端可驱动（R31 模式）;补全 accept 走浏览器 E2E（live view）。
+- 标签面板 = React 组件（live view）→ 浏览器 E2E（点击渲染 + requestSearch 注入 → SearchPanel query）;桌面探针验 `getTagMap` + `requestSearch` store 真值（store 操作可驱动）。
+
+### As-built（评审修复 + 教训）
+
+**3 个确认修复（已修）**：① **`getTagMap()` 无缓存,补全热路径每键全库重建+排序**——CM6 补全源故意省 validFor → 弹窗期间
+每键重跑 → 每键 `[...getTagMap().keys()]` 全库遍历 + sort（兄弟 `getPropertyKeys`/`getPropertyKeyCounts` 早有 revision
+缓存,唯 getTagMap 没做）。修 = 加 `tagMapCache: {rev, map}` revision 缓存（镜像 propertyKeyCountsCache;返回缓存 Map,
+消费方皆只读——同既有 getPropertyKeyCounts 口径）。② **退化 frontmatter 标签泄漏**——`parseNote` 把 frontmatter `tags:`
+原样入索引（仅 `replace(/^#/,"")`,无校验）→ `tags: ["#", "bad space"]` 把空串/含空格键塞进 getTagMap,R41 首次直接消费
+keys 故新暴露（面板渲染空名行、补全把 `#bad space` 当候选 → accept 插入无效文本）。修 = parseNote 过滤 `tag.trim()!==""
+&& !/\\s/.test(tag)`（行内 tag 因 TAG_RE 的 `+` 永不空/带空格,纯 frontmatter 路径,根因修在索引层）。③ **`(#tag` 补全 gate
+不一致**——补全 TAG_RE 原 `(^|\\s)` 而 metadata/装饰用 `(^|[\\s(])` → `(#tag` 被索引却不弹补全。修 = 补全 gate 对齐
+`(^|[\\s(])`（`#` 偏移不变,`(` 不入 m[2]）。
+
+**16 个 nit/by-design/证伪**：TAG_RE 词中/URL/多井号/heading 边界全正确（`(^|[\\s(])` 守卫）;apply 偏移在行内多 `#`/嵌套
+`#a/b`/空 query/词中全正确;三补全源（wikilink/slash/tag）对所有重叠输入互斥（`[[` 守卫逐字同 slash）无候选混合;`#` accept
+走 CM 标准事务 → autosave 无新写路径;CJK 仅 BMP 表意（`一-鿿`,kana/Ext-A/Hangul 不收——**三正则[metadata/装饰/补全]同步、
+镜像既有限制,非 R41 引入**,记已知限制);代码围栏/行内 code 内 `#` 仍弹补全（三源共有 gap,无 fence 守卫——accept 的 `#tag`
+在 code 内本不被索引,无害菜单噪声);**标签计数 = 文件数（Set.size）非出现次数**（合契约 + 同 SearchPanel `#` 浏览器,Obsidian
+是出现次数——保真 gap,记)。
+
+### 已知偏差（写给后续轮）
+- 裸 `#` 起标题时标签补全闪现（单键,空格即关）——Obsidian 同样 `#` 即弹标签。
+- 标签面板与 SearchPanel 的 `#` 浏览器**两套**（面板=持久全库列表;搜索=临时）——Obsidian 亦分离。
+- `requestSearch` 是新增的程序化搜索注入（bookmarks 的 search 书签类型曾记此 gap,未来可复用）。
+- **标签计数 = 含该标签的文件数（非出现次数）**,与 SearchPanel `#` 浏览器一致;Obsidian 显示出现次数（保真 gap）。
+- **`#` 补全 CJK 仅 BMP 表意字（`一-鿿`）**,kana/CJK Ext-A/Hangul/emoji 不触发——与 metadata 索引 + 装饰器**同字符类**（三处同步,改需一起改）。
+- **代码围栏/行内 code 内 `#` 仍弹标签补全**（无 syntaxTree 守卫,与 slash/wikilink 三源共有;accept 的 `#tag` 在 code 内不被索引,无害）。
+
 ## Round 40 additions — 键盘切换复选框（Toggle checkbox status, Cmd/Ctrl-L）【As-built v0.40】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑨ = 已核实缺口（仅鼠标点 `cm-live-checkbox`，无键命令）。
