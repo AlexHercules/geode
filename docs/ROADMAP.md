@@ -637,6 +637,20 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R44 — v0.44（2026-06-14）Note composer：提取选区 → 新笔记（R32+ 候选池第三梯队 #⑬ extract 切片）
+`core/noteComposer.ts`（NEW，纯函数）：`sanitizeNoteName`（一个字符类同守文件名+wikilink:剥控制符 `\p{Cc}`
++ `[]#^|/\:*?"<>` + 折叠空白 + 去首尾点 + UTF-8 边界裁 ≤200 字节;空/全点→Untitled）/`deriveNoteName`（首非空行,
+ATX 标题取其文字）/`extractedContent`（选区逐字,尾换行规整）/`extractReplacement`（`[[name]]` | `![[name]]`）。
+`features/editor/noteComposerCommands.ts`（NEW）：`editor:extract-selection`（无默认键）——选区→建新笔记
+（同目录 `uniquePath` 碰撞后缀）→替换为 `[[link]]`。**数据安全不变式 = create-before-edit**（先持久化目标再删源,
+create 失败则源不动零丢失）+ **await 后乐观锁守卫**（防 IPC 窗口内并发改动致旧 offset 错删）。App.tsx 注册 +
+`__geodeComposer` 探针 + i18n `cmd.extractSelection`。**合并 merge 延后**（= #⑬ 另一半,需 link-rewrite-only 变体）。
+**零新依赖、无 Rust。** 验证：typecheck 0 · `r44-e2e.mjs` **25/25** · 桌面 `r44-probe.mjs` **17/17** · cargo release 真实
+重建 37s · 回归 r40/r43/r33-e2e + r42-probe 不回退。**3 维对抗评审 13 finding → 5 确认（2 major + 3 minor,去重）逐条修
++ 8 by-design/证伪**（① async create 后旧 offset dispatch 错删/RangeError→乐观锁文本指纹守卫 ② sanitizeNoteName
+`". ."`塌成`"."`→坏名→去首尾点 ③ C0 控制符泄漏→`\p{Cc}` ④ 名无长度上限→ENAMETOOLONG→≤200 字节裁 ⑤ 纯空白选区建空笔记→trim 守卫）。
+显式延期：合并 merge / extract 自动导航 / embed 命令 / 链接 basename 歧义（Obsidian 同款）。
+
 ### R43 — v0.43（2026-06-14）日记日历 + 前/后一日导航（R32+ 候选池第三梯队 #⑫ 日历切片）
 `core/dailyNote.ts`（NEW，纯函数 + 1 app-helper）：`dailyStamp`/`dailyNotePath`/`parseDailyStamp`
 （basename 锚定 `^YYYY-MM-DD(?:.md)?$`）/`isDailyNotePath`（DAILY_FOLDER 前缀门控）/`addDays`/`sameDay`/
@@ -1000,7 +1014,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**⑩ 标签面板 + 编辑器 `#` 标签补全**~~ | **R41 已完成（v0.41，见上）**——`features/tags/TagsPanel`（右栏，`useStore(metadata.revision)`，getTagMap 计数降序，点击 `workspace.requestSearch("#"+tag)`）+ `features/editor/tagCompletion.ts`（`#` 补全源镜像 slashCommands，gate `(^|[\s(])`，`__geodeTag` 探针）+ cmExtensions override 三源 + 新增 `searchRequest` consume-once Store。getTagMap 加 revision 缓存、frontmatter 退化标签索引层过滤。r41-e2e 21/21 + r41-probe 11/11。 | 余项（按需求驱动）：标签计数=文件数非出现数；CJK 仅 BMP 表意（三正则同步）；code 内仍弹补全（三源共有）；标签重命名/层级折叠；面板搜索框过滤。 |
 | **⑪ 回收站 + 文件恢复快照** | **部分 / 数据安全**（本地 `.trash/` 回收站 **R42 已完成（v0.42，见上）**：Rust `vault_trash`/`vault_list_trash`[仅 std::fs 无新 crate] + vault.ts adapter.trash/listTrash[含 binaryFiles] + Vault.trash/listTrash/restoreFromTrash[restore emit file:renamed 重索引文件夹子项] + Explorer trash 前 flushAll 无损 + compat trash 接通 + `.trash` 自动隐藏。**修永久删=丢数据底线**。r42-e2e 17/17 + r42-probe 10/10[真 fs 验证]；**文件恢复快照[周期内容快照]仍缺**）| 余项切入：snapshots = Rust 周期写 `.geode/snapshots/<file>/<ts>` 副本 + 恢复 UI；系统回收站（需 `trash` crate=新依赖，待用户拍板）；回收站 UI 面板（listTrash/restoreFromTrash 已就绪，restore 原路径需自携）。 |
 | **⑫ 日记日历 + 可配置日记** | **部分**（日历+前后日导航 **R43 已完成（v0.43，见上）**：`core/dailyNote.ts`[dailyStamp/dailyNotePath/parseDailyStamp(basename 锚定)/isDailyNotePath/addDays/sameDay/monthGrid/openOrCreateDailyNote] + `features/calendar/CalendarPanel`[右栏自绘月历,today 高亮/有笔记标记/点击开建/月导航/locale-aware 标签] + daily-note 插件 `next-day`/`prev-day`[isDailyNotePath 门控基准] + `__geodeDaily` 探针。**评审顺手硬化 `vault_create` TOCTOU**[create_new 原子,补 R17 漏网命令]。r43-e2e 22/22 + r43-probe 13/13;**可配置设置 UI[格式/文件夹/模板]仍延后**）| 余项切入：daily-note 设置（格式/文件夹/模板,镜像 settings 模式）；月历周一起可配；周期模板套用到新建日记。 |
-| **⑬ 笔记合并/拆分（Note composer）** | **缺** | Obsidian：合并两笔记、按标题/选区拆分为新笔记、提取并替换为链接。切入：core 文本操作 + 复用 `renameWithLinkUpdate`/link 改写。 |
+| **⑬ 笔记合并/拆分（Note composer）** | **部分**（提取选区→新笔记+替换为链接 **R44 已完成（v0.44，见上）**：`core/noteComposer.ts`[sanitizeNoteName 守文件名+wikilink+控制符+首尾点+≤200 字节 / deriveNoteName 首标题或首行 / extractedContent / extractReplacement link\|embed] + `features/editor/noteComposerCommands.ts`[`editor:extract-selection`,**create-before-edit** 无损 + await 后乐观锁守卫防错删 + uniquePath 碰撞] + App 注册 + `__geodeComposer` 探针 + i18n。r44-e2e 25/25 + r44-probe 17/17;**合并 merge 仍缺**）| 余项切入：**合并两笔记**（append + 删源 + 把指向源的链接改指目标——需「不移动文件只改链接」的 link-rewrite-only 变体，R16 引擎是 rename-with-link-update[`vault.rename(A,B)` 在 B 存在时覆盖]，须抽出 link-rewrite 核或新写一遍 capture→verify→splice）；extract 自动导航到新笔记；embed 模式命令（core 已支持）。 |
 | **⑭ 保存的工作区布局（Workspaces）** | **缺**（无 serializeLayout/workspaces.json）| 切入：workspace 状态序列化 + `.obsidian/workspaces.json` 兼容 + 切换 UI。 |
 | **⑮ `obsidian://` URI / 深链** | **缺**（compat 仅 gap-stub）| 桌面 Tauri deep-link + 浏览器降级。 |
 | **⑯ 弹出窗口（Pop-out windows）** | **缺**（compat 明示「single-window host」）| Tauri 多 WebviewWindow——**大工程**，远期。 |

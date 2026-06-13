@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.43.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R43 日记日历 + 前/后一日导航 ✓ 已交付**（R32+ 候选池第三梯队 **#⑫ 的日历切片**;#⑫=日记日历+可配置日记,**可配置设置 UI 延后**,沿用 "Daily Notes/YYYY-MM-DD"）。新 `core/dailyNote.ts`（纯函数 + `openOrCreateDailyNote` app-helper）;`features/calendar/CalendarPanel`（右栏自绘月历:today 高亮/有笔记标记/点击开建/上下月+今天/locale-aware 标签）+ App 右 ribbon `calendar` tab + icons;daily-note 插件 `next-day`/`prev-day`（`isDailyNotePath` 门控基准）+ `__geodeDaily` 探针。**评审顺手修数据安全**:`vault_create` 桌面端 `exists()`-then-`fs::write` TOCTOU 截断（R17 为 `write_binary` 修过的同根因、独漏此命令;日历把它摆上热路径）→ 改 `create_new` 原子+rollback。**零新依赖**。`r43-e2e` **22/22** + 桌面 `r43-probe` **13/13** + 回归 r42-probe 10 / r41-e2e 21 不回退。**3 维对抗评审 9 finding → 8 确认（全 minor）逐条修 + 1 证伪**（parseDailyStamp 整 path over-match→basename 锚定 / 子文件夹日记导航逃逸→isDailyNotePath 双门控 / vault_create TOCTOU→create_new / create 失败竞态仍 open / locale 走 Store / aria t() / monthLabel memo）。
-- **下一项 = R43→R44 = R32+ 候选池第三梯队 #⑬ 笔记合并/拆分（Note composer）**（Obsidian:合并两笔记 / 按标题或选区拆分为新笔记 / 提取选区替换为链接）。切入:`core` 文本操作（纯函数:split-at-heading / split-at-selection / extract-to-note）+ **复用 R16 改写引擎 `renameWithLinkUpdate`/link 改写**（合并/拆分要同步更新指向被动笔记的链接）+ 命令注册（无默认键）。**⚠️ 数据安全相关**:动 vault 多文件写 + link 改写 → 必加载 data-safety skill（R16 五步算法、改写复解析断言、flush-before-move）。**零新依赖预判可行**（纯前端 + 既有引擎）。**#⑫ 余项**（可配置日记设置 UI=格式/文件夹/模板）+ **#⑪ 余项**（恢复快照）+ **#⑧ 余项**（stacked/linked view）仍延后。其后队列:⑭ workspaces → ⑮ obsidian:// URI →（全队列见 ROADMAP R32+ 候选池第三/四梯队）。
+- 版本 **v0.44.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R44 Note composer：提取选区→新笔记 ✓ 已交付**（R32+ 候选池第三梯队 **#⑬ 的 extract 切片**;#⑬=笔记合并/拆分+提取替换为链接,**合并 merge 延后**）。新 `core/noteComposer.ts`（纯函数:`sanitizeNoteName` 一类同守文件名+wikilink[剥控制符 `\p{Cc}` + `[]#^|/\:*?"<>` + 去首尾点 + ≤200 字节] / `deriveNoteName` / `extractedContent` / `extractReplacement`）+ `features/editor/noteComposerCommands.ts`（`editor:extract-selection`,**create-before-edit** 无损 + **await 后乐观锁文本指纹守卫**防错删）+ App 注册 + `__geodeComposer` 探针 + i18n。**零新依赖、无 Rust**。`r44-e2e` **25/25** + 桌面 `r44-probe` **17/17** + 回归 r40/r43/r33-e2e + r42-probe 不回退。**3 维对抗评审 13 finding → 5 确认（2 major + 3 minor,去重）逐条修 + 8 by-design/证伪**（async create 后旧 offset dispatch 错删/RangeError→乐观锁守卫 / `". ."`塌成`"."`坏名→去首尾点 / C0 控制符泄漏→`\p{Cc}` / 名无长度上限 ENAMETOOLONG→≤200 字节 / 纯空白选区建空笔记→trim 守卫）。
+- **下一项 = R44→R45 = R32+ 候选池第三梯队 #⑭ 保存的工作区布局（Workspaces）**（Obsidian:命名保存/切换整个面板布局,`.obsidian/workspaces.json`;当前无 serializeLayout/workspaces.json）。切入:`core/workspace.ts` 状态序列化（tabs/panes/侧栏 → JSON）+ 反序列化恢复 + 命名存取（写 `.obsidian/workspaces.json` 兼容格式）+ 切换 UI（命令面板 / 模态）。**⚠️ 数据安全较低**（写的是布局配置非用户笔记;但反序列化要容错坏 JSON、缺文件路径不崩）。**零新依赖预判可行**（既有 workspace 模型 + JSON）。**#⑬ 余项**（合并 merge=需 link-rewrite-only 变体）+ **#⑫ 余项**（可配置日记设置 UI）+ **#⑪ 余项**（恢复快照）+ **#⑧ 余项**（stacked/linked view）仍延后。其后队列:⑮ obsidian:// URI → ⑯ pop-out（大）→ ⑰ canvas（大）→（全队列见 ROADMAP R32+ 候选池第三/四梯队）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,7 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R44（Note composer 提取选区）核心教训三条**：① **引入 `await` 就引入重入窗口**——同步命令（formatCommands read→transform→dispatch）的绝对 offset 永远有效,但本轮 create-before-edit 的 `await vault.create`（桌面端是跨进程 IPC,毫秒级,编辑器无 readonly 守卫）期间用户/IME 可改文档 → await 前捕获的 `main.from/to` 变陈旧 → 用旧 offset dispatch 会**静默删错位置=数据损坏**(或越界 RangeError)。**修 = await 后、写前复验捕获跨度**（`doc.sliceString(from,to)===selected` 乐观锁文本指纹,不符则保留新笔记[无害重复]+不删源）——这是 R16 splice-verification、R23「await 后视图重校验」的**反复出现的同根**,凡「读快照→await→按快照写」必加这道复验。② **「用户文本→文件名」是对抗输入重灾区**:`sanitizeNoteName` 一个看似简单的纯函数藏 3 个 edge——`". ."` 去首点后塌成 `"."` 生成坏名 `"..md"`+坏链 `"[[.]]"`（要去**首尾**点）、C0 控制符（NUL/BEL,`\s` 不覆盖非空白控制符）泄漏（用 `\p{Cc}` 剥）、超长/CJK 超 255 字节文件名上限 ENAMETOOLONG（按 UTF-8 边界裁 ≤200 字节）。凡此类函数,评审必设 控制符/点/长度/元字符 四维对抗。③ **删 belt-and-braces 防御前先想清它防什么**——我为去源文件里的裸控制字节,直接删了 ILLEGAL_RE 的控制范围,却漏了「非空白控制符仍需剥离」,**正确做法是换等价干净写法（`\p{Cc}`）而非直接删防御**。
 - **R43（日记日历 + 前后日导航）核心教训三条**：① **修一类数据安全根因要全命令面扫同类**——R17 评审硬化了
   `vault_write_binary` 的 check-then-act（`create_new` 原子）,但普通 `vault_create` 当年漏网;直到 R43 日历把它摆上热路径
   （Mod+D / 点日历高频 create）评审才揪出同款 TOCTOU 截断窗口。**历史薄弱根因会被新功能「重新激活」;改一处原子写时,grep 全部

@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R44 套件回归（2026-06-14，macOS release 二进制 v0.44.0 实测 `r44-probe-vault`）
+
+R44 = Note composer 提取选区→新笔记（R32+ 候选池第三梯队 #⑬ extract 切片；compat 面无改动——纯新增 core/feature/command）。
+对照 Obsidian 核心插件 **Note Composer** 的「Extract current selection」：选区→建新笔记+把选区替换为 `[[link]]`（**合并 merge 延后**=
+#⑬ 另一半）。新 `core/noteComposer.ts`（纯函数,sanitizeNoteName 一类同守文件名+wikilink）+ `editor:extract-selection` 命令
+（**create-before-edit** 数据安全不变式 + await 后乐观锁守卫）。macOS probe 实测：新增 **r44-probe 17/17**（真实 WKWebView 上
+`__geodeComposer` 纯函数 + 对抗输入:空/全空白/CJK/非法字符/裸 `#`/`". ."` 塌点/控制符/超长截断）。**r43/r42/…/r24/r28/r31 套件
+不回退**（浏览器 r44-e2e **25/25** + r43-e2e 22、r40-e2e 19、r33-e2e 37、r42-probe 10 抽样实测全绿;`r26-bytes` 0）。
+**3 维对抗评审 13 finding → 5 确认（2 major + 3 minor,去重）逐条修 + 8 by-design/证伪**（① async create 后旧 offset dispatch
+错删/RangeError→乐观锁文本指纹守卫[R16/R23 同根] ② `sanitizeNoteName` `". ."`塌成`"."`坏名→去首尾点 ③ C0 控制符泄漏→`\p{Cc}`
+④ 名无长度上限 ENAMETOOLONG→UTF-8 边界裁 ≤200 字节 ⑤ 纯空白选区建空笔记→trim 守卫;证伪:链接 basename 歧义[Obsidian 同款]、
+多选区取 main[与 formatCommands 一致]、getActiveView 双侧门控正确、parentPath/uniquePath 正确）。显式延期：合并 merge / extract
+自动导航 / embed 模式命令 / 可配置新笔记位置。
+
 ### R43 套件回归（2026-06-14，macOS release 二进制 v0.43.0 实测 `r43-probe-vault`）
 
 R43 = 日记日历 + 前/后一日导航（R32+ 候选池第三梯队 #⑫ 日历切片；compat 面无改动——纯新增 core/feature/plugin）。新

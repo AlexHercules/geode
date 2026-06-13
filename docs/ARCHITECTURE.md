@@ -71,6 +71,69 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 44 additions — Note composer：提取选区 → 新笔记（Extract current selection）【As-built v0.44】
+
+> **状态：As-built（v0.44 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑬ 的 **extract 切片**（#⑬ = 笔记合并/拆分 + 提取替换为链接;本轮做
+> **提取选区→新笔记+替换为 `[[link]]`**,**合并 merge 延后**——merge 需「不移动文件只改链接」的 link-rewrite 变体,而 R16 引擎是
+> rename-with-link-update[`vault.rename(A,B)` 在 B 已存在时会覆盖],重构冻结的 data-safety 引擎风险高,留 #⑬ 另一半）。
+> **零新依赖、无 Rust**（纯前端;新笔记走 R43 已硬化的原子 `vault.create`）。**数据安全相关轮**（用户文本跨文件搬移）。
+> 验证:typecheck 0 · `r44-e2e.mjs` **25/25** · `r44-probe.mjs` **17/17** · cargo release 真实重建 37s · 回归 r40/r43/r33-e2e + r42-probe 不回退。
+
+### As-built（评审根因修复 — 13 finding → 5 确认[2 major + 3 minor,去重] 全修 + 8 by-design/证伪）
+
+对抗评审 3 维 × find→verify。确认并修复:
+
+1. **【major / 数据安全】async create 后用旧绝对 offset dispatch → 错删/RangeError**：命令拍下 `main.from/to` 快照 + selected 文本,`await vault.create`（桌面端是跨进程 IPC + `refreshTree`,毫秒级可重入窗口,编辑器**无 readonly 守卫**）后用**陈旧 offset** dispatch。坏路径 A=选区前被插入/删除致 offset 指向不同文本 → **静默删错位置=数据损坏**;坏路径 B=doc 变短致越界 → CM `RangeError`（dispatch 在 try 外,unhandled）。R33 `formatCommands.applyFormat` 是纯同步无 await 窗口故无此问题——这是 create-before-edit 引入 await **独有**的新风险。**修**（R16 splice-verification 精神 = 乐观锁文本指纹）:dispatch 前校验 `main.to <= doc.length && doc.sliceString(main.from,main.to) === selected`,不符则 abort（保留新笔记=无害重复,源不动=零损坏）。
+2. **【major】`sanitizeNoteName` 对 `". ."` 类输入塌成 `"."` → 文件名 `"..md"` + 坏链 `"[[.]]"`**：`replace(/^\.+/, "")` 只去**首**点;`". ."` → 去首点 → `" ."` → trim → `"."`（非空,返回）。**修**：去**首尾**点 `/^\.+|\.+$/g`,塌空→"Untitled"（连带修「`note.` 尾点 → `note..md`」）。
+3. **【minor】C0 控制字符（NUL/BEL,`\s` 不覆盖非空白控制符）泄漏进文件名+wikilink**：我上一版为去裸字节卫生问题删了控制范围,注释断言「`\s+` 折叠即可」对非空白控制符**为假**。**修**：`\p{Cc}` Unicode 类剥离控制字符（无裸字节、可读）。
+4. **【minor】派生名无长度上限 → 超长/86+ CJK 字符超 255 字节 → 桌面 ENAMETOOLONG 静默失败**（浏览器 Memory 无限制 → 双端分歧）。**修**：按 UTF-8 边界（`for...of` 码点迭代）裁到 ≤200 字节（留 uniquePath ` N.md` 余量）。
+5. **【minor】纯空白选区（非 empty）建空 Untitled 笔记**：`available` 仅守 `!main.empty`。**修**：`if (selected.trim().length === 0) return;`。
+
+> **证伪/by-design（未改）**：链接 basename 歧义（Obsidian 同款,已记已知偏差）· 多选区只取 main（与 formatCommands 一致、Obsidian 单提取语义）· `getActiveFileEditorView` 双侧门控正确（命令不误改后台文件）· `parentPath` 根空串 + `uniquePath` 三元 prefix 正确 · `extractedContent` 尾部裁剪**不**吃有意义内容（`"x = 1   "→"x = 1"` 实测）· i18n 键注释归属/探针注释（纯文档 nit）。
+
+> **教训（写给后续轮）**：① **引入 `await` 就引入重入窗口**——同步命令（formatCommands）的绝对 offset 永远有效,但 create-before-edit 的 await 期间文档可变,**await 后必须复验捕获跨度再写**（R16 splice-verification、R23「await 后视图重校验」同根反复出现）。② **文件名 sanitize 是对抗输入重灾区**:首尾点/纯点塌成 `.`、控制符泄漏、超长越界——一个看似简单的纯函数藏 3 个 edge,凡「用户文本 → 文件名」必过 控制符/点/长度/元字符 四关。③ 删「belt-and-braces」防御前先想清它防的是什么——我删控制范围只为源卫生,却漏了非空白控制符,**正确做法是换等价干净写法（`\p{Cc}`）而非直接删**。
+
+### 契约（交付即实现，已纳评审修复）
+
+**核心数据安全不变式 = create-before-edit 排序**：先 `vault.create` 把选区文本持久化进新笔记（R43 `create_new` 原子写),
+**成功后才** dispatch 源编辑器事务删掉选区。create 失败 → abort、源文件一字不动 → **零丢失**。无 R16 跨文件 link-rewrite（新笔记无入链）。
+
+**core/noteComposer.ts（NEW，纯函数）**：
+```ts
+export type ExtractMode = "link" | "embed";
+// 同时守【文件名】+【wikilink】安全:剥离控制字符(\p{Cc}) + []#^|/\:*?"<> + 折叠空白 + trim
+// + 去【首尾】点(防 ".."/"note." 塌成坏名) + 按 UTF-8 边界裁 ≤200 字节;空/全点 → "Untitled"。（评审硬化:控制符/首尾点/长度）
+export function sanitizeNoteName(raw: string): string;
+// 默认名:选区(跳过空行后)首行若是 ATX 标题取其文字、否则取首非空行 → sanitizeNoteName
+export function deriveNoteName(selectedText: string): string;
+// 新笔记内容:选区逐字(尾换行规整为单个 \n)
+export function extractedContent(selectedText: string): string;
+// 替换进源文件选区处的文本:`[[name]]`(link) | `![[name]]`(embed)
+export function extractReplacement(noteName: string, mode: ExtractMode): string;
+```
+
+**features/editor/noteComposerCommands.ts（NEW）**：`registerComposerCommands(app: GeodeApp, getView: () => EditorView | null): Array<() => void>`。
+注册 `editor:extract-selection`（无默认键;`available = getView()!==null && !selection.empty`）。callback 流程（**create-before-edit**）:
+① `view`+`activePath=workspace.getActiveFile()` 取真值;② `selected = doc.sliceString(from,to)`,**纯空白则 return**（评审 #5）;③ `name=deriveNoteName(selected)`;
+④ `folder=parentPath(activePath)`、`notePath=vault.uniquePath(folder,name)`（碰撞 ` 1`/` 2` 后缀）;⑤ **`await vault.create(notePath, extractedContent(selected))`**——失败 catch+console.error+return（源不动）;
+⑥ **await 后乐观锁守卫（评审 #1 数据安全）**:`main.to > doc.length || doc.sliceString(main.from,main.to) !== selected` → console.warn + return（选区被并发改动 → 保留新笔记[无害重复]、不删错源）;
+⑦ `finalName=basename(notePath).replace(/\.md$/i,"")`、`view.dispatch({changes:{from,to,insert:extractReplacement(finalName,"link")}, selection:{anchor:from+insert.length}, userEvent:"input.extract"})` + `view.focus()`。**不自动导航到新笔记**（停在源,链接可点;记已知偏差）。
+
+**app/App.tsx**：注册 effect 加 `...registerComposerCommands(app, () => getActiveFileEditorView(app)?.view ?? null)`（紧邻 `registerFormatCommands`,L377 区）。
+**main.tsx**：`__geodeComposer` 纯探针（`derive`/`content`/`replacement`,desktop probe + 确定性纯测；命令路径走浏览器 E2E,App effect 后台不跑）。
+**i18n**：`dict.app.ts` `cmd.extractSelection`（en+zh）。版本 0.43→0.44。
+
+### 文件所有权（并行 implementer）
+- **A（core + 探针 + i18n）**：`src/core/noteComposer.ts`(new) + `src/main.tsx`(`__geodeComposer`) + `src/core/i18n/dict.app.ts`(`cmd.extractSelection`)。
+- **B（feature + app wiring + 版本）**：`src/features/editor/noteComposerCommands.ts`(new) + `src/app/App.tsx`(注册) + 版本三处（`package.json`/`src-tauri/tauri.conf.json`/`src/features/settings/SettingsModal.tsx`）。
+- **me（验证）**：`.calibration/r44-e2e.mjs`（端到端:开笔记→设选区→execute→新笔记含选区文本+源含 `[[name]]` + 碰撞后缀 + 纯函数对抗输入）+ `.calibration/r44-probe.mjs`（`__geodeComposer` 纯函数,含空/全空白/CJK/非法字符/裸 `#`）。
+
+### 已知偏差（写给后续轮）
+- **合并 merge 延后**（= #⑬ 另一半;需 link-rewrite-only 变体,R16 引擎重构风险高）。
+- **extract 不自动导航到新笔记**（停在源;Obsidian 会打开新笔记——延后,避免跨 tab flush 复杂度）。
+- **链接按 basename `[[name]]`**（uniquePath 仅查目标文件夹;若别处有同名 basename 文件 → 链接歧义,罕见,Obsidian 同款 basename 行为）。
+- **embed 模式 core 已支持但未注册命令**（仅 link 命令;embed 变体留后续）。
+
 ## Round 43 additions — 日记日历 + 前/后一日导航（Calendar pane + daily-note nav）【As-built v0.43】
 
 > **状态：As-built（v0.43 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑫ 的 **日历切片**（#⑫ = 日记日历 + 可配置日记;本轮做日历 +
