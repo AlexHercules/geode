@@ -25,6 +25,11 @@ interface WikiLinkInfo {
   display: string;
   /** set ⇒ render an image embed placeholder instead of an internal-link anchor */
   embedPath?: string;
+  /** R26: set ⇒ render a media file-embed placeholder (audio/video/pdf). The
+   *  extension drives the element kind at hydration; `subpath` carries a PDF
+   *  page anchor ("page=N"). */
+  fileEmbedPath?: string;
+  fileEmbedExt?: string;
   /** set ⇒ render a note-embed placeholder span (R12, noteEmbeds option) */
   notePath?: string;
   /** raw text between '#' and '|' in the original inner ("" when absent) */
@@ -49,6 +54,78 @@ export const IMAGE_EXTS: ReadonlySet<string> = new Set([
   "webp",
   "bmp",
 ]);
+
+/** R26: audio extensions an `![[...]]` embed renders as a native <audio>. */
+export const AUDIO_EXTS: ReadonlySet<string> = new Set([
+  "mp3",
+  "wav",
+  "m4a",
+  "ogg",
+  "oga",
+  "opus",
+  "3gp",
+  "flac",
+  "aac",
+]);
+
+/** R26: video extensions an `![[...]]` embed renders as a native <video>.
+ *  (webm is treated as video — the common case — not audio.) */
+export const VIDEO_EXTS: ReadonlySet<string> = new Set([
+  "mp4",
+  "webm",
+  "ogv",
+  "mov",
+  "mkv",
+]);
+
+/** R26: classify a (lowercase) extension as a hydratable file embed. Video is
+ *  checked before audio so webm resolves to video. Returns null for everything
+ *  that is NOT a media embed (images go through the dedicated IMAGE_EXTS branch;
+ *  other attachments — zip/docx/… — keep degrading to a link). */
+export function fileEmbedKind(ext: string): "audio" | "video" | "pdf" | null {
+  if (ext === "pdf") return "pdf";
+  if (VIDEO_EXTS.has(ext)) return "video";
+  if (AUDIO_EXTS.has(ext)) return "audio";
+  return null;
+}
+
+/** R26: MIME by lowercase extension — single source shared by the editor blob
+ *  cache and the export data-URI path (was duplicated, image-only, in each).
+ *  Covers image + audio + video + pdf; unknown → application/octet-stream. */
+const MIME_BY_EXT: Record<string, string> = {
+  // image
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  svg: "image/svg+xml",
+  webp: "image/webp",
+  bmp: "image/bmp",
+  // audio
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  "3gp": "audio/3gpp",
+  flac: "audio/flac",
+  aac: "audio/aac",
+  // video
+  mp4: "video/mp4",
+  webm: "video/webm",
+  ogv: "video/ogg",
+  mov: "video/quicktime",
+  mkv: "video/x-matroska",
+  // document
+  pdf: "application/pdf",
+};
+
+/** R26: resolve a vault path to its MIME type (unknown → octet-stream). */
+export function mimeForPath(path: string): string {
+  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
+  return MIME_BY_EXT[ext] ?? "application/octet-stream";
+}
 
 export interface RenderMarkdownOptions {
   /**
@@ -352,6 +429,20 @@ function replaceWikilinks(
             if (resolved !== null && IMAGE_EXTS.has(ext)) {
               // the whole `![[...]]` becomes the embed placeholder
               links.push({ target, display, embedPath: resolved });
+              return `@@GEODELINK${links.length - 1}@@`;
+            }
+            // R26: audio/video/pdf attachment → file-embed placeholder (the
+            // extension drives the element kind at hydration; PDF carries its
+            // page anchor in subpath). Non-media attachments (zip/…) fall
+            // through to the legacy link path, byte-identical to before.
+            if (resolved !== null && fileEmbedKind(ext) !== null) {
+              links.push({
+                target,
+                display,
+                fileEmbedPath: resolved,
+                fileEmbedExt: ext,
+                subpath: subpath || undefined,
+              });
               return `@@GEODELINK${links.length - 1}@@`;
             }
           }
@@ -1020,6 +1111,14 @@ md.core.ruler.push("geode-wikilinks", (state) => {
           img.content = `<img class="geode-embed" data-embed-path="${escapeHtml(info.embedPath)}" alt="${escapeHtml(info.display)}">`;
           img.level = child.level;
           next.push(img);
+        } else if (info.fileEmbedPath !== undefined) {
+          // R26: media file embed (audio/video/pdf) — an empty container the
+          // caller hydrates via the shared engine (core/embeds.ts hydrateFile)
+          const sub = info.subpath ? ` data-embed-subpath="${escapeHtml(info.subpath)}"` : "";
+          const span = new state.Token("html_inline", "", 0);
+          span.content = `<span class="geode-embed-file" data-embed-path="${escapeHtml(info.fileEmbedPath)}" data-embed-ext="${escapeHtml(info.fileEmbedExt ?? "")}"${sub} data-embed-display="${escapeHtml(info.display)}"></span>`;
+          span.level = child.level;
+          next.push(span);
         } else if (info.notePath !== undefined) {
           // note transclusion: an empty container, expanded asynchronously by
           // the caller via the shared hydration engine (core/embeds.ts)

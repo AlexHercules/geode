@@ -19,7 +19,7 @@
  * import each other); core never imports React or features.
  */
 import { t } from "./i18n";
-import { renderMarkdownToHtml } from "./markdown";
+import { fileEmbedKind, renderMarkdownToHtml } from "./markdown";
 import { loadKatex } from "./math";
 import { loadMermaid } from "./mermaid";
 import type { MetadataIndex } from "./metadata";
@@ -224,6 +224,47 @@ async function hydrateImage(img: HTMLImageElement, ctx: HydrateContext): Promise
   }
 }
 
+/**
+ * R26: hydrate a media file embed (`span.geode-embed-file`) into a native
+ * <audio>/<video>/<iframe> player. The blob/data URL comes from ctx.imageSrc
+ * (the feature supplies the correct MIME via core mimeForPath). A PDF page
+ * anchor rides on data-embed-subpath ("page=N"). Never throws — a read failure
+ * marks the placeholder `.geode-embed-failed`. Zero new dependencies: PDF uses
+ * the host's native viewer (WKWebView / Chromium).
+ */
+async function hydrateFile(span: HTMLElement, ctx: HydrateContext): Promise<void> {
+  const path = span.getAttribute("data-embed-path") ?? "";
+  const ext = (span.getAttribute("data-embed-ext") ?? "").toLowerCase();
+  const subpath = (span.getAttribute("data-embed-subpath") ?? "").trim();
+  const kind = fileEmbedKind(ext);
+  if (!kind) return; // defensive: emission only ever marks media extensions
+  try {
+    const src = await ctx.imageSrc(path);
+    let el: HTMLMediaElement | HTMLIFrameElement;
+    if (kind === "audio") {
+      const a = document.createElement("audio");
+      a.controls = true;
+      a.src = src;
+      el = a;
+    } else if (kind === "video") {
+      const v = document.createElement("video");
+      v.controls = true;
+      v.src = src;
+      el = v;
+    } else {
+      // pdf → native iframe viewer; page anchor (page=N) rides on the subpath
+      const f = document.createElement("iframe");
+      f.src = subpath ? `${src}#${subpath}` : src;
+      el = f;
+    }
+    el.classList.add(kind === "pdf" ? "geode-embed-pdf" : "geode-embed-media");
+    el.addEventListener("error", () => span.classList.add("geode-embed-failed"), { once: true });
+    span.appendChild(el);
+  } catch {
+    span.classList.add("geode-embed-failed");
+  }
+}
+
 async function hydrateNote(
   span: HTMLElement,
   ctx: HydrateContext,
@@ -312,6 +353,10 @@ export async function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Pro
       root.querySelectorAll<HTMLImageElement>("img.geode-embed[data-embed-path]"),
     );
     const spans = Array.from(root.querySelectorAll<HTMLElement>("span.geode-embed-note"));
+    // R26: media file embeds (audio/video/pdf)
+    const fileSpans = Array.from(
+      root.querySelectorAll<HTMLElement>("span.geode-embed-file[data-embed-path]"),
+    );
     // R18: math pass — nested transclusions are covered by the recursive
     // hydrateNote → hydrateEmbeds({...ctx}) call, which carries mathOutput
     const mathEls = Array.from(root.querySelectorAll<HTMLElement>(".geode-math[data-math]"));
@@ -323,6 +368,7 @@ export async function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Pro
     const passes = [
       ...imgs.map((img) => hydrateImage(img, ctx)),
       ...spans.map((span) => hydrateNote(span, ctx, depth, ancestors)),
+      ...fileSpans.map((span) => hydrateFile(span, ctx)),
     ];
     if (mathEls.length > 0) passes.push(hydrateMath(mathEls, ctx));
     if (mermaidEls.length > 0) passes.push(hydrateMermaid(mermaidEls, ctx));

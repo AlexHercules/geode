@@ -8,18 +8,8 @@
  * their entry and revoke the URL so the next request re-reads from disk.
  */
 import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
+import { mimeForPath } from "@core/markdown";
 import type { GeodeApp } from "@app/AppContext";
-
-/** MIME by lowercase extension — mirrors IMAGE_EXTS in core/markdown.ts. */
-const MIME_BY_EXT: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  svg: "image/svg+xml",
-  webp: "image/webp",
-  bmp: "image/bmp",
-};
 
 /** path → in-flight or settled object-URL promise (shared by all consumers) */
 const urlCache = new Map<string, Promise<string>>();
@@ -58,8 +48,9 @@ export function getEmbedUrl(app: GeodeApp, path: string): Promise<string> {
   ensureInvalidation(app);
   const cached = urlCache.get(path);
   if (cached) return cached;
-  const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
-  const mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
+  // shared core source of truth (image + audio + video + pdf) so media files
+  // get the correct MIME and native <audio>/<video>/<iframe> players render
+  const mime = mimeForPath(path);
   const load = app.vault.readBinary(path).then((bytes) => {
     // copy into a fresh ArrayBuffer-backed view: TS types adapter bytes over
     // ArrayBufferLike, which BlobPart rejects (and a view may have an offset)

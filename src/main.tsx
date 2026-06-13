@@ -201,6 +201,25 @@ async function bootstrap() {
     });
   };
 
+  // always-on byte-level render probe: renders an ARBITRARY markdown source
+  // string through the exact reading-view pipeline (resolve link + resolve
+  // attachment + noteEmbeds), returning the raw HTML string. This is the
+  // byte-level regression surface for core/markdown.ts changes (the rebuilt
+  // r18-diff equivalent — see .calibration/r26-bytes.mjs): snapshot a corpus,
+  // change the pipeline, diff. sourcePath defaults to "" (vault root context).
+  const renderHost = globalThis as unknown as {
+    __geodeRenderMarkdown?: (source: string, sourcePath?: string) => string;
+  };
+  renderHost.__geodeRenderMarkdown = (source, sourcePath = "") =>
+    renderMarkdownToHtml(
+      source,
+      (tg) => metadata.resolveLink(tg, sourcePath),
+      {
+        noteEmbeds: true,
+        resolveEmbed: (tg) => metadata.resolveAttachment(tg, sourcePath),
+      },
+    );
+
   // load vault: memory adapter is always ready; desktop restores the last vault
   if (adapter.kind === "memory") {
     await vault.load();

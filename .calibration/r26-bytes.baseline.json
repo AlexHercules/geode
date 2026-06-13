@@ -1,0 +1,146 @@
+[
+  {
+    "name": "headings",
+    "html": "<h1>H1</h1>\n<h2>H2</h2>\n<h3>H3 with <strong>bold</strong></h3>\n"
+  },
+  {
+    "name": "emphasis",
+    "html": "<p><strong>bold</strong> <em>italic</em> <s>strike</s> <code>code</code> text</p>\n"
+  },
+  {
+    "name": "highlight",
+    "html": "<p><mark>marked text</mark> and normal</p>\n"
+  },
+  {
+    "name": "list-ul",
+    "html": "<ul>\n<li>alpha</li>\n<li>beta\n<ul>\n<li>nested</li>\n</ul>\n</li>\n</ul>\n"
+  },
+  {
+    "name": "list-ol",
+    "html": "<ol>\n<li>one</li>\n<li>two</li>\n<li>three</li>\n</ol>\n"
+  },
+  {
+    "name": "list-task",
+    "html": "<ul>\n<li class=\"task-list-item\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"0\">todo</li>\n<li class=\"task-list-item is-checked\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"1\" checked>done</li>\n</ul>\n"
+  },
+  {
+    "name": "blockquote",
+    "html": "<blockquote>\n<p>quote line\nsecond line</p>\n</blockquote>\n"
+  },
+  {
+    "name": "callout",
+    "html": "<div class=\"callout\" data-callout=\"note\"><div class=\"callout-title\"><div class=\"callout-icon\"></div><div class=\"callout-title-inner\">Title</div></div><div class=\"callout-content\"><p>callout body</p>\n</div></div>"
+  },
+  {
+    "name": "callout-fold",
+    "html": "<div class=\"callout is-collapsible is-collapsed\" data-callout=\"warning\" data-callout-fold=\"-\"><div class=\"callout-title\"><div class=\"callout-icon\"></div><div class=\"callout-title-inner\">Collapsed</div></div><div class=\"callout-content\"><p>hidden body</p>\n</div></div>"
+  },
+  {
+    "name": "footnote",
+    "html": "<p>text with a ref<sup class=\"footnote-ref\"><a id=\"fnref-0-1\" href=\"#fn-0-1\" class=\"footnote-link\" data-footnote=\"1\">[1]</a></sup></p>\n<hr class=\"footnotes-sep\"><section class=\"footnotes\"><ol class=\"footnotes-list\"><li id=\"fn-0-1\" class=\"footnote-item\">the footnote <a href=\"#fnref-0-1\" class=\"footnote-backref\">↩</a></li></ol></section>"
+  },
+  {
+    "name": "comment",
+    "html": "<p>before  after</p>\n"
+  },
+  {
+    "name": "math-inline",
+    "html": "<p>inline <span class=\"geode-math geode-math-inline\" data-math=\"x^2 + y^2\">x^2 + y^2</span> done</p>\n"
+  },
+  {
+    "name": "math-block",
+    "html": "<div class=\"geode-math geode-math-block\" data-math=\"\\int_0^1 x\\,dx\">\\int_0^1 x\\,dx</div>"
+  },
+  {
+    "name": "code-fence",
+    "html": "<pre><code class=\"language-js\">const a = 1;\nconsole.log(a);\n</code></pre>\n"
+  },
+  {
+    "name": "code-inline",
+    "html": "<p>use <code>npm run dev</code> here</p>\n"
+  },
+  {
+    "name": "table",
+    "html": "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td>2</td>\n</tr>\n</tbody>\n</table>\n"
+  },
+  {
+    "name": "hr",
+    "html": "<p>above</p>\n<hr>\n<p>below</p>\n"
+  },
+  {
+    "name": "md-link",
+    "html": "<p><a href=\"https://example.com\" target=\"_blank\" rel=\"noopener\" class=\"external-link\">label</a></p>\n"
+  },
+  {
+    "name": "wikilink",
+    "html": "<p>see <a class=\"internal-link\" data-target=\"Note A\" href=\"#\">Note A</a> here</p>\n"
+  },
+  {
+    "name": "wikilink-sub",
+    "html": "<p>see <a class=\"internal-link\" data-target=\"Note A\" data-subpath=\"Heading\" href=\"#\">Note A#Heading</a> here</p>\n"
+  },
+  {
+    "name": "wikilink-alias",
+    "html": "<p>see <a class=\"internal-link\" data-target=\"Note A\" href=\"#\">Alias</a> here</p>\n"
+  },
+  {
+    "name": "wikilink-unresolved",
+    "html": "<p>see <a class=\"internal-link is-unresolved\" data-target=\"Ghost Note 9999\" href=\"#\">Ghost Note 9999</a> here</p>\n"
+  },
+  {
+    "name": "selflink",
+    "html": "<p>jump to <a class=\"internal-link\" data-target=\"\" data-subpath=\"Heading\" href=\"#\">#Heading</a></p>\n"
+  },
+  {
+    "name": "image-embed",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"img.png\"></p>\n"
+  },
+  {
+    "name": "image-embed-alias",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"caption\"></p>\n"
+  },
+  {
+    "name": "note-embed",
+    "html": "<p><span class=\"geode-embed-note\" data-embed-note=\"Note A.md\" data-embed-subpath=\"\" data-embed-display=\"Note A\"></span></p>\n"
+  },
+  {
+    "name": "note-embed-sub",
+    "html": "<p><span class=\"geode-embed-note\" data-embed-note=\"Note A.md\" data-embed-subpath=\"Heading\" data-embed-display=\"Note A#Heading\"></span></p>\n"
+  },
+  {
+    "name": "mermaid",
+    "html": "<div class=\"geode-mermaid\" data-mermaid=\"graph TD; A--&gt;B;\"><pre class=\"geode-mermaid-source\"><code>graph TD; A--&gt;B;</code></pre></div>\n"
+  },
+  {
+    "name": "html-inline",
+    "html": "<p>text &lt;strong&gt;raw&lt;/strong&gt; end</p>\n"
+  },
+  {
+    "name": "blockref",
+    "html": "<p>a paragraph with a block id</p>\n"
+  },
+  {
+    "name": "mixed",
+    "html": "<h1>Title</h1>\n<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"img.png\"> and <a class=\"internal-link\" data-target=\"Note A\" href=\"#\">Note A</a> plus <mark>hi</mark> and <span class=\"geode-math geode-math-inline\" data-math=\"x\">x</span>.</p>\n<div class=\"callout\" data-callout=\"tip\"><div class=\"callout-title\"><div class=\"callout-icon\"></div><div class=\"callout-title-inner\">T</div></div><div class=\"callout-content\"><p>b</p>\n</div></div>"
+  },
+  {
+    "name": "embed-other-zip",
+    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"archive.zip\" href=\"#\">archive.zip</a></p>\n"
+  },
+  {
+    "name": "embed-audio",
+    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"audio.mp3\" href=\"#\">audio.mp3</a></p>\n"
+  },
+  {
+    "name": "embed-video",
+    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"video.mp4\" href=\"#\">video.mp4</a></p>\n"
+  },
+  {
+    "name": "embed-pdf",
+    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"doc.pdf\" href=\"#\">doc.pdf</a></p>\n"
+  },
+  {
+    "name": "embed-pdf-page",
+    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"doc.pdf\" data-subpath=\"page=2\" href=\"#\">doc.pdf#page=2</a></p>\n"
+  }
+]

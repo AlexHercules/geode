@@ -49,7 +49,7 @@ import {
 import type { GeodeApp } from "@app/AppContext";
 import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
 import { t } from "@core/i18n";
-import { IMAGE_EXTS } from "@core/markdown";
+import { IMAGE_EXTS, fileEmbedKind } from "@core/markdown";
 import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
@@ -291,6 +291,63 @@ class EmbedWidget extends WidgetType {
       () => img.classList.add("geode-embed-failed"),
     );
     return img;
+  }
+}
+
+/**
+ * Inline media file embed for `![[a.mp3]]` / `![[v.mp4]]` / `![[doc.pdf]]`
+ * (R26). Mirrors EmbedWidget: toDOM returns synchronously and the blob URL
+ * resolves async, applied only if the element is still in the document. The
+ * element kind is derived from the extension — audio → <audio controls>,
+ * video → <video controls>, pdf → <iframe> (native viewer; a `#page=N`
+ * subpath rides on the src as a page anchor). NEVER writes document content.
+ */
+class FileEmbedWidget extends WidgetType {
+  constructor(
+    readonly app: GeodeApp,
+    readonly resolvedPath: string,
+    readonly ext: string,
+    readonly subpath: string,
+  ) {
+    super();
+  }
+  override eq(other: FileEmbedWidget): boolean {
+    return (
+      other.resolvedPath === this.resolvedPath &&
+      other.ext === this.ext &&
+      other.subpath === this.subpath
+    );
+  }
+  override toDOM(): HTMLElement {
+    const kind = fileEmbedKind(this.ext);
+    let el: HTMLMediaElement | HTMLIFrameElement;
+    if (kind === "pdf") {
+      const f = document.createElement("iframe");
+      f.className = "cm-live-embed geode-embed-pdf";
+      el = f;
+    } else if (kind === "video") {
+      const v = document.createElement("video");
+      v.className = "cm-live-embed geode-embed-media";
+      v.controls = true;
+      el = v;
+    } else {
+      const a = document.createElement("audio");
+      a.className = "cm-live-embed geode-embed-media";
+      a.controls = true;
+      el = a;
+    }
+    // a blob URL revoked while loading surfaces as an error event
+    el.addEventListener("error", () => el.classList.add("geode-embed-failed"), { once: true });
+    getEmbedUrl(this.app, this.resolvedPath).then(
+      (url) => {
+        // the widget may have been dropped while the binary read was in flight
+        if (!el.isConnected) return;
+        // pdf page anchor (page=N) rides on the subpath, like the reading view
+        el.src = kind === "pdf" && this.subpath ? `${url}#${this.subpath}` : url;
+      },
+      () => el.classList.add("geode-embed-failed"),
+    );
+    return el;
   }
 }
 
@@ -994,6 +1051,21 @@ function computeDecorations(
             from: embedFrom,
             to: end,
             deco: Decoration.replace({ widget: new EmbedWidget(app, resolved) }),
+          });
+          continue;
+        }
+        if (resolved && fileEmbedKind(ext)) {
+          // R26: audio/video/pdf media embed. subpath = raw text between "#"
+          // and "|" (carries PDF `page=N`), derived like the note-embed path.
+          const mediaBody = m[1].split("|")[0];
+          const mediaHash = mediaBody.indexOf("#");
+          const mediaSubpath = mediaHash >= 0 ? mediaBody.slice(mediaHash + 1) : "";
+          replaces.push({
+            from: embedFrom,
+            to: end,
+            deco: Decoration.replace({
+              widget: new FileEmbedWidget(app, resolved, ext, mediaSubpath),
+            }),
           });
           continue;
         }

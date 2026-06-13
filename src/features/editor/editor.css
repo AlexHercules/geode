@@ -444,6 +444,18 @@
   border-radius: 6px;
 }
 
+/* R26 media/pdf embed widgets replacing ![[a.mp3]]/![[v.mp4]]/![[doc.pdf]].
+   audio/video inherit .cm-live-embed sizing; iframe needs explicit dims. */
+audio.cm-live-embed,
+video.cm-live-embed {
+  border: none;
+}
+
+iframe.geode-embed-pdf.cm-live-embed {
+  width: 100%;
+  height: min(600px, 80vh);
+}
+
 /* reveal flash (R14) — one-shot highlight on the revealed line after a
    [[note#subpath]] navigation; low-opacity accent fading out over ~1.2s.
    The decoration is cleared by EditorPane shortly after the animation ends. */
@@ -627,6 +639,32 @@
 /* binary read / image decode failed (class set by embeds.ts) */
 .geode-embed-failed {
   opacity: 0.45;
+}
+
+/* ============ media/pdf embeds ![[a.mp3]]/![[v.mp4]]/![[doc.pdf]] (R26) ============ */
+
+/* reading-view span wrapper hydrated into a native player/viewer (core/embeds.ts) */
+.geode-embed-file {
+  display: block;
+  margin: 0.6em 0;
+}
+
+/* native <audio>/<video> players — keep within the content column */
+audio.geode-embed-media,
+video.geode-embed-media {
+  max-width: 100%;
+}
+
+video.geode-embed-media {
+  height: auto;
+}
+
+/* native PDF viewer (<iframe>) — full-width, sensible default height */
+iframe.geode-embed-pdf {
+  width: 100%;
+  height: min(600px, 80vh);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }
 
 /* ============ note transclusion ![[note]] (R12, core/embeds.ts) ============ */

@@ -11,7 +11,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { hydrateEmbeds } from "@core/embeds";
 import { saveTextFile } from "@core/export";
 import { t } from "@core/i18n";
-import { renderMarkdownToHtml } from "@core/markdown";
+import { mimeForPath, renderMarkdownToHtml } from "@core/markdown";
 import exportCss from "./export.css?raw";
 import "./notice.css";
 
@@ -32,17 +32,6 @@ function escapeHtml(s: string): string {
 function disableTaskCheckboxes(bodyHtml: string): string {
   return bodyHtml.replaceAll('class="task-checkbox"', 'class="task-checkbox" disabled');
 }
-
-/** MIME by lowercase extension — mirrors IMAGE_EXTS in core/markdown.ts. */
-const MIME_BY_EXT: Record<string, string> = {
-  png: "image/png",
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  gif: "image/gif",
-  svg: "image/svg+xml",
-  webp: "image/webp",
-  bmp: "image/bmp",
-};
 
 /**
  * Uint8Array → base64 in fixed-size chunks: spreading a whole image into
@@ -73,10 +62,10 @@ async function inlineEmbeds(app: GeodeApp, notePath: string, bodyHtml: string): 
     vault: app.vault,
     metadata: app.metadata,
     imageSrc: async (p: string) => {
-      const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
-      const mime = MIME_BY_EXT[ext] ?? "application/octet-stream";
+      // R26: shared core MIME map (covers image + audio + video + pdf). Media
+      // embeds inline as data: URIs too — self-contained but bulky (gap noted).
       const bytes = await app.vault.readBinary(p);
-      return `data:${mime};base64,${bytesToBase64(bytes)}`;
+      return `data:${mimeForPath(p)};base64,${bytesToBase64(bytes)}`;
     },
     ancestors: new Set([notePath]),
     // R18: exported/printed documents are self-contained — MathML output needs
