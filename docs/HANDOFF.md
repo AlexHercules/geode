@@ -4,10 +4,10 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.27.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R27 书签 Bookmarks ✓ 已交付**（`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+分组，序列化 RMW 保真 + 侧栏面板拖拽/分组/右键 + 4 命令 + 探针；零新依赖；评审 1 minor+1 nit 全修；E2E 抓获并修掉 1 个 `move()` 数据丢失根因；`r27-e2e` 22 断言入库）。**收尾另跑 `/simplify`（4 agent 并行）：采纳 4 项无行为变更清理**（面板复用 `@core/vault` basename/stripExtension；`editAtPath` 合并 remove/update 双walker；parse 未知类型双分支合一；App.tsx 抽 `cursorContext` 共用 heading/block 命令前导）——22 断言不回退；显式跳过需跨 diff 的项（共享菜单 CSS/`isPlainObject`/提 openWikilink 入 core）
-- **下一项 = R28｜文件树拖拽移动**（Explorer 无 drag → 文件拖到文件夹 = `vault.rename`，R16 改写引擎已就绪，纯接线；五分区/插入指示线借 R3 tab 拖拽先例 + 跨文件夹防撞；数据安全重轮=移动即改名竞态全覆盖——细则见 `docs/ROADMAP.md` R25+ 候选池表）
-- 其后按序：⑤折叠持久化 → ⑥Properties 侧栏 → ⑦斜杠命令
+- 版本 **v0.28.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R28 文件树拖拽移动 ✓ 已交付**（`core/explorerMove.ts` 决策核心 = `resolveDropTarget` 四守卫（no-op/自身后代/落点解析）+ `wouldCollide` 撞名 + `findFolder` + `EXPLORER_MIME`；Explorer 行 `draggable` + 容器级 dragover/drop + `moveNode` 走 `renameWithLinkUpdate`（**零新写路径**，复用 R16 写咽喉）+ CSS `is-dragging`/`is-drop-target`/`is-drop-root`；`MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust `vault_rename`；`__geodeExplorerMove` 探针装 loadExternal 前；零新依赖）。评审 2 confirmed minor 全修（① 决策核心 bootstrap→feature 耦合 → 迁入 core；② 浏览器陈旧树盲写窗口 → Memory adapter `to.exists` 守卫两端对齐）；`r28-e2e` 23 断言 + 桌面 probe 4/4 真实 fs 入库
+- **下一项 = ⑤折叠持久化 + 阅读视图折叠**（R17 显式债：折叠态不持久化、tab 重开/preview 往返丢，grep foldState 零命中；阅读视图无折叠。范围 = 折叠态按文件持久化（localStorage 或 `.obsidian` 形状，可借 Explorer `EXPANDED_KEY` 先例）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）——细则见 `docs/ROADMAP.md` R25+ 候选池表）
+- 其后按序：⑥Properties 侧栏视图 → ⑦斜杠命令 `/` 菜单
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,21 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R28（文件树拖拽移动）核心教训两条**：① **凡浏览器 `MemoryVaultAdapter` 与 Tauri
+  Rust 后端都实现的写操作，fail-safe 守卫必须两端对齐**——`MemoryVaultAdapter.rename`
+  原本盲写覆盖目标，而 Rust `vault_rename` 有 `to.exists()` 守卫（main.rs:243）→ 外部
+  watcher 在拖拽渲染窗口内把同名文件投进落点时，浏览器有极窄盲写丢数据窗口、桌面被 Rust
+  兜住（浏览器 E2E 全绿却在真实并发下能丢）。修复 = 给 Memory adapter 加等价 `to.exists`
+  throw。**评审专设这一维：Memory↔Rust 双 adapter 的守卫对账**（R24「首字节门控」、本轮
+  「to.exists」都是这类——一端有守卫另一端必须镜像）。② **「纯接线轮」= 复用既有写咽喉、
+  绝不新增写路径**：移动只新增「落点解析 + 四守卫」纯逻辑决定**是否**调
+  `renameWithLinkUpdate`（R16），字节写全部继承 R16 的 verified rewrite + skip 不盲写——
+  这是本轮数据安全的根本保证（B 类 checklist 全继承、无新写）。**纯决策核心放 core 而非
+  feature**：初版导出在 `Explorer.tsx`，但 main.tsx 探针要 import 它就成了全仓唯一一处
+  bootstrap→feature 耦合（其余探针都 import core）→ 迁入 `core/explorerMove.ts`，feature
+  与探针共享单一真值、零跨层耦合。**DnD Chromium 纪律**沿用 R3：`draggable` 行 + onDragStart
+  里 `setTimeout(0)` 再 setState（同帧 setState 取消拖拽）+ 容器级 dragover 读
+  `closest('.explorer-item')` 集中解析落点（免每行挂 handler）。
 - **R27（书签 Bookmarks）核心教训三条**：① **「先删后插」的树变更，删除会让目标路径
   本身漂移**——`move()` 把顶层项移入「位于其后」的 group 时，`removeAtPath(from)` 使该
   group 前移一位、`toGroup` 仍指旧位 → `insertInto` 找不到 group 静默 no-op、**被移动项

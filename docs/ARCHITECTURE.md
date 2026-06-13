@@ -71,6 +71,108 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 28 additions — 文件树拖拽移动（Explorer drag-to-move）【契约冻结 v0.28】
+
+> **状态：契约冻结（2026-06-13）。** R25+ 候选池 #④。Explorer 此前**零 drag 处理**
+> （grep onDragStart/onDrop 零命中）。本轮 = 把 HTML5 DnD 接到既有 `renameWithLinkUpdate`
+> 写路径上——**纯接线轮，零新写路径、零新依赖**（CLAUDE.md 硬边界 #5）。
+> 官方校准（Obsidian 行为，2026-06-13）：文件/文件夹拖到文件夹 = 移动；文件按名自动
+> 排序、**不可手动重排**（故与 R3 tab 拖拽不同——**无插入指示线/无 reorder**，只有
+> 「放进哪个文件夹」单一落点高亮）；移动即改名、`renameWithLinkUpdate` 自动更新全库链接。
+
+### 数据安全口径（最高优先级 — 移动 = 改名，会改用户 `.md` 文件 + 全库引用）
+
+移动**复用 R27/R16 同一写咽喉** `renameWithLinkUpdate(deps, oldPath, newPath)`（capture →
+rename → ensureFresh → verified rewrite → report，自带 flushAll/串行队列/skip 不盲写）。
+**本轮不新增任何写路径**——只新增「落点解析 + 守卫」纯逻辑，决定**是否**调用既有写。
+四道守卫（全部纯函数、可单测、E2E 必覆盖）：
+
+1. **no-op 守卫**：`parentPath(dragged) === targetFolder` → 不动（已在该文件夹；含「拖到
+   同级兄弟文件」「拖到自己所在文件夹空白」）。返回 null，dragover 不高亮、`dropEffect="none"`。
+2. **自身/后代守卫**：拖的是文件夹时，`targetFolder === dragged.path` 或
+   `targetFolder.startsWith(dragged.path + "/")` → 拒绝（否则把文件夹移进自己 = 环 / 孤儿）。
+3. **撞名守卫**：落点文件夹已有同名子项（大小写不敏感，镜像 `validateName`）→ **不写**，
+   弹 `explorer.moveCollision` 通知 abort（**绝不覆盖**——数据安全咽喉）。撞名**不**在
+   dragover 阻断高亮（结构合法即高亮），在 **drop 时**检测 + 通知，给用户反馈。
+4. **陈旧守卫**：drag 期 tree 可能被外部 watcher 刷新——drop 时从 live `tree` 重新解析
+   被拖节点；不存在则静默 abort（拖动中文件已被外部移走/删除）。
+
+> 落点解析：hover 文件夹行 → 落点 = 该文件夹；hover 文件行 → 落点 = 该文件的
+> `parentPath`（Obsidian 一致：拖到文件上 = 进它所在文件夹）；hover 树容器空白 → 落点
+> = 根 `""`。`dropTarget` 状态：`null`=无/非法、`""`=根、`"a/b"`=该文件夹。
+
+### 纯决策核心（`features/explorer/Explorer.tsx` 导出，单一真值 — 组件 drop 与 probe 共用）
+
+```ts
+/** 结构合法性（no-op + 自身/后代守卫）→ 落点文件夹路径，或 null。撞名不在此判。 */
+export function resolveDropTarget(
+  tree: FolderNode, draggedPath: string, hoveredPath: string | null,
+): string | null;
+/** 落点文件夹是否已有同名子项（撞名守卫，drop 时调）。 */
+export function wouldCollide(tree: FolderNode, draggedPath: string, targetFolder: string): boolean;
+```
+
+组件 `onDrop` 与 main.tsx 探针 `window.__geodeExplorerMove(fromPath, hoveredPath|null)` 都走
+同一序列：`resolveDropTarget` → null 则 `{moved:false, reason}`；`wouldCollide` 则
+`{moved:false, reason:"collision"}`；否则 `renameWithLinkUpdate` → `{moved:true, target,
+linksRewritten, filesChanged, skipped}`。**探针装在 `plugins.loadExternal` 之前**（R27 教训：
+晚于 loadExternal 则外部插件 onload 同步读到 undefined）。
+
+### DOM 接线（HTML5 DnD，借 R3 tab 拖拽的 Chromium 纪律）
+
+- 每行 `draggable={!isRenaming}`（renaming 时关，避免与内联编辑/选区打架）；
+  `onDragStart`：`setData(EXPLORER_MIME="application/x-geode-path", node.path)` +
+  `effectAllowed="move"` + `setTimeout(()=>setDraggingPath(node.path), 0)`（R3 先例：同帧
+  setState 会被 Chromium 取消拖拽）；`onDragEnd` 清 `draggingPath`/`dropTarget`。
+- **容器级**（`.explorer-tree`）`onDragOver`：`isExplorerDrag` 守卫 → `preventDefault` +
+  读 `e.target.closest('.explorer-item')` 的 `data-path` → 解析 hover 节点 →
+  `resolveDropTarget` → 有效则 `dropEffect="move"` + setDropTarget，无效则 `dropEffect="none"`
+  + setDropTarget(null)（容器级集中逻辑，免每行挂 handler）；`onDrop` 走 move 序列；
+  `onDragLeave`：`!container.contains(relatedTarget)` 才清 `dropTarget`（避免子元素穿越误清）。
+- 高亮：行 `is-drop-target`（`node.path === dropTarget`，复用 BookmarksPanel `is-drop-into`
+  样式：`background: var(--accent-muted)` + `inset 0 0 0 1px var(--accent)`）；
+  根落点（`dropTarget===""`）给容器 `is-drop-root`；源行 `is-dragging`（dim）。
+- move 成功后：文件夹则 `remapPaths(expanded)`（R27 commitRename 先例）；
+  `expandAncestors(newPath)`（展开落点文件夹让移动项可见）；`setSelected(newPath)`；
+  `skipped.length>0` 弹 `explorer.linkUpdateSkipped`（复用 R16 通知）。
+
+### i18n（`core/i18n/dict.panels.ts`，explorer 命名空间）
+
+新增 `explorer.moveCollision`（参数 `{name}`）= "A file or folder named "{name}" already
+exists here" / "此处已存在名为"{name}"的文件或文件夹"。
+
+### data-testid / 探针（E2E）
+
+行新增 `draggable` 属性可断言；`is-drop-target`/`is-dragging` 类可断言；
+`window.__geodeExplorerMove` 探针驱动真实 fs 的 move（浏览器 Memory + 桌面 WKWebView 双端）。
+E2E 必覆盖：移进文件夹（行重挂到新父）+ 链接改写 / no-op 拒绝 / 自身后代拒绝 / 撞名拒绝
+（不写）/ 文件夹移动 + expanded remap。**已知限制**：虚拟化大库滚动外的落点需先滚动
+（不做 auto-scroll，记缺口）；移动期源行 dim 为锦上添花。
+
+### As-built（评审 2 confirmed minor → 全修；其余 6 维 confirmed-correct）
+
+对抗评审 7 findings：5 维 confirmed-correct（字符串前缀后代守卫 `"Foobar".startsWith("Foo/")`
+= false 无误命中、no-op/自身/根落点全对、macOS 大小写撞名两端覆盖、`closest` 从子 span
+冒泡正确、`setTimeout(0)` drop-before-state 也安全、i18n/CSS 变量齐备），**2 confirmed
+根因已修**：
+
+1. **分层（minor）**：纯决策核心初版导出在 `Explorer.tsx`，但 main.tsx 探针要 import 它
+   = bootstrap→feature 耦合（全仓唯一一处 `@features/*` 进 main.tsx；其余探针都 import
+   `@core`）。**修复 = 决策核心迁入 `core/explorerMove.ts`**（`EXPLORER_MIME` /
+   `findFolder` / `resolveDropTarget` / `wouldCollide`），Explorer 与 main.tsx 都从 `@core`
+   引；Explorer 原 local `findFolder` 也删除改引 core（去重）。契约冻结时写在 feature，
+   As-built 落 core——单一真值 + 零跨层耦合。
+2. **浏览器模式陈旧树覆盖窗口（minor，data-safety）**：`moveNode` 的 `wouldCollide` 读
+   React-state `tree`（可能慢一帧），而 `MemoryVaultAdapter.rename` **盲写覆盖**（不像
+   Rust `vault_rename` 有 `to.exists()` 守卫，main.rs:243）→ 外部 watcher 在拖拽渲染窗口
+   内把同名文件投进落点时，浏览器有极窄覆盖窗口（桌面被 Rust 守卫兜住）。**修复 = 给
+   `MemoryVaultAdapter.rename` 加 `to.exists()` 等价守卫**（target 已存在即 throw，镜像
+   Rust 后端）——两端 adapter 行为一致，盲写彻底关闭；正常改名/移动上游已 collision-check，
+   该守卫只在竞态触发、throw 被 moveNode catch→abort（无丢失）。**教训：凡浏览器
+   Memory adapter 与 Tauri 后端都实现的写操作，fail-safe 守卫必须两端对齐**（Rust 有
+   `to.exists`/`from===0` 类守卫时，Memory adapter 不能盲写——否则浏览器 E2E 全绿却在
+   真实并发下丢数据）。
+
 ## Round 27 additions — 书签 Bookmarks（`.obsidian/bookmarks.json` 兼容）【契约冻结 v0.27】
 
 > **状态：契约冻结（2026-06-13）。** R25+ 候选池 #③。补齐「完全缺失」的书签功能。

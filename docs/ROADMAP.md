@@ -637,6 +637,34 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R28 — v0.28（2026-06-13）文件树拖拽移动（R25+ 候选池 #④）
+
+补齐 Explorer「零 drag 处理」缺口。官方校准：文件/文件夹拖到文件夹 = 移动；文件按名
+自动排序、**不可手动重排**（故无插入指示线/无 reorder，只有「放进哪个文件夹」单一落点
+高亮）；移动即改名、`renameWithLinkUpdate` 自动更新全库链接。**纯接线轮、零新写路径、
+零新依赖**。
+**core/explorerMove.ts**（评审后从 feature 迁入 core，单一真值）：`resolveDropTarget`
+（结构落点：hover 文件夹→自身/文件→父/空白→根 `""`；no-op + 自身后代守卫）+ `wouldCollide`
+（落点撞名，大小写不敏感）+ `findFolder` + `EXPLORER_MIME`。**features/explorer/Explorer.tsx**：
+每行 `draggable={!isRenaming}` + `onDragStart`（setData + `setTimeout(0)` 防 Chromium 取消，R3
+先例）+ 容器级 `onDragOver/onDrop/onDragLeave`（读 `closest('.explorer-item')` data-path 集中
+解析）+ `moveNode`（四守卫：no-op/自身后代/撞名 notice/陈旧 `fileExists||folderExists` →
+`renameWithLinkUpdate` → 文件夹则 `remapPaths(expanded)` + `expandAncestors` 展开落点 +
+`setSelected`）+ CSS `is-dragging`/`is-drop-target`/`is-drop-root`。**core/vault.ts**：
+`MemoryVaultAdapter.rename` 加 `to.exists()` 等价守卫（target 已存在即 throw，**镜像 Rust
+后端** main.rs:243，关闭浏览器盲写窗口）。**main.tsx**：`__geodeExplorerMove` 探针（装在
+loadExternal 之前）。**i18n**：`explorer.moveCollision`（en+zh）。
+**对抗评审 7 维**：2 confirmed minor（① 决策核心分层：bootstrap→feature 耦合 → 迁入 core；
+② 浏览器陈旧树盲写窗口 → Memory adapter 加 `to.exists` 守卫两端对齐）**已修**；前缀后代
+守卫/macOS 大小写撞名/`closest` 冒泡/`setTimeout(0)`/i18n/CSS 5 维 confirmed-correct。
+验证：浏览器 E2E `.calibration/r28-e2e.mjs` **23/23**（移进文件夹+行重挂+链接保持解析/no-op
+拒绝/自身后代拒绝/**数据安全：撞名拒绝且目标不被覆盖**/文件夹移动带子项/根落点/draggable 属性
++ 合成 dragover is-drop-target 高亮）+ R27 22 / R25 17 / R24 12 不回退 + typecheck/cargo 绿；
+桌面 macOS release **probe 4/4 真实 fs**（file→folder+link 解析 / **撞名不覆盖：Dest/dup.md
+真实字节 "DEST ORIGINAL" 完好** / 文件夹移动带子项 / no-op+后代守卫；外部读判定）。
+显式延期（候选池余项）：虚拟化大库滚动外落点需先滚动（不做 auto-scroll）；移动期源行 dim
+仅锦上添花；拖多选未做（单项移动）。
+
 ### R27 — v0.27（2026-06-13）书签 Bookmarks（R25+ 候选池 #③）
 
 补齐「完全缺失」的书签功能。官方校准（obsidian.md/help/Plugins/Bookmarks）：可书签
@@ -713,7 +741,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~**悬停预览（Hover preview）**~~ | **R25 已完成（v0.25，见上）**——features/hover 控制器（三触发源含 live `.cm-live-wikilink`）+ 卡片（复用 `renderMarkdownToHtml`+`hydrateEmbeds`、subpath `resolveSubpath` 序号滚动）+ 编辑视图 Ctrl/Cmd 修饰键 + 设置两项 + compat `registerHoverLinkSource` 真无操作登记 | 余项（按需求驱动）：块引用 `#^id` 子滚动（需 markdown.ts 加块 DOM 标记）/ 插件自渲染 `hoverPopover`/`HoverParent` / 嵌套预览 / 图谱节点 hover / backlinks 片段按钮 hover。 |
 | ~~**PDF 查看器 + PDF/音频/视频嵌入**~~ | **R26 已完成（v0.26，见上）**——音视频原生 `<audio>`/`<video>`、PDF 原生 `<iframe>`（零新依赖，不用 PDF.js）；阅读/live/导出三态 + `#page=N` 锚点 | 余项（按需求驱动）：canvas 嵌入 / 其它附件类型 / 导出媒体瘦身（当前 data-URI 内联）。 |
 | ~~**书签（Bookmarks）**~~ | **R27 已完成（v0.27，见上）**——`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+嵌套组（序列化 RMW 保真未知键 + carrier round-trip）+ 侧栏面板（递归树/拖拽重排移组/右键改名删除新建组/点击导航）+ 4 命令 + `__geodeBookmarks` 探针 | 余项（按需求驱动）：文件改名/删除联动更新书签路径 / search 书签注入 query / block 自动铸 `^id` / 折叠态持久化 / `app.internalPlugins` bookmarks instance API。 |
-| **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
+| ~~**文件树拖拽移动**~~ | **R28 已完成（v0.28，见上）**——`core/explorerMove.ts` 决策核心（resolveDropTarget 四守卫 + wouldCollide）+ Explorer HTML5 DnD（行 draggable + 容器级 dragover/drop + moveNode 走 `renameWithLinkUpdate`）+ `MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust + `__geodeExplorerMove` 探针 | 余项（按需求驱动）：虚拟化大库 auto-scroll / 拖多选 / 拖到标签页打开 / 移动期源行 dim 打磨。 |
 | **折叠持久化 + 阅读视图折叠** | **R17 显式债**：折叠状态不持久化（tab 重开/preview 往返丢，grep foldState 零命中）；阅读视图无折叠 | 折叠状态按文件持久化（localStorage 或 `.obsidian` 形状）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）。 |
 | **Properties 侧栏视图** | **R22 显式延期**：全库属性浏览/全局改名/值建议/text 内链渲染 | 侧栏 All Properties 视图（全库 key 聚合，R22 `getPropertyKeys` 已备）+ 全局重命名（types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律）+ 值建议（datalist 跨库取值）。 |
 | **斜杠命令 `/` 菜单** | **缺失**（grep slashCommand/SlashMenu 零命中）| 编辑器输入 `/` 触发命令菜单（复用 R6 EditorSuggest 管线 + commands registry 过滤/执行）；官方校准 Obsidian slash command 范围。 |
