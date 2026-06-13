@@ -637,6 +637,37 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R27 — v0.27（2026-06-13）书签 Bookmarks（R25+ 候选池 #③）
+
+补齐「完全缺失」的书签功能。官方校准（obsidian.md/help/Plugins/Bookmarks）：可书签
+file/folder/heading/block/search/graph 七类 + group 分组（可嵌套）；侧栏点击打开、拖拽
+排序/移组、右键改名/删除/新建组；命令 Bookmark active tab / heading / block。**零新依赖**。
+**core/bookmarks.ts**：Obsidian 形状判别联合（顶层 `{items:[...],...保留其它顶层键}`），
+持久化镜像 `properties.ts` 序列化 RMW——每次写**重读磁盘只换 items、保留未知顶层键 + 逐项
+`_extra` 未知字段**、malformed（非对象/items 非数组）**abort 不覆盖**、vault 切换 adapter
+身份守卫；未知 `type` 走 `UNKNOWN_TYPE_MARKER` carrier 原样 round-trip。API：`init`/
+`isFileBookmarked`/`add`/`toggleFile`/`removeAt`/`setTitleAt`/`addGroup`/`move`（index 路径
+寻址 `[i]`/`[g,c]`）。**features/bookmarks/BookmarksPanel.tsx**：递归树（组可折叠）+ 点击导航
+（file→openFile；heading/block→openFile+resolveSubpath+requestReveal，**subpath 去前导 `#`**；
+folder→切 explorer；graph→openGraph；search→切搜索面板）+ 右键菜单（Rename/Remove/New group，
+镜像 Explorer MenuState）+ 拖拽重排/移组（私有 MIME，镜像 tab DnD，插入指示线）。**App.tsx**：
+ribbon 书签按钮 + 渲染分支 + 4 命令（bookmark-file toggle/标签翻转、heading/block under cursor、
+show）+ `headingUnderCursor`/`blockUnderCursor` 双门控。**main.tsx**：`bookmarks.init` +
+`vault:changed` 重载 + `__geodeBookmarks` 探针（list/toggleFile/add/move/reload，**装在
+loadExternal 之前**）。
+**对抗评审 9 维**：1 minor（carrier rename 丢 title）+ 1 nit（labelHeading 贪婪剥 `#`）**已修**；
+move 索引数学/RMW 保真/`_extra` round-trip/分层/XSS 等维 clean。**E2E 抓获并修掉 1 个评审漏网
+根因 = `move()` 跨容器索引漂移导致书签项丢失**（详见 ARCHITECTURE R27 As-built）。
+验证：浏览器 E2E `.calibration/r27-e2e.mjs` **22/22**（面板/命令 toggle+标签翻转/heading 命令
+Obsidian-shape subpath/点击导航/New group/move 嵌套/持久化 reload/**数据安全：未知顶层键+逐项
+字段保真、malformed 不覆盖**）+ R26 12 / R25 17 / R24 12 / R23 22 不回退 + r26-bytes 0 违反
+（markdown.ts 未动）+ typecheck/cargo/build 绿；桌面 macOS release **probe 8/8**（真实 fs：
+读 Obsidian 形状 bookmarks.json + 嵌套组/标题解析 + toggleFile 真写持久化 + 未知顶层/逐项字段
+跨真写保真）。
+显式延期（候选池余项）：文件改名/删除不更新书签路径（导航 no-op，不毁内容）；search 书签不注入
+query；block 仅收已有 `^id` 块（不自动铸 id）；折叠态不持久化；`app.internalPlugins` bookmarks
+instance API 未做。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -681,7 +712,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 |---|---|---|
 | ~~**悬停预览（Hover preview）**~~ | **R25 已完成（v0.25，见上）**——features/hover 控制器（三触发源含 live `.cm-live-wikilink`）+ 卡片（复用 `renderMarkdownToHtml`+`hydrateEmbeds`、subpath `resolveSubpath` 序号滚动）+ 编辑视图 Ctrl/Cmd 修饰键 + 设置两项 + compat `registerHoverLinkSource` 真无操作登记 | 余项（按需求驱动）：块引用 `#^id` 子滚动（需 markdown.ts 加块 DOM 标记）/ 插件自渲染 `hoverPopover`/`HoverParent` / 嵌套预览 / 图谱节点 hover / backlinks 片段按钮 hover。 |
 | ~~**PDF 查看器 + PDF/音频/视频嵌入**~~ | **R26 已完成（v0.26，见上）**——音视频原生 `<audio>`/`<video>`、PDF 原生 `<iframe>`（零新依赖，不用 PDF.js）；阅读/live/导出三态 + `#page=N` 锚点 | 余项（按需求驱动）：canvas 嵌入 / 其它附件类型 / 导出媒体瘦身（当前 data-URI 内联）。 |
-| **书签（Bookmarks）** | **完全缺失**（grep 零命中）| core bookmarks store（兼容 `.obsidian/bookmarks.json` 形状：file/folder/heading/block/search/graph 类型 + 分组）+ 侧栏面板（拖拽排序/分组）+ 命令（Bookmark current file/收藏当前 heading）+ compat。 |
+| ~~**书签（Bookmarks）**~~ | **R27 已完成（v0.27，见上）**——`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+嵌套组（序列化 RMW 保真未知键 + carrier round-trip）+ 侧栏面板（递归树/拖拽重排移组/右键改名删除新建组/点击导航）+ 4 命令 + `__geodeBookmarks` 探针 | 余项（按需求驱动）：文件改名/删除联动更新书签路径 / search 书签注入 query / block 自动铸 `^id` / 折叠态持久化 / `app.internalPlugins` bookmarks instance API。 |
 | **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
 | **折叠持久化 + 阅读视图折叠** | **R17 显式债**：折叠状态不持久化（tab 重开/preview 往返丢，grep foldState 零命中）；阅读视图无折叠 | 折叠状态按文件持久化（localStorage 或 `.obsidian` 形状）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）。 |
 | **Properties 侧栏视图** | **R22 显式延期**：全库属性浏览/全局改名/值建议/text 内链渲染 | 侧栏 All Properties 视图（全库 key 聚合，R22 `getPropertyKeys` 已备）+ 全局重命名（types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律）+ 值建议（datalist 跨库取值）。 |

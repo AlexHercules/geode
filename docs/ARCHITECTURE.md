@@ -71,6 +71,185 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 27 additions — 书签 Bookmarks（`.obsidian/bookmarks.json` 兼容）【契约冻结 v0.27】
+
+> **状态：契约冻结（2026-06-13）。** R25+ 候选池 #③。补齐「完全缺失」的书签功能。
+> 官方校准（obsidian.md/help/Plugins/Bookmarks，2026-06-13）：可书签 file/folder/
+> heading/block/search/graph/（web）link 七类 + group 分组（可嵌套）；侧栏面板点击打开、
+> 拖拽排序/移组、右键改名/删除/新建组；命令「Bookmark the active tab / heading under
+> cursor / block under cursor」。**零新依赖**（CLAUDE.md 硬边界 #5）。
+
+### 数据安全口径（最高优先级 — 这是会写用户 `.obsidian/` 的代码）
+
+书签持久化到 `<vault>/.obsidian/bookmarks.json`——**Obsidian 自己也读写这个文件**，
+所以**绝不能破坏 Obsidian 写入的数据**。两条铁律（镜像 `core/properties.ts` types.json
+的 RMW 纪律）：
+
+1. **序列化 RMW + 队列**：所有写经一个 module-level promise 链串行（`properties.ts`
+   `regChain` / `themes.ts` `appearanceChain` 先例）；每次写**先重读磁盘**当前文件，
+   只改 `items`，**保留顶层未知键**；malformed（非对象 / `items` 非数组）→ **abort 写**
+   并 `console.warn`（绝不从 `{}` 重写覆盖掉 Obsidian 的数据）。
+2. **逐项未知字段保真**：每个书签项可能含 Obsidian 写的我们没建模的键——in-memory 项
+   带 `_extra?: Record<string, unknown>`（解析时收集已知字段以外的键），序列化时
+   `{ ..._extra, ...canonicalFields }` 先铺 `_extra` 再覆盖规范字段。group 递归。
+3. **vault 切换守卫**：写前后比对 `vault.adapter` 身份 + `vault.isOpen`（properties.ts
+   `adapterBefore` 先例）；切了库就 skip 写。
+
+### 数据模型（`core/bookmarks.ts`，Obsidian 形状）
+
+文件顶层 = `{ "items": BookmarkItem[], ...其它顶层键保留 }`。`BookmarkItem` 判别联合：
+
+```ts
+export type BookmarkType =
+  | "file" | "folder" | "heading" | "block" | "search" | "graph" | "group";
+
+interface BookmarkBase {
+  ctime?: number;                       // ms epoch，Obsidian 写；新建项由 caller 传入（探针/probe 可传固定值）
+  title?: string;                       // 可选自定义显示名
+  _extra?: Record<string, unknown>;     // 保真：本模型未覆盖的原始键（序列化时回铺）
+}
+export interface FileBookmark    extends BookmarkBase { type: "file";    path: string; }
+export interface FolderBookmark  extends BookmarkBase { type: "folder";  path: string; }
+export interface HeadingBookmark extends BookmarkBase { type: "heading"; path: string; subpath: string; }  // subpath "#Heading"
+export interface BlockBookmark   extends BookmarkBase { type: "block";   path: string; subpath: string; }  // subpath "#^blockId"
+export interface SearchBookmark  extends BookmarkBase { type: "search";  query: string; }
+export interface GraphBookmark   extends BookmarkBase { type: "graph"; }
+export interface GroupBookmark   extends BookmarkBase { type: "group";   items: BookmarkItem[]; }
+export type BookmarkItem =
+  | FileBookmark | FolderBookmark | HeadingBookmark | BlockBookmark
+  | SearchBookmark | GraphBookmark | GroupBookmark;
+```
+
+### 模块 API（镜像 `core/properties.ts` 的 `propertyTypes` 单例风格）
+
+```ts
+export interface BookmarksApi {
+  /** 顶层 items 树（含嵌套 group.items）。订阅 useStore 重渲染。 */
+  readonly items: Store<ReadonlyArray<BookmarkItem>>;
+  /** boot + vault:changed(reason==="load") 调用：从 .obsidian/bookmarks.json 载入。 */
+  init(vault: Vault): Promise<void>;
+  /** 是否已书签某 file（type==="file" && path 匹配，递归全树）。面板/命令判定用。 */
+  isFileBookmarked(path: string): boolean;
+  /** 加一项到 groupPath（undefined=顶层）。已存在等价项则 no-op。返回 Promise（持久化完成）。 */
+  add(item: BookmarkItem, groupPath?: ReadonlyArray<number>): Promise<void>;
+  /** toggle file 书签：未书签则 add file，已书签则移除所有匹配该 path 的 file 项。 */
+  toggleFile(path: string): Promise<void>;
+  /** 按 index 路径（顶层 [i]，组内 [groupIdx, childIdx, ...]）移除一项。 */
+  removeAt(path: ReadonlyArray<number>): Promise<void>;
+  /** 改某项 title（空串=清除自定义 title）。 */
+  setTitleAt(path: ReadonlyArray<number>, title: string): Promise<void>;
+  /** 新建空 group（顶层或组内），返回它的 index 路径。 */
+  addGroup(title: string, groupPath?: ReadonlyArray<number>): Promise<void>;
+  /** 移动 from → 目标组 toGroup 的 toIndex 处（拖拽排序/移组）。toGroup=[] 顶层。 */
+  move(from: ReadonlyArray<number>, toGroup: ReadonlyArray<number>, toIndex: number): Promise<void>;
+}
+export const bookmarks: BookmarksApi;
+```
+
+> **index 路径寻址**：`[2]` = 顶层第 3 项；`[2,0]` = 顶层第 3 项（必为 group）的第 1 个子项。
+> 所有变更走序列化队列 + RMW 持久化。内存态 `items` Store 立即更新（乐观），写盘异步。
+
+### 面板契约（`features/bookmarks/BookmarksPanel.tsx`，无 props）
+
+- 复用 `.panel-header`；空态文案 `bookmarks.empty`；树形渲染 group 可展开/折叠
+  （折叠态 feature 本地 `useState`，本轮不持久化——与 R17 折叠债一致，注明）。
+- **点击打开**（镜像 R25 hover 卡导航，不跨 feature import openWikilink）：
+  - file → `openFile(path)`；heading/block → `openFile(path)` 后
+    `resolveSubpath(path, subpath)` → `requestReveal(path, from, to)`；
+  - folder → `setLeftPanel("explorer")` +（best-effort 选中，本轮可仅切 explorer）；
+  - graph → `openGraph()`；search → `setLeftPanel("search")`（query 注入本轮 best-effort，
+    无 SearchPanel 程序化 API → 注明缺口，仅切面板/不崩）。
+- **右键菜单**（ad-hoc，镜像 Explorer `MenuState{x,y,...}` + 视口 clamp）：Rename / Remove /
+  New group。Rename = inline input 或 prompt 风格（feature 自决，走 `setTitleAt`）。
+- **拖拽**（镜像 App.tsx tab DnD：私有 MIME `application/geode-bookmark`、`onDragStart`
+  setData(index 路径 JSON)、`onDragOver` 算插入位、插入指示线、`onDrop` 调 `bookmarks.move`）。
+  组可作为放置目标（拖到组上=移入组）。
+- `data-testid`：`bookmarks-panel` / `bookmark-item` / `bookmark-group` / `bookmarks-empty`。
+
+### App / 命令 / 探针接线（集成层，chief 自持）
+
+- `core/types.ts`：`LeftPanelKind` 增 `"bookmarks"`（已是 `(string&{})` 宽松，仅为可读性）。
+- `App.tsx`：ribbon 加书签按钮（icon `"bookmark"`，`setLeftPanel("bookmarks")`）；
+  左栏 render 分支 `ws.leftPanel === "bookmarks" ? <BookmarksPanel/>`；注册命令：
+  - `bookmarks:bookmark-file`（toggle 当前 file，`available` = 有 active md file）
+  - `bookmarks:bookmark-heading`（光标所在 heading：取 `documents.getActiveView()` 光标
+    offset → `metadata.getMetadata(path).headings` 找 `from<=cursor` 的最后一个 → add
+    heading，subpath=`#text`）
+  - `bookmarks:bookmark-block`（光标所在 block：`metadata...blocks` 找 `from<=cursor<to`
+    → subpath=`#^id`；无现成 block id 的本轮要求光标落在已有 `^id` 块上才可，否则命令
+    `available`=false——不自动生成 block id，留作余项）
+  - `bookmarks:show`（`setLeftPanel("bookmarks")`）
+- `main.tsx`：`void bookmarks.init(vault)` + `vault:changed reason==="load"` 重 init
+  （镜像 `propertyTypes.init`）；**always-on probe** `window.__geodeBookmarks`（镜像
+  `__geodeRename`/`__geodeHover`——WKWebView 无 CDP，桌面 probe 靠它驱动真实 fs 读写）：
+
+```ts
+window.__geodeBookmarks = {
+  list: () => BookmarkItem[];                                  // 当前 items 快照（去 _extra 噪音可选）
+  toggleFile: (path) => Promise<void>;                          // 走真实持久化
+  add: (item, groupPath?) => Promise<void>;
+  reload: () => Promise<void>;                                  // 强制从磁盘重 init
+};
+```
+
+### 文件所有权表（并行实现，独占）
+
+| Agent | 独占文件 | 不碰 |
+|---|---|---|
+| impl-core | `src/core/bookmarks.ts`（填实现）| 其余一切 |
+| impl-panel | `src/features/bookmarks/BookmarksPanel.tsx` + `index.ts` + `bookmarks.css` | core / app / 别的 feature |
+| chief（集成）| `src/core/i18n/dict.bookmarks.ts`、`src/core/i18n.ts`、`src/core/types.ts`、`src/app/App.tsx`、`src/main.tsx` | — |
+
+> chief 先落 **stub**（`core/bookmarks.ts` 骨架 + `dict.bookmarks.ts` + i18n 合并 + types）
+> 使 `tsc` 0 错误，两 agent 再并行填实现。冻结签名见上，agent 行内注释不得改契约。
+
+### compat 口径（本轮范围）
+
+compat 面 = **数据文件双向保真**（上「数据安全口径」已覆盖：读 Obsidian 写的
+bookmarks.json 不丢字段、写回 Obsidian 能继续读）。**`app.internalPlugins`
+bookmarks instance API（`getBookmarks()`/`addItem()` 等）本轮不做**——属深 compat，
+记入余项（OBSIDIAN-COMPAT 缺口表）。features 绝不 import compat（books 走 `@core/bookmarks`）。
+
+### R27 As-built（v0.27，2026-06-13 — 双端验证通过）
+
+契约按冻结设计落地（core 单例 + 面板 + 4 命令 + 探针）。**2 个并行 implementer
+（impl-core / impl-panel，独占文件）+ chief 集成 + 1 个对抗评审 agent（9 维）+ 浏览器
+E2E（22 断言）+ 桌面真实 fs probe（8 断言）。** 根因记录：
+
+1. **`move()` 跨容器索引漂移 = 数据丢失（E2E 抓获，静态评审漏网）**：把顶层项移入
+   一个**位于其后**的 group 时，`move` 先 `removeAtPath(from)` 再 `insertInto(toGroup)`
+   ——但移除使该 group 的索引**前移一位**，`toGroup` 仍指旧位 → 落到越界/错误节点 →
+   `insertInto` 找不到 group 静默 no-op，**被移动的书签项被移除却没重新插入＝丢失**。
+   修复 = 移除后按移除深度 `depth` 调整目标路径：若 `toGroup` 经由一个「在 `fromIndex`
+   之后的同级兄弟」下降（`toGroup[depth] > fromIndex` 且前缀 === parentPath），则
+   `toGroup[depth]--`；同容器重排的 `toIndex` 漂移单独处理。教训：**「先删后插」的树
+   变更，删除会让目标路径本身漂移，不只是插入下标**——任何 move/reorder 都要把这条
+   验进 E2E（本轮 “Beta moved INTO the group” + “no longer at top level” 双断言守住）。
+2. **`__geodeBookmarks` 探针主机赋值晚于 `loadExternal`（桌面 probe 抓获）**：探针主机
+   原放在 `propertyTypes.init` 之后（≈boot 末尾），但 `plugins.loadExternal`（跑外部
+   `.geode/plugins/*.js` 的 onload）在更早执行 → 探针插件 onload 里同步读
+   `window.__geodeBookmarks` 时它还 undefined → `bm.reload` 抛错。修复 = 把探针主机赋值
+   **上移到 `loadExternal` 之前**（与 `__geodeRename`/`__geodeHover`/`__geodeRenderMarkdown`
+   同位）。教训：**任何要给外部/Obsidian 插件 onload 看见的 `window.__geode*` 探针/钩子，
+   必须在 `loadExternal` 之前装好**（init 本身可仍按 properties 先例放 vault.load 后）。
+3. **评审 1 minor + 1 nit（已修）**：① 未知类型 carrier（`UNKNOWN_TYPE_MARKER`，
+   round-trip 保真未来 Obsidian 新书签类型）被 Rename 后，`serializeItem` 的 carrier 分支
+   只回铺 `_extra`、丢掉新 `title`/`ctime` → 修复=carrier 分支叠加 item 自身的 title/ctime；
+   ② 面板 `labelFor` 对「标题本身以 `#` 开头」的 heading（存 subpath `##tag`）贪婪
+   `replace(/^#+\s*/,"")` 把两个 `#` 都吃掉 → 改为只剥一个前缀 `#`（与导航 strip 对齐）。
+
+**subpath 约定（务必记牢）**：bookmarks.json 里 heading/block 的 `subpath` 是 **Obsidian
+形状带前导 `#`**（`"#Heading"` / `"#^blockId"`）；而 `core/metadata.ts resolveSubpath`
+要的是**去掉 `#`** 的形式（block 以裸 `^` 判别）。所以：**创建**（命令 `headingUnderCursor`
+/`blockUnderCursor`）存 `#…`；**导航**（面板 `activate`）先 `.replace(/^#/,"")` 再
+`resolveSubpath`。两侧约定不一致就会「存了书签但点了不跳」。
+
+**已知限制（记入候选池余项 / 缺口表）**：① 文件改名/删除**不更新书签路径**（Obsidian 会
+更新；`.obsidian/bookmarks.json` 非 .md，不进 R16 改写面）→ 失效书签点击=导航 no-op（不
+毁内容）；② search 书签点击仅切到搜索面板、**不注入 query**（SearchPanel 无程序化查询 API）；
+③ block 书签**只收已有 `^id` 的块**（不自动铸 block id）；④ 折叠态不持久化（与 R17 折叠债
+一致）；⑤ `app.internalPlugins` bookmarks instance API 未做。
+
 ## Round 26 additions — PDF/音视频嵌入（`![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]`）【As-built v0.26】
 
 > **状态：已实现并双端验证（v0.26，2026-06-13）。** 契约（下文）按冻结设计落地，

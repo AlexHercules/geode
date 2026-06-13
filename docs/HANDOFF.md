@@ -4,10 +4,10 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.26.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R26 PDF/音视频嵌入 ✓ 已交付**（原生 `<audio>`/`<video>`/`<iframe>`，零新依赖；字节守卫 `r26-bytes` 入库）
-- **下一项 = R27｜书签 Bookmarks**（core bookmarks store 兼容 `.obsidian/bookmarks.json` 形状 + 侧栏面板 + 命令 + compat；零新依赖——细则见 `docs/ROADMAP.md` R25+ 候选池表）
-- 其后按序：④文件树拖拽 → ⑤折叠持久化 → ⑥Properties 侧栏 → ⑦斜杠命令
+- 版本 **v0.27.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R27 书签 Bookmarks ✓ 已交付**（`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+分组，序列化 RMW 保真 + 侧栏面板拖拽/分组/右键 + 4 命令 + 探针；零新依赖；评审 1 minor+1 nit 全修；E2E 抓获并修掉 1 个 `move()` 数据丢失根因；`r27-e2e` 22 断言入库）
+- **下一项 = R28｜文件树拖拽移动**（Explorer 无 drag → 文件拖到文件夹 = `vault.rename`，R16 改写引擎已就绪，纯接线；五分区/插入指示线借 R3 tab 拖拽先例 + 跨文件夹防撞；数据安全重轮=移动即改名竞态全覆盖——细则见 `docs/ROADMAP.md` R25+ 候选池表）
+- 其后按序：⑤折叠持久化 → ⑥Properties 侧栏 → ⑦斜杠命令
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,24 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R27（书签 Bookmarks）核心教训三条**：① **「先删后插」的树变更，删除会让目标路径
+  本身漂移**——`move()` 把顶层项移入「位于其后」的 group 时，`removeAtPath(from)` 使该
+  group 前移一位、`toGroup` 仍指旧位 → `insertInto` 找不到 group 静默 no-op、**被移动项
+  被删却没重插＝数据丢失**（E2E 抓获、静态评审漏网）。修复=移除后按移除深度 `depth`
+  调 `toGroup[depth]--`（当它经由 `fromIndex` 之后的同级兄弟下降）。**任何 move/reorder
+  务必把「移入靠后兄弟」这条验进 E2E**。② **要给外部/Obsidian 插件 onload 看见的
+  `window.__geode*` 探针/钩子，必须装在 `plugins.loadExternal` 之前**（桌面 probe 抓获：
+  探针主机原放 boot 末尾、晚于 loadExternal → 探针插件 onload 同步读到 undefined →
+  `bm.reload` 抛错；与 `__geodeRename`/`__geodeHover`/`__geodeRenderMarkdown` 同位即可）。
+  ③ **subpath 两侧约定不一致＝「存了书签点了不跳」**：bookmarks.json 的 heading/block
+  `subpath` 是 **Obsidian 形状带前导 `#`**（`#Heading`/`#^id`），而 `resolveSubpath` 要
+  **去 `#`**（block 以裸 `^` 判别）——创建侧（命令）存 `#…`、导航侧（面板 activate）
+  先 `.replace(/^#/,"")` 再 resolve。**写 `.obsidian/*.json` 一律镜像 `properties.ts`
+  序列化 RMW**：重读磁盘只换目标键、保留未知顶层键 + 逐项 `_extra`、malformed abort 不
+  覆盖、vault 切换 adapter 身份守卫——这是「绝不毁 Obsidian 数据」的咽喉点（R27 桌面
+  probe 8/8 实测真实 fs 跨写保真）。已知限制：文件改名/删除不联动更新书签路径（导航
+  no-op 不毁内容）、search 书签不注入 query、block 仅收已有 `^id`、折叠态不持久化、
+  `app.internalPlugins` bookmarks instance API 未做（均记 ROADMAP 余项/缺口表）。
 - **R26（PDF/音视频嵌入）核心教训 = 改 `core/markdown.ts`（字节级阅读管线）的纪律**：
   r18-diff 本机未重建，于是先落 always-on 探针 `window.__geodeRenderMarkdown(source,
   sourcePath)`（main.tsx）+ `.calibration/r26-bytes.mjs`（36 例语料，基线数据
