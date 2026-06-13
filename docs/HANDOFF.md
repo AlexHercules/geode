@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.39.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R39 固定标签页 pinned tabs ✓ 已交付**（R32+ 候选池第二梯队 **#⑧ 的 pinned 切片**；#⑧ 三子特性=固定/堆叠/链接,本轮只取「固定」,**stack/linked 延后**）。实现:`TabState.pinned?:boolean`(持久化);`core/workspace.ts` openFile replace 分支 + recordNavigation 都加 `&& !active.pinned`(固定活动 tab → 不替换 → 落新 tab 分支、不记 phantom 历史);`toggleTabPin`;`sanitizeTab` 读 pinned;split dup 剔除 pin、reopen 恢复 pin(`ClosedTab.pinned`)。App.tsx `app:toggle-pin` 命令(无默认键)+ TabBar 双击切换(Obsidian 手势)+ pin 图标 + `.tab.is-pinned .tab-close` 淡显;icons `pin`。**零新 vault 写路径**(pin 是 workspace 标志)+ **零新依赖** + **零新探针**(store 直驱)。`r39-e2e` **17/17** + 桌面 `r39-probe` **8/8** + r32-r38 不回退 + r26-bytes 0。**3 维对抗评审 9 finding → 3 确认修复**(split 副本继承 pin→剔除 / `.tab.is-pinned` CSS 缺失→补 / reopen 丢 pin→ClosedTab 存 pin 恢复)+ 6 nit/证伪。
-- **下一项 = R39→R40 = R32+ 候选池第二梯队 #⑨ 键盘切换复选框**（仅鼠标点 `cm-live-checkbox`,无键命令）。Obsidian「Toggle checkbox status」(Cmd/Ctrl-L)。切入:复用 `preview.ts` 的 `toggleTaskOnLine`(已有,阅读视图点选复选框用它)接**编辑器命令** `editor:toggle-checklist`(或 toggle-checkbox)+ 默认键 `Mod+L`,作用当前行/选区(把 `- [ ]`↔`- [x]`,非任务行可选转成 `- [ ]`)。**注意**:这是编辑器命令(依赖 live CM view)→ 纯变换逻辑抽 core(镜像 R33 format)、桌面探针验纯函数、浏览器 E2E 验真编辑器键入(R34 结论:live-view 功能桌面探针不可驱动)。**#⑧ 余项**(stacked tabs / linked view=local graph·backlinks·outline 跟随某 tab)延后,见 ROADMAP。其后队列见 ROADMAP R32+ 候选池(第三梯队 ⑩ 标签面板+`#`补全 起)。
+- 版本 **v0.40.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R40 键盘切换复选框 ✓ 已交付**（R32+ 候选池第二梯队 #⑨：仅鼠标点复选框,无键命令）。**整套复用 R33 format 基建**:`core/format.ts` 加纯 op `toggle-task` + `toggleTaskStatus`(任务行翻转勾选、非任务行转 `- [ ]`、空行/缩进规则),经既有 `applyFormatOp` 接通 → 既有 `__geodeFormat.apply` 探针**自动可驱动(零新探针)**;`formatCommands.ts` 注册 `editor:toggle-checkbox`(`Mod+L`)走既有 applyFormat→CM 事务→autosave(活动文件门控)+ R33 keydown 拦截器。**零新 vault 写路径/零新依赖/零新文件**。`r40-e2e` **19/19** + 桌面 `r40-probe` **11/11** + r32-r39 不回退 + r26-bytes 0。**3 维对抗评审 10 finding → 1 确认修复(3 reviewer 一致):自定义复选框态 `[/]`/`[-]`/`[>]` 被当非任务→prepend 出畸形双方框** → `TASK_BOX_RE` 状态类 `[ xX]`→`[^\]]`(任意单字符态就地翻转、不误伤多字符 `[text]`)+ 翻转规则「checked→空/其余→x」。+ 9 nit/证伪。
+- **下一项 = R40→R41 = R32+ 候选池第三梯队 #⑩ 标签面板 + 编辑器 `#` 标签补全**（`metadata.getTagMap()` 已有数据无面板消费;编辑器无 `#` 补全源）。切入:① 新 `features/tags` 右/左侧栏面板(全库标签 + 计数 + 点击搜索,镜像 bookmarks/allproperties 面板)消费 `metadata.getTagMap()`;② 编辑器加 `#` CompletionSource(**镜像 R31 `/` slashCommands + `[[` wikilink 补全源**,features 绝不 import compat),复用 getTagMap 候选。**注意 R31 结论**:CM 补全源是 live-view → 纯候选逻辑抽 core 可探针单测、补全 accept 走浏览器 E2E。**#⑧ 余项**(stacked tabs / linked view)+ #⑪ 回收站(数据安全相关,可能需 Rust 后端依赖决策)仍延后,见 ROADMAP。其后队列见 ROADMAP R32+ 候选池第三/四梯队。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,16 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R40（键盘切换复选框）核心教训三条**：① **「翻转既有 X」的正则别把状态类写死成已知集**——`toggle-task` 的
+  `TASK_BOX_RE` 初版只认 `[ xX]`,导致 Obsidian 自定义复选框态 `[/]`/`[-]`/`[>]` 落进「非任务→新建复选框」分支,prepend 出
+  畸形双方框 `- [ ] [/] x`(无效 markdown + 非幂等)。3 个 reviewer 一致命中。修 = 状态类放宽到 `[^\]]`(任意单字符态都识别
+  为任务 → 就地翻转)+ 翻转规则「checked→空 / 其余→x」。**凡"toggle 既有 X"的逻辑,先枚举 X 的全部形态,别让未覆盖形态
+  掉进"新建 X"分支产出嵌套畸形**;单字符限定 `[^\]]` 同时避免误伤 `[text]`(多字符链接标签)。② **复用成熟基建 = 缺陷面
+  极小**——R40 整轮零新文件/零新探针/零新写路径(新 op 挂既有 `applyFormatOp` → `__geodeFormat` 探针自动可驱动、`Mod+L`
+  走 R33 keydown 拦截器 + autosave 管线),10 个 finding 里唯一确认缺陷就在新 op 的「状态类边界」一处。**能挂既有 op-dispatch/
+  命令基建的功能,优先挂上去,别另起炉灶**。③ **同一概念多处定义易漂移,记成已知 gap**——「什么算任务」在源码 toggle
+  (`TASK_BOX_RE`)/阅读视图渲染(`markdown.ts TASK_RE` 要 `]\s`)/live lezer 三处定义不同;R40 toggle 比渲染宽松(`]` 后不要求
+  空格),收紧反会把 `- [ ]task` 推入非任务分支致畸形,故权衡保留 + 文档化为已知 gap(理想是收敛到一处,留后续轮)。
 - **R39（固定标签页）核心教训三条**：① **「复制实例」vs「移动实例」对 per-instance 状态处理相反**——`moveTab` 复用
   原 tab 对象(pinned/历史应随之迁移,对),`splitActivePane` 用 `{...srcTab, id:newTabId()}` 复制**新实例**(per-instance
   态如 pinned、导航历史**不应继承**,需显式剔除 `pinned: undefined`)。R37 漏了 split 不复制历史、R39 漏了 split 不该继承

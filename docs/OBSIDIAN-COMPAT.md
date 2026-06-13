@@ -172,6 +172,21 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R40 套件回归（2026-06-14，macOS release 二进制 v0.40.0 实测 `r40-probe-vault`）
+
+R40 = 键盘切换复选框（Toggle checkbox status, Cmd/Ctrl-L；已核实缺口：仅鼠标点复选框、无键命令）。**compat API 表面
+零代码改动**——整套复用 R33 format 基建：`core/format.ts` 加纯 op `toggle-task` + `toggleTaskStatus`，经既有 `applyFormatOp`
+接通 → 既有 `__geodeFormat.apply` 探针**自动可驱动（零新探针）**；`formatCommands.ts` 注册 `editor:toggle-checkbox`（`Mod+L`）
+走既有 applyFormat→CM 事务→documents dirty→autosave（活动文件门控 R23 DS-1）+ R33 `Prec.highest` keydown 拦截器。**零新 vault
+写路径 / 零新依赖 / 零新文件**。校准 Obsidian「Toggle checkbox status」。macOS probe 实测：新增 **r40-probe 11/11**——桌面在
+真二进制驱动纯 `toggle-task` 变换（任务翻转 / 自定义态 `[/]`→`[x]` / 非任务转换 / 多行）；live 真 Mod+L 键入（CM view）交浏览器
+r40-e2e。**r39/r38/…/r23 套件不回退**（compat 调用面零改动；浏览器 r40-e2e **19/19** + r39 17、r38 19、r37 36、r36 47、r35 25、
+r34 15、r33 37、r32 24 全绿；`r26-bytes` 0 违例，markdown.ts 未动）。**3 维对抗评审 10 finding → 1 确认修复（3 reviewer 一致）**：
+自定义复选框态 `[/]`/`[-]`/`[>]` 被当非任务 → prepend 畸形双方框（`- [ ] [/] x`，无效 + 非幂等）→ `TASK_BOX_RE` 状态类
+`[ xX]`→`[^\]]`（任意单字符态就地翻转、不误伤多字符 `[text]`）+ 翻转规则「checked→空 / 其余→x」（E2E + probe 补自定义态断言）
+**+ 9 nit/by-design/证伪**（`- [ ]task` 无空格 toggle 但不渲染=三处任务定义未收敛记 gap / 全空多行 select-all 塌缩=极端边角 /
+blockquote 内任务不识别 / `default:never` 穷尽断言补 / 与 R33 `checklist` op 独立不串扰）。
+
 ### R39 套件回归（2026-06-14，macOS release 二进制 v0.39.0 实测 `r39-probe-vault`）
 
 R39 = 固定标签页（#⑧ 的 pinned 切片；stack/linked 延后）。**compat API 表面零代码改动**——`core/types.ts`（`TabState.pinned`）

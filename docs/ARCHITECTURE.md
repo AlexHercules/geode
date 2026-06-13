@@ -71,6 +71,52 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 40 additions — 键盘切换复选框（Toggle checkbox status, Cmd/Ctrl-L）【As-built v0.40】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑨ = 已核实缺口（仅鼠标点 `cm-live-checkbox`，无键命令）。
+> **整套复用 R33 format 基建**：新增纯 op `toggle-task` 到 `core/format.ts`，经既有 `applyFormatOp` 接通 → 既有
+> `__geodeFormat.apply` 探针**自动可驱动**（零新探针）；注册 `editor:toggle-checkbox`（`Mod+L`，Obsidian-canonical）走
+> 既有 `applyFormat`→CM 事务→documents dirty→autosave（`getView` 活动文件门控 R23 DS-1）+ R33 `Prec.highest` keydown 拦截器。
+> **零新 vault 写路径**（编辑器写,继承 R33 B 类守卫）+ **零新运行时依赖** + **零新文件**。校准 Obsidian「Toggle checkbox status」。
+> **验证**：typecheck 0 + 浏览器 `r40-e2e` **19/19**（纯变换 15 含自定义态 + live 真 Mod+L + autosave 落盘 + 命令转换）+
+> 桌面 `r40-probe` **11/11**（纯变换在真二进制）+ r32-r39 不回退 + `r26-bytes` 0 + cargo/build 绿。
+> **3 维对抗评审 10 finding → 1 确认修复（含 3 reviewer 一致）+ 9 nit/by-design/证伪**（详见下）。
+
+### 契约（冻结 + As-built）
+
+**core/format.ts**：`FormatOp` 加 `"toggle-task"`；`applyFormatOp` 加 case（末尾补 `default: never` 穷尽断言）；新纯函数：
+```ts
+const TASK_BOX_RE = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([^\]])(\])/;  // 状态 = 任意单个非 ] 字符
+export function toggleTaskStatus(text, from, to): FormatEdit | null;
+```
+语义（逐非空行）：① 任务行 → 翻转勾选（**checked `x`/`X` → 空格;其余任意单字符态（含自定义 `[/]` `[-]` `[>]`）→ `x`** —— 就地
+翻转、绝不畸形、幂等）；② 非任务行 → `<indent>- [ ] <stripListMarker(body)>`（`* foo`/`1. foo`/`foo` 皆 → `- [ ] foo`）；
+③ 有非空行时空行保留;全空（光标在空行）→ `<indent>- [ ] `（缩进保留）。
+
+**features/editor/formatCommands.ts**：`{ id:"editor:toggle-checkbox", nameKey:"cmd.toggleCheckbox", op:"toggle-task", hotkey:"Mod+L" }`。
+**core/i18n/dict.app.ts**：`cmd.toggleCheckbox`（en/zh）。版本 0.39→0.40。
+
+### As-built（评审修复 + 教训）
+
+**1 个确认缺陷（已修，3 reviewer 一致）— 自定义复选框态产出畸形双方框**：初版 `TASK_BOX_RE` 状态类只认 `[ xX]`，对
+Obsidian 自定义态 `- [/] doing`（进行中）/`[-]`（取消）/`[>]`（转交）走**非任务分支** → prepend `- [ ] ` → `- [ ] [/] doing`
+（一个方框里套另一个方框,无效 markdown,且非幂等:再按 → `- [x] [/] doing`,永回不到 `[/]`）。修 = **状态类 `[ xX]`→`[^\]]`**
+（任意单字符态都识别为任务 → 就地翻转）+ 翻转规则改「checked→空 / 其余→x」→ `- [/] doing`→`- [x] doing`（Obsidian 行为、
+幂等、不畸形）。**单字符限定** `[^\]]` 不误伤 `[text]`（多字符）/`[]`（空）——它们仍走非任务转换。E2E + probe 补自定义态断言。
+
+**9 个 nit/by-design/证伪**：① `- [ ]task`（`]` 后无空格）会被 toggle 但渲染层（markdown.ts `TASK_RE` 要 `]\s`）不显示复选框
+——**收紧 `(?=\s|$)` 反会把它推入非任务分支致畸形,故不收紧,记为渲染-gap 边角**;② 全空多行 select-all（`\n\n` 全选）因
+`lineBounds` 对「选区以尾随 `\n` 结束」的裁剪 + toggleTaskStatus「空行也转」叠加 → 两空行塌缩成一个 `- [ ] `（极端边角:仅
+「对纯空行文档全选」触发;单空行/光标常规场景正确;不动共享 `lineBounds` 避免回归 R33,记为已知边角）;③ blockquote 内任务
+`>  - [ ] x` 不识别（`TASK_BOX_RE` 行首不允许 `>`）→ 转换;④ `default: never` 穷尽断言已补;⑤ 注释与纯空白行实现已对齐;
+其余证伪（Mod+L 无冲突 / 与 R33 `checklist` op 独立不串扰 / FormatOp 消费点全核 / 写路径继承 R33 活动文件门控）。
+
+**根因教训**：① **「翻转既有标记」的正则别把状态类写死成已知集**——只认 `[ xX]` 导致自定义态走「新建」分支 prepend 出畸形;
+状态类放宽到 `[^\]]`（单字符）让翻转对任意态成立、且不误伤多字符括号。**凡"toggle 既有 X"的逻辑,先想清 X 的全部形态,
+别让未覆盖形态掉进"新建 X"分支产出嵌套畸形**。② **三套"什么算任务"的定义（源码 toggle / 阅读视图渲染 / live lezer）易漂移**
+——R40 的 toggle 比渲染层宽松（`]` 后不要求空格）,记为已知 gap;理想是收敛到一处,但本轮收紧会致畸形,故权衡保留+文档化。
+③ **复用成熟基建（R33 format）= 缺陷面极小**:整轮零新文件/零新探针/零新写路径,缺陷只在新 op 的「状态类边界」一处。
+
 ## Round 39 additions — 固定标签页（pinned tabs）【As-built v0.39】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑧ 的 **pinned-tabs 切片**（#⑧ 三子特性 = 固定/堆叠/链接面板；
