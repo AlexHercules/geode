@@ -417,6 +417,7 @@ export class Vault {
   }
 
   async createFolder(path: string): Promise<void> {
+    assertSafeRelPath(path); // R48 review: R46 guarded create()/createBinary but missed this — a `..`/absolute folder (e.g. a daily-note folder setting) would otherwise pollute the Memory adapter's folder set
     await this.adapter.createFolder(path);
     await this.refreshTree();
     this.events.emit("vault:changed", { reason: "create" });

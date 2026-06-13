@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
+import {
+  dailyNoteFolder,
+  dailyNoteFormat,
+  dailyNoteTemplate,
+  setDailyNoteFolder,
+  setDailyNoteFormat,
+  setDailyNoteTemplate,
+} from "@core/dailyNote";
 import { getCommandName, hotkeyFromEvent, formatHotkey, isMacPlatform } from "@core/commands";
 import {
   pagePreviewEnabled,
@@ -36,7 +44,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.47.0";
+const APP_VERSION = "0.48.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -137,6 +145,10 @@ function AppearanceSection() {
   const tplFolder = useStore(templateFolder);
   const tplDateFormat = useStore(templateDateFormat);
   const tplTimeFormat = useStore(templateTimeFormat);
+  /* R48: daily notes — folder / date format / template, stored verbatim (R17/R23 precedent) */
+  const dailyFolder = useStore(dailyNoteFolder);
+  const dailyFormat = useStore(dailyNoteFormat);
+  const dailyTemplate = useStore(dailyNoteTemplate);
   /* R22: in-document properties display (visible | hidden | source) */
   const propsDisplay = useStore(app.workspace.propertiesInDocument);
   /* R25: page preview (hover) — settings Stores from core/hover */
@@ -458,6 +470,56 @@ function AppearanceSection() {
           aria-label={t("settings.templateTimeFormat")}
           data-testid="settings-template-time-format"
           onChange={(e) => setTemplateTimeFormat(e.target.value)}
+        />
+      </div>
+
+      <h2 className="settings-heading">{t("settings.dailyNotes")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.dailyNoteFolder")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={dailyFolder}
+          placeholder="Daily Notes"
+          spellCheck={false}
+          aria-label={t("settings.dailyNoteFolder")}
+          data-testid="settings-daily-folder"
+          onChange={(e) => setDailyNoteFolder(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.dailyNoteFormat")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={dailyFormat}
+          placeholder="YYYY-MM-DD"
+          spellCheck={false}
+          aria-label={t("settings.dailyNoteFormat")}
+          data-testid="settings-daily-format"
+          onChange={(e) => setDailyNoteFormat(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.dailyNoteTemplate")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={dailyTemplate}
+          placeholder=""
+          spellCheck={false}
+          aria-label={t("settings.dailyNoteTemplate")}
+          data-testid="settings-daily-template"
+          onChange={(e) => setDailyNoteTemplate(e.target.value)}
         />
       </div>
     </section>

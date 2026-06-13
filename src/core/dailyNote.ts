@@ -1,42 +1,101 @@
+import moment from "moment/min/moment-with-locales";
+import { Store } from "./store";
+import { expandTemplate } from "./templates";
 import type { Vault } from "./vault";
 import type { Workspace } from "./workspace";
 
-/** R43: daily-note conventions (folder + YYYY-MM-DD, matching the daily-note plugin). */
-export const DAILY_FOLDER = "Daily Notes";
+/* ============================ configurable settings (R48) ============================ */
 
-/** Local YYYY-MM-DD for a date. */
+const FOLDER_KEY = "geode.dailyNote.folder";
+const FORMAT_KEY = "geode.dailyNote.format";
+const TEMPLATE_KEY = "geode.dailyNote.template";
+const DEFAULT_FOLDER = "Daily Notes";
+const DEFAULT_FORMAT = "YYYY-MM-DD";
+
+/** Back-compat default folder (was the only value pre-R48). */
+export const DAILY_FOLDER = DEFAULT_FOLDER;
+
+function readInitial(key: string, fallback: string): string {
+  try {
+    const stored = localStorage.getItem(key);
+    return stored === null ? fallback : stored;
+  } catch {
+    return fallback;
+  }
+}
+
+function persist(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable — session-only */
+  }
+}
+
+/** New-note folder (default "Daily Notes", persisted, stored RAW — trim at use). */
+export const dailyNoteFolder = new Store<string>(readInitial(FOLDER_KEY, DEFAULT_FOLDER));
+export function setDailyNoteFolder(v: string): void {
+  dailyNoteFolder.set(v);
+  persist(FOLDER_KEY, v);
+}
+
+/** moment date format for the filename (default "YYYY-MM-DD", persisted, RAW). */
+export const dailyNoteFormat = new Store<string>(readInitial(FORMAT_KEY, DEFAULT_FORMAT));
+export function setDailyNoteFormat(v: string): void {
+  dailyNoteFormat.set(v);
+  persist(FORMAT_KEY, v);
+}
+
+/** Optional template note path applied to a freshly-created daily note (default "" = none). */
+export const dailyNoteTemplate = new Store<string>(readInitial(TEMPLATE_KEY, ""));
+export function setDailyNoteTemplate(v: string): void {
+  dailyNoteTemplate.set(v);
+  persist(TEMPLATE_KEY, v);
+}
+
+/** Effective folder: trimmed + stripped of leading/trailing slashes (a trailing
+ *  "/" would otherwise make a "folder//date.md" double-slash path — R17
+ *  attachmentFolder precedent), and rejected back to DEFAULT if any segment is
+ *  empty / "." / ".." / dot-prefixed (no traversal, no hidden folders — R48 review;
+ *  mirrors templates.ts validateDir). A "/" in a configured FORMAT is still NOT
+ *  supported (basename parser assumes a flat date filename — known deviation). */
+function effFolder(): string {
+  const raw = dailyNoteFolder.get().trim().replace(/^\/+|\/+$/g, "");
+  if (raw === "") return DEFAULT_FOLDER;
+  for (const seg of raw.split("/")) {
+    if (seg === "" || seg === "." || seg === ".." || seg.startsWith(".")) return DEFAULT_FOLDER;
+  }
+  return raw;
+}
+function effFormat(): string {
+  return dailyNoteFormat.get().trim() || DEFAULT_FORMAT;
+}
+
+/* ============================ pure date helpers ============================ */
+
+/** The configured date stamp for a date (default YYYY-MM-DD, local). */
 export function dailyStamp(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  return moment(date).format(effFormat());
 }
 
 export function dailyNotePath(date: Date): string {
-  return `${DAILY_FOLDER}/${dailyStamp(date)}.md`;
+  return `${effFolder()}/${dailyStamp(date)}.md`;
 }
 
-/** Parse a YYYY-MM-DD stamp out of a path's BASENAME → local-midnight Date, or
- *  null. Anchored to the basename (optionally + ".md") so embedded digits
- *  ("12025-06-14.md", "meeting-2026-06-14.md") and date-named PARENT folders
- *  ("2020-01-01-backup/2026-06-14.md") never over-match the real file name
- *  (R43 review fix); rejects impossible dates (2026-13-40) via a round-trip check. */
+/** Parse the configured date stamp out of a path's BASENAME → local-midnight Date,
+ *  or null. moment STRICT parse against the configured format keeps the R43
+ *  over-match guards (embedded digits "12025-06-14.md", date-named PARENT folders
+ *  "2020-01-01-backup/2026-06-14.md", impossible dates "2026-13-40") all → null. */
 export function parseDailyStamp(path: string): Date | null {
-  const base = path.slice(path.lastIndexOf("/") + 1);
-  const m = /^(\d{4})-(\d{2})-(\d{2})(?:\.md)?$/.exec(base);
-  if (!m) return null;
-  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
-  const date = new Date(y, mo - 1, d);
-  if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null;
-  return date;
+  const base = path.slice(path.lastIndexOf("/") + 1).replace(/\.md$/i, "");
+  const m = moment(base, effFormat(), true); // strict
+  return m.isValid() ? m.toDate() : null;
 }
 
-/** True iff `path` is a daily note under DAILY_FOLDER (e.g. "Daily Notes/2026-06-14.md").
- *  Gates relative nav (next/prev-day) so only a REAL daily note seeds the base date —
- *  a stray date-named file elsewhere ("Archive/2026-06-14.md") falls back to today
- *  instead of silently navigating out of its folder (R43 review fix). */
+/** True iff `path` is a daily note under the configured folder (gates relative nav
+ *  so only a REAL daily note seeds the base date — R43 review fix). */
 export function isDailyNotePath(path: string): boolean {
-  return path.startsWith(DAILY_FOLDER + "/") && parseDailyStamp(path) !== null;
+  return path.startsWith(effFolder() + "/") && parseDailyStamp(path) !== null;
 }
 
 export function addDays(date: Date, n: number): Date {
@@ -60,15 +119,35 @@ export function monthGrid(year: number, month0: number): Date[][] {
   return weeks;
 }
 
-/** Open (creating if needed) the daily note for `date`. Decoupled (explicit
- *  vault+workspace) so both the plugin (AppHandle) and the calendar feature
- *  (GeodeApp) can call it. */
+/* ============================ create/open ============================ */
+
+/** New note body: the configured template (expanded) if set + readable, else a
+ *  "# stamp" heading. */
+async function dailyNoteContent(vault: Vault, date: Date): Promise<string> {
+  const tpl = dailyNoteTemplate.get().trim();
+  if (tpl) {
+    const tplPath = /\.md$/i.test(tpl) ? tpl : `${tpl}.md`;
+    if (vault.fileExists(tplPath)) {
+      try {
+        const raw = await vault.read(tplPath);
+        return expandTemplate(raw, { title: dailyStamp(date), now: date });
+      } catch (err) {
+        console.error("[daily-note] template read failed — falling back to heading", err);
+      }
+    }
+  }
+  return `# ${dailyStamp(date)}\n\n`;
+}
+
+/** Open (creating if needed) the daily note for `date`, honoring the configured
+ *  folder/format/template. Decoupled (explicit vault+workspace) so both the plugin
+ *  (AppHandle) and the calendar feature (GeodeApp) can call it. */
 export async function openOrCreateDailyNote(vault: Vault, workspace: Workspace, date: Date): Promise<void> {
   const path = dailyNotePath(date);
   if (!vault.fileExists(path)) {
-    try { await vault.createFolder(DAILY_FOLDER); } catch { /* folder exists */ }
+    try { await vault.createFolder(effFolder()); } catch { /* folder exists */ }
     try {
-      await vault.create(path, `# ${dailyStamp(date)}\n\n`);
+      await vault.create(path, await dailyNoteContent(vault, date));
     } catch (err) {
       // create can reject because the note appeared meanwhile (race / the file
       // already existed on disk): still open it. Only bail if it truly isn't there.

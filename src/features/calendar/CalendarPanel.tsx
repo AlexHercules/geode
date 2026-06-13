@@ -7,7 +7,7 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { locale, useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
-import { dailyNotePath, monthGrid, openOrCreateDailyNote, sameDay } from "@core/dailyNote";
+import { dailyNoteFolder, dailyNoteFormat, dailyNotePath, monthGrid, openOrCreateDailyNote, sameDay } from "@core/dailyNote";
 
 import "./calendar.css";
 
@@ -15,6 +15,10 @@ export function CalendarPanel() {
   const app = useApp();
   const t = useI18n();
   useStore(app.vault.tree); // re-render when files appear/disappear
+  // R48: re-render when the daily-note folder/format settings change so the
+  // has-note dots and click target follow the configured path immediately.
+  useStore(dailyNoteFolder);
+  useStore(dailyNoteFormat);
   const today = new Date();
   const [view, setView] = useState({ year: today.getFullYear(), month0: today.getMonth() });
 

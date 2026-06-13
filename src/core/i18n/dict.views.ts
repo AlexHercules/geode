@@ -67,6 +67,12 @@ export const en = {
   "settings.templateDateFormat": "Date format",
   "settings.templateTimeFormat": "Time format",
 
+  // ---- settings: daily notes (R48) ----
+  "settings.dailyNotes": "Daily notes",
+  "settings.dailyNoteFolder": "New file location",
+  "settings.dailyNoteFormat": "Date format",
+  "settings.dailyNoteTemplate": "Template file location",
+
   // ---- settings: plugins ----
   // note split around the inline <code> element (word order differs per locale)
   "settings.pluginsNotePre":
@@ -275,6 +281,12 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.templateFolder": "模板文件夹位置",
   "settings.templateDateFormat": "日期格式",
   "settings.templateTimeFormat": "时间格式",
+
+  // ---- settings: daily notes (R48) ----
+  "settings.dailyNotes": "日记",
+  "settings.dailyNoteFolder": "新文件位置",
+  "settings.dailyNoteFormat": "日期格式",
+  "settings.dailyNoteTemplate": "模板文件位置",
 
   // ---- settings: plugins ----
   "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",
