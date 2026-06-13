@@ -71,10 +71,10 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 25 additions — 悬停预览（Page Preview / Ctrl+hover 页面预览卡片）【设计冻结，待执行】
+## Round 25 additions — 悬停预览（Page Preview / Ctrl+hover 页面预览卡片）【As-built v0.25】
 
-> **状态：契约已冻结，尚未实现**（R25 设计文档，2026-06-13 与用户登记 R25+ 候选池后
-> 预写，供下一会话「阅读 handoff 继续开发」直接照此执行）。
+> **状态：已实现并双端验证（v0.25，2026-06-13）。** 契约（下文）按冻结设计落地，
+> As-built 修订记录见本节末「R25 As-built」。
 >
 > 官方校准（obsidian.md/help/plugins/page-preview，2026-06-13 WebFetch）：Page preview
 > 核心插件**默认开启**；**默认无修饰键**——在 File explorer / Search / Backlinks 等
@@ -187,6 +187,70 @@ export const HOVER_HIDE_DELAY = 120;
 > （hover 内链出卡 / 编辑器需 Ctrl / subpath 滚动 / unresolved 不出 / 卡内点击导航 /
 > 设置 toggle）+ 桌面 probe（真实 vault hover 渲染——`__geodeHover` 钩子或 DOM 断言）+
 > r24/r23 套件不回退。
+
+### R25 As-built（实现修订记录，2026-06-13）
+
+按上述契约落地，编排 = 1 core + 3 并行 agent（hover/sources/settings）+ 集成 +
+5 维评审 Workflow。总工程师裁决 2 项 + 评审/E2E 共 6 修复，分述：
+
+**总工程师裁决（契约留给 chief 的两点）：**
+1. **`hoverStore` 归属** = core/hover.ts 导出单例 `Store<HoverTarget | null>`（控制器
+   写、卡片 `useStore` 订阅），如契约建议——最省接线。
+2. **卡内链接点击导航不走 `openWikilink`**。`openWikilink` 在 `features/editor/`，
+   跨 feature import 违反分层。卡片持有的 `path` 已是 resolved，故直接
+   `app.workspace.openFile(resolved)` + `resolveSubpath` → `requestReveal`（等价
+   openWikilink 的 resolved 分支，分层干净；unresolved 永不进卡，故无 create-note 分支需求）。
+
+**评审确认根因（5 维 9 finding → 6 确认 / 3 证伪 → 去重 4 根因 = 1 major + 3 minor）：**
+- **[major] subpath 滚动用文本匹配而非 `resolveSubpath` 序号**：原实现按标题
+  `textContent` 大小写匹配（精确→子串回退），违反契约「`resolveSubpath` 定位 + R15
+  reveal 先例」。失效面：重复标题、`.geode-embed-note` 嵌入副本标题、子串误命中
+  （"Intro" 命中 "Introduction…"）。**修复 = 镜像 EditorPane R15**：`resolveSubpath`
+  得 span.from → `getMetadata().headings.findIndex(h.from===span.from)` 得文档序序号 →
+  index 进 `querySelectorAll("h1..h6")` 过滤掉 `.closest(".geode-embed-note")` 的元素。
+  块引用 `#^id` 自然落 ordinal<0 → 不滚（与阅读视图同口径，见延期）。
+- **[minor] hover.css box-shadow 硬编码** `0 8px 28px rgba(0,0,0,.32)` → 改
+  `var(--shadow-modal)`（主题感知；全仓唯一硬编码 drop-shadow）。
+- **[minor] 链接源用全局活动文件而非锚点所在 pane**：控制器原用
+  `workspace.getActiveFile()` 作 resolve 源路径；非聚焦分屏内 hover 重名链接、或
+  graph tab 活动时 hover 自链 `[[#h]]` 会误解析到别的 pane 的笔记。**修复 =
+  EditorPane 根 div 加 `data-leaf-path={tab.filePath}`（chief 授权的跨所有权一行非
+  行为属性）+ 控制器 `el.closest("[data-leaf-path]")` 取锚点所在 pane 源路径，回退
+  getActiveFile()**（侧栏源走全路径 data-hover-path，不受影响）。
+- **[minor] keydown 重触发对非本平台修饰键放行**：原 `e.key==="Control"||"Meta"`
+  双键放行，macOS 按 Control（非 Cmd）也越过 `hasModifier()` 平台门。**修复 = gate
+  到本平台键**（Apple→"Meta"，否则→"Control"）。
+（证伪 3：块引用「无 DOM 标记」非缺陷而是 R15 同口径；blob 缓存模块级不在卸载全 revoke
+——materiality 证伪；陈旧 body 写——已被 cancelled/store 守卫兜住。）
+
+**浏览器 E2E 另抓 2 个评审漏网缺陷（静态评审看不到、必须实跑）：**
+- **live-preview 内链根本不是 `a.internal-link`**：CodeMirror live preview 折叠
+  wikilink 渲染为 `span.cm-live-wikilink[data-link-target]`（+ `data-link-subpath`，
+  空 target=自链），**不带 `data-target`/`a.internal-link`**（契约「编辑器锚点已带
+  data-target」与实际编码不符）。原控制器 `closest("a.internal-link")` 整个漏掉它 →
+  **最常用的编辑视图悬停完全不触发**。**修复 = `extractTrigger` 增第二触发源
+  `.cm-live-wikilink`**（`data-link-target`/`data-link-subpath`，inEditor=true）。
+  教训：契约对锚点 DOM 形状的断言务必以实际渲染管线为准——reading 与 live 的内链编码
+  不同源（reading=核心 markdown 管线 `a.internal-link`；live=CM 装饰 `cm-live-wikilink`）。
+- **subpath 滚动竞态**：`placeCard` 把 max-height 设在 `requestAnimationFrame` 里
+  （合帧），但渲染链（read+hydrate，内存 vault 极快）常在该 rAF 前完成 →
+  `scrollToSubpath` 跑时卡片尚未受 max-height 约束 → 内容不溢出 → `scrollTop` 夹到 0
+  （真实磁盘读较慢时偶发可滚——flaky）。**修复 = subpath 滚动包进 `requestAnimationFrame`
+  并补 cancelled/store 陈旧守卫**，落在定位帧之后再滚。教训：依赖「尺寸已定 + 内容
+  已渲染」两个异步前置的 DOM 读写，必须排到二者都落定的帧。
+
+**验证**：浏览器 `node .calibration/r25-e2e.mjs` **17/17**；R24 12/12、R23 22/22 不
+回退；生产 build 绿。桌面 macOS release `geode compat-vault` + `r25-probe` **7/7**
+（`__geodeHover` 真实 fs resolve→read→render，含 unresolved→null）。可复跑资产：
+`.calibration/r25-e2e.mjs`（17 断言，需 dev server）、`compat-vault/.geode/plugins/
+r25-probe.js`（7 断言，重跑前删 `r25-results.md` + `__r25/`）。
+
+**显式延期/缺口**：块引用 `#^id` 子滚动——阅读视图 R15 reveal 同样只认 heading 序号
+（块标记 R13 剥离、无 DOM 锚），卡片停顶部 = 一致行为；补块滚动需给 markdown.ts 加块
+DOM 标记（动字节管线 → 须先重建 r18-diff，缓做）。插件自渲染 `hoverPopover`/
+`HoverParent` 保持缺口（Geode 全局 hover 已覆盖其 `a.internal-link`，插件被动受益）。
+嵌套预览（卡内再 hover）不做。图谱节点 hover 延期。backlinks 片段按钮 hover 官方
+「可加」未加。
 
 ## Round 24 additions — 未链接提及（Unlinked Mentions / 反链面板扩展）
 

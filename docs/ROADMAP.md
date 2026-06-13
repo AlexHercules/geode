@@ -568,6 +568,49 @@ flushAll+ensureFresh、open buffer 或 readFresh 真值源、**从 fresh 重派�
 subpath reveal 不适用）；面板级 Collapse/Show-more-context/排序/搜索过滤工具栏；
 matcher 热循环首字符门控 + 保存 burst 去抖（性能优化候选，非缺陷）。
 
+### R25 — v0.25（2026-06-13）悬停预览（Page Preview / Ctrl+hover，R25+ 候选池 #①）
+
+R25+ 候选池（Obsidian 原生功能补课）首项。官方校准（obsidian.md/help/plugins/
+page-preview，2026-06-13 WebFetch）：Page preview 核心插件**默认开**；File explorer/
+Search/Backlinks 等处 hover 内链即预览，**编辑视图（live/source）需按住 Ctrl（macOS
+Cmd）**；设置项可「要求所有预览都按 Ctrl/Cmd」。预览 = 目标笔记（subpath 滚到对应
+heading；纯只读，绝不写文件/不改 workspace 状态）。
+**core/hover.ts（新，纯 TS 零依赖）**：localStorage 背书的设置 Store
+（`pagePreviewEnabled` 默认开 / `pagePreviewRequireModifier` 默认关）+ `HoverTarget`
++ 共享 `hoverStore` 单例（控制器写、卡片订阅——总工程师裁决：单例最省接线）+ 延迟
+常量。**features/hover（新）**：`HoverController`（document 级捕获委托，三触发源
+首命中胜出——`a.internal-link`[data-target]（阅读/侧栏/嵌入/mermaid）、
+`.cm-live-wikilink`[data-link-target]（live 编辑器）、`[data-hover-path]`（explorer/
+backlinks）；修饰键规则；`resolveLink` unresolved 不弹卡）+ `HoverPreview` 卡片
+（复用 `renderMarkdownToHtml` + 核心 `hydrateEmbeds`、陈旧守卫、subpath 走
+`resolveSubpath` 序号定位（镜像 R15 reading reveal）、rAF 定位下方优先溢出翻转、卡内
+`a.internal-link` 点击直接 `openFile`+`requestReveal` 导航（不 import editor）、私有
+blob 缓存）+ hover.css（CSS 变量）。触发源 owner 加 data 属性（Explorer 文件行 +
+Backlinks 三处 + **EditorPane 加 `data-leaf-path`**——源笔记按锚点所在 pane 解析）。
+设置两 toggle + i18n en/zh + compat `registerHoverLinkSource` 由 warn-stub 升**真实
+无操作登记**（`hoverPopover`/`HoverParent` 保持缺口）。main.tsx `__geodeHover` 探针钩子。
+评审 5 维 Workflow **9 finding → 6 确认 / 3 证伪，去重 4 根因（1 major + 3 minor）
+全修复** + **浏览器 E2E 另抓 2 个评审漏网缺陷（共 6 修复）**：major = subpath 滚动用
+朴素文本匹配而非 `resolveSubpath` 序号（重复标题/嵌入副本/子串误命中——改为镜像
+EditorPane R15 序号 + 排除 `.geode-embed-note`）；minor = box-shadow 硬编码
+（→ `var(--shadow-modal)` 主题感知）/ 链接源用全局活动文件而非锚点所在 pane（非聚焦
+分屏 + 重名 / graph 活动时自链误解析——改 = EditorPane `data-leaf-path` + 控制器
+`closest`）/ keydown 重触发对非本平台修饰键放行（gate 到本平台键）；**E2E 抓**：
+① live-preview 内链实为 `span.cm-live-wikilink[data-link-target]` 而非
+`a.internal-link` → 控制器漏配 → **编辑视图悬停整体失效**（改 = extractTrigger 加
+`.cm-live-wikilink` 源）；② subpath 滚动竞态——`placeCard` 的 rAF 设 max-height 晚于
+渲染链完成 → 卡片未受限不可滚 → scrollTop 夹到 0（改 = 滚动延后到 rAF，落在定位帧后）。
+详见 ARCHITECTURE R25 As-built。
+验证：浏览器 E2E `.calibration/r25-e2e.mjs` **17/17**（explorer/阅读/编辑修饰键/
+unresolved/subpath 滚动/卡内点击导航/设置 toggle 失效复活）+ R24 12/12 + R23 22/22
+不回退 + 生产 build 绿；桌面 macOS release 真实 fs probe **r25-probe 7/7**（经
+`window.__geodeHover` 钩子驱动真实磁盘 resolve→read→render，含 unresolved→null）。
+显式延期：块引用 `#^id` 子滚动（阅读视图同样无 DOM 标记，卡片停顶部 = R15 同口径，
+加块标记需动 markdown.ts 字节管线，缓做）；插件自渲染 `hoverPopover`/`HoverParent`
+（Geode 全局 hover 已覆盖其 `a.internal-link`，插件被动受益——记缺口）；嵌套预览
+（卡内再 hover）不做（单层，卡内链接点击 = 导航）；图谱节点 hover 延期；backlinks
+片段按钮 hover（官方「可加」，未加）。
+
 ## 迁移体验路线图（R16-R18，2026-06-11 与用户对齐）
 
 > 背景：R15 后与用户盘点"距离 Obsidian 还差在哪"，确认第一梯队 = 会让 Obsidian
@@ -610,7 +653,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **悬停预览（Hover preview）** ⭐**R25 设计冻结待执行** | **完全缺失**——无 hover 卡片；compat 的 `hoverPopover`/`registerHoverLinkSource` 也是空 stub（grep 零命中）| **契约已写在 ARCHITECTURE「Round 25 additions」节**：features/hover 控制器 + 卡片（复用 `renderMarkdownToHtml` + `hydrateEmbeds`）+ 触发源（内链锚点/explorer/backlinks/未链接，编辑视图需 Ctrl 其余无修饰，官方口径）+ 设置两项 + compat `registerHoverLinkSource` 接通。零新依赖。 |
+| ~~**悬停预览（Hover preview）**~~ | **R25 已完成（v0.25，见上）**——features/hover 控制器（三触发源含 live `.cm-live-wikilink`）+ 卡片（复用 `renderMarkdownToHtml`+`hydrateEmbeds`、subpath `resolveSubpath` 序号滚动）+ 编辑视图 Ctrl/Cmd 修饰键 + 设置两项 + compat `registerHoverLinkSource` 真无操作登记 | 余项（按需求驱动）：块引用 `#^id` 子滚动（需 markdown.ts 加块 DOM 标记）/ 插件自渲染 `hoverPopover`/`HoverParent` / 嵌套预览 / 图谱节点 hover / backlinks 片段按钮 hover。 |
 | **PDF 查看器 + PDF/音频/视频嵌入** | `![[x.pdf]]`/`![[a.mp3]]`/`![[v.mp4]]` **全降级为链接**（R12 缺口"PDF/音频/canvas 嵌入均降级链接"；embeds.ts 仅 img/note/math/mermaid 分支）| embeds 管线增 audio→`<audio>` / video→`<video>`（零依赖，走 `readBinary`+blob，R11 先例）；PDF = **一次性依赖决策**（PDF.js ~体积 vs `<embed>`/iframe 内嵌 webview PDF——桌面 WKWebView 原生支持 PDF，浏览器端要 PDF.js）。阅读视图/live/导出三态 + 页码锚点 `#page=N`。 |
 | **书签（Bookmarks）** | **完全缺失**（grep 零命中）| core bookmarks store（兼容 `.obsidian/bookmarks.json` 形状：file/folder/heading/block/search/graph 类型 + 分组）+ 侧栏面板（拖拽排序/分组）+ 命令（Bookmark current file/收藏当前 heading）+ compat。 |
 | **文件树拖拽移动** | Explorer **无任何 drag 处理**（grep onDragStart/onDrop 零命中）| Explorer drag/drop：文件→文件夹移动 = `vault.rename`，**R16 改写引擎已就绪**（rename 自动更新全库链接，纯接线）+ 五分区/插入指示线（R3 tab 拖拽先例可借）+ 跨文件夹防撞。属"接线为主"轮，数据安全重轮（移动=改名竞态全覆盖）。 |
