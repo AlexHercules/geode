@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.35.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R35 括号/引号自动配对 + 选区包裹 ✓ 已交付**（R32+ 候选池 #④：敲 `[` 得 `[` 不补 `]`、源码无 closeBrackets）。按 Obsidian 两设定分两层：**Layer 1 = CM `closeBrackets()`** 管 `( [ { " '`（空选区自动配对 / 选区包裹 / type-over / Backspace 删空配对 / 引号 contraction 安全，= Obsidian「Auto pair brackets」）；**Layer 2 = `core/bracketWrap.ts` 纯函数 `markdownWrapInput`** 管 `* _ \` ~ = $`（仅非空选区 additive 包裹 `*sel*`→`**sel**`、连按累积 `** ~~ == $$`；空选区透传单字符）。接 `cmExtensions`：`markdownWrapHandler`（`Prec.high` inputHandler）+ `closeBrackets()` + `keymap.of(closeBracketsKeymap)`（放 defaultKeymap 之上）+ `__geodeBrackets` 探针（main.tsx，loadExternal 前）。**零新 vault 写路径**（配对/包裹走 CM 事务→autosave，B 类守卫全继承）+ **零新依赖**（`@codemirror/autocomplete` 已在）+ **零 i18n**。**最高风险点 = `[` 配对与 wikilink `]]` 补全协同**：靠 wikilink source 既有 `sliceDoc(to,to+2)==="]]"` 守卫零冲突（敲 `[[`→`[[]]`、补全 accept→单 `]]`、字面 `[[Note]]` 经 type-over 吸收手敲括号 round-trip——**这正是 r23–r34 既有 `[[` 键入断言零回退的原因**，未改 wikilink 源一字）。`r35-e2e` **25/25** + 桌面 `r35-probe` **9/9**（**桌面探针首次能驱动配对真值**：纯函数无需 live view，不同于 R34 search）+ r23–r34 不回退（r34 15 / r33 37 / r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ r26-bytes 0。**5 维对抗评审 5 finding→0 确认/5 证伪**（2 观察硬化成 E2E 断言：apostrophe contraction + line-start 引号；2 记已知限制：空选区强调符不配对=刻意偏离 / closeBrackets 不按代码块上下文门控=保真 gap）。
-- **下一项 = R35→R36 = R32+ 候选池 #⑤ 标签页快捷键**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）。Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 `nextTab/prevTab/goToTab` + `recentlyClosed` 栈，App.tsx 注册命令 + 默认键（注意 mac `Mod` = Cmd，R32 已就绪）。其后队列：⑥ 前进/后退导航历史 → ⑦ 快速切换器子模式 →（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.36.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R36 标签页快捷键 ✓ 已交付**（R32+ 候选池第一梯队 #⑤：命令表原无 next/prev-tab、go-to-tab N、new-tab、reopen-closed）。校准 Obsidian 官方 docs 键位:**next/prev-tab = 字面 `Ctrl+Tab`/`Ctrl+Shift+Tab`(两平台都 Ctrl,`Cmd+Tab` 是 mac 应用切换器→用 R32 体系的字面 `Ctrl` 区分)**、`Mod+1..8` 第 N 标签、`Mod+9` 末标签、`Mod+T` 新标签、`Mod+Shift+T` 重开。实现:`core/workspace.ts` 加 4 纯 store 方法(`cycleActiveTab`/`activateTabAt`/`activateLastTab`/`reopenClosedTab`)+ `recentlyClosed` 栈(cap 20、session-only、**只 closeTab 入栈**、delete/rename/missing 三处反应式 purge/remap、**vault 切换 reason "load" 清空**)；App.tsx 注册 13 命令(`Array.from` 循环注册 go-to-tab-1..8);导航限**活动 pane**(`getActivePane()`，镜像 Obsidian 在当前 tab group 内循环)。**零新 vault 写路径**(`app:new-tab` 复用 `app:new-note` 的 `vault.create`)+ **零新依赖** + **零新 window 探针**(标签切换=store 操作,探针/E2E 直驱 `app.workspace`,热键复用 `__geodeHotkey.match`)。`r36-e2e` **47/47** + 桌面 `r36-probe` **18/18**(**store 层真二进制可驱动,强于 R34/R35;命令层因 App Nap §D 不可驱动交 E2E**)+ r35 25 / r34 15 / r33 37 / r32 24 不回退 + r26-bytes 0。**3 维对抗评审 3 finding → 1 确认修复(vault 切换清 recentlyClosed 防跨库同名碰撞)+ 2 证伪硬化成断言(三处 purge/remap 钩子 6 断言 + Mod+T/Mod+Shift+T 真键)**。
+- **下一项 = R36→R37 = R32+ 候选池第二梯队 #⑥ 前进/后退导航历史**（`workspace.ts` 仅 `lastActiveFile`，无 per-pane 导航栈）。Obsidian：`Cmd+Alt+←/→` + 标题栏箭头。切入：per-leaf history stack（openFile push、cap N、back/forward 不 push）+ back/forward 命令+默认键 + 标题栏按钮（注意与 R36 recentlyClosed 是**两套独立栈**：导航历史 = pane 内访问序，reopen = 关闭序）。其后队列：⑦ 快速切换器子模式 → ⑧ 固定/堆叠标签 → ⑨ 键盘切换复选框 →（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,21 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R36（标签页快捷键）核心教训三条**：① **桌面探针可驱动「store / 纯函数」层,但不可驱动「React-effect /
+  live-view」层——命令注册也在不可驱动一侧**。R36 探针初版断言 `app.commands.execute("app:next-tab")` +
+  `app.commands.list()` 含 13 命令 → 桌面实测 **cmdCount=0、execute 不切 tab**:根因 = App.tsx 在 `useEffect`
+  里注册命令,**后台 WKWebView 不绘制 → React effect 不跑 → 命令从不注册**(= R34「`editor:*` 命令始终未
+  注册」同一 App Nap §D)。**但 `app.workspace.cycleActiveTab/reopen` 等是纯 store 调用、不经 effect → 桌面
+  探针能真实驱动**(比 R34/R35 只能验纯函数更强)。沉淀分界线:**store/纯函数 → 桌面探针可验;React-effect/CM
+  view/命令注册 → 交浏览器 E2E(前台真渲染)**。② **凡新增「持相对路径的内存会话态」,in-place 切库清单上必加
+  一笔**。`recentlyClosed` 漏清 → 切库后 `Mod+Shift+T` 打开**新库里同名的无关文件**(`closeMissingFileTabs` 的
+  `exists()` 守卫恰好放行新库同名路径)。现有代码本就为此清了 `lastActiveFile`(注释「same-named files would
+  silently collide」),新栈照抄。修法 = Workspace 订阅 `vault:changed` reason `"load"` 反应式清空(镜像
+  `DocumentManager` 句柄失效;反应式留 core、覆盖所有切库路径,优于 App.tsx 单点)。③ **平台差异键位先查官方
+  docs、再用 R32 `Ctrl`/`Mod`/`Meta` 四态体系精确表达,别想当然 mac=Cmd**。next/prev-tab 官方在**两平台都是
+  字面 `Ctrl+Tab`**(`Cmd+Tab` 是 macOS 应用切换器)——靠 R32 区分字面 `Ctrl` 与 `Mod` 直接表达,`matchParsedHotkey`
+  四态全等保证 mac 下 `Cmd+Tab` 绝不误触 `Ctrl+Tab` 绑定。**对抗评审「证伪≠无价值」延续 R35:** 三处 purge/remap
+  钩子 + Mod+T/Shift+T 真键虽行为正确但原零覆盖 → 硬化成 8 条新断言(含「删 `sub` 不误伤 `subextra.md`」字节级前缀边界)。
 - **R35（括号/引号自动配对 + 选区包裹）核心教训三条**：① **复用 CM 内置（`closeBrackets()`）前先实测它的默认
   集 + 与既有补全源的协同点**——CM `closeBrackets()` 默认括号集 `( [ { ' "` 恰好 = Obsidian「Auto pair
   brackets」（零配置即对齐），且引号有自带 quote-before-word 守卫（`don't` 不配对、行首 `'`→`''`，实测锁住）。

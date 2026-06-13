@@ -172,6 +172,23 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R36 套件回归（2026-06-14，macOS release 二进制 v0.36.0 实测 `r36-probe-vault`）
+
+R36 = 标签页快捷键（已核实缺口：命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 `focus-next/prev-pane`
+是空间移动）。**compat API 表面零代码改动**——全在 `core/workspace.ts`（4 纯 store 导航方法 + `recentlyClosed` 栈）
++ `app/App.tsx`（13 命令注册）+ i18n。校准 Obsidian 官方 docs（`help/User+interface/Tabs`）:**next/prev-tab 两平台都是
+字面 `Ctrl+Tab`/`Ctrl+Shift+Tab`**（`Cmd+Tab` 是 macOS 应用切换器 → 用 R32 体系的字面 `Ctrl` 区分）、`Mod+1..8` 第 N、
+`Mod+9` 末、`Mod+T` 新、`Mod+Shift+T` 重开。**零新 window 探针**——标签切换是 workspace **store 操作**，探针/E2E 直接
+驱动 `app.workspace`、热键复用 R32 `__geodeHotkey.match`。macOS probe 实测:新增 **r36-probe 18/18**——**桌面探针比
+R34/R35 更强:直驱真实 store 功能逻辑**（开多 tab → cycle/activateTabAt/last/reopen + mode 恢复，store 变更不依赖绘制，
+无需 live view）+ 热键 grammar；**唯一不可驱动 = 命令层**（App.tsx 在 `useEffect` 注册命令，后台 WKWebView 不绘制 →
+effect 不跑 → 命令从不注册,cmCount=0；= R34 `editor:*` 同一 App Nap §D），故命令注册+execute 交浏览器 r36-e2e。
+**r35/r34/…/r23 套件不回退**（compat 调用面零改动；浏览器 r36-e2e **47/47** + r35 25、r34 15、r33 37、r32 24、r31 21、
+r25 17、r24 12、r23 22 全绿；`r26-bytes` 0 违例，markdown.ts 未动）。**3 维对抗评审 3 finding → 1 确认修复**（vault 切换
+不清 `recentlyClosed` → 跨库同名相对路径碰撞，`Mod+Shift+T` 打开新库无关同名文件；修 = 订阅 `vault:changed` reason
+"load" 反应式清栈，镜像 `lastActiveFile` 重置 + DocumentManager 句柄失效）**+ 2 证伪硬化成断言**（三处 purge/remap
+钩子 6 断言含「删 `sub` 不误伤 `subextra.md`」字节级前缀边界 + `Mod+T`/`Mod+Shift+T` 真键端到端）。
+
 ### R35 套件回归（2026-06-13，macOS release 二进制 v0.35.0 实测 `r35-probe-vault`）
 
 R35 = 括号/引号自动配对 + 选区包裹（实测缺口：敲 `[` 得 `[` 不补 `]`、源码无 closeBrackets）。**compat API

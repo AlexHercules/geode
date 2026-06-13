@@ -71,6 +71,113 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 36 additions — 标签页快捷键（tab keyboard shortcuts）【As-built v0.36】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第一梯队 #⑤ = 已核实缺口（命令表无 next/prev-tab、
+> go-to-tab N、new-tab、reopen-closed；仅 `focus-next/prev-pane` 是**空间**移动，非 tab 切换）。本轮
+> **纯 workspace store + 命令注册，零新 vault 写路径**（标签切换不写 `.md`；`app:new-tab` 复用既有
+> `app:new-note` 的 `vault.create` 写路径——同一咽喉点，B 类守卫全继承）+ **零新运行时依赖** + **零新
+> window 全局探针**（不同于 R34/R35 的 live-view 功能：标签切换是 store 操作 → 探针/E2E 直接驱动
+> `app.workspace` 读 store 真值；热键解析复用 R32 `__geodeHotkey.match`）。
+> 校准 Obsidian 官方 docs（`help/User+interface/Tabs`，WebFetch 2026-06-13）。
+> **验证**：typecheck 0 + 浏览器 `r36-e2e` **47/47**（store ops + 命令层 execute + reopen LIFO/mode 恢复 +
+> UI 反映 + 双平台热键 grammar + 真键 Ctrl+Tab/Shift+Tab/Mod+3/Mod+9/**Mod+T**/**Mod+Shift+T** + G 节
+> purge/remap）+ 桌面 release `r36-probe` **18/18**（store 层在真 WKWebView 直驱 + 热键 grammar；命令层
+> 因 App Nap §D 不可驱动，交 E2E）+ r35 25 / r34 15 / r33 37 / r32 24 不回退 + `r26-bytes` 0 + cargo/build 绿。
+> **3 维对抗评审 3 finding → 1 确认修复（vault 切换清 recentlyClosed）+ 2 证伪硬化成断言**（见 As-built）。
+
+### 官方键位校准（写进契约，勿臆造）
+
+| 命令 id | 名称 | 默认热键 | 修饰键性质 |
+|---|---|---|---|
+| `app:next-tab` | Go to next tab | **`Ctrl+Tab`** | **字面 Ctrl**（两平台都是物理 Ctrl，非 Cmd——`Cmd+Tab` 是 macOS 应用切换器） |
+| `app:previous-tab` | Go to previous tab | **`Ctrl+Shift+Tab`** | **字面 Ctrl** |
+| `app:go-to-tab-1..8` | Go to tab #N | `Mod+1`..`Mod+8` | **Mod**（mac=Cmd，其余=Ctrl） |
+| `app:go-to-last-tab` | Go to last tab | `Mod+9` | **Mod** |
+| `app:new-tab` | New tab | `Mod+T` | **Mod** |
+| `app:reopen-closed-tab` | Reopen closed tab | `Mod+Shift+T` | **Mod** |
+
+> **关键：next/prev-tab 用字面 `Ctrl`（R32 体系区分 `Ctrl`/`Mod`/`Meta`）。** `parseHotkey("Ctrl+Tab")`→
+> `wantCtrl=true,wantMod=false`；`matchParsedHotkey` 四态全等：mac 下需 `ctrlKey=true,metaKey=false`（=物理
+> Ctrl+Tab），且 `Cmd+Tab`（metaKey=true）绝不误触。`NAMED_KEYS.tab="Tab"`、数字键走 `key.length===1` 路径
+> → `Tab`/`1`..`9` 均可表达（commands.ts 已就绪，无需改）。`Ctrl+Tab` 在编辑器内不会被 CM 当成缩进：R33
+> 的 `Prec.highest` keydown 拦截器先调 `handleKeydown` 匹配并 `preventDefault`，CM 永远收不到这个 Tab。
+
+### 契约（冻结）
+
+**core/workspace.ts — 4 个新公开方法（additive，不改任何既有签名）**。导航作用于**活动 pane**（`getActivePane()`，
+镜像 `focusAdjacentPane` 在活动 pane 内循环——Obsidian Ctrl+Tab 在当前 tab group 内循环）：
+
+```ts
+/** Cycle the ACTIVE pane's active tab by delta (+1 next / -1 prev), wrapping.
+ *  No-op when the active pane has < 2 tabs. (Ctrl+Tab / Ctrl+Shift+Tab.) */
+cycleActiveTab(delta: 1 | -1): void
+
+/** Activate the tab at 0-based `index` in the ACTIVE pane. Out-of-range → no-op
+ *  (Obsidian: Cmd+5 with 3 tabs does nothing). (Mod+1..8 → index 0..7.) */
+activateTabAt(index: number): void
+
+/** Activate the LAST tab in the active pane. No-op when empty. (Mod+9.) */
+activateLastTab(): void
+
+/** Reopen the most-recently USER-closed tab (LIFO), restoring its view mode,
+ *  in a NEW tab — preferring its original pane if it still exists, else the
+ *  active pane. Returns true if one was reopened. (Mod+Shift+T.) */
+reopenClosedTab(): boolean
+```
+
+**recentlyClosed 栈（session-only，不持久化）**：
+```ts
+interface ClosedTab { viewType: "markdown" | "graph"; filePath: string | null; mode: ViewMode; paneId: string }
+private recentlyClosed: ClosedTab[] = [];   // most-recent LAST; cap RECENTLY_CLOSED_MAX = 20
+```
+- **只有 `closeTab(id)` 入栈**（用户显式关闭）——关闭前捕获被关 tab 的 `{viewType,filePath,mode,paneId}` push，超 cap 丢最旧。
+- **反应式清理一律 PURGE 不入栈**（删/改名/缺失文件无法 reopen）：`handleDeleted(path)` 删 `filePath===path || startsWith(path+"/")` 的条目；`handleRenamed(old,new)` 同 tab 规则 remap 栈内 filePath；`closeMissingFileTabs(exists)` 删 `filePath` 不再存在的条目。
+- `reopenClosedTab()`：`pop()` 取最近条目；`viewType==="graph"`→`openGraph()`；否则 `filePath` 非空→`openFile(filePath,{newTab:true,paneId:entry.paneId})`（`openFile` 的 `paneId0` 在原 pane 已塌缩时回退活动 pane）后 `setTabMode` 恢复 mode；返回是否 reopen。
+
+**app/App.tsx — 注册 13 个命令**（`commands.register({id,name:()=>t(...),hotkey,callback})` 样板，hotkey 字段直接被 commands 层消费）：`app:next-tab`/`app:previous-tab`（callback `cycleActiveTab(±1)`）、`app:go-to-tab-1..8`（循环注册，`name:()=>t("cmd.goToTab",{n})`，callback `activateTabAt(n-1)`）、`app:go-to-last-tab`（`activateLastTab()`）、`app:new-tab`（`Mod+T`，复刻 `app:new-note` 但 `openFile(path,{newTab:true})` = 加新 tab 不替换）、`app:reopen-closed-tab`（`reopenClosedTab()`）。
+
+**core/i18n/dict.app.ts — 6 个新键 en+zh**：`cmd.nextTab`/`cmd.previousTab`/`cmd.goToTab`（含 `{n}` 插值，`t()` 支持 number）/`cmd.goToLastTab`/`cmd.newTab`/`cmd.reopenClosedTab`。
+
+**探针/E2E（无新 window 全局）**：`__app.workspace.*` + `__app.commands.execute("app:next-tab"|...)` 直接驱动，读 `getActiveTab().filePath`/`getPanes()[0].tabs`/`.tab.is-active .tab-title` 验真值；热键解析复用 `window.__geodeHotkey.match("Ctrl+Tab", evt, isMac)`。桌面 `r36-probe` **可真实驱动命令层**（store 操作不依赖 live view，强于 R34/R35）。
+
+### 文件所有权（并行 implementer）
+- **A（core）**：`src/core/workspace.ts`（4 方法 + recentlyClosed 栈 + 3 处反应式 PURGE/remap 钩子）。
+- **B（app+i18n+版本）**：`src/app/App.tsx`（13 命令注册）+ `src/core/i18n/dict.app.ts`（6 键 en+zh）+ 三处版本号 0.35.0→0.36.0（`package.json`/`src-tauri/tauri.conf.json`/`src/features/settings/SettingsModal.tsx` APP_VERSION）。
+- **C（验证）**：`.calibration/r36-e2e.mjs` + `.calibration/r36-probe.mjs`（独占新建）。
+
+### 已知偏差（写给后续轮）
+- **`app:new-tab` 急切建 `Untitled.md` 文件**（Obsidian Cmd+T 开空白 tab、不建文件）——Geode 标签页是文件支撑（`TabState` 无「空白 tab」视图），故复刻为「新 untitled 笔记 + 新 tab」。
+- **TabBar「+」按钮仍调 `app:new-note`（替换活动 tab，pre-existing）**——本轮只补键盘快捷键（候选池 #⑤ = tab 快捷键），「+」repoint 列为余项。
+- **导航限活动 pane**（Obsidian 同样在当前 tab group 内循环；跨 pane 用 `focus-next/prev-pane`）。
+- **recentlyClosed session-only**（Obsidian 跨重启持久化）——避持久化栈的 stale-path 风险；重启清空。
+
+### As-built（评审修复 + 根因教训）
+
+**1 个确认缺陷（已修）— vault 切换不清 `recentlyClosed` → 跨库同名相对路径碰撞**：in-place 切库（`openVaultFlow`
+重指 adapter，**非** `location.reload`，内存栈存活）后只调 `closeMissingFileTabs(p => 新库.fileExists(p))`，其
+栈 purge 条件 `c.filePath===null || exists(c.filePath)` 会**放行新库恰好同名的旧库条目**（两库都有 `Notes/x.md`
+时 `exists()=true`）→ `Mod+Shift+T` 打开新库里**无关的同名文件**。现有代码本就为此在切库处清了 `lastActiveFile`
+（注释「same-named files would silently collide」），却漏了新增的栈。**修复 = Workspace 构造器订阅
+`vault:changed` reason `"load"` → `recentlyClosed = []`**（镜像 `DocumentManager` 在同一事件失效所有句柄
+`documents.ts:476`；反应式、留在 core、覆盖所有切库路径含启动 last-vault 恢复，优于 App.tsx 单点清）。
+**非数据损坏**（reopen 只读 acquire、flush 有 fileExists no-resurrect 守卫）——纯正确性/UX。
+
+**2 个证伪 → 硬化成 E2E 断言**（R35 教训「未测但行为正确 → 转已测」）：① 三处反应式 purge/remap 钩子
+（delete-purge / rename-remap / **文件夹前缀**非误伤 / missing-purge 保留 graph）原零覆盖 → 补 G 节 6 断言（含
+`删 "sub" 不误伤 "subextra.md"` 的字节级前缀边界——历轮反复踩坑点）；② `Mod+T`/`Mod+Shift+T`（任务点名的
+「浏览器/系统可能吞」风险点）原仅测 grammar → 补 F 节真键端到端断言（CDP 实测两者均经 R33 `Prec.highest`
+拦截器正确触发）。
+
+**根因教训 — 命令层（App.tsx `useEffect` 注册）桌面探针不可驱动，store 层可**：R36 探针初版断言
+`app.commands.execute("app:next-tab")` + `app.commands.list()` 含 13 命令 → 桌面实测 **cmdCount=0、execute 不切
+tab**。根因 = **App.tsx 在 `useEffect` 里注册命令，后台 WKWebView 不绘制 → React effect 不跑 → 命令从不注册**
+（= R34 「`editor:*` 命令始终未注册」同一 App Nap §D 现实）。**但 `app.workspace.*`（cycleActiveTab/reopen 等）
+是纯 store 调用、不经 effect → 桌面探针能真实驱动**（store 变更不依赖绘制）——这是 R36 探针面比 R34/R35 强的原因
+（驱动真实功能逻辑而非仅纯函数）。结论沉淀：**桌面探针可驱动「store/纯函数」层，不可驱动「React-effect/live-view」
+层（命令注册、CM view、EditorPane）**；后者真值一律交浏览器 E2E（前台真渲染）。R36 探针遂只验 store + hotkey
+grammar，命令注册+execute 交 r36-e2e（B 节 6 断言全绿）。
+
 ## Round 35 additions — 括号/引号自动配对 + 选区包裹（auto-close brackets + wrap selection）【As-built v0.35】
 
 > **状态：As-built（2026-06-13）。** R32+ 候选池 #④ = 实测缺口（敲 `[` 得 `[` 不补 `]`；源码无
