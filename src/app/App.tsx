@@ -10,6 +10,7 @@ import { SearchPanel } from "@features/search/SearchPanel";
 import { EditorPane } from "@features/editor/EditorPane";
 import { GraphView } from "@features/graph/GraphView";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
+import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
@@ -21,6 +22,7 @@ import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/ed
 import { isTauri } from "@core/vault";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
+import { bookmarks } from "@core/bookmarks";
 import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
@@ -83,7 +85,9 @@ export function App() {
     ? activeLeftPanel.id
     : ws.leftPanel === "search"
       ? "search"
-      : "explorer";
+      : ws.leftPanel === "bookmarks"
+        ? "bookmarks"
+        : "explorer";
   const effectiveRight = activeRightPanel
     ? activeRightPanel.id
     : ws.rightPanel === "outline"
@@ -307,6 +311,45 @@ export function App() {
         available: () => workspace.getActiveFile() !== null,
       }),
       commands.register({
+        id: "bookmarks:bookmark-file",
+        // label flips so the palette/hotkey shows the right verb for the state
+        name: () => {
+          const p = workspace.getActiveFile();
+          return p && bookmarks.isFileBookmarked(p)
+            ? t("cmd.unbookmarkFile")
+            : t("cmd.bookmarkFile");
+        },
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const p = workspace.getActiveFile();
+          if (p) void bookmarks.toggleFile(p);
+        },
+      }),
+      commands.register({
+        id: "bookmarks:bookmark-heading",
+        name: () => t("cmd.bookmarkHeading"),
+        available: () => headingUnderCursor(app) !== null,
+        callback: () => {
+          const h = headingUnderCursor(app);
+          // subpath stored Obsidian-shape (leading "#"); navigation strips it
+          if (h) void bookmarks.add({ type: "heading", path: h.path, subpath: h.subpath, ctime: Date.now() });
+        },
+      }),
+      commands.register({
+        id: "bookmarks:bookmark-block",
+        name: () => t("cmd.bookmarkBlock"),
+        available: () => blockUnderCursor(app) !== null,
+        callback: () => {
+          const b = blockUnderCursor(app);
+          if (b) void bookmarks.add({ type: "block", path: b.path, subpath: b.subpath, ctime: Date.now() });
+        },
+      }),
+      commands.register({
+        id: "bookmarks:show",
+        name: () => t("cmd.showBookmarks"),
+        callback: () => workspace.setLeftPanel("bookmarks"),
+      }),
+      commands.register({
         id: "app:check-updates",
         name: () => t("cmd.checkUpdates"),
         available: () => updateSupported(),
@@ -408,6 +451,16 @@ export function App() {
                 : app.workspace.setLeftPanel("search")
             }
           />
+          <RibbonButton
+            icon="bookmark"
+            title={t("app.ribbonBookmarks")}
+            active={ws.leftSidebarOpen && effectiveLeft === "bookmarks"}
+            onClick={() =>
+              effectiveLeft === "bookmarks" && ws.leftSidebarOpen
+                ? app.workspace.toggleLeftSidebar()
+                : app.workspace.setLeftPanel("bookmarks")
+            }
+          />
           <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />
           <RibbonButton
             icon="command"
@@ -457,6 +510,8 @@ export function App() {
               <SidebarPanelHost key={activeLeftPanel.id} panel={activeLeftPanel} />
             ) : ws.leftPanel === "search" ? (
               <SearchPanel />
+            ) : ws.leftPanel === "bookmarks" ? (
+              <BookmarksPanel />
             ) : (
               <Explorer />
             )}
@@ -588,6 +643,44 @@ function insertNowAtSelection(
     changes: { from: main.from, to: main.to, insert },
     selection: { anchor: main.from + insert.length },
   });
+}
+
+/** The heading the editor cursor is currently under (R27 bookmark-heading):
+ *  the last heading whose start offset is <= the cursor. Returns the path +
+ *  Obsidian-shape subpath ("#" + heading text); null when no active editor
+ *  file, no metadata, or the cursor sits above the first heading. */
+function headingUnderCursor(
+  app: ReturnType<typeof useApp>,
+): { path: string; subpath: string } | null {
+  const active = getActiveFileEditorView(app);
+  if (!active) return null;
+  const meta = app.metadata.getMetadata(active.path);
+  if (!meta || meta.headings.length === 0) return null;
+  const cursor = active.view.state.selection.main.head;
+  let hit: { text: string } | null = null;
+  for (const h of meta.headings) {
+    if (h.from <= cursor) hit = h;
+    else break;
+  }
+  if (!hit) return null;
+  return { path: active.path, subpath: `#${hit.text}` };
+}
+
+/** The block the editor cursor sits inside (R27 bookmark-block): a block whose
+ *  span [from, to) contains the cursor. We do NOT mint new block ids this round
+ *  — only blocks that already carry a `^id` (indexed in metadata) qualify, so
+ *  the command is unavailable when the cursor is not on an id'd block. */
+function blockUnderCursor(
+  app: ReturnType<typeof useApp>,
+): { path: string; subpath: string } | null {
+  const active = getActiveFileEditorView(app);
+  if (!active) return null;
+  const meta = app.metadata.getMetadata(active.path);
+  if (!meta || meta.blocks.length === 0) return null;
+  const cursor = active.view.state.selection.main.head;
+  const hit = meta.blocks.find((b) => b.from <= cursor && cursor <= b.to);
+  if (!hit) return null;
+  return { path: active.path, subpath: `#^${hit.id}` };
 }
 
 /* ---------------- pieces ---------------- */

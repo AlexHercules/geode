@@ -1,5 +1,6 @@
 import { Store, useStore } from "./store";
 import * as dictApp from "./i18n/dict.app";
+import * as dictBookmarks from "./i18n/dict.bookmarks";
 import * as dictPanels from "./i18n/dict.panels";
 import * as dictViews from "./i18n/dict.views";
 
@@ -16,8 +17,13 @@ import * as dictViews from "./i18n/dict.views";
 
 export type Locale = "en" | "zh";
 
-const en = { ...dictApp.en, ...dictPanels.en, ...dictViews.en };
-const zh: Record<string, string> = { ...dictApp.zh, ...dictPanels.zh, ...dictViews.zh };
+const en = { ...dictApp.en, ...dictPanels.en, ...dictViews.en, ...dictBookmarks.en };
+const zh: Record<string, string> = {
+  ...dictApp.zh,
+  ...dictPanels.zh,
+  ...dictViews.zh,
+  ...dictBookmarks.zh,
+};
 
 export type I18nKey = keyof typeof en;
 

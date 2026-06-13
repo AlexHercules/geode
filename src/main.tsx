@@ -26,6 +26,7 @@ import {
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
+import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { Workspace } from "@core/workspace";
@@ -220,6 +221,31 @@ async function bootstrap() {
       },
     );
 
+  // always-on bookmarks probe (R27): drives the real-fs read/write path from
+  // browser/desktop E2E (WKWebView has no CDP — same pattern as __geodeRename /
+  // __geodeHover). reload() forces a fresh read from disk. Assigned BEFORE
+  // loadExternal so an external plugin's onload can capture it synchronously.
+  const bookmarksHost = globalThis as unknown as {
+    __geodeBookmarks?: {
+      list: () => ReadonlyArray<BookmarkItem>;
+      toggleFile: (path: string) => Promise<void>;
+      add: (item: BookmarkItem, groupPath?: ReadonlyArray<number>) => Promise<void>;
+      move: (
+        from: ReadonlyArray<number>,
+        toGroup: ReadonlyArray<number>,
+        toIndex: number,
+      ) => Promise<void>;
+      reload: () => Promise<void>;
+    };
+  };
+  bookmarksHost.__geodeBookmarks = {
+    list: () => bookmarks.items.get(),
+    toggleFile: (path) => bookmarks.toggleFile(path),
+    add: (item, groupPath) => bookmarks.add(item, groupPath),
+    move: (from, toGroup, toIndex) => bookmarks.move(from, toGroup, toIndex),
+    reload: () => bookmarks.init(vault),
+  };
+
   // load vault: memory adapter is always ready; desktop restores the last vault
   if (adapter.kind === "memory") {
     await vault.load();
@@ -285,6 +311,15 @@ async function bootstrap() {
   void propertyTypes.init(vault);
   events.on("vault:changed", ({ reason }) => {
     if (reason === "load") void propertyTypes.init(vault);
+  });
+
+  // R27: bookmarks (.obsidian/bookmarks.json) — same lifecycle as property
+  // types (load on boot, re-read when the vault ROOT switches). NOTE: the
+  // __geodeBookmarks probe host is assigned EARLIER (before loadExternal) so an
+  // external plugin's onload can see it — same ordering as the other probes.
+  void bookmarks.init(vault);
+  events.on("vault:changed", ({ reason }) => {
+    if (reason === "load") void bookmarks.init(vault);
   });
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
