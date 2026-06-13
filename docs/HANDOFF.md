@@ -4,10 +4,10 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.28.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R28 文件树拖拽移动 ✓ 已交付**（`core/explorerMove.ts` 决策核心 = `resolveDropTarget` 四守卫（no-op/自身后代/落点解析）+ `wouldCollide` 撞名 + `findFolder` + `EXPLORER_MIME`；Explorer 行 `draggable` + 容器级 dragover/drop + `moveNode` 走 `renameWithLinkUpdate`（**零新写路径**，复用 R16 写咽喉）+ CSS `is-dragging`/`is-drop-target`/`is-drop-root`；`MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust `vault_rename`；`__geodeExplorerMove` 探针装 loadExternal 前；零新依赖）。评审 2 confirmed minor 全修（① 决策核心 bootstrap→feature 耦合 → 迁入 core；② 浏览器陈旧树盲写窗口 → Memory adapter `to.exists` 守卫两端对齐）；`r28-e2e` 23 断言 + 桌面 probe 4/4 真实 fs 入库
-- **下一项 = ⑤折叠持久化 + 阅读视图折叠**（R17 显式债：折叠态不持久化、tab 重开/preview 往返丢，grep foldState 零命中；阅读视图无折叠。范围 = 折叠态按文件持久化（localStorage 或 `.obsidian` 形状，可借 Explorer `EXPANDED_KEY` 先例）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）——细则见 `docs/ROADMAP.md` R25+ 候选池表）
-- 其后按序：⑥Properties 侧栏视图 → ⑦斜杠命令 `/` 菜单
+- 版本 **v0.29.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R29 折叠持久化 + 阅读视图折叠 ✓ 已交付**（`core/foldStore.ts` 镜像 Obsidian `{folds,lines}` 0-based 行形状、存 localStorage `geode.fold.<path>`、**零新 vault 写路径/零新依赖/不动 markdown.ts 字节管线**；`foldPersistence.ts` ViewPlugin 防抖捕获 + destroy flush；EditorPane mount 恢复（foldEffect **无 docChanged→不触发 autosave**）+ 阅读视图标题折叠点击委托（嵌套独立，纯 DOM toggle）；`__geodeFold` 探针装 loadExternal 前）。评审 1 major + 2 minor 全修（① CSS 泄漏：标题样式裸挂 `.markdown-rendered` 被 hover 卡片/compat 复用 → 收窄 `.markdown-reading-view`；② `foldRangesFromInfo` 加整数/非负守卫防篡改 throw；③ 探针去 `peek` 对齐契约）；`r29-e2e` 19/19 + 桌面 probe 4/4 + `r26-bytes` 0 违例
+- **下一项 = ⑥Properties 侧栏视图**（R22 显式延期：侧栏 All Properties 视图 = 全库 key 聚合，`getPropertyKeys` 已备 R22；全局重命名 = types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律；值建议 = datalist 跨库取值——细则见 `docs/ROADMAP.md` R25+ 候选池表）
+- 其后按序：⑦斜杠命令 `/` 菜单
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,27 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R29（折叠持久化 + 阅读视图折叠）核心教训三条**：① **reading 类 CSS 别挂裸
+  `.markdown-rendered` / `.preview-content`——这俩被 hover 预览卡片复用**（HoverPreview.tsx
+  的卡片 className = `hover-preview-content preview-content markdown-preview-view
+  markdown-rendered`，连 compat `MarkdownRenderer` 也用 `.markdown-rendered`）。标题折叠
+  样式初版挂 `.markdown-rendered :is(h1..h6)` → hover 卡片标题平白得 `cursor:pointer`+死
+  chevron（点击委托 gated 在编辑器 `previewContentRef.contains`，卡片里点了没反应）。**修复 =
+  收窄到 `.markdown-reading-view`**（仅编辑器阅读窗外层 wrapper EditorPane.tsx:739；hover/
+  compat/export 均无此类）。**「仅编辑器阅读窗」选择器 = `.markdown-reading-view`，不是
+  `.preview-content`/`.markdown-rendered`。** ② **折叠是 view-only 装饰、不碰 doc——这是
+  R29 数据安全的根本**：恢复在 mount 派 `foldEffect`（**无 docChanged**）→ autosave 在
+  documents.ts:86 `if(!update.docChanged) return` 早退、不标 dirty、绝不写 .md；持久化只进
+  localStorage（**零新 vault 写路径，B 类写清单全免**）。捕获 ViewPlugin 的 `destroy()` 同步
+  flush 是 preview↔editor / tab 关闭两丢失点的关键（live↔source 已靠 base-list
+  `markdownFolding` 在 EditorState 内保留）。③ **CM 折叠区间 ↔ Obsidian 行号双投影**：存盘
+  镜像 Obsidian `{folds:[{from,to}], lines}`（0-based 行），`foldInfoFromState` 字符→行
+  （`doc.lineAt(c).number-1`）、`foldRangesFromInfo` 行→字符（`doc.line(n+1).to`）；回投务必
+  加 **整数/非负 + 越界守卫**（`loadFoldInfo` 只校验 `typeof number`，篡改的负/小数 `from`
+  会让 `doc.line()` 抛 RangeError 中断 mount effect）——fail-safe 方向：丢折叠态不抛、不丢
+  内容。阅读视图标题折叠 = 纯运行时 DOM toggle（`nextElementSibling` 遍历至下个同/更高级
+  标题，嵌套子标题独立保持折叠），**本轮不持久化**（与编辑器共享 FoldInfo 需给 heading emit
+  `data-line` = 改 markdown.ts 字节管线，显式延期）。
 - **R28（文件树拖拽移动）核心教训两条**：① **凡浏览器 `MemoryVaultAdapter` 与 Tauri
   Rust 后端都实现的写操作，fail-safe 守卫必须两端对齐**——`MemoryVaultAdapter.rename`
   原本盲写覆盖目标，而 Rust `vault_rename` 有 `to.exists()` 守卫（main.rs:243）→ 外部

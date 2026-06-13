@@ -71,6 +71,95 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 29 additions — 折叠持久化 + 阅读视图折叠（Fold persistence + reading-view fold）【契约冻结 v0.29】
+
+> **状态：契约冻结（2026-06-13）。** R25+ 候选池 #⑤ / R17 显式债收口。R17 折叠
+> （`features/editor/folding.ts` 冻结 ATX 节语义 + fold-all/unfold-all + foldGutter）
+> 已就绪，但**折叠态零持久化**（grep foldState 零命中）：live↔source 在 EditorState 内
+> 保留（base 扩展），但 **preview↔editor 往返 + tab 关闭重开全丢**。阅读视图仅 callout
+> 折叠半截（R18 click 委托 toggle `.is-collapsed`），**标题无折叠**。本轮 =
+> ①编辑器折叠态按文件持久化（localStorage，**镜像 Obsidian `{folds, lines}` 形状**）
+> + ②阅读视图标题折叠点击委托（运行时视觉 toggle，**不动 markdown.ts 字节管线**）。
+
+### 官方校准（Obsidian fold 持久化形状，已 WebFetch 核实）
+
+- Obsidian 把折叠态存 **localStorage（不入 vault `.obsidian/*.json`）**，**按文件**一条，key
+  `${appId}-note-fold-${filePath}`，value = `JSON.stringify(FoldInfo)`：
+  ```ts
+  interface FoldRange { from: number; to: number } // 0-based 行号
+  interface FoldInfo  { folds: FoldRange[]; lines: number } // lines = 存盘时总行数（用于行数漂移对账）
+  ```
+  `from` = 折叠起始行（标题行 / 列表父项行），`to` = 折叠末行；**无 type 标记**（heading/list/callout
+  统一为行区间，apply 时由内容重新判定）；**编辑与阅读视图共享同一条 `FoldInfo`**。
+- **Geode 取舍**：**镜像 value 形状**（便于未来导入真实 vault），但**存 localStorage**（不写
+  vault `.md`／不写 `.obsidian` → 零新 vault 写路径，数据安全 B 类全免）。key 用 Geode 命名
+  `geode.fold.<path>`（与 Explorer `EXPANDED_KEY` 同风格）。
+
+### 决策核心 — `core/foldStore.ts`（**新建**，纯 TS，可 import `@codemirror/state`）
+
+| 导出 | 签名 | 语义 |
+|---|---|---|
+| `FoldRange` | `{ from: number; to: number }` | 0-based 行号区间（镜像 Obsidian） |
+| `FoldInfo` | `{ folds: FoldRange[]; lines: number }` | 镜像 Obsidian；`lines` = 存盘时 `doc.lines` |
+| `loadFoldInfo(path)` | `(path: string) => FoldInfo \| null` | 读 `geode.fold.<path>`；try/catch，解析失败/缺失返 null |
+| `saveFoldInfo(path, info)` | `(path: string, info: FoldInfo \| null) => void` | `info===null \|\| folds.length===0` → **removeItem**（不留空键）；否则 setItem；try/catch |
+| `foldInfoFromState(state)` | `(state: EditorState) => FoldInfo` | `foldedRanges(state)` 字符区间 → 0-based 行 FoldInfo：每段 `from=doc.lineAt(charFrom).number-1`、`to=doc.lineAt(charTo).number-1`，`lines=doc.lines` |
+| `foldRangesFromInfo(state, info)` | `(state, info) => {from:number;to:number}[]` | 行→字符回投：跳过 `from+1>doc.lines` 的越界段（文件缩短对账）；`charFrom=doc.line(from+1).to`（折叠起始行末）、`charTo=doc.line(min(to,doc.lines-1)+1).to`；仅保留 `charFrom<charTo` 段 |
+
+- **localStorage 访问全 try/catch**（沿用 Explorer/hover/graph 先例，私密模式/配额异常静默降级会话态）。
+
+### 捕获扩展 — `features/editor/foldPersistence.ts`（**新建**，import `core/foldStore`）
+
+- 导出 `foldPersistence(getPath: () => string): Extension` = 一个 `ViewPlugin`：
+  - `update(u)`：若 `u.transactions` 任一 `tr.effects` 含 `foldEffect`/`unfoldEffect`（`e.is(foldEffect)||e.is(unfoldEffect)`）→ **防抖（400ms）** `saveFoldInfo(getPath(), foldInfoFromState(view.state))`。
+  - `destroy()`：清防抖 timer + **同步 flush 最后一次 save**（覆盖 preview↔editor / tab 关闭这两个丢失点）。
+- **接线**：`cmExtensions.ts` `buildEditorExtensions` 的 base 列表加 `foldPersistence(getPath)`（`getPath` 已是入参 → **不改 buildEditorExtensions/createViewState/EditorPane 调用点签名**，零跨区耦合）。
+
+### 恢复 + 阅读视图标题折叠 — `features/editor/EditorPane.tsx`（B 区）
+
+- **编辑器恢复**（mount effect，`attachView`+会话恢复之后，~L245）：
+  ```ts
+  const info = loadFoldInfo(handle.path);
+  if (info?.folds.length) {
+    const ranges = foldRangesFromInfo(view.state, info);
+    if (ranges.length) view.dispatch({ effects: ranges.map((r) => foldEffect.of(r)) });
+  }
+  ```
+  foldEffect 事务**无 docChanged → 不触发 autosave**（documents.ts:86 `if(!update.docChanged) return`）、不标 dirty。live/source mount 均恢复；preview mount 无 CM view（不恢复，阅读视图折叠走下条）。
+- **阅读视图标题折叠**（`onPreviewClick` 内，callout 分支后、link 分支前）：
+  ```ts
+  const heading = el.closest<HTMLElement>("h1,h2,h3,h4,h5,h6");
+  if (heading && previewContentRef.current?.contains(heading) && !el.closest("a")) {
+    e.preventDefault(); toggleHeadingFold(heading); return;
+  }
+  ```
+  `toggleHeadingFold`：从 tagName 取 level；`heading.classList.toggle("is-collapsed")`；遍历 `nextElementSibling` 至**遇到 level ≤ 本级的标题**（节边界）止——折叠则给区间内兄弟加 `geode-heading-folded`（`display:none`）；展开时**尊重嵌套折叠**（遇到自身 `.is-collapsed` 的子标题，显示该标题但跳过其子节，保持子节隐藏）。纯 DOM class toggle、**无 doc 写**（同 callout 折叠语义：re-render 回到初始态——本轮**阅读视图折叠不持久化**，见下「显式偏差」）。
+- **CSS**（`features/editor/editor.css`，B 区）：阅读视图 `.markdown-rendered :is(h1..h6)` hover 折叠箭头提示（CSS 变量、`::before` chevron，`.is-collapsed` 旋转）+ `.geode-heading-folded{display:none}`。颜色走变量。
+
+### 探针 — `main.tsx`（A 区，**装在 loadExternal 之前**，R27 教训）
+
+- `window.__geodeFold = { save(path, info), load(path) }`（As-built：`peek` 删去——`load` 已覆盖读路径，无独立需求）：桌面 probe 经此驱动 localStorage 往返真实校验（WKWebView 无 CDP；`foldInfoFromState`/`foldRangesFromInfo` 需 EditorState，由编辑器内部行使，不暴露裸态）。
+
+### 文件所有权表（并行实现，独占文件）
+
+| Agent | 独占文件 |
+|---|---|
+| **A（core + 捕获 + 探针）** | `src/core/foldStore.ts`（新）· `src/features/editor/foldPersistence.ts`（新）· `src/features/editor/cmExtensions.ts`（加 1 行接线）· `src/main.tsx`（加 `__geodeFold` 探针） |
+| **B（恢复 + 阅读视图 + 样式）** | `src/features/editor/EditorPane.tsx`（恢复 + 标题折叠委托）· `src/features/editor/editor.css`（标题折叠样式） |
+
+- B import A 的冻结 API（`loadFoldInfo`/`foldRangesFromInfo` from `@core/foldStore`，`foldEffect` from `@codemirror/language`）。两区零文件重叠。
+
+### 显式偏差（记 ROADMAP 余项）
+
+- **阅读视图折叠不持久化、且不与编辑器共享 `FoldInfo`**：Obsidian 编辑/阅读共享一条 FoldInfo（行号）；Geode 阅读视图 DOM→源行映射需给标题 emit `data-line`（= **改 markdown.ts 字节管线**，违背本轮「不动字节」纪律）→ 本轮阅读视图折叠为**纯运行时视觉态**（re-render 复位），编辑器折叠持久化为行号态。未来如要共享需先在 markdown.ts 给 heading 加 `data-line`（过 r26-bytes 基线重快照）。
+- **同文件多 pane**：各 pane 的 ViewPlugin 都 save 同一 path（幂等，last-writer-wins，内容一致）；A pane 折叠不实时同步到 B pane（重开才反映最新存盘——Obsidian 亦按 leaf 渲染）。
+- **行数漂移**：`foldRangesFromInfo` 越界段丢弃（文件外部变短）；不做内容级对账（Obsidian 用 `lines` 字段做更细的 reconcile，本轮仅做越界裁剪——fail-safe 方向：丢折叠态不丢内容）。
+
+### As-built（评审 + 双端实测，v0.29）
+
+- **评审 1 major + 2 minor 修复**：① **CSS 泄漏（major）** — 标题折叠样式初版用 `.markdown-rendered :is(h1..h6)`，但 `.markdown-rendered` **也被 hover 预览卡片（HoverPreview.tsx）+ compat `MarkdownRenderer`（util.ts）+ `.preview-content` 复用**（连 hover 卡片都带 `preview-content`！）→ 卡片标题平白得到 `cursor:pointer`+chevron 但点击无效（委托 gated 在 `previewContentRef.contains`）。**修复 = 收窄到 `.markdown-reading-view`**（仅编辑器阅读窗的外层 wrapper，EditorPane.tsx:739；hover/compat/export 均无此类）。**教训：reading 类样式别挂裸 `.markdown-rendered`/`.preview-content`——这俩被 hover 卡片复用；要「仅编辑器阅读窗」用 `.markdown-reading-view`。** ② **越界吞 throw（minor）** — `loadFoldInfo` 的 `isFoldRange` 只校验 `typeof number`，篡改的负/小数 `from` 会让 `doc.line(from+1)` 抛 RangeError、半途中断 mount effect（focusin/active-view 接线漏挂）→ `foldRangesFromInfo` 加 `Number.isInteger && >=0` 守卫（丢折叠不抛）。③ **`__geodeFold` 去 `peek`（minor）**：`load` 已覆盖读路径，契约对齐 as-built（见上探针行）。
+- **双端实测全绿**：浏览器 `r29-e2e.mjs` **19/19**（foldStore 探针往返 6 + 真实 CM fold-all→持久化→preview↔editor 往返**恢复**→unfold 清空 4 + 阅读视图标题折叠/嵌套独立/链接守卫 9）；桌面 release probe `r29-probe.js` **4/4**（WKWebView 真实 localStorage 往返 / empty→removeItem / malformed→null / key 落盘）；`r26-bytes` **0 违例**（markdown.ts 零改动，字节管线不动）；typecheck 0 / cargo check 通过。
+
 ## Round 28 additions — 文件树拖拽移动（Explorer drag-to-move）【契约冻结 v0.28】
 
 > **状态：契约冻结（2026-06-13）。** R25+ 候选池 #④。Explorer 此前**零 drag 处理**

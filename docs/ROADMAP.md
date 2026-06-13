@@ -637,6 +637,37 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R29 — v0.29（2026-06-13）折叠持久化 + 阅读视图折叠（R25+ 候选池 #⑤ / R17 显式债收口）
+
+补齐 R17「折叠态零持久化」债 + 阅读视图标题折叠。官方校准（WebFetch 核实）：Obsidian 折叠态
+存 **localStorage（不入 vault）**、**按文件**一条 key `${appId}-note-fold-${path}`、value =
+`{folds:[{from,to}], lines}`（**0-based 行号**，`from`=折叠起始行/`to`=末行，**无 type 标记**，
+编辑/阅读共享同一条）。**Geode 取舍**：镜像 value 形状（便于未来导入真实 vault）但存 localStorage、
+key 用 `geode.fold.<path>`——**零新 vault 写路径、零新依赖、不动 markdown.ts 字节管线**。
+**core/foldStore.ts**（新，纯 TS 可 import @codemirror/state）：`FoldRange`/`FoldInfo` 类型 +
+`loadFoldInfo`（解析/形状校验失败返 null）+ `saveFoldInfo`（empty→removeItem 不留空键）+
+`foldInfoFromState`（`foldedRanges` 字符区间→0-based 行）+ `foldRangesFromInfo`（行→字符回投，
+越界段 + 非整数/负值守卫丢弃，fail-safe 不抛）。**features/editor/foldPersistence.ts**（新）：
+捕获 ViewPlugin——`update` 检测 `foldEffect`/`unfoldEffect` 防抖（400ms）save、`destroy` 同步
+flush（覆盖 preview↔editor / tab 关闭两丢失点）；接 `cmExtensions.ts` base 列表（`getPath`
+已是入参，零签名改动）。**EditorPane.tsx**：mount 恢复（`loadFoldInfo`→`foldRangesFromInfo`→
+`foldEffect`，**无 docChanged→不触发 autosave/标 dirty**）+ 阅读视图标题折叠点击委托
+（`onPreviewClick` callout 分支后：闭合 `h1..h6` 折叠其节至下个同/更高级标题，嵌套子标题
+独立保持折叠，纯 DOM class toggle 无 doc 写，链接 `!closest('a')` 守卫放行）。
+**editor.css**：标题 hover chevron（`.markdown-reading-view` 收窄作用域）+ `.geode-heading-folded`。
+**main.tsx**：`__geodeFold` 探针（装 loadExternal 前）。
+**对抗评审 1 major + 2 minor 修复**：① **CSS 泄漏（major）** 标题样式初版挂裸 `.markdown-rendered`
+→ hover 卡片/compat/`.preview-content` 复用此类、平添死 chevron+cursor → 收窄到
+`.markdown-reading-view`（仅编辑器阅读窗）；② **越界 throw（minor）** `foldRangesFromInfo` 加
+整数/非负守卫防篡改 localStorage 抛 RangeError 中断 mount；③ **探针去 `peek`（minor）** 契约
+对齐 as-built。验证：浏览器 `.calibration/r29-e2e.mjs` **19/19**（探针往返 6 + 真实 CM
+fold-all→持久化→preview↔editor 往返**恢复**→unfold 清空 4 + 阅读视图折叠/嵌套独立/链接守卫 9）
++ R28 23 / R27 22 / R25 17 不回退 + typecheck/cargo 绿 + `r26-bytes` **0 违例**（markdown.ts
+零改动）；桌面 release **probe 4/4**（WKWebView 真实 localStorage 往返 / empty→removeItem /
+malformed→null / key 落盘）。显式延期（候选池余项）：阅读视图折叠持久化 + 与编辑器共享
+FoldInfo（需 markdown.ts 给 heading emit `data-line` 改字节管线）/ 删除·改名清理孤儿 fold key /
+行数漂移内容级对账 / list-indent 折叠的 reading 视图。
+
 ### R28 — v0.28（2026-06-13）文件树拖拽移动（R25+ 候选池 #④）
 
 补齐 Explorer「零 drag 处理」缺口。官方校准：文件/文件夹拖到文件夹 = 移动；文件按名
@@ -742,7 +773,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~**PDF 查看器 + PDF/音频/视频嵌入**~~ | **R26 已完成（v0.26，见上）**——音视频原生 `<audio>`/`<video>`、PDF 原生 `<iframe>`（零新依赖，不用 PDF.js）；阅读/live/导出三态 + `#page=N` 锚点 | 余项（按需求驱动）：canvas 嵌入 / 其它附件类型 / 导出媒体瘦身（当前 data-URI 内联）。 |
 | ~~**书签（Bookmarks）**~~ | **R27 已完成（v0.27，见上）**——`core/bookmarks.ts` 兼容 `.obsidian/bookmarks.json` 七类型+嵌套组（序列化 RMW 保真未知键 + carrier round-trip）+ 侧栏面板（递归树/拖拽重排移组/右键改名删除新建组/点击导航）+ 4 命令 + `__geodeBookmarks` 探针 | 余项（按需求驱动）：文件改名/删除联动更新书签路径 / search 书签注入 query / block 自动铸 `^id` / 折叠态持久化 / `app.internalPlugins` bookmarks instance API。 |
 | ~~**文件树拖拽移动**~~ | **R28 已完成（v0.28，见上）**——`core/explorerMove.ts` 决策核心（resolveDropTarget 四守卫 + wouldCollide）+ Explorer HTML5 DnD（行 draggable + 容器级 dragover/drop + moveNode 走 `renameWithLinkUpdate`）+ `MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust + `__geodeExplorerMove` 探针 | 余项（按需求驱动）：虚拟化大库 auto-scroll / 拖多选 / 拖到标签页打开 / 移动期源行 dim 打磨。 |
-| **折叠持久化 + 阅读视图折叠** | **R17 显式债**：折叠状态不持久化（tab 重开/preview 往返丢，grep foldState 零命中）；阅读视图无折叠 | 折叠状态按文件持久化（localStorage 或 `.obsidian` 形状）+ 阅读视图 callout/heading 折叠点击委托（R18 callout 折叠仅阅读视图已有半截）。 |
+| ~~**折叠持久化 + 阅读视图折叠**~~ | **R29 已完成（v0.29，见上）**——`core/foldStore.ts`（镜像 Obsidian `{folds,lines}` 0-based 行形状，存 localStorage `geode.fold.<path>`，零新 vault 写路径）+ `features/editor/foldPersistence.ts`（ViewPlugin 防抖捕获 + destroy flush）+ EditorPane mount 恢复（foldEffect 无 docChanged→不触发 autosave）+ 阅读视图标题折叠点击委托（嵌套独立，纯 DOM toggle）+ `__geodeFold` 探针 | 余项（按需求驱动）：阅读视图折叠持久化 + 与编辑器共享 FoldInfo（需 markdown.ts 给 heading emit `data-line`，改字节管线）/ 文件删除/改名时清理孤儿 fold key / 行数漂移内容级对账 / list-indent 折叠的 reading 视图。 |
 | **Properties 侧栏视图** | **R22 显式延期**：全库属性浏览/全局改名/值建议/text 内链渲染 | 侧栏 All Properties 视图（全库 key 聚合，R22 `getPropertyKeys` 已备）+ 全局重命名（types.json + 跨文件 frontmatter 改写，复用 R22 builder + R16 写纪律）+ 值建议（datalist 跨库取值）。 |
 | **斜杠命令 `/` 菜单** | **缺失**（grep slashCommand/SlashMenu 零命中）| 编辑器输入 `/` 触发命令菜单（复用 R6 EditorSuggest 管线 + commands registry 过滤/执行）；官方校准 Obsidian slash command 范围。 |
 
