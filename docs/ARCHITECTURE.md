@@ -71,6 +71,49 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 48 additions — 可配置日记设置（Configurable daily notes）【As-built v0.48】
+
+> **状态：As-built（v0.48 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑫ 的**另一半**（R43 做了日历+导航;**#⑫ 至此完成**）。Obsidian Daily notes 设置：
+> **日期格式**（moment token）/ **新文件位置**（文件夹）/ **模板文件**。**关键复用**：镜像既有 `templateFolder`/`templateDateFormat` 的 localStorage
+> Store + 设置 UI 范式;`expandTemplate(content, {title, now})` 应用模板;moment 已是依赖（templates.ts 用）。**零新依赖、无 Rust**。
+> 验证:typecheck 0 · `r48-e2e.mjs` **13/13** · `r48-probe.mjs` **9/9**（真实 WKWebView 可配置 format/folder）· cargo release 真实重建 37s ·
+> 回归 r43-e2e 22 / r43-probe 13 / r23 22 / r28 23 / r42 17 不回退（**moment 改写完全保 R43 over-match 守卫 + createFolder 守卫不破既有**）。
+
+### As-built（评审根因修复 — 9 finding → 6 确认[1 major + 5 minor] + 3 证伪）
+
+对抗评审 3 维 × find→verify。修复 1 major + 1 minor（R46 同根纵深防御）,其余 3 minor 为 misconfiguration 边角（无数据丢失）记已知偏差:
+
+1. **【major】`effFolder()` 只 `trim` 未 strip 斜杠 → 尾斜杠输入（"Daily Notes/"）出双斜杠路径 "Daily Notes//date.md"**（R17 attachmentFolder 已 strip,此为回退）。**修**：`effFolder` `replace(/^\/+|\/+$/g, "")` strip 首尾斜杠 + 拒 空/`.`/`..`/dot-前缀 段 → 回落 DEFAULT（镜像 templates.ts validateDir;连带覆盖文件夹 `..` 穿越 + 静默失败的消费侧）。
+2. **【minor / R46 同根】`Vault.createFolder` 缺 `assertSafeRelPath` 守卫**：R46 给 `create()`/`createBinary()` 补了守卫、**漏了 `createFolder`**;配置文件夹 `..` → Memory adapter 污染 folders set（桌面 safe_join 拒但静默）。**修**：`Vault.createFolder` 入口加 `assertSafeRelPath`（双端一致,所有 caller 继承——R46 教训③「纵深防御放核心」的补完）。
+
+> **证伪/已记偏差（未改,均 minor、无数据丢失、misconfiguration 门控）**：① **无日粒度格式（`[note]`/`MMMM YYYY`/周编号）→ 文件名碰撞**（所有日记挤一文件 + 日历 has-note 全亮 + nav 失效）——misconfiguration,默认 YYYY-MM-DD 安全,`create_new` 不丢数据;**余项**:设置加「相邻两日 stamp 相同→校验拒绝 + 实时样例预览」(沿用 templateDateFormat 范式)。② **format 含 FS 非法字符（`:` 等,如 "HH:mm"）→ Windows create 静默失败**（macOS/浏览器成功 → 双端分叉）——Windows-only misconfiguration,Obsidian 同款不 sanitize,sanitize 会破 parse 往返;**余项**:出口 sanitize（需 format↔sanitize 联动）或校验。③ **daily-note 插件描述硬编码 "Daily Notes/"**（配置后失真）——cosmetic i18n;**余项**:描述改通用串。证伪:模板自引用循环（daily note 尚不存在→fileExists false→回落,无循环）· locale-token 跨会话（compat 改全局 moment locale 是既有风险,非 R48 引入）。
+
+> **教训（写给后续轮）**：① **「配置化一个写死值」要把消费侧的规整一起补**——`effFolder` 抄了 templateFolder 的「RAW 存 + trim 消费」却漏了它的 strip-slash/validateDir,尾斜杠就出双斜杠;**镜像一个设置范式,要连它的消费侧规整（strip/validate/default）一起抄**。② **纵深防御补一处要扫同族全部**——R46 给 `create`/`createBinary` 加了路径守卫,`createFolder` 是同族写路径却漏补,R48 配置文件夹一来就暴露;**加一道 core 守卫时,grep 同族所有入口（create/createFolder/createBinary/write/modify）一并对齐**（与 R43「修一类根因全命令面扫同类」同源,反复出现）。③ **把纯函数改成读全局 Store 要全回归既有断言**——`dailyStamp`/`parseDailyStamp` 从纯函数改为读设置 + moment strict parse,r43-e2e/probe 全绿证明 R43 的 over-match 守卫被 moment strict 完整保住(嵌入数字/带日期父目录/非法日期均 null);**用既有回归套件给「行为应不变」的重构兜底**。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/dailyNote.ts（已落,可配置化）**：新增 localStorage Store + setter（镜像 `core/templates.ts`）:
+```ts
+export const dailyNoteFolder: Store<string>;   export function setDailyNoteFolder(v: string): void;   // 默认 "Daily Notes"
+export const dailyNoteFormat: Store<string>;   export function setDailyNoteFormat(v: string): void;   // 默认 "YYYY-MM-DD"(moment token)
+export const dailyNoteTemplate: Store<string>; export function setDailyNoteTemplate(v: string): void; // 默认 ""(无模板)
+```
+`dailyStamp(date) = moment(date).format(effFormat)`;`dailyNotePath = effFolder/stamp.md`;**`parseDailyStamp` 改 moment STRICT parse**（`moment(basename, effFormat, true)`——**保留 R43 全部 over-match 守卫**:嵌入数字/带日期父目录/非法日期均 → null,r43-e2e 22/22 实测不回退）;`isDailyNotePath` 用 effFolder 前缀。`openOrCreateDailyNote` 应用模板（`dailyNoteTemplate` 设置且文件存在 → `vault.read` + `expandTemplate({title:stamp, now:date})`,否则 `# stamp`）。Store/setter RAW 存、消费处 trim+default-on-empty。**`DAILY_FOLDER` 导出保留**（= 默认值,back-compat）。
+**main.tsx**：`__geodeDaily` 探针加 `setFormat`/`setFolder`（E2E/probe 测可配置）[已落]。
+
+**features/settings/SettingsModal.tsx（B）**：AppearanceSection 加「Daily notes」heading + 3 字段（folder/format/template),逐字镜像现有 template 三字段（`<input className="settings-text-input">` + `useStore` + setter + `data-testid="settings-daily-folder"/"settings-daily-format"/"settings-daily-template"`）。
+**features/calendar/CalendarPanel.tsx（B）**：加 `useStore(dailyNoteFolder)` + `useStore(dailyNoteFormat)` 反应式（改格式即重渲 has-note 标记）。
+**i18n（B）**：`settings.dailyNotes`(heading) + `settings.dailyNoteFolder` + `settings.dailyNoteFormat` + `settings.dailyNoteTemplate`（en+zh,放 `settings.templateFolder` 所在 dict——B grep 确认）。版本 0.47→0.48。
+
+### 文件所有权
+- **me（core + 探针 + 验证,已落核心）**：`src/core/dailyNote.ts` + `src/main.tsx`(探针) + `.calibration/r48-*`。
+- **B（UI + i18n + 版本）**：`src/features/settings/SettingsModal.tsx` + `src/features/calendar/CalendarPanel.tsx`(反应式) + i18n dict + 版本三处。
+
+### 已知偏差（写给后续轮）
+- **FORMAT 含 "/" 不支持**（Obsidian 允许格式建子文件夹;Geode basename 解析假设扁平日期名,format 子文件夹延后）。
+- **改格式后旧格式的既存日记不被识别**（parseDailyStamp 只认当前格式;改格式 = 换命名空间,旧日记仍是文件但 isDailyNotePath/has-note 不再认——Obsidian 同款）。
+- **模板变量集 = `expandTemplate` 既有**（{{title}}/{{date}}/{{time}} 等;Obsidian daily-note 模板的 {{date:FORMAT}} 内联格式若 expandTemplate 不支持则按其能力）。
+
 ## Round 47 additions — 笔记合并（Note composer merge）【As-built v0.47】
 
 > **状态：As-built（v0.47 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑬ 的**另一半**（R44 做了 extract）——**#⑬ 至此完成**。Obsidian「Merge

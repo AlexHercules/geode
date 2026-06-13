@@ -172,6 +172,19 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R48 套件回归（2026-06-14，macOS release 二进制 v0.48.0 实测 `r48-probe-vault`）
+
+R48 = 可配置日记设置（Configurable daily notes，R32+ 候选池第三梯队 #⑫ 另一半 → **#⑫ 完成**）。对照 Obsidian **Daily notes** 设置：
+日期格式（moment token）/ 新文件位置 / 模板文件。compat：设置存 localStorage（Geode 偏好，非 `.obsidian/daily-notes.json` —— Obsidian
+schema 桥接是 #⑭ 余项）。`core/dailyNote.ts` 改 moment-based（`dailyStamp = moment.format(effFormat)` + `parseDailyStamp` moment STRICT
+parse），**完整保 R43 over-match 守卫**。macOS probe 实测：新增 **r48-probe 9/9**——真实 WKWebView 上 `__geodeDaily.setFormat/setFolder`
+→ stamp/path/parse 跟随（默认 → DD-MM-YYYY → Journal 文件夹 → reset）。**r47/r43/…/r23/r28/r42 套件不回退**（浏览器 r48-e2e **13/13** +
+r43-e2e 22、r43-probe 13、r23 22、r28 23、r42 17 抽样实测全绿——**moment 改写不破 R43、createFolder 守卫不破既有**；`r26-bytes` 0）。
+**3 维对抗评审 9 finding → 6 确认（1 major + 5 minor）→ 修 2 + 3 已知偏差 + 3 证伪**（修：effFolder 只 trim 未 strip 斜杠→双斜杠路径→
+strip+validateDir；`Vault.createFolder` 缺 assertSafeRelPath[R46 同根因漏补]→加守卫。延期 minor：无日粒度格式→文件名碰撞[校验+样例预览余项]、
+FS 非法字符→Windows create 静默失败[sanitize 余项]、daily-note 插件描述硬编码。证伪：模板自引用循环、locale-token 跨会话[非 R48 引入]）。
+显式延期：月历周一起 / 格式校验预览 / format 子文件夹支持 / `.obsidian/daily-notes.json` schema 桥接（#⑭）。
+
 ### R47 套件回归（2026-06-14，macOS release 二进制 v0.47.0 实测 `r47-probe-vault`）
 
 R47 = 笔记合并（Note composer merge，R32+ 候选池第三梯队 #⑬ 另一半 → **#⑬ 完成**）。对照 Obsidian 核心插件 **Note Composer** 的
