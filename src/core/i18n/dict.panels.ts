@@ -17,8 +17,8 @@ export const en = {
   "explorer.newFolderHere": "New folder here",
   "explorer.rename": "Rename",
   "explorer.delete": "Delete",
-  "explorer.deleteConfirmFile": 'Delete "{name}"?',
-  "explorer.deleteConfirmFolder": 'Delete folder "{name}" and all its contents?',
+  "explorer.deleteConfirmFile": 'Move "{name}" to trash?',
+  "explorer.deleteConfirmFolder": 'Move folder "{name}" and all its contents to trash?',
   "explorer.linkUpdateSkipped": "{count} file(s) skipped during link update — see console",
   "explorer.moveCollision": 'A file or folder named "{name}" already exists here',
 
@@ -109,8 +109,8 @@ export const zh: Record<keyof typeof en, string> = {
   "explorer.newFolderHere": "在此新建文件夹",
   "explorer.rename": "重命名",
   "explorer.delete": "删除",
-  "explorer.deleteConfirmFile": "删除“{name}”？",
-  "explorer.deleteConfirmFolder": "删除文件夹“{name}”及其全部内容？",
+  "explorer.deleteConfirmFile": "将“{name}”移到回收站？",
+  "explorer.deleteConfirmFolder": "将文件夹“{name}”及其全部内容移到回收站？",
   "explorer.linkUpdateSkipped": "链接更新跳过 {count} 个文件——详见控制台",
   "explorer.moveCollision": "此处已存在名为“{name}”的文件或文件夹",
 

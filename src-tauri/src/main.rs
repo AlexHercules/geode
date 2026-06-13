@@ -259,6 +259,50 @@ fn vault_delete(vault: String, path: String) -> CmdResult<()> {
     }
 }
 
+#[tauri::command]
+fn vault_trash(vault: String, path: String) -> CmdResult<String> {
+    // R42 review: never trash the vault root itself (empty / "." resolves to root).
+    let trimmed = path.trim();
+    if trimmed.is_empty() || trimmed == "." || trimmed == "./" {
+        return Err("cannot trash the vault root".into());
+    }
+    let abs = safe_join(&vault, &path)?;
+    let trash_dir = Path::new(&vault).join(".trash");
+    fs::create_dir_all(&trash_dir).map_err(|e| format!("mkdir .trash: {e}"))?;
+    let base = abs
+        .file_name()
+        .ok_or_else(|| format!("no file name in '{path}'"))?
+        .to_string_lossy()
+        .to_string();
+    // collision-safe name under .trash: append " <n>" before the extension
+    let (stem, ext) = match base.rfind('.') {
+        Some(i) if i > 0 => (base[..i].to_string(), base[i..].to_string()),
+        _ => (base.clone(), String::new()),
+    };
+    let mut name = base.clone();
+    let mut n = 1;
+    while trash_dir.join(&name).exists() {
+        name = format!("{stem} {n}{ext}");
+        n += 1;
+    }
+    let dest = trash_dir.join(&name);
+    fs::rename(&abs, &dest).map_err(|e| format!("trash {path}: {e}"))?;
+    Ok(format!(".trash/{name}"))
+}
+
+#[tauri::command]
+fn vault_list_trash(vault: String) -> CmdResult<Vec<String>> {
+    let trash_dir = Path::new(&vault).join(".trash");
+    let mut out = Vec::new();
+    if let Ok(entries) = fs::read_dir(&trash_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            out.push(format!(".trash/{name}"));
+        }
+    }
+    Ok(out)
+}
+
 /// Strip the Windows verbatim prefix that `canonicalize` adds.
 fn strip_verbatim(s: &str) -> &str {
     s.trim_start_matches(r"\\?\")
@@ -656,6 +700,8 @@ fn main() {
             vault_mkdir,
             vault_rename,
             vault_delete,
+            vault_trash,
+            vault_list_trash,
             vault_watch,
             vault_plugin_files,
             vault_obsidian_plugins,

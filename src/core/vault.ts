@@ -37,6 +37,11 @@ export interface VaultAdapter {
   createFolder(path: string): Promise<void>;
   rename(oldPath: string, newPath: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /** R42: move a file/folder to the vault's local `.trash/` (recoverable). Returns
+   *  the trash-relative path (e.g. `.trash/note.md`). */
+  trash(path: string): Promise<string>;
+  /** R42: list top-level entries under `.trash/` (vault-relative paths). */
+  listTrash(): Promise<string[]>;
   /**
    * Start (or restart) watching the vault for EXTERNAL filesystem changes.
    * `onChange` receives debounced vault-relative paths. No-op for memory.
@@ -417,6 +422,38 @@ export class Vault {
     await this.refreshTree();
     this.events.emit("file:deleted", { path });
     this.events.emit("vault:changed", { reason: "delete" });
+  }
+
+  /** R42: move a path to the local `.trash/` (recoverable delete). Returns the
+   *  trash-relative path. Emits file:deleted (the file leaves the visible vault). */
+  async trash(path: string): Promise<string> {
+    const trashPath = await this.adapter.trash(path);
+    for (const key of [...this.contentCache.keys()]) {
+      if (key === path || key.startsWith(path + "/")) this.cacheDelete(key);
+    }
+    await this.refreshTree();
+    this.events.emit("file:deleted", { path });
+    this.events.emit("vault:changed", { reason: "delete" });
+    return trashPath;
+  }
+
+  /** R42: top-level entries under `.trash/`. */
+  async listTrash(): Promise<string[]> {
+    return this.adapter.listTrash();
+  }
+
+  /** R42: restore a trashed entry to `targetPath`. Uses a RAW adapter move (NOT
+   *  Vault.rename — no link-text rewrite; the file is coming back, not being
+   *  renamed). Emits file:renamed (NOT file:created) so a restored FOLDER's `.md`
+   *  children are reindexed via reindexFolder (file:created → reindexFile early-
+   *  returns on a non-`.md` folder path, leaving backlinks/graph/search stale —
+   *  R42 review). file:renamed does not rewrite link text (that lives in the
+   *  explicit renameWithLinkUpdate, not in any file:renamed listener). */
+  async restoreFromTrash(trashRelPath: string, targetPath: string): Promise<void> {
+    await this.adapter.rename(trashRelPath, targetPath);
+    await this.refreshTree();
+    this.events.emit("file:renamed", { oldPath: trashRelPath, newPath: targetPath });
+    this.events.emit("vault:changed", { reason: "create" });
   }
 
   /** Pick a unique path like "Untitled.md", "Untitled 1.md", ... in a folder. */
@@ -843,11 +880,16 @@ export class MemoryVaultAdapter implements VaultAdapter {
       ensureFolder(parentPath(path)).children.push(node);
       return node;
     };
-    for (const folder of this.folders) ensureFolder(folder);
+    for (const folder of this.folders) {
+      if (folder.split("/")[0].startsWith(".")) continue; // R42: skip dot-prefixed (e.g. .trash) — align with Rust walk
+      ensureFolder(folder);
+    }
     for (const path of this.files.keys()) {
+      if (path.split("/")[0].startsWith(".")) continue; // R42: dot-skip
       ensureFolder(parentPath(path)).children.push(makeFileNode(path));
     }
     for (const path of this.binaryFiles.keys()) {
+      if (path.split("/")[0].startsWith(".")) continue; // R42: dot-skip
       ensureFolder(parentPath(path)).children.push(makeFileNode(path));
     }
     return root;
@@ -946,6 +988,53 @@ export class MemoryVaultAdapter implements VaultAdapter {
     }
     throw new Error(`Path not found: ${path}`);
   }
+
+  async trash(path: string): Promise<string> {
+    const base = basename(path);
+    const dot = base.lastIndexOf(".");
+    const stem = dot > 0 ? base.slice(0, dot) : base;
+    const ext = dot > 0 ? base.slice(dot) : "";
+    let name = base;
+    let n = 1;
+    // R42 review: a trash name must not collide with ANY existing entry (text
+    // file / binary file / folder) already under .trash.
+    const taken = (d: string) => this.files.has(d) || this.binaryFiles.has(d) || this.folders.has(d);
+    while (taken(`.trash/${name}`)) {
+      name = `${stem} ${n}${ext}`;
+      n++;
+    }
+    const dest = `.trash/${name}`;
+    if (this.files.has(path)) {
+      this.files.set(dest, this.files.get(path)!);
+      this.files.delete(path);
+    } else if (this.binaryFiles.has(path)) {
+      // R42 review: binary attachments (pasted images) live in binaryFiles only —
+      // without this branch, deleting one in the browser threw "Path not found".
+      this.binaryFiles.set(dest, this.binaryFiles.get(path)!);
+      this.binaryFiles.delete(path);
+    } else if (this.folders.has(path)) {
+      this.folders.add(dest);
+      this.folders.delete(path);
+      for (const [p, c] of [...this.files]) if (p.startsWith(path + "/")) { this.files.set(dest + p.slice(path.length), c); this.files.delete(p); }
+      // R42 review: a folder's binary descendants must move too, else they are
+      // orphaned in binaryFiles and listTree "revives" the deleted folder.
+      for (const [p, b] of [...this.binaryFiles]) if (p.startsWith(path + "/")) { this.binaryFiles.set(dest + p.slice(path.length), b); this.binaryFiles.delete(p); }
+      for (const f of [...this.folders]) if (f !== dest && f.startsWith(path + "/")) { this.folders.add(dest + f.slice(path.length)); this.folders.delete(f); }
+    } else {
+      throw new Error(`Path not found: ${path}`);
+    }
+    this.folders.add(".trash");
+    return dest;
+  }
+
+  async listTrash(): Promise<string[]> {
+    const out = new Set<string>();
+    const top = (p: string) => ".trash/" + p.slice(".trash/".length).split("/")[0];
+    for (const p of this.files.keys()) if (p.startsWith(".trash/")) out.add(top(p));
+    for (const p of this.binaryFiles.keys()) if (p.startsWith(".trash/")) out.add(top(p));
+    for (const f of this.folders) if (f.startsWith(".trash/")) out.add(top(f));
+    return [...out];
+  }
 }
 
 /* ---------------- Tauri adapter (desktop) ---------------- */
@@ -963,6 +1052,8 @@ export function isTauri(): boolean {
  *   vault_mkdir(vault, path)
  *   vault_rename(vault, old_path, new_path)
  *   vault_delete(vault, path)
+ *   vault_trash(vault, path) -> string   (move into <vault>/.trash/, returns trash-relative path)
+ *   vault_list_trash(vault) -> Vec<String>   (top-level entries under .trash/)
  *   vault_watch(vault) -> starts/replaces a debounced fs watcher; the backend
  *     emits the Tauri event "vault:fs-change" with Vec<String> of changed
  *     vault-relative paths (forward slashes)
@@ -1044,6 +1135,14 @@ export class TauriVaultAdapter implements VaultAdapter {
 
   async remove(path: string): Promise<void> {
     await this.invoke("vault_delete", { vault: this.root, path });
+  }
+
+  async trash(path: string): Promise<string> {
+    return this.invoke<string>("vault_trash", { vault: this.root, path });
+  }
+
+  async listTrash(): Promise<string[]> {
+    return this.invoke<string[]>("vault_list_trash", { vault: this.root });
   }
 
   async startWatch(onChange: (paths: string[]) => void): Promise<void> {

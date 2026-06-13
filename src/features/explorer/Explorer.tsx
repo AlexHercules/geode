@@ -353,7 +353,11 @@ export function Explorer() {
     }
     if (!ok) return;
     try {
-      await app.vault.remove(node.path);
+      // R42: flush pending editor saves BEFORE trashing so the recoverable copy
+      // in .trash holds the user's latest edits (review: trash-before-flush =
+      // truly lossless), then route deletion through the local `.trash/`.
+      await app.workspace.flushAll();
+      await app.vault.trash(node.path);
     } catch (err) {
       console.error("[explorer] delete failed", err);
       return;

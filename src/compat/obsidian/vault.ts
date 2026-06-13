@@ -141,8 +141,8 @@ export class CompatDataAdapter {
     return false;
   }
   async trashLocal(p: string): Promise<void> {
-    reportGap("DataAdapter", "trashLocal", "deletes permanently instead");
-    await this.remove(p);
+    // R42: route to the vault's local `.trash/` (recoverable) instead of deleting
+    await this.geode.trash(p);
   }
   getResourcePath(normalizedPath: string): string {
     reportGap("DataAdapter", "getResourcePath", "returns the vault-relative path");
@@ -277,10 +277,16 @@ export class Vault extends Events {
     await this._geode.remove(file.path);
   }
 
-  /** No trash in Geode — deletes permanently (recorded gap). */
-  async trash(file: TAbstractFile, _system: boolean): Promise<void> {
-    reportGap("Vault", "trash", "deletes permanently (no system/local trash)");
-    await this._geode.remove(file.path);
+  /**
+   * R42: local trash (`system === false`) routes to the vault's `.trash/`
+   * (recoverable). System trash (`system === true`) is not implemented in
+   * Geode — recorded as a gap and falls back to the local trash.
+   */
+  async trash(file: TAbstractFile, system: boolean): Promise<void> {
+    if (system) {
+      reportGap("Vault", "trash(system)", "no system trash — uses local .trash/ instead");
+    }
+    await this._geode.trash(file.path);
   }
 
   async rename(file: TAbstractFile, newPath: string): Promise<void> {
