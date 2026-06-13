@@ -60,6 +60,11 @@ export const en = {
   "backlinks.noTags": "No tags",
   "backlinks.createTitle": 'Create "{name}"',
   "backlinks.newBadge": "new",
+  "backlinks.unlinkedMentions": "Unlinked mentions",
+  "backlinks.noUnlinked": "No unlinked mentions",
+  "backlinks.scanning": "Searching…",
+  "backlinks.linkMention": "Link",
+  "backlinks.linkAll": "Link all",
 
   // ---- outline ----
   "outline.title": "Outline",
@@ -134,6 +139,11 @@ export const zh: Record<keyof typeof en, string> = {
   "backlinks.noTags": "暂无标签。",
   "backlinks.createTitle": "新建“{name}”",
   "backlinks.newBadge": "未创建",
+  "backlinks.unlinkedMentions": "未链接提及",
+  "backlinks.noUnlinked": "没有未链接提及。",
+  "backlinks.scanning": "搜索中…",
+  "backlinks.linkMention": "链接",
+  "backlinks.linkAll": "全部链接",
 
   // ---- outline ----
   "outline.title": "大纲",

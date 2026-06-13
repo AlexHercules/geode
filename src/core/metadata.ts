@@ -23,6 +23,20 @@ const INLINE_CODE_RE = /`[^`\n]*`/g;
 /** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
 const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
+/**
+ * Blank out code-fence and inline-code regions with same-length runs of spaces
+ * so links/tags/mentions inside them are ignored while every downstream offset
+ * stays byte-aligned with the input (R24 pure extraction — byte-for-byte the
+ * same logic `parseNote` used inline since R13). Reused by
+ * `core/unlinkedMentions.ts` so fence / inline-code recognition lives in exactly
+ * one place and never diverges between the two scanners.
+ */
+export function maskCodeRegions(s: string): string {
+  return s
+    .replace(CODE_FENCE_RE, (m) => " ".repeat(m.length))
+    .replace(INLINE_CODE_RE, (m) => " ".repeat(m.length));
+}
+
 /** Span of a link subpath target inside a note (R14, frozen contract). */
 export interface SubpathSpan {
   kind: "heading" | "block";
@@ -125,9 +139,7 @@ export function parseNote(path: string, content: string): NoteMetadata {
   const withoutFm = frontmatter
     ? " ".repeat(frontmatter.to) + content.slice(frontmatter.to)
     : content;
-  const masked = withoutFm
-    .replace(CODE_FENCE_RE, (m) => " ".repeat(m.length))
-    .replace(INLINE_CODE_RE, (m) => " ".repeat(m.length));
+  const masked = maskCodeRegions(withoutFm);
 
   const links: LinkRef[] = [];
   for (const m of masked.matchAll(WIKILINK_RE)) {

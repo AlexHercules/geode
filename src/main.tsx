@@ -15,6 +15,14 @@ import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
+import {
+  deriveMentionTerms,
+  findUnlinkedMentions,
+  linkAllMentionsInFile,
+  linkOneMention,
+  type MentionLinkResult,
+  type MentionSpan,
+} from "@core/unlinkedMentions";
 import { MetadataIndex } from "@core/metadata";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
@@ -146,6 +154,34 @@ async function bootstrap() {
   };
   probeHost.__geodeRename = (oldPath, newPath) =>
     renameWithLinkUpdate({ vault, metadata, documents }, oldPath, newPath);
+
+  // always-on unlinked-mentions probe (R24): drive the matcher + link engine
+  // directly from browser/desktop E2E (WKWebView has no CDP — desktop verifies
+  // the real-fs write path through this hook; same pattern as __geodeRename)
+  const unlinkedHost = globalThis as unknown as {
+    __geodeUnlinked?: {
+      find: (sourcePath: string, activePath: string) => Promise<MentionSpan[]>;
+      linkAll: (activePath: string, sourcePath: string) => Promise<MentionLinkResult>;
+      linkOne: (
+        activePath: string,
+        sourcePath: string,
+        target: MentionSpan,
+      ) => Promise<MentionLinkResult>;
+    };
+  };
+  unlinkedHost.__geodeUnlinked = {
+    find: async (sourcePath, activePath) => {
+      const am = metadata.getMetadata(activePath);
+      const sm = metadata.getMetadata(sourcePath);
+      if (!am || !sm) return [];
+      const content = await vault.read(sourcePath);
+      return findUnlinkedMentions(content, sm, deriveMentionTerms(am));
+    },
+    linkAll: (activePath, sourcePath) =>
+      linkAllMentionsInFile({ vault, metadata, documents }, activePath, sourcePath),
+    linkOne: (activePath, sourcePath, target) =>
+      linkOneMention({ vault, metadata, documents }, activePath, sourcePath, target),
+  };
 
   // load vault: memory adapter is always ready; desktop restores the last vault
   if (adapter.kind === "memory") {

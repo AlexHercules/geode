@@ -598,6 +598,34 @@ Literal (not a variable): {{title:bogus}}
 
 -
 `,
+  // R24 unlinked-mentions fixtures — mirrored on disk at demo-vault/ (byte-identical).
+  // "Zettelkasten" has alias "ZK"; "On Knowledge" references it in prose in
+  // several ways. Deterministic so E2E can assert exactly 4 unlinked mentions:
+  // 3 plain "Zettelkasten" + 1 alias "ZK". Excluded: the already-linked
+  // [[Zettelkasten]], the inline-code `Zettelkasten`, and the plural
+  // "Zettelkastens" (word-boundary reject).
+  "Zettelkasten.md": `---
+aliases: [ZK]
+---
+
+# Zettelkasten
+
+A Zettelkasten is a personal knowledge-management system built from atomic,
+densely linked notes.
+`,
+  "On Knowledge.md": `# On Knowledge
+
+The Zettelkasten method shapes how I take notes. A good Zettelkasten is a
+network of atomic notes, and every Zettelkasten grows richer over time.
+
+I keep my own ZK in this vault — see [[Zettelkasten]] for the index note.
+
+In code you reference it as \`Zettelkasten\`, which must stay plain text.
+
+Note that "Zettelkastens" (plural) must not be detected as a mention.
+
+#knowledge
+`,
 };
 
 /* ---- synthetic bench vault (?bench=N) ---- */
