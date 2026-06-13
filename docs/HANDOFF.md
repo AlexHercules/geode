@@ -6,8 +6,8 @@
 
 - 版本 **v0.31.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
 - 上一轮：**R31 斜杠命令 `/` 菜单 ✓ 已交付**（**分层关键**：R6 EditorSuggest 在 compat、features 绝不 import compat → 改镜像原生 `[[` wikilink 的 CM6 `@codemirror/autocomplete` 路径；`features/editor/slashCommands.ts` `slashCommandSource` 追加进 `cmExtensions` autocompletion override；`core/fuzzy.ts` 从 palette 迁入复用；`__geodeSlash` 探针装 loadExternal 前）。评审 **1 critical + 1 major 全修**（① **C1 菜单不随输入过滤**：`filter:false`+`validFor` 冻结列表、初版 E2E 一次性快打被去抖掩盖假绿 → 去 `validFor` 让 CM 每键重查源；② **M1 slash 在未闭合 `[[` 内 co-fire** → `slashTrigger` 加 `[[` 未闭合守卫）；`r31-e2e` 21/21（含 C1 增量过滤锁 + M1 抑制锁）+ 桌面 probe 10/10 真实 runtime + `r26-bytes` 0 违例（markdown.ts 未动）
-- **🎉 R25+ 候选池（Obsidian 原生功能补课）已清空**（R25 悬停预览 → R31 斜杠命令，七项全交付）。**下一项 = 无既定队列项**——主线剩 **发布渠道 + Authenticode 证书（🛑 硬边界，待用户拍板，`.tauri-keys` 私钥未找回，不主动启动）** + 性能远期项（图谱 WebGL/Worker、倒排索引、R24 扫描去抖）。**新一轮无明确指令时**：可挑性能远期项之一，或各历轮 polish 余项（见 ROADMAP「已知技术债」+ R25+ 表「余项」列），或等用户指定方向。
-- 其后：候选池已空，按上一条挑余项 / 性能项，或等用户新方向
+- **调研轮（2026-06-13，零代码）已交付**：R25+ 候选池清空后，全面盘点 Obsidian 原生差距 → **新建 ROADMAP「R32+ 候选池」共 21 项**（按用户重点「键盘/编辑交互」优先分四梯队）+ OBSIDIAN-COMPAT「原生功能差距全景调研」运行时实测纪录。4 explorer 盘点 + dev :1420 实测 6 项交互。
+- **下一项 = R32 = ① macOS Cmd（Mod）修饰键支持**（R32+ 候选池首项，**实测 Cmd+P 无反应 = 头号缺口**：`commands.ts` 三处拒 metaKey、Mod 写死=Ctrl）。其后按候选池序：② 格式化快捷键（Cmd-B/I/K）→ ③ 编辑器内查找替换 → ④ 括号自动配对 → ⑤ 标签页快捷键 → …（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,17 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **原生差距全景调研轮（2026-06-13，R31 末，零代码）核心三条**：① **实际测试胜过静态扫描**
+  ——explorer 静态 grep `insertNewlineContinueMarkup` 查不到 → 误报「列表续行缺失」，但 dev :1420
+  实测 `- item`+Enter→`- item\n- `、`1. a`→`2.` **均工作**（来自 `markdown()` 打包的 `markdownKeymap`，
+  `cmExtensions.ts:314` 注释明示）。**凡断言「某 CM 行为缺失」，先在运行的编辑器里敲一遍再写**——
+  库内置功能常打包在 `lang-xxx().support` 内、按名 grep 抓不到。② **头号缺口 = macOS Cmd 不通**
+  （实测 Ctrl+P 开面板、**Cmd+P 无反应**）：`core/commands.ts:97/255/287` 三处 `if(e.metaKey) return false`、
+  Mod 写死=Ctrl；编辑器 `defaultKeymap` 经 CM 把 Mod→Cmd（Cmd+A/Z 可用）**与 app 命令层割裂**——
+  这是 R32 首项。③ **缺口分两根轴**：OBSIDIAN-COMPAT 缺口表 = **插件 API 面**；ROADMAP 候选池 =
+  **原生功能面**。本轮产物（21 项 R32+ 候选池）落 ROADMAP；OBSIDIAN-COMPAT 仅加一条调研纪录、
+  插件缺口表不动。另：格式化快捷键（Cmd-B/I/K）、括号自动配对（closeBrackets）、编辑器内查找
+  （Cmd-F，`@codemirror/search` 已装未接）三项亦实测确认缺失。
 - **R31（斜杠命令 `/` 菜单）核心教训三条**：① **分层：复用「补全/建议」前先确认它在哪层**——
   R6 `EditorSuggest` 在 `compat/obsidian/suggest.ts`（给外部 Obsidian 插件的 API shim），而
   **features 绝不 import compat**。原生 `[[` wikilink 补全走的是另一套 = CM6

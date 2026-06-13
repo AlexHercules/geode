@@ -833,6 +833,63 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 > 与性能远期项（图谱 WebGL/Worker、倒排索引、R24 扫描去抖+热循环门控）见 R19+ 表
 > 末两行，仍属待办；各轮 polish 余项见 R19+ 表与「已知技术债」。
 
+### R32+ 候选池（Obsidian 原生功能补课 · 第四梯队 · 键盘/编辑交互优先，2026-06-13 全景调研登记）
+
+> 背景：R31 末 R25+ 候选池清空后，与用户重新「全面盘点 Geode 距离 Obsidian 的原生差距」。
+> 本轮（2026-06-13）= **纯调研/规划轮，零代码**：4 并行 explorer 全量盘点 editor / live 渲染 /
+> 键盘命令 / feature 表面 + WebFetch 官方 obsidian.md 校准 + **dev :1420 浏览器实测 6 项核心交互**
+> （详见 OBSIDIAN-COMPAT「原生功能差距全景调研」）。下表「当前状态」均经代码核实，标注「实测」者
+> 经 dev server 运行时实测。执行口径沿用 R25+：逐项按序自主推进，验收 = 四条底线 + 官方校准 +
+> 双端 probe 不回退。用户关注重点 = **标题修改 / 实时解译 / 快捷键输入**等具体交互行为，故按
+> 「键盘/编辑交互」优先排序。
+
+**实测纠偏（写给后续轮，避免重复发现假缺口）**：列表续行（Enter 续 `- `、`1.`→`2.` 自动重编号）、
+Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**——来自 `@codemirror/lang-markdown`
+的 `markdown()` 内置 `markdownKeymap`（`cmExtensions.ts:314` 注释明示「markdown keymap … stay」），
+**非缺口**。静态 grep `insertNewlineContinueMarkup` 查不到，是因它打包在 `markdown().support` 内
+（dev :1420 实测 `- item`+Enter→`- item\n- `、`1. a`+Enter→`1. a\n2. ` 证实）。
+
+#### 第一梯队 — 键盘 / 编辑器交互（日常高频，多为低成本接线；用户重点）
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **① macOS Cmd（Mod）修饰键支持** | **缺**（**实测** Ctrl+P 开命令面板、**Cmd+P 无反应**）——`core/commands.ts:97/255/287` 三处 `if (e.metaKey) return false`，注释「Mod === Ctrl on Windows」**写死 Mod=Ctrl、拒绝 Meta**；默认键全拼 `Ctrl+…` 仅认物理 Control。CM 编辑器 `defaultKeymap` 经 CM 把 Mod 解析为 Cmd（Cmd+A/Z 在编辑器可用）→ **与 app 命令层割裂** | **头号缺口**（macOS 优先机的迁移用户 Cmd 肌肉记忆全废）。切入：commands.ts 引入 `isMac` + Mod 归一（mac 把 Meta 当 Mod、Win/Linux 把 Ctrl 当 Mod）；`hotkeyFromEvent`/`matchHotkey`/`parseHotkey`/`normalizeHotkey` 全链对齐 + 默认键改 `Mod+…` 语义；Hotkeys 设置页按平台呈现 `⌘`/`Ctrl`。纯键路由，不碰 vault 写。 |
+| **② Markdown 格式化命令 + 快捷键** | **缺**（**实测** 选区 "Hello" 按 Ctrl+B 不加粗；源码无 toggleBold/wrapSelection/toggle-heading 任何命令；markdownKeymap 不含格式化键）| Obsidian 默认：Cmd/Ctrl-B 粗、Cmd/Ctrl-I 斜（仅 `*`/`**` 记法）、Cmd-K 链接，另有 toggle heading/quote/code/callout/checklist 命令（可绑键）。切入：新 `features/editor/formatCommands.ts` 选区包裹/切换纯函数（幂等 toggle：已包裹则脱）+ 注册 app 命令（依赖 ① 的 Mod 归一）+ 默认键。 |
+| **③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）** | **缺**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）| 切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。低成本。 |
+| **④ 括号/引号自动配对 + 选区包裹** | **缺**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）| 切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」。注意 `[[`/`![[` 与既有 wikilink 补全源协同。 |
+| **⑤ 标签页快捷键** | **缺**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）| Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 nextTab/prevTab/goToTab + recentlyClosed 栈，App.tsx 注册命令+默认键。 |
+
+#### 第二梯队 — 导航 / 工作区结构
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **⑥ 前进/后退导航历史** | **缺**（`workspace.ts` 仅 `lastActiveFile`，无 per-pane 导航栈）| Obsidian Cmd+Alt+←/→ + 标题栏箭头。切入：per-leaf history stack（openFile push、cap N）+ back/forward 命令+键+标题栏按钮。 |
+| **⑦ 快速切换器子模式 / 文内标题跳转** | **部分**（QuickSwitcher 仅文件名+别名+create；无 heading `#`/block `^`/symbol 模式）| Obsidian：`#`→标题、`^`→块、Ctrl+O 文件。切入：QuickSwitcher 加前缀模式解析 + 复用 outline/metadata 的 headings/blocks 索引。 |
+| **⑧ 固定标签页 + 堆叠标签 + 链接面板** | **缺**（workspace 状态无 pinned/stacked/linkedGroup 字段）| Pin（固定后链接另开）、Stack notes、Linked view（local graph/backlinks/outline 跟随某 tab）。切入：workspace 状态扩字段 + TabBar 右键菜单 + Open linked view。 |
+| **⑨ 键盘切换复选框** | **缺**（仅鼠标点 `cm-live-checkbox`；无键命令）| Obsidian「Toggle checkbox status」(Cmd/Ctrl-L)。切入：复用 `preview.ts` 的 `toggleTaskOnLine` 接编辑器命令+键。 |
+
+#### 第三梯队 — 整块缺失功能
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **⑩ 标签面板 + 编辑器 `#` 标签补全** | **缺**（`metadata.getTagMap()` 已有数据无面板消费；编辑器无 `#` 补全源）| 切入：新 `features/tags` 侧栏（全库标签+计数+点击搜索）；编辑器加 `#` CompletionSource（镜像 `[[`/`/` 路径，复用 getTagMap）。 |
+| **⑪ 回收站 + 文件恢复快照** | **缺 / 数据安全相关**（删除=永久；compat `trash*` 仅 stub；无 `.trash`/快照）| Obsidian「File recovery」定期快照 + 删除入 `.trash`。切入：Rust 后端 move-to-`.trash` + 周期快照。**必触发 data-safety skill**（可能需依赖决策）。 |
+| **⑫ 日记日历 + 可配置日记** | **部分**（daily-note 插件仅命令、格式写死、无日历/模板/前后日导航）| 切入：daily-note 设置（格式/文件夹/模板）+ 侧栏月历（自绘，零依赖）+ 前/后一日命令。 |
+| **⑬ 笔记合并/拆分（Note composer）** | **缺** | Obsidian：合并两笔记、按标题/选区拆分为新笔记、提取并替换为链接。切入：core 文本操作 + 复用 `renameWithLinkUpdate`/link 改写。 |
+| **⑭ 保存的工作区布局（Workspaces）** | **缺**（无 serializeLayout/workspaces.json）| 切入：workspace 状态序列化 + `.obsidian/workspaces.json` 兼容 + 切换 UI。 |
+| **⑮ `obsidian://` URI / 深链** | **缺**（compat 仅 gap-stub）| 桌面 Tauri deep-link + 浏览器降级。 |
+| **⑯ 弹出窗口（Pop-out windows）** | **缺**（compat 明示「single-window host」）| Tauri 多 WebviewWindow——**大工程**，远期。 |
+| **⑰ Canvas 白板** | **缺**（零匹配）| JSONCanvas（`.canvas`）无限画布——**大工程**，远期梯队。 |
+
+#### 第四梯队 — 编辑器实时渲染长尾 + 杂项（「实时解译」精修）
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
+| **⑲ 拼写检查 / 可读行宽 / 应用级缩放** | **缺**（所有 input `spellCheck={false}`；无 readableLineLength；缩放仅图谱内）| Obsidian Appearance「Readable line length」很常用。切入：CSS max-width 开关 + spellcheck 设置 + Cmd+± 字号缩放。 |
+| **⑳ 移动行上下 + 其它编辑命令** | **部分**（defaultKeymap 经 Mod 已给 deleteLine 等；move-line-up/down Obsidian 有、CM 默认无）| 切入：`@codemirror/commands` `moveLineUp/Down` 接命令+键。 |
+| **㉑ 小众核心插件** | **缺**：Footnotes view / Unique note creator / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；多数零/轻依赖可做。 |
+
 ## 已知技术债
 
 - R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/

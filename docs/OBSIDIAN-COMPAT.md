@@ -153,6 +153,25 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 2. **杀手演示**：`geode.exe <真实 Obsidian vault 路径>` → 已装插件出现在设置页并可启用。
 3. 本文件维护「已实现 API ↔ 官方签名」对照表（实现后逐条追加），缺口显式列出而非沉默。
 
+### 原生功能差距全景调研（2026-06-13，R31 末 · dev :1420 浏览器实测 + 源码核实 + 官方 obsidian.md 校准）
+
+R25+ 候选池清空后的**纯调研轮（零代码、零 compat 改动）**：4 并行 explorer 全量盘点 Geode
+editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsidian.md（→ obsidian.md/help）
+建参照，dev server 实测 6 项核心交互行为。**完整缺口表 + 执行队列见 ROADMAP「R32+ 候选池」**
+（21 项，按键盘/编辑交互优先分四梯队）。本条仅记运行时实测结论（写给后续轮，免重复发现）：
+
+- **运行时确认缺口**：① **macOS Cmd 不通**——Ctrl+P 开命令面板、**Cmd+P 无反应**
+  （`core/commands.ts:97/255/287` 三处拒 `metaKey`，Mod 写死=Ctrl）；② **格式化快捷键全缺**
+  ——选 "Hello" 按 Ctrl+B 不加粗（无任何 toggleBold/wrap 命令）；③ **括号不自动配对**
+  ——敲 `[` 得 `[` 不补 `]`（无 closeBrackets）；④ 编辑器内查找替换（Cmd/Ctrl-F）未接
+  （`@codemirror/search` 仅 compat loader 引入）。
+- **运行时纠偏（非缺口，勿重发现）**：列表续行 + 有序表自动重编号 + Tab 缩进 **均工作**
+  ——来自 `markdown()` 内置 `markdownKeymap`（`cmExtensions.ts:314` 注释明示）；实测
+  `- item`+Enter→`- item\n- `、`1. a`+Enter→`1. a\n2. `。静态 grep 查不到是因打包在
+  `markdown().support` 内——**实际测试胜过静态扫描的样例**。
+- **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
+  （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
+
 ### R31 套件回归（2026-06-13，macOS release 二进制 v0.31.0 实测 `r31-probe-vault`）
 
 R31 = 斜杠命令 `/` 菜单（编辑器输入 `/` 弹命令菜单、实时过滤、执行删 query）。**compat API
