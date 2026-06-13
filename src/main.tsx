@@ -37,6 +37,7 @@ import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
+import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
@@ -382,6 +383,21 @@ async function bootstrap() {
   };
   formatHost.__geodeFormat = {
     apply: (op, text, from, to) => applyFormatOp(op, text, from, to),
+  };
+
+  // always-on bracket/quote auto-pair probe (R35): exposes the pure markdown
+  // selection-wrap decision (core/bracketWrap). The bracket/quote auto-close +
+  // type-over come from CM's closeBrackets() (a live-view behavior the desktop
+  // probe can't drive — R34 conclusion — so the browser E2E exercises those);
+  // this probe lets desktop/browser assert the wrap decision deterministically.
+  // Same pure-gate approach as __geodeFormat; assigned BEFORE loadExternal.
+  const bracketHost = globalThis as typeof globalThis & {
+    __geodeBrackets?: {
+      wrap: (doc: string, from: number, to: number, ch: string) => WrapEdit | null;
+    };
+  };
+  bracketHost.__geodeBrackets = {
+    wrap: (doc, from, to, ch) => markdownWrapInput(doc, from, to, ch),
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll

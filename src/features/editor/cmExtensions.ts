@@ -9,6 +9,8 @@
  */
 import {
   autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
   type Completion,
   type CompletionContext,
   type CompletionResult,
@@ -38,6 +40,7 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
+import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
 import { attachmentIngest } from "./attachments";
@@ -341,6 +344,33 @@ function wikilinkCompletionSource(app: GeodeApp) {
   };
 }
 
+/* ---------------- markdown emphasis selection-wrap (R35) ---------------- */
+
+/**
+ * Typing a markdown emphasis marker (`* _ ` ~ = $`) over a NON-EMPTY selection
+ * wraps it (additive — the inner text stays selected so a 2nd keystroke re-wraps:
+ * `*sel*` → `**sel**`). Brackets/quotes `( [ { " '` are handled by closeBrackets();
+ * this only covers the markdown chars closeBrackets ignores. Empty selection or a
+ * non-marker char → return false → CM inserts normally (so line-start `* ` bullets,
+ * ``` fences are untouched; CJK input is safe since its committed text is never one
+ * of these ASCII chars). The cheap pre-guard avoids slicing the whole doc on the
+ * keystroke hot path. Pure decision lives in core/bracketWrap.ts (probe-shared).
+ */
+const markdownWrapHandler = Prec.high(
+  EditorView.inputHandler.of((view, from, to, text) => {
+    if (to <= from || text.length !== 1 || !MARKDOWN_WRAP_CHARS.has(text)) return false;
+    const edit = markdownWrapInput(view.state.sliceDoc(), from, to, text);
+    if (!edit) return false;
+    view.dispatch({
+      changes: edit.changes,
+      selection: { anchor: edit.selection.anchor, head: edit.selection.head },
+      userEvent: "input.type",
+      scrollIntoView: true,
+    });
+    return true;
+  }),
+);
+
 /* ---------------- the full stack ---------------- */
 
 /**
@@ -410,6 +440,9 @@ export function buildEditorExtensions(opts: {
     // resolved at view build time — a locale switch applies to views built after it
     placeholder(tr("editor.placeholder")),
     editorTheme,
+    // R35 — Backspace over an empty auto-pair (e.g. `(|)`) deletes BOTH brackets.
+    // Above defaultKeymap so the pair-delete wins over the plain backspace.
+    keymap.of(closeBracketsKeymap),
     keymap.of([...defaultKeymap, indentWithTab]),
     // R34 — in-editor find/replace. The panel UI + state; searchKeymap provides
     // in-panel keys (Enter=next, Shift-Enter=prev, Escape=close, F3, Mod-d). The
@@ -421,6 +454,14 @@ export function buildEditorExtensions(opts: {
     search({ top: true }),
     keymap.of(searchKeymap),
     EditorState.phrases.of(editorSearchPhrases()),
+    // R35 — auto-pair brackets/quotes (`( [ { " '`): auto-close, selection-wrap,
+    // type-over, plus the keymap above for Backspace-delete-pair. CM's default
+    // bracket set is exactly Obsidian's "Auto pair brackets". markdownWrapHandler
+    // (Prec.high) covers the disjoint markdown emphasis chars `* _ ` ~ = $` for
+    // selection-wrap only. `[` pairing coordinates with the wikilink `]]` completion
+    // via that source's `sliceDoc(to,to+2)==="]]"` guard (no double `]]`).
+    markdownWrapHandler,
+    closeBrackets(),
     autocompletion({
       override: [wikilinkCompletionSource(app), slashCommandSource(app)],
       icons: false,
