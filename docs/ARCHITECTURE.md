@@ -71,6 +71,123 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 31 additions — 斜杠命令 `/` 菜单（slash command menu）【契约冻结 v0.30→v0.31】
+
+> **状态：契约冻结（2026-06-13）。** R25+ 候选池 #⑦（候选池**最后一项**）。官方校准
+> （obsidian.md core plugin "Slash commands"，2026-06-13 复核）：编辑器中行首或空白后键入
+> `/` 弹命令菜单、随输入过滤、Enter/点击执行所选命令并**删除 `/query` 文本**、Esc 关闭。
+> Obsidian 展示「编辑器情境」命令子集；**Geode 取舍 = 展示全部 `available()` 命令**（与命令
+> 面板同口径，`available` 门控已隐藏情境不当命令——超集，记 As-built）。
+>
+> **🚧 分层关键决策**：R6 `EditorSuggest` 管线在 **`compat/obsidian/suggest.ts`**——而
+> **features/ 绝不 import compat**（分层铁律）。故**不能**复用 compat EditorSuggest。改**镜像
+> 原生 `[[` wikilink 补全所用的 CM6 `@codemirror/autocomplete` 路径**（`cmExtensions.ts`
+> `wikilinkCompletionSource` 先例，features/core 可 import `@codemirror/*`）——给
+> `autocompletion({override:[...]})` 数组**追加一个 slash 补全源**。两源触发上下文互斥
+> （`[[` vs 行首/空白后 `/`），永不同帧 co-fire。
+
+### Core: `core/fuzzy.ts`（**从 `features/palette/fuzzy.ts` 迁入**，core agent 所有）
+
+`fuzzy.ts` 是纯函数（零 import），但位于 `features/palette/`——slash 源在 `features/editor/`
+需复用它做一致排序，而 **features 绝不 import 别的 feature**。故**迁入 `core/fuzzy.ts`**
+（`fuzzyMatch`/`toSegments`/`FuzzyMatch` 原样搬），更新三处 palette 引用
+（`CommandPalette.tsx`/`QuickSwitcher.tsx`/`TemplateSelector.tsx`）`@features/palette/fuzzy`
+→ `@core/fuzzy`。**纯搬迁零行为改动**（命令面板/快速切换排序字节级不变）。
+
+### Editor: `features/editor/slashCommands.ts`（新；ui/editor agent 所有）
+
+```ts
+import type { GeodeApp } from "@app/AppContext"; // 或 core 的 App 类型（见 cmExtensions 现状）
+import type { Command } from "@core/types";
+import type { CompletionSource } from "@codemirror/autocomplete";
+
+/** 共享触发正则：行首或空白后的 `/` + 命令名字符（字母数字/连字符）。
+ *  `(^|\s)` 门控 = 绝不在词中/URL `://`/wikilink `foo/bar` 里误触发。 */
+export const SLASH_RE = /(^|\s)(\/[\w-]*)$/;
+
+/** 纯触发判定（探针 + 源共用）：行首到光标的文本 → {query} 或 null。 */
+export function slashTrigger(before: string): { query: string } | null;
+  // SLASH_RE.exec(before)；命中返回 { query: m[2].slice(1) }（去掉前导 `/`）。
+
+/** 候选 = 全部 available()!==false 命令，按 fuzzyMatch(query, getCommandName) 降序；
+ *  query 空 → 注册表顺序（list() 已按命令名字典序）。探针 + 源共用。 */
+export function slashCandidates(app: GeodeApp, query: string): Command[];
+
+/** CM6 补全源：追加进 cmExtensions 的 autocompletion override 数组。 */
+export function slashCommandSource(app: GeodeApp): CompletionSource;
+  // const line = ctx.state.doc.lineAt(ctx.pos);
+  // const before = ctx.state.sliceDoc(line.from, ctx.pos);
+  // const m = SLASH_RE.exec(before); if (!m) return null;
+  // const slashText = m[2]; const from = ctx.pos - slashText.length;
+  // const cmds = slashCandidates(app, slashText.slice(1)); if (!cmds.length) return null;
+  // options = cmds.map(c => ({ label: getCommandName(c), apply: (view, _c, from, to) => {
+  //   view.dispatch({ changes: { from, to, insert: "" } }); // 删除 /query
+  //   app.commands.execute(c.id);                            // 再执行命令
+  // }}));
+  // return { from, options, filter: false };  // ← 无 validFor，见 As-built C1
+```
+- **`filter: false` + 无 `validFor`**（**评审后修订**）：自己用 fuzzyMatch 预排序（与命令面板
+  一致排序），CM 不二次过滤；**不给 validFor** → CM 每次按键重跑本源 → 候选随输入实时
+  重排/收窄（给了 validFor 且 filter:false 会**冻结**列表，见 As-built C1）。SLASH_RE
+  不匹配（空格/非命令名字符）→ null → 关闭。`slashTrigger` 内含 **`[[` 未闭合守卫**
+  抑制 wikilink 上下文 co-fire（见 As-built M1）。
+- **apply 两步 = 两个 CM 事务**：先删 `/query`（光标落回 `/` 处）再 `commands.execute`
+  （命令的插入/副作用在该处生效，如 `/date` → 删 `/date` 插日期）。两个 undo 步（命令是
+  不透明副作用，不强行合并）。**数据安全**：均走 CM 事务 → autosave 防抖/flush 全覆盖；
+  无新 vault 写路径、不手写文件。
+- **触发门控**：`(^|\s)` 确保 `and/or`、`http://`、`[[a/b]]` 不误触发；live + source 双模式
+  都生效（源在 `buildEditorExtensions` base，非 modeCompartment）。
+
+### `cmExtensions.ts` 接线（editor agent 所有）
+
+`autocompletion({ override: [wikilinkCompletionSource(app), slashCommandSource(app)], icons: false })`
+——追加一个源，wikilink 源不动。
+
+### 探针（main.tsx，装 `loadExternal` 之前 —— R27 教训）
+
+`window.__geodeSlash = { trigger(before): {query}|null, candidates(query): string[] }`
+（`candidates` 返回命令 id 列表）——驱动桌面 probe 真实 fs 验证触发门控 + 候选排序（apply
+全流程靠浏览器 E2E 真实 CM 编辑器：键入 `/` → 弹 `.cm-tooltip-autocomplete` → 选中 →
+命令执行 + `/query` 删除）。
+
+### 显式延期（记 ROADMAP）
+
+Obsidian「编辑器情境」命令精选子集（我们展示全部 available 超集）；命令图标（core
+`Command` 无 icon 字段，命令面板亦不渲染图标——一致不做）；slash 触发的 `activateOnTyping`
+细调 / 自定义 `/` 触发字符；分类分组（Obsidian 平铺，我们亦平铺）；CJK 字符后无空格的 `/`
+不触发（`\s` 不含 CJK——与「不在词中触发」一致的显式偏差，minor）。
+
+### As-built（根因修复记录，2026-06-13）
+
+对抗评审 7 维抓获 **1 critical + 1 major + 1 minor**，critical/major **已修**：
+
+- **【C1 critical】菜单不随输入过滤——列表在键入 `/` 那刻被冻结**。根因：初版
+  `{ filter: false, validFor: /^\/[\w-]*$/ }`。CM6 在 token 仍匹配 `validFor` 时**复用**结果
+  且**停止重查源**，叠加 `filter: false`（CM 不自己过滤）→ 键入 `/ne`、`/new` 选项始终是键入
+  `/` 时返回的全量字母序列表（实测复现：`/`→`/ne`→`/new` 三步选项不变）。**初版 E2E 用
+  `keyboard.type` 一次性快打被 CM 100ms 去抖掩盖**（只查一次源 = 全 query 一次到位）。修复 =
+  **去掉 `validFor`** → CM 每次按键重跑本源 → 每次以新 query 跑 `slashCandidates` 实时重排。
+  **教训：`filter:false` 必须配「无 validFor」——validFor 是"别重查、自己 reuse"的优化，与
+  自定义排序源互斥；想要实时重排就别给 validFor。E2E 测增量过滤必须逐键带 delay（> CM 去抖），
+  一次性打字会假绿。**
+- **【M1 major】slash 源在未闭合 `[[` wikilink 内 co-fire**。契约原断言两源「永不同帧」，但
+  `[[foo /bar`（链接文本含空格再跟 `/`）两源都匹配 → CM 合并出坏菜单（实测 `[[foo /ne` 弹空
+  列表）。修复 = `slashTrigger` 加 **未闭合 `[[` 守卫**（`before.lastIndexOf("[[")>lastIndexOf("]]")`
+  → null），源与探针共用该 gate。**教训：「两触发上下文互斥」的断言要把"容器内含触发字符"的
+  嵌套情形验进去。**
+- **【minor】** CJK 后无空格 `/` 不触发——记显式延期，不改（broaden 反而易误触发 CJK 正文）。
+
+**clean 维**：apply 双事务偏移正确（删 `[slash, cursor]` = 恰 `/query`、命令副作用落回 `/` 处）；
+`slashCandidates` 每键 O(n) 可接受、`available()` 廉价无副作用；fuzzy.ts 纯搬迁零行为改动、三处
+palette 引用全改 `@core/fuzzy`、无残留 `./fuzzy`；分层（slash 源仅 import core/app/`@codemirror`，
+**不碰 compat/别的 feature**）；数据安全（纯 CM 事务，autosave 覆盖，无新 vault 写路径）。
+
+**验证**：浏览器 `r31-e2e` **21/21**（触发门控 6 + 候选排序/可用性 5 + 真实 CM apply 全流程 5 +
+**增量实时过滤 C1 锁 2** + **mid-word/wikilink 抑制 M1 锁 3**）+ 桌面 release **probe 10/10**（真实
+runtime：触发门控含 wikilink 抑制 + 候选排序/可用性）+ r30 25 / r29 19 不回退 + `r26-bytes` 0
+违例（markdown.ts 未动）+ typecheck/cargo/build 绿 + fuzzy 迁 core 后命令面板/快速切换/模板选择
+排序零回归。
+
 ## Round 30 additions — Properties 侧栏视图（All Properties view + 全局改名 + 值建议）【契约冻结 v0.30】
 
 > **状态：契约冻结（2026-06-13）。** R25+ 候选池 #⑥ / R22 显式延期项收口。R22

@@ -4,10 +4,10 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.30.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R30 Properties 侧栏视图 ✓ 已交付**（`core/propertyRewrite.ts` `renamePropertyAcrossVault` **逐字镜像 R16 verified-rewrite**：读 fresh/绝不 cache、`buildRenameProperty` 绝不手写 YAML、post-rewrite 复解析断言、per-file skip+report、`runTail` 串行、types.json carry；`metadata.getPropertyKeyCounts/getPropertyValues` 聚合；`features/allproperties/` 右侧栏面板=filter+类型图标+计数+展开文件列表+右键全局改名 `window.prompt`；`PropertiesPanel` text/multitext 值 datalist；`__geodeProperties` 探针装 loadExternal 前）。评审 **1 critical + 2 minor 全修**（① **C1 case-only 改名静默失败**：post-rewrite「旧键须消失」断言大小写不敏感 → 仅 `from.toLowerCase()!==to.toLowerCase()` 才检查；② 值 datalist 收窄到 text/multitext；③ 删死 i18n 键 + menu aria-label）；`r30-e2e` 25/25 + 桌面 probe 10/10 真实 fs + `r26-bytes` 0 违例（markdown.ts 未动）
-- **下一项 = ⑦斜杠命令 `/` 菜单**（缺失，grep slashCommand/SlashMenu 零命中：编辑器输入 `/` 触发命令菜单，复用 R6 EditorSuggest 管线 + commands registry 过滤/执行；官方校准 Obsidian slash command 范围——细则见 `docs/ROADMAP.md` R25+ 候选池表末行）
-- 其后：R25+ 候选池清空后 = 发布渠道 + Authenticode（待拍板）+ 性能远期项
+- 版本 **v0.31.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R31 斜杠命令 `/` 菜单 ✓ 已交付**（**分层关键**：R6 EditorSuggest 在 compat、features 绝不 import compat → 改镜像原生 `[[` wikilink 的 CM6 `@codemirror/autocomplete` 路径；`features/editor/slashCommands.ts` `slashCommandSource` 追加进 `cmExtensions` autocompletion override；`core/fuzzy.ts` 从 palette 迁入复用；`__geodeSlash` 探针装 loadExternal 前）。评审 **1 critical + 1 major 全修**（① **C1 菜单不随输入过滤**：`filter:false`+`validFor` 冻结列表、初版 E2E 一次性快打被去抖掩盖假绿 → 去 `validFor` 让 CM 每键重查源；② **M1 slash 在未闭合 `[[` 内 co-fire** → `slashTrigger` 加 `[[` 未闭合守卫）；`r31-e2e` 21/21（含 C1 增量过滤锁 + M1 抑制锁）+ 桌面 probe 10/10 真实 runtime + `r26-bytes` 0 违例（markdown.ts 未动）
+- **🎉 R25+ 候选池（Obsidian 原生功能补课）已清空**（R25 悬停预览 → R31 斜杠命令，七项全交付）。**下一项 = 无既定队列项**——主线剩 **发布渠道 + Authenticode 证书（🛑 硬边界，待用户拍板，`.tauri-keys` 私钥未找回，不主动启动）** + 性能远期项（图谱 WebGL/Worker、倒排索引、R24 扫描去抖）。**新一轮无明确指令时**：可挑性能远期项之一，或各历轮 polish 余项（见 ROADMAP「已知技术债」+ R25+ 表「余项」列），或等用户指定方向。
+- 其后：候选池已空，按上一条挑余项 / 性能项，或等用户新方向
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -59,6 +59,20 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R31（斜杠命令 `/` 菜单）核心教训三条**：① **分层：复用「补全/建议」前先确认它在哪层**——
+  R6 `EditorSuggest` 在 `compat/obsidian/suggest.ts`（给外部 Obsidian 插件的 API shim），而
+  **features 绝不 import compat**。原生 `[[` wikilink 补全走的是另一套 = CM6
+  `@codemirror/autocomplete`（`cmExtensions.ts`，core/features 可 import `@codemirror/*`）。
+  **要在编辑器里加内置补全/建议菜单 = 追加一个 CM6 `CompletionSource` 进 `autocompletion override`
+  数组，不是 compat EditorSuggest。** ② **CM6 autocomplete：`filter:false` 必须配「无 `validFor`」**——
+  `validFor` 是"token 仍匹配就 reuse 结果、别重查源"的优化；叠加 `filter:false`（CM 不自己过滤）
+  → 列表在打开那刻**冻结**，键入不收窄。自定义 fuzzy 排序源要实时重排就**别给 validFor**（CM 每键
+  重跑源）。**且：测增量过滤必须逐键带 delay（> CM 100ms 去抖）——`keyboard.type` 一次性快打只查
+  一次源、全 query 一次到位，会把"冻结"bug 测成假绿**（C1 正是这样漏过初版 E2E、被对抗评审实测抓获）。
+  ③ **「两触发上下文互斥」断言要验"容器内含触发字符"的嵌套**——slash 门控 `(^|\s)/` 看似与 `[[`
+  wikilink 互斥，但 `[[foo /bar`（链接文本含空格再跟 `/`）两源同帧 co-fire 出坏菜单。守卫 = 未闭合
+  `[[`（`lastIndexOf("[[")>lastIndexOf("]]")`）则 slash 不触发。**纯逻辑 gate（`slashTrigger`）源与
+  探针共用 = 单一真值、桌面可测。**
 - **R30（Properties 侧栏视图）核心教训两条**：① **「旧标识须消失」类 post-rewrite 断言遇
   case-only 改名必须短路**——全局属性改名 `Author`→`author` 时，post-rewrite 断言
   `hasVisibleKey(rewritten, from)`（大小写不敏感）会把合法的小写键误判成「旧键残留」→ throw

@@ -637,6 +637,30 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R31 — v0.31（2026-06-13）斜杠命令 `/` 菜单（R25+ 候选池 #⑦ = **候选池清空**）
+
+编辑器输入 `/`（行首/空白后）弹命令菜单、随输入实时过滤、Enter/点击执行并删除 `/query`。
+官方校准（obsidian.md "Slash commands"）：菜单 + 过滤 + 执行删 query + Esc 关。**分层关键**：
+R6 `EditorSuggest` 管线在 `compat/`，而 **features 绝不 import compat** → 改**镜像原生
+`[[` wikilink 所用 CM6 `@codemirror/autocomplete` 路径**（features/core 可 import
+`@codemirror/*`），给 `autocompletion override` 数组追加 slash 源。**core/fuzzy.ts**（从
+`features/palette/fuzzy.ts` 迁入——slash 源在 features/editor 需复用、features 绝不互 import，
+纯函数提核；三处 palette 引用改 `@core/fuzzy`，命令面板/快速切换/模板选择排序零回归）。
+**features/editor/slashCommands.ts**（新）：`SLASH_RE=/(^|\s)(\/[\w-]*)$/`（行首/空白后门控，
+`and/or`·`http://`·`[[a/b` 不误触发）+ `slashTrigger`（纯 gate + **未闭合 `[[` 守卫**）+
+`slashCandidates`（全部 `available()!==false` 命令按 fuzzyMatch 降序）+ `slashCommandSource`
+（CM6 源，apply 两事务=删 `/query` + `commands.execute`）。**cmExtensions** override 追加；
+**main.tsx** `__geodeSlash` 探针（装 loadExternal 前）。**对抗评审 1 critical + 1 major 修复**：
+① **【C1】菜单不随输入过滤**——`filter:false`+`validFor` 让 CM 冻结列表（reuse 不重查），
+**初版 E2E 一次性快打被去抖掩盖假绿**；修复=去 `validFor`（CM 每键重跑源实时重排）；②
+**【M1】slash 在未闭合 `[[` 内 co-fire**（`[[foo /bar`）→ `slashTrigger` 加 `[[` 未闭合守卫。
+显式延期：编辑器情境命令子集（展示全部 available 超集）/ 命令图标（core Command 无 icon）/
+CJK 后无空格 `/` 不触发（`\s` 不含 CJK，显式偏差）/ 分类分组。验证：浏览器 `r31-e2e`
+**21/21**（含 C1 增量过滤锁 2 + M1 wikilink/mid-word 抑制锁 3）+ 桌面 release **probe 10/10**
+（真实 runtime 触发门控 + 候选排序）+ R30 25 / R29 19 不回退 + `r26-bytes` 0 违例（markdown.ts
+未动）+ typecheck/cargo/build 绿。**🎉 R25+ 候选池（Obsidian 原生功能补课）至此清空**——后续
+主线 = 发布渠道 + Authenticode 证书（**待用户拍板**，`.tauri-keys` 私钥未找回）+ 性能远期项。
+
 ### R30 — v0.30（2026-06-13）Properties 侧栏视图（R25+ 候选池 #⑥ / R22 显式延期收口）
 
 补齐 R22 显式延期三件：①侧栏 All Properties 视图 ②全局属性改名 ③属性值跨库建议。官方校准
@@ -803,7 +827,7 @@ callouts（13 类型+别名+折叠+嵌套）、`==高亮==`、脚注（含行内
 | ~~**文件树拖拽移动**~~ | **R28 已完成（v0.28，见上）**——`core/explorerMove.ts` 决策核心（resolveDropTarget 四守卫 + wouldCollide）+ Explorer HTML5 DnD（行 draggable + 容器级 dragover/drop + moveNode 走 `renameWithLinkUpdate`）+ `MemoryVaultAdapter.rename` 加 `to.exists` 守卫镜像 Rust + `__geodeExplorerMove` 探针 | 余项（按需求驱动）：虚拟化大库 auto-scroll / 拖多选 / 拖到标签页打开 / 移动期源行 dim 打磨。 |
 | ~~**折叠持久化 + 阅读视图折叠**~~ | **R29 已完成（v0.29，见上）**——`core/foldStore.ts`（镜像 Obsidian `{folds,lines}` 0-based 行形状，存 localStorage `geode.fold.<path>`，零新 vault 写路径）+ `features/editor/foldPersistence.ts`（ViewPlugin 防抖捕获 + destroy flush）+ EditorPane mount 恢复（foldEffect 无 docChanged→不触发 autosave）+ 阅读视图标题折叠点击委托（嵌套独立，纯 DOM toggle）+ `__geodeFold` 探针 | 余项（按需求驱动）：阅读视图折叠持久化 + 与编辑器共享 FoldInfo（需 markdown.ts 给 heading emit `data-line`，改字节管线）/ 文件删除/改名时清理孤儿 fold key / 行数漂移内容级对账 / list-indent 折叠的 reading 视图。 |
 | ~~**Properties 侧栏视图**~~ | **R30 已完成（v0.30，见下）**——`core/propertyRewrite.ts`（renamePropertyAcrossVault 镜像 R16 verified-rewrite）+ `metadata.getPropertyKeyCounts/getPropertyValues` + `features/allproperties/` 右侧栏面板（类型图标+计数+展开文件列表+右键全局改名）+ PropertiesPanel 值建议 datalist + `__geodeProperties` 探针 | 余项（按需求驱动）：跨库属性删除 / 类型侧栏内联改 / search 集成（点 key 注入 `[key]`）/ 改名后旧 types.json key 清理 / 值建议类型化 / 开文件改名计数即时刷新（m2 滞后）。 |
-| **斜杠命令 `/` 菜单** | **缺失**（grep slashCommand/SlashMenu 零命中）| 编辑器输入 `/` 触发命令菜单（复用 R6 EditorSuggest 管线 + commands registry 过滤/执行）；官方校准 Obsidian slash command 范围。 |
+| ~~**斜杠命令 `/` 菜单**~~ | **R31 已完成（v0.31，见下）**——`features/editor/slashCommands.ts`（`slashCommandSource` CM6 补全源镜像 `[[` wikilink 路径，**非** compat EditorSuggest——分层铁律 features 绝不 import compat）+ `core/fuzzy.ts`（从 palette 迁入复用）+ `cmExtensions` override 追加 + `__geodeSlash` 探针 | 余项（按需求驱动）：编辑器情境命令子集（我们展示全部 available 超集）/ 命令图标（core Command 无 icon）/ CJK 后无空格 `/` 不触发（显式偏差）/ 分类分组。 |
 
 > 注：上表外，发布渠道 + Authenticode 证书（待用户拍板，`.tauri-keys` 私钥未找回）
 > 与性能远期项（图谱 WebGL/Worker、倒排索引、R24 扫描去抖+热循环门控）见 R19+ 表
