@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.36.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R36 标签页快捷键 ✓ 已交付**（R32+ 候选池第一梯队 #⑤：命令表原无 next/prev-tab、go-to-tab N、new-tab、reopen-closed）。校准 Obsidian 官方 docs 键位:**next/prev-tab = 字面 `Ctrl+Tab`/`Ctrl+Shift+Tab`(两平台都 Ctrl,`Cmd+Tab` 是 mac 应用切换器→用 R32 体系的字面 `Ctrl` 区分)**、`Mod+1..8` 第 N 标签、`Mod+9` 末标签、`Mod+T` 新标签、`Mod+Shift+T` 重开。实现:`core/workspace.ts` 加 4 纯 store 方法(`cycleActiveTab`/`activateTabAt`/`activateLastTab`/`reopenClosedTab`)+ `recentlyClosed` 栈(cap 20、session-only、**只 closeTab 入栈**、delete/rename/missing 三处反应式 purge/remap、**vault 切换 reason "load" 清空**)；App.tsx 注册 13 命令(`Array.from` 循环注册 go-to-tab-1..8);导航限**活动 pane**(`getActivePane()`，镜像 Obsidian 在当前 tab group 内循环)。**零新 vault 写路径**(`app:new-tab` 复用 `app:new-note` 的 `vault.create`)+ **零新依赖** + **零新 window 探针**(标签切换=store 操作,探针/E2E 直驱 `app.workspace`,热键复用 `__geodeHotkey.match`)。`r36-e2e` **47/47** + 桌面 `r36-probe` **18/18**(**store 层真二进制可驱动,强于 R34/R35;命令层因 App Nap §D 不可驱动交 E2E**)+ r35 25 / r34 15 / r33 37 / r32 24 不回退 + r26-bytes 0。**3 维对抗评审 3 finding → 1 确认修复(vault 切换清 recentlyClosed 防跨库同名碰撞)+ 2 证伪硬化成断言(三处 purge/remap 钩子 6 断言 + Mod+T/Mod+Shift+T 真键)**。
-- **下一项 = R36→R37 = R32+ 候选池第二梯队 #⑥ 前进/后退导航历史**（`workspace.ts` 仅 `lastActiveFile`，无 per-pane 导航栈）。Obsidian：`Cmd+Alt+←/→` + 标题栏箭头。切入：per-leaf history stack（openFile push、cap N、back/forward 不 push）+ back/forward 命令+默认键 + 标题栏按钮（注意与 R36 recentlyClosed 是**两套独立栈**：导航历史 = pane 内访问序，reopen = 关闭序）。其后队列：⑦ 快速切换器子模式 → ⑧ 固定/堆叠标签 → ⑨ 键盘切换复选框 →（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.37.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R37 前进/后退导航历史 ✓ 已交付**（R32+ 候选池第二梯队 #⑥：`workspace.ts` 原仅 `lastActiveFile`、无 per-tab 导航栈）。校准 Obsidian 官方默认键 **`Mod+Alt+←/→`**（`Ctrl+Alt+←/→` win；与 Geode 自创的 `focus-next/prev-pane` 冲突 → **navigate 拿 canonical 键、focus-pane 改无默认键**,命令仍在面板可自绑）。实现:`core/workspace.ts` per-tab `tabHistory: Map<tabId,{back,forward}>`(session-only、NAV_HISTORY_MAX=50);`openFile` 起始 `recordNavigation`(精确镜像三分支:replace 才记旧 location+清 forward,reuse/new-tab 不记);`navigateBack/Forward`(活动 tab 上回放)+`canTabNavigateBack/Forward(tabId)`+`setTabLocation`(改位不记录);**5 处清理**(closeTab delete、delete purge+prune、rename remap、missing prune、**vault 切换 clear**)。App.tsx 2 命令 + TabBar 加 back/forward 箭头按钮(`disabled` 走 `canTabNavigate*`,**反应式靠 useStore(state)——每次历史变更都伴随 state 变更,无需独立 Store**);icons.tsx 加 arrow-left/right。**零新 vault 写路径**(导航只改 tab.filePath)+ **零新依赖** + **零新探针**(store 直驱 `app.workspace`,热键复用 `__geodeHotkey.match`)。**与 R36 recentlyClosed 两套独立栈**(导航历史=访问序、reopen=关闭序)。`r37-e2e` **36/36** + 桌面 `r37-probe` **18/18** + r32-r36 不回退 + r26-bytes 0。**3 维对抗评审 12 finding → 0 确认缺陷**(核心「recordNavigation 镜像 openFile」逐分支证伪 + 1 行为偏差记入已知偏差[split 不复制历史] + 2 证伪硬化成断言[mode 恢复 + forward 栈 purge])。
+- **下一项 = R37→R38 = R32+ 候选池第二梯队 #⑦ 快速切换器子模式 / 文内标题跳转**（QuickSwitcher 现仅文件名+别名+create，无 heading `#`/block `^`/symbol 模式）。Obsidian：键入 `#`→标题模式、`^`→块模式、Ctrl/Cmd+O 文件。切入：QuickSwitcher 加**前缀模式解析**（query 以 `#`/`^` 开头切模式）+ 复用 outline/`metadata` 的 headings/blocks 索引。其后队列：⑧ 固定/堆叠标签+链接面板 → ⑨ 键盘切换复选框（Cmd/Ctrl-L 复用 `preview.ts` toggleTaskOnLine）→（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,21 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R37（前进/后退导航历史）核心教训三条**：① **当新逻辑「镜像」既有函数的分支决策时,逐分支对照证伪
+  是评审的硬要求**——`recordNavigation` 必须只在 openFile 的 replace 分支记一次旧 location(reuse=切 tab、
+  new-tab=新 tab 都不记)。评审核心担忧正是「镜像是否精确」,逐分支核对:reuse 判据
+  `tabs.some(markdown&&filePath===path)` ≡ openFile 的 `existing && !newTab`;graph/null-filePath 活动 tab
+  两边都走 new-tab 不记;`s0` 单快照无 TOCTOU——全等价。**凡写「镜像 X 的决策」的代码,把 X 的每个分支与你的
+  判据并排列出来逐一证伪,别只测 happy path**。② **「session 态每次变更都伴随 store 变更」⇒ 反应式 UI 无需
+  独立 Store——但这是个需要逐变更点枚举证明的断言,不是想当然**。本轮 nav 按钮禁用态靠 `useStore(state)`:枚举
+  tabHistory 全部变更点(record/navigate/closeTab/handleDeleted/Renamed/closeMissingFileTabs)均调 `this.update`
+  (→state 新引用→重渲染),含「仅存在于历史的删除/改名」也因 handleDeleted 的 `{...s}` 总产新对象而通知;唯一
+  `vault:changed load→clear` 不直接 update 由其后 closeMissingFileTabs 兜住。**省一个 Store 前,先证明每条变更
+  路径都搭车了一次 state.set,否则按钮态会 stale**。③ **平台默认键冲突时,prime directive(复刻 Obsidian)优先于
+  既有自创键**——`Mod+Alt+←/→` 被 Geode 自创的 focus-pane 占着,而 Obsidian 官方给 navigate;解法 = navigate 拿
+  canonical 键、focus-pane 降级为无默认键(命令保留可自绑)。WebSearch 官方确认键位 + grep 全仓确认无双绑后再动。
+  **延续 R35/R36:** split 不复制导航历史(评审证实=行为偏差非缺陷)记入「已知偏差」;mode 恢复 + forward 栈 purge
+  两个证伪硬化成 E2E 断言。**12 finding → 0 确认缺陷**:契约先行 + 逐分支镜像 + 对齐 R36 已审模式让本轮零返工。
 - **R36（标签页快捷键）核心教训三条**：① **桌面探针可驱动「store / 纯函数」层,但不可驱动「React-effect /
   live-view」层——命令注册也在不可驱动一侧**。R36 探针初版断言 `app.commands.execute("app:next-tab")` +
   `app.commands.list()` 含 13 命令 → 桌面实测 **cmdCount=0、execute 不切 tab**:根因 = App.tsx 在 `useEffect`

@@ -71,6 +71,104 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 37 additions — 前进/后退导航历史（back/forward navigation history）【As-built v0.37】
+
+> **状态：As-built（2026-06-14）。** R32+ 候选池第二梯队 #⑥ = 已核实缺口（`workspace.ts` 仅 `lastActiveFile`，
+> 无 per-pane/per-tab 导航栈）。本轮 **纯 workspace store + 命令注册，零新 vault 写路径**（导航只改 tab 的
+> filePath，不写 `.md`）+ **零新运行时依赖** + **零新 window 探针**（store 操作 → 探针/E2E 直驱 `app.workspace`，
+> 热键复用 R32 `__geodeHotkey.match`）。校准 Obsidian 官方默认键（`Ctrl/Cmd+Alt+←/→`，WebSearch 2026-06-14）。
+> **与 R36 `recentlyClosed` 是两套独立栈**：导航历史 = 某 tab 内「显示过哪些文件」的访问序（per-tab back/forward）；
+> reopen = 「关闭过哪些 tab」的关闭序。
+> **验证**：typecheck 0 + 浏览器 `r37-e2e` **36/36**（tab 内 back/forward/wrap/canTabNavigate + 新导航清 forward +
+> 命令层 execute + 新 tab 空历史 + **UI 按钮禁用态反映 + 真键 Mod+Alt+←/→** + rename/delete/vault-switch 清理 +
+> mode 恢复 + forward 栈 purge）+ 桌面 `r37-probe` **18/18**（store 层真二进制直驱；命令层 App Nap §D 交 E2E）+
+> r36 47 / r35 25 / r34 15 / r33 37 / r32 24 不回退 + `r26-bytes` 0 + cargo/build 绿。
+> **3 维对抗评审 12 finding → 0 确认缺陷**（核心担忧「recordNavigation 镜像 openFile 三分支」逐分支证伪；
+> 1 行为偏差记入已知偏差 + 2 证伪硬化成断言；详见 As-built）。
+
+### 官方键位校准 + 冲突解决
+
+| 命令 id | 名称 | 默认热键 |
+|---|---|---|
+| `app:navigate-back` | Navigate back | `Mod+Alt+ArrowLeft`（mac Cmd+⌥←，win/linux Ctrl+Alt+←） |
+| `app:navigate-forward` | Navigate forward | `Mod+Alt+ArrowRight` |
+
+> **冲突解决**：`Mod+Alt+ArrowLeft/Right` 此前被 Geode 自创的 `focus-next/prev-pane` 占用，而 Obsidian 官方把这两个键
+> 给 navigate-back/forward。prime directive = 复刻 Obsidian → **navigate 拿 canonical 键，`focus-next/prev-pane`
+> 改为无默认键**（命令仍在面板，用户可自绑；Obsidian 本就无 pane-focus 默认键）。r32 套件只在测 `normalize`/`format`
+> 纯函数时用到 `Mod+Alt+ArrowRight` 字面量，不依赖 focus-pane 绑定 → 不回退。
+
+### 契约（冻结）
+
+**core/workspace.ts — per-tab 导航历史（session-only，不持久化，键 = TabState.id）**：
+```ts
+const NAV_HISTORY_MAX = 50;
+interface NavLocation { filePath: string; mode: ViewMode }
+interface NavHistory { back: NavLocation[]; forward: NavLocation[] }
+private tabHistory = new Map<string, NavHistory>();
+```
+- **记录点 = openFile 的 replace 分支**（活动 markdown tab 的内容 A→B）。openFile 起始处调
+  `recordNavigation(s0, targetPaneId, path, newTab)`（targetPaneId = `opts.paneId ? paneId0(s0,opts.paneId) : s0.activePaneId`）：
+  `newTab` → 不记；目标 pane 已开同文件（reuse 分支=切 tab）→ 不记；活动 tab 是 markdown 且 `filePath` 非空且
+  `!==path`（replace 分支）→ push `{filePath:旧, mode:旧}` 到该 tab 的 back、清 forward、超 `NAV_HISTORY_MAX` 丢最旧。
+- `navigateBack()` / `navigateForward()`：作用于**活动 tab**；非 markdown / 无 filePath / 该向栈空 → no-op；否则
+  pop 源栈、push 当前 `{filePath,mode}` 到目标栈、`setTabLocation(tab.id, 目标.filePath, 目标.mode)`。
+- `canTabNavigateBack(tabId)` / `canTabNavigateForward(tabId)`：读 Map 长度（UI 按钮禁用态；每次历史变更都伴随
+  workspace.state 变更 → `useStore(state)` 重渲染即读到新值，**无需额外 Store**）。
+- `private setTabLocation(tabId, filePath, mode)`：改 tab 的 filePath+title+mode 并激活，**不经 openFile → 不记录新导航**。
+- **清理（镜像 R36 recentlyClosed）**：`closeTab` → `tabHistory.delete(id)`；`handleDeleted(path)` → purge 所有 tab
+  历史里 `filePath===path||startsWith(path+"/")` 的 Location + `pruneTabHistory()`；`handleRenamed` → remap Location
+  filePath（含文件夹前缀）；`closeMissingFileTabs` → `pruneTabHistory()`；`vault:changed` reason `"load"` →
+  `tabHistory.clear()`（与 recentlyClosed 同处，防跨库同名相对路径 back 到错文件）。`pruneTabHistory()` = 删除 Map 中
+  不再属于任何 live tab 的键。
+
+**app/App.tsx**：注册 `app:navigate-back`（`Mod+Alt+ArrowLeft` → `workspace.navigateBack()`）+ `app:navigate-forward`
+（`Mod+Alt+ArrowRight`）；**删除 `app:focus-next-pane`/`app:focus-previous-pane` 的 `hotkey` 字段**（命令保留、无默认键）。
+**TabBar**：在 `leaf.tabs.map` 之前 prepend back/forward 图标按钮组（`disabled = !canTabNavigate{Back,Forward}(leaf.activeTabId)`，
+`onClick` → `workspace.navigateBack/Forward()`；非活动 pane 的按钮靠 PaneLeafView 既有 `onMouseDownCapture` 先激活 pane）。
+
+**app/icons.tsx**：加 `arrow-left` / `arrow-right`（Lucide）。**core/i18n/dict.app.ts**：`cmd.navigateBack`/`cmd.navigateForward`
++ `app.navigateBack`/`app.navigateForward`（按钮 aria-label），en+zh。**styles/app.css**：`.tab-nav` / `.tab-nav-btn`
+（28px 图标按钮、`:disabled` 淡显，色走 `--text-muted`/`--bg-hover`/`--text-faint` 变量）。
+
+**探针/E2E（无新 window 全局）**：`__app.workspace` 直驱 —— openFile 序列建历史、navigateBack/Forward、读
+`getActiveFile()` + `canTabNavigateBack/Forward(tabId)`；热键 grammar 复用 `__geodeHotkey.match("Mod+Alt+ArrowLeft",…)`。
+桌面 `r37-probe` 可真实驱动 store 层（命令层 App-effect 不可驱动，交 E2E）。
+
+### 文件所有权（并行 implementer）
+- **A（core）**：`src/core/workspace.ts`（tabHistory + recordNavigation + navigate/canTabNavigate + setTabLocation + 5 处清理钩子）。
+- **B（app+i18n+css+版本）**：`src/app/App.tsx`（2 命令 + focus-pane 去键 + TabBar 按钮）+ `src/app/icons.tsx`（2 图标）+ `src/core/i18n/dict.app.ts`（4 键 en+zh）+ `src/styles/app.css`（.tab-nav）+ 三处版本号 0.36→0.37。
+- **C（验证）**：`.calibration/r37-e2e.mjs` + `.calibration/r37-probe.mjs`（独占新建）。
+
+### 已知偏差（写给后续轮）
+- **导航历史 session-only**（Obsidian 跨重启持久化）——避持久化栈 stale-path 风险；与 R36 recentlyClosed 一致。
+- **back/forward 限单 tab 内**（Obsidian 同样 per-tab）——切 tab 走 R36 Ctrl+Tab，跨 pane 走 focus-pane。
+- **导航到「已删除文件」从历史 purge**（不像 stale tab 留着）——back 不会落到缺失文件。
+- **`focus-next/prev-pane` 失去默认键**（让位 Obsidian-canonical 的 navigate 键；命令仍在面板可自绑）。
+- **TabBar reuse 分支（切到已开 tab）不记历史**——Obsidian 同样视为切 tab 非导航。
+- **`splitActivePane` 克隆 tab 用新 tabId → 分屏副本的导航历史不随之复制**（新 pane 副本 back/forward 恒空，
+  即使源 tab 有历史）。Obsidian 拆分 pane 会复制历史到新 leaf。非泄漏/非数据丢失（fresh 空历史安全），纯功能偏差；
+  对照 `moveTab` 保留原 tabId → 历史正确随 tab 迁移。（R37 对抗评审证实，列为已知偏差，未来轮可补 split 复制历史。）
+
+### As-built（评审结论 + 教训）
+
+**0 个确认缺陷**——3 维 12 finding 全为 nit/by-design/证伪。核心担忧（recordNavigation 是否精确镜像 openFile 的
+reuse/replace/new-tab 三分支）经**逐分支对照证伪**：reuse 判据 `tabs.some(markdown&&filePath===path)` ≡ openFile 的
+`existing && !newTab`；graph/null-filePath 活动 tab → 两边都走 new-tab 不记；同文件被 `!==path` 双重守卫；`s0` 单快照
+无 TOCTOU。**反应式按钮无需独立 Store 的契约断言也被实证**：枚举 tabHistory 全部变更点均伴随 `this.update`（→state
+引用变更 → `useStore(state)` 重渲染读到新 `canTabNavigate*`），含「删/改名仅存在于历史的文件」也因 handleDeleted/
+Renamed 的 `{...s}` 总产新对象而通知；唯一不直接 update 的 `vault:changed load → clear` 由其后必跟的 closeMissingFileTabs
+兜住。**多 pane 点非活动 pane 的按钮**：`onMouseDownCapture` 先 `setActivePane`（Store 同步），click 的 navigateBack 经
+`getActiveTab()` 读到已是该 pane 的 tab → 同手势内一致。
+
+**2 个证伪 → 硬化成断言**（延续 R35「未测但行为正确→转已测」）：① navigateBack 的 view-mode 恢复（`{filePath,mode}`
+双值入/出栈，setTabLocation 回放 mode）原只断言 filePath → 补「a 切 source→openFile b→back a 仍 source」；②
+`purgeNavLocations` 同清 back+forward，原 H 节只测 back 栈条目删除 → 补「fwd=[c,b]，删 b，forward 跳过 b→c」。
+
+**1 个无害冗余（保留）**：`closeMissingFileTabs` 内的 `purgeNavLocations/pruneTabHistory` 在现两个调用点（启动恢复 /
+in-place 切库）实为 no-op——切库走 `vault.load()` 先 emit `vault:changed load` 已 `tabHistory.clear()`，启动时 Map 本空。
+属防御性冗余（若未来出现「不经 vault:changed 就调 closeMissingFileTabs」的新路径则真正生效），故**保留更稳**。
+
 ## Round 36 additions — 标签页快捷键（tab keyboard shortcuts）【As-built v0.36】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第一梯队 #⑤ = 已核实缺口（命令表无 next/prev-tab、

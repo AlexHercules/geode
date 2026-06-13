@@ -972,7 +972,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **⑥ 前进/后退导航历史** | **缺**（`workspace.ts` 仅 `lastActiveFile`，无 per-pane 导航栈）| Obsidian Cmd+Alt+←/→ + 标题栏箭头。切入：per-leaf history stack（openFile push、cap N）+ back/forward 命令+键+标题栏按钮。 |
+| ~~**⑥ 前进/后退导航历史**~~ | **R37 已完成（v0.37，见上）**——`core/workspace.ts` per-tab `tabHistory` Map（session-only、cap 50）+ `recordNavigation`（hook openFile replace 分支、清 forward）+ `navigateBack/Forward`+`canTabNavigateBack/Forward`+`setTabLocation` + 5 处清理（close/delete/rename/missing/vault-switch）；App.tsx `app:navigate-back/forward`（`Mod+Alt+←/→`，focus-pane 让出默认键）+ TabBar 箭头按钮（反应式靠 useStore，无独立 Store）+ icons.tsx arrow-left/right。与 R36 recentlyClosed 两套独立栈。r37-e2e 36/36 + r37-probe 18/18。 | 余项（按需求驱动）：导航历史跨重启持久化；**split 复制 tab 时历史不随之复制**（已知偏差）；back/forward 限单 tab；导航到删除文件从历史 purge（已做）。 |
 | **⑦ 快速切换器子模式 / 文内标题跳转** | **部分**（QuickSwitcher 仅文件名+别名+create；无 heading `#`/block `^`/symbol 模式）| Obsidian：`#`→标题、`^`→块、Ctrl+O 文件。切入：QuickSwitcher 加前缀模式解析 + 复用 outline/metadata 的 headings/blocks 索引。 |
 | **⑧ 固定标签页 + 堆叠标签 + 链接面板** | **缺**（workspace 状态无 pinned/stacked/linkedGroup 字段）| Pin（固定后链接另开）、Stack notes、Linked view（local graph/backlinks/outline 跟随某 tab）。切入：workspace 状态扩字段 + TabBar 右键菜单 + Open linked view。 |
 | **⑨ 键盘切换复选框** | **缺**（仅鼠标点 `cm-live-checkbox`；无键命令）| Obsidian「Toggle checkbox status」(Cmd/Ctrl-L)。切入：复用 `preview.ts` 的 `toggleTaskOnLine` 接编辑器命令+键。 |

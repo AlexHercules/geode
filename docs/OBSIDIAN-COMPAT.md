@@ -172,6 +172,22 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R37 套件回归（2026-06-14，macOS release 二进制 v0.37.0 实测 `r37-probe-vault`）
+
+R37 = 前进/后退导航历史（已核实缺口：`workspace.ts` 仅 `lastActiveFile`、无 per-tab 导航栈）。**compat API 表面零代码
+改动**——全在 `core/workspace.ts`（per-tab `tabHistory` Map + recordNavigation + navigateBack/Forward + 5 处清理）+
+`app/App.tsx`（2 命令 + focus-pane 去默认键 + TabBar 箭头按钮）+ icons/i18n/css。校准 Obsidian 官方默认键
+`Mod+Alt+←/→`（`Ctrl+Alt+←/→` win，WebSearch）——与 Geode 自创 `focus-next/prev-pane` 冲突 → **navigate 拿 canonical 键、
+focus-pane 改无默认键**（命令仍在面板可自绑；r32 套件只在测 normalize/format 纯函数时用 `Mod+Alt+ArrowRight` 字面量，
+不依赖 focus-pane 绑定 → 不回退）。**零新 window 探针**——导航是 store 操作,探针/E2E 直驱 `app.workspace`、热键复用 R32
+`__geodeHotkey.match`。macOS probe 实测:新增 **r37-probe 18/18**——桌面直驱真实 store（a→b→c 导航 + back/forward + wrap
+no-op + 新导航清 forward + 新 tab 空历史 + 热键 grammar）;命令层 App-effect 不可驱动交浏览器 r37-e2e。**r36/r35/…/r23
+套件不回退**（compat 调用面零改动；浏览器 r37-e2e **36/36** + r36 47、r35 25、r34 15、r33 37、r32 24 全绿；`r26-bytes` 0
+违例,markdown.ts 未动）。**3 维对抗评审 12 finding → 0 确认缺陷**（核心「recordNavigation 镜像 openFile 三分支」逐分支
+证伪;反应式按钮无需独立 Store 的断言实证;多 pane 点非活动 pane 按钮经 onMouseDownCapture 先激活正确）**+ 1 行为偏差
+记入已知偏差**（split 克隆 tab 用新 id → 副本无导航历史,Obsidian 会复制）**+ 2 证伪硬化成断言**（view-mode 恢复 +
+forward 栈 delete-purge）。
+
 ### R36 套件回归（2026-06-14，macOS release 二进制 v0.36.0 实测 `r36-probe-vault`）
 
 R36 = 标签页快捷键（已核实缺口：命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 `focus-next/prev-pane`
