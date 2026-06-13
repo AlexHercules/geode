@@ -172,6 +172,22 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R33 套件回归（2026-06-13，macOS release 二进制 v0.33.0 实测 `r33-probe-vault`）
+
+R33 = Markdown 格式化命令 + 快捷键（实测缺口：选区按 Cmd-B 不加粗、无任何 toggle 命令）。**compat API
+表面零代码改动**——本轮全在原生编辑器/命令层（新 `core/format.ts` 纯变换 + `features/editor/formatCommands.ts`
+注册 + `cmExtensions` `Prec.highest` keydown 拦截器 + `core/commands.ts` 两守卫）。镜像 Obsidian 编辑器命令：
+13 个格式化命令（仅 Cmd/Ctrl-B/I/K 默认键、余 10 个无默认键可绑）；`*`/`**` 星号记法、Cmd-K=`[text]()`。
+新增 always-on 探针 `window.__geodeFormat`（**装在 `loadExternal` 之前**，与 `__geodeHotkey`/`__geodeSlash`/
+`__geodeRename`/`__geodeProperties`/`__geodeFold` 同列）；`apply(op,text,from,to)` 暴露纯变换 → 桌面 WKWebView
+无 CDP 也能确定性自检 13 op。macOS probe 实测：新增 **r33-probe 12/12**——真实 WKWebView runtime（bold
+wrap/unwrap、italic 强调符歧义守卫、link、heading 循环、blockquote、checklist、numbered 多行、code-block、
+callout）。**头号根因**：原生 contenteditable 的 Cmd+I 在 window 冒泡前把选区扩成整行 → 命令热键须在 CM
+最高优先级拦截（不能只靠 window）。**r32/r31/…/r23 套件不回退**（compat 调用面零改动；浏览器 r33-e2e
+**37/37** 含 live Cmd+B/I/K 真实 CM 编辑器 + autosave 落盘实测；r32 e2e 24/24 + probe 16/16、r31–r23
+浏览器 21/17/12/22 全绿；r26-bytes 0 违例，markdown.ts 未动）。**对抗评审 5 维 18 verdict → 13 确认 → 去重
+4 根因修复**（lineBounds 不变量 / IME isComposing / 双触发 defaultPrevented / heading 无空格）。
+
 ### R32 套件回归（2026-06-13，macOS release 二进制 v0.32.0 实测 `r32-probe-vault`）
 
 R32 = macOS Cmd（Mod）修饰键支持（**头号缺口**：迁移前 Cmd+P 无反应、仅 Ctrl 通）。**compat API

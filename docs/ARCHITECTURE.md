@@ -71,6 +71,79 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 33 additions — Markdown 格式化命令 + 快捷键（formatting commands）【As-built v0.33】
+
+> **状态：As-built（2026-06-13）。** R32+ 候选池 #② = 实测缺口（选区按 Cmd/Ctrl-B 不加粗、
+> 源码无任何 toggle 命令）。验证：浏览器 `r33-e2e` **37/37**（26 纯函数 probe 覆盖 13 op 的
+> wrap/unwrap/empty/emphasis-guard/边界 + 9 live：Cmd+B/I 包裹+往返、Cmd+K 建链、命令注册/
+> available + 2 评审修复边界）+ 桌面 release `r33-probe` **12/12** 真实 WKWebView runtime（纯
+> 函数）+ r23–r32 全套不回退（r32 24 / r31 21 / r25 17 / r24 12 / r23 22）+ r26-bytes 0 违例
+> （markdown.ts 未动）+ typecheck/cargo/build 绿 + **autosave→vault 落盘实测**（Cmd+B 后
+> `vault.read` 见 `**Hello**`）。**5 维对抗评审 18 verdict → 13 确认/部分 → 去重 4 根因修复**
+> （lineBounds 不变量 / IME isComposing / 双触发 defaultPrevented / heading 无空格），其余证伪
+> （insertLink 光标 off-by-one = 评审误数；分屏 undo = 与打字同路径无新风险；多行加粗/选区端点 =
+> 镜像 Obsidian 非缺陷）。
+
+### 契约（已实现）
+
+**分层落点（R28 教训）**：纯变换在 `core/format.ts`（纯 TS，零 CM/React 依赖）——这样
+`main.tsx` 的 `__geodeFormat` 探针能 import 它而**不引入 bootstrap→feature 耦合**；
+`features/editor/formatCommands.ts` 才是 CM dispatch + 命令注册层。
+
+- `core/format.ts`：
+  - `FormatEdit = { from, to, insert, selFrom, selTo }`（单段连续替换 + 替换后绝对选区）；
+    `FormatOp`（13 个）。`null` = no-op，调用方不 dispatch。
+  - `applyFormatOp(op, text, from, to): FormatEdit | null` = **唯一入口**（命令层与探针共用
+    → 行为单一真值）。底层：`toggleWrap`（bold/italic/strike/highlight/inline-code）、
+    `insertLink`、`toggleList`（bullet/numbered/checklist）、`toggleBlockquote`、`toggleHeading`、
+    `toggleCodeBlock`、`toggleCallout`。
+  - **幂等 toggle**：再按一次脱（包裹↔脱、标题 none→H1..H6→none 循环、围栏 wrap↔unwrap）。
+  - **强调符歧义守卫**（`toggleWrap`）：marker 仅当「该位继续字符 ≠ 同强调符」才算成对——
+    故 `*`（斜体）不会从 `**`（粗体）里抠一个星、`**` 不会误吞 `***`。对 selection 内成对与
+    selection 外贴邻成对两种情况都判。空选区 → `marker|marker` 光标居中。
+- `features/editor/formatCommands.ts`：`applyFormat(view, op)` 读 `state.doc`+`selection.main`→
+  调 `applyFormatOp`→ 一次原子事务（`changes`+`selection`，`userEvent:"input.format"`）；
+  `registerFormatCommands(app, getView)` 注册 13 命令，`getView` 由 App 注入
+  （`() => getActiveFileEditorView(app)?.view ?? null`）；`available = getView()!==null`。
+- 命令集 + 默认键（**仅 B/I/K 有默认键 = 镜像 Obsidian**；其余无默认键，可在设置绑定）：
+  `editor:toggle-bold`(Mod+B) `editor:toggle-italic`(Mod+I) `editor:insert-link`(Mod+K)
+  `editor:toggle-strikethrough` `editor:toggle-highlight` `editor:toggle-inline-code`
+  `editor:toggle-heading` `editor:toggle-blockquote` `editor:toggle-bullet-list`
+  `editor:toggle-numbered-list` `editor:toggle-checklist` `editor:toggle-code-block`
+  `editor:insert-callout`。i18n 键在 `dict.app.ts` 的 `cmd.*`（en+zh）。
+- `cmExtensions.ts`：新增 **`Prec.highest(EditorView.domEventHandlers({keydown: e => app.commands.handleKeydown(e)}))`**——见下「头号根因」。
+- `main.tsx`：`window.__geodeFormat.apply(op,text,from,to)`（loadExternal 前，always-on 探针）。
+
+### As-built 根因教训
+
+1. **头号坑：原生 contenteditable 的 Cmd+I 会先把选区扩成整行，而 app 命令层在 window 冒泡阶段
+   读选区 = 读到被扩后的整行。** 实测：选 `[0,5]`"Hello" 按 **Cmd+B 干净包裹**（选区不变），但按
+   **Cmd+I 把整行 `[0,11]` 斜体**（`*Hello world*`）。`commands.execute("editor:toggle-italic")`
+   直接调却正确（`*Hello*`）→ 锁定问题在**键盘事件投递**，不在命令逻辑。逐层探针证：keydown
+   capture 阶段选区仍 `[0,5]`，到 window 冒泡时已 `[0,11]`——CM 的 contentDOM keydown 处理（在
+   window 冒泡 handler 之前跑）触发了原生/CM 的选区扩展。**修复 = 把命令热键路由提到编辑器层、
+   最高优先级**：`Prec.highest` 的 CM `domEventHandlers.keydown → app.commands.handleKeydown(e)`，
+   在 CM 自身 keymap / 原生 contenteditable 动作**之前**处理（在真选区上）；`handleKeydown` 命中即
+   `preventDefault`+`stopPropagation`→ window listener 不再二次触发。**教训：编辑器内的命令热键
+   必须在 CM 输入处理链的最高优先级拦截，不能只靠 window 冒泡——原生 contenteditable 会在冒泡前
+   改 DOM/选区。** Cmd+B「碰巧」没事不代表 Cmd+I 也没事，**每个修饰键都要在真编辑器里敲一遍**
+   （R31 教训复现）。
+2. **该拦截把「每次 keydown 都过 handleKeydown」→ 必加两道守卫**（评审抓获）：① **IME
+   `isComposing`**——CJK 合成期 keydown 会进来，`handleKeydown` 顶部 `if(e.isComposing) return false`
+   保护中文/日文输入不被命令误吞（zh 用户高频）；② **`defaultPrevented`**——若更早的处理者已占用
+   该键（CM 拦截器命中并 preventDefault），window listener 不再重跑（防 CM「更新中延迟派发」这一
+   罕见次序下的双触发）。两守卫加在 `core/commands.ts handleKeydown` 顶部，对所有命令生效、且只在
+   「合成中 / 已被占用」时短路，不影响正常命中（r32/r31 全绿验证）。
+3. **零新 vault 写路径**：格式化经普通 CM 事务 → `documents.ts` dirty → autosave 去抖落盘
+   （与打字同管线，B 类写守卫全继承）。唯一安全要点 = **活动文件门控（R23 DS-1）**：命令经
+   `getActiveFileEditorView`（path===活动文件 双侧门控）取 view，焦点/活动 tab 分叉时**fail-safe
+   返 null 不写**，绝不误写后台文件。CM 拦截器只路由热键、无数据路径。
+4. **评审修复的两处纯函数边界**：① `lineBounds` 对 doc=`"\n"` + 全选会算出 `start>end`（trailing
+   newline 把 effTo 推到 start 前）→ code-block/callout 会建 `from>to` change（`view.dispatch`
+   抛 RangeError）→ 加 `if(end<start)end=start` 守不变量；② `toggleHeading` 对无空格 `#Heading`
+   原产出 `# #Heading`（strip 正则要求空格、不匹配）→ strip 改 `/^#{1,6} ?/`（空格可选），循环出
+   干净 `# Heading`。
+
 ## Round 32 additions — macOS Cmd（Mod）修饰键支持【As-built v0.32】
 
 > **状态：As-built（2026-06-13）。** 实现与下方契约一致。验证：浏览器 `r32-e2e` 24/24（20

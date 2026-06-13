@@ -4,9 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.32.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R32 macOS Cmd（Mod）修饰键支持 ✓ 已交付**（R32+ 候选池 #① **头号缺口**：迁移前 Cmd+P 无反应）。镜像 Obsidian `Mod` 语义——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、Win/Linux→Ctrl/ctrlKey；`Ctrl` 永远物理 Control、`Meta` 永远 ⌘/Win）+ `matchParsedHotkey(p,e,isMac)` **四态全等**（故 mac 下 `Ctrl+P` 不触发 `Mod+P`=镜像 Obsidian）+ 新 `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 13+1 处 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。**纯键路由零 vault 写**。评审 8 维功能正确性全证伪、仅收口版本+陈旧注释。`r32-e2e` 24/24（含 live Cmd+P 开面板）+ 桌面 `r32-probe` 16/16 真实 runtime + r23–r31 不回退 + `r26-bytes` 0 违例（markdown.ts 未动）。
-- **下一项 = R33 = R32+ 候选池 #② Markdown 格式化命令 + 快捷键**（**实测缺**：选区按 Cmd/Ctrl-B 不加粗；源码无 toggleBold/wrapSelection）。Obsidian 默认 Cmd/Ctrl-B 粗、-I 斜（仅 `*`/`**`）、Cmd-K 链接 + toggle heading/quote/code/callout/checklist 命令。切入：新 `features/editor/formatCommands.ts` 选区包裹/切换纯函数（**幂等 toggle**：已包裹则脱）+ 注册 app 命令（**复用 R32 `Mod+…` 语义**）+ 默认键。其后队列：③ 编辑器内查找替换（Cmd-F，`@codemirror/search` 已装未接）→ ④ 括号自动配对（closeBrackets）→ ⑤ 标签页快捷键 →（全队列见 ROADMAP R32+ 候选池）。
+- 版本 **v0.33.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R33 Markdown 格式化命令 + 快捷键 ✓ 已交付**（R32+ 候选池 #②：实测选区按 Cmd-B 不加粗、源码无任何 toggle 命令）。`core/format.ts` 纯变换（**分层落点：放 core 让 main.tsx 探针 import 不耦合 feature**）+ `applyFormatOp(op,text,from,to)` 唯一入口（13 op：bold/italic/strike/highlight/inline-code 包裹 + link + heading 循环 + blockquote/bullet/numbered/checklist/code-block/callout 行变换；**幂等 toggle** + **强调符歧义守卫** `*`≠`**`）+ `features/editor/formatCommands.ts` CM dispatch + 注册 13 命令（仅 **Mod+B/I/K** 有默认键=镜像 Obsidian，余无）+ `__geodeFormat` 探针。**头号坑：原生 contenteditable 的 Cmd+I 会先把选区扩成整行**→ 命令层在 window 冒泡读到整行（Cmd+B 没事 Cmd+I 出错）→ 修复 = `cmExtensions` 加 **`Prec.highest` CM keydown 拦截器路由 `handleKeydown`**（在 CM keymap/原生动作之前、真选区上处理）+ `handleKeydown` 加 **isComposing/defaultPrevented** 两守卫（IME 安全 + 防双触发）。**零新 vault 写路径**（走 CM 事务→autosave，活动文件门控 fail-safe）。`r33-e2e` 37/37 + 桌面 `r33-probe` 12/12 真实 runtime + r23–r32 不回退（r32 24/probe16 / r31 21 / r25 17 / r24 12 / r23 22）+ `r26-bytes` 0 违例 + autosave 落盘实测。**5 维对抗评审 18 verdict→13 确认→去重 4 根因修复**（lineBounds 不变量 / IME / 双触发 / heading 无空格），余证伪。
+- **下一项 = R34 = R32+ 候选池 #③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）。切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。**复用 R33 `Prec.highest` 拦截器经验**：Cmd-F 在编辑器内须在 CM 层处理（别只靠 window）。低成本。其后队列：④ 括号自动配对（closeBrackets）→ ⑤ 标签页快捷键 →（全队列见 ROADMAP R32+ 候选池）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
@@ -58,6 +58,22 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R33（Markdown 格式化命令）核心教训三条**：① **编辑器内的命令热键必须在 CM 输入处理链的
+  最高优先级拦截，不能只靠 window 冒泡**——原生 contenteditable 会在冒泡到 window 之前改 DOM/选区。
+  实测：选 `[0,5]`"Hello" 按 **Cmd+B 干净包裹**，但 **Cmd+I 把整行斜体**（原生先把选区扩成整行）；
+  `commands.execute("editor:toggle-italic")` 直接调却正确 → 锁定是**键盘投递**不是命令逻辑（逐层
+  探针：capture 阶段选区仍 `[0,5]`、window 冒泡时已 `[0,11]`）。修复 = `cmExtensions` 加
+  `Prec.highest(EditorView.domEventHandlers({keydown: e => app.commands.handleKeydown(e)}))`，在真选区上、
+  CM keymap/原生动作之前处理；命中即 `preventDefault`+`stopPropagation` 防 window 二次触发。**「某修饰键
+  碰巧没事」≠「都没事」，每个修饰键都要在真编辑器里敲一遍**（R31「先在运行的编辑器里敲一遍」复现）。
+  ② **把「每次 keydown 都过 handleKeydown」必加 `isComposing`+`defaultPrevented` 两道守卫**——前者保护
+  IME 合成（CJK 高频，zh 用户）、后者防 CM「更新中延迟派发」次序下的双触发；加在 `commands.ts`
+  handleKeydown 顶部、只在「合成中/已被占用」短路，不影响正常命中。③ **纯变换放 `core/format.ts`
+  （R28 教训）**：`main.tsx` 的 `__geodeFormat` 探针要 import 它，放 feature 就成 bootstrap→feature
+  耦合；命令层与探针共用 `applyFormatOp` 单一真值。**强调符歧义守卫**：`toggleWrap` 的 marker 仅当「该位
+  续字符≠同强调符」才算成对，故 `*`（斜体）不从 `**`（粗体）抠星、`**` 不误吞 `***`——pure-correctness
+  评审专设此维（A 段 26 例 probe 全锁）。格式化**零新 vault 写路径**（走 CM 事务→autosave，活动文件门控
+  fail-safe），但仍触发 data-safety skill：B 类写守卫全继承、唯一要点是 `getActiveFileEditorView` 双侧门控。
 - **R32（macOS Cmd/Mod 修饰键）核心教训三条**：① **`Mod` 必须升为一等修饰符 + 「四态全等」
   比对**——旧码把 `Mod` collapse 成 `Ctrl`、丢了平台语义。正确 = canonical 保留 `Mod`/`Ctrl`/`Meta`
   三者各异，match 时按平台解析（mac `Mod`→metaKey、其余 `Mod`→ctrlKey），且**逐一全等比

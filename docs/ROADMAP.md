@@ -637,6 +637,39 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R33 — v0.33（2026-06-13）Markdown 格式化命令 + 快捷键（R32+ 候选池 #②）
+
+**实测缺口收口**：选区按 Cmd/Ctrl-B 不加粗、源码无任何 toggle 命令、markdownKeymap 不含格式化键。
+本轮镜像 Obsidian 编辑器命令：13 个格式化命令（仅 **Cmd/Ctrl-B 粗 / -I 斜 / -K 链接** 有默认键、
+余 10 个无默认键可绑——与 Obsidian 一致）。官方校准 obsidian.md（`*`/`**` 星号记法、Cmd-K=
+`[text]()`）。改动：① **`core/format.ts`**（**纯变换放 core = R28 教训：让 `main.tsx` 探针 import
+不引入 bootstrap→feature 耦合**）——`applyFormatOp(op,text,from,to): FormatEdit|null` 唯一入口
+（命令层 + 探针共用单一真值）；`toggleWrap`（bold/italic/strike/highlight/inline-code，**幂等
+toggle + 强调符歧义守卫** `*`≠`**`≠`***`）、`insertLink`（空/URL/文本三态光标）、`toggleList`
+（bullet/numbered/checklist 互斥替换）、`toggleBlockquote`/`toggleHeading`（none→H1..H6→none 循环）/
+`toggleCodeBlock`/`toggleCallout`。② **`features/editor/formatCommands.ts`**——`applyFormat(view,op)`
+读 doc+selection→ 一次原子 CM 事务；`registerFormatCommands(app,getView)` 注册 13 命令，
+`available=getView()!==null`、`getView` 由 App 注入 `getActiveFileEditorView(app)?.view`（**活动文件
+双侧门控 = R23 DS-1，焦点/活动分叉 fail-safe 不写**）。③ **`cmExtensions.ts`**——新增 `Prec.highest`
+CM keydown 拦截器路由 `app.commands.handleKeydown`（**头号根因修复，见下**）。④ `dict.app.ts` 13 个
+`cmd.*`（en+zh）；⑤ `main.tsx` `__geodeFormat` 探针（loadExternal 前）。**头号根因**：原生
+contenteditable 的 **Cmd+I 会先把选区扩成整行**（Cmd+B 没事 Cmd+I 出错），命令层在 window 冒泡读到
+被扩选区 → 把整行斜体；`commands.execute` 直接调却正确 → 锁定是键盘投递（capture 阶段选区仍对、
+window 冒泡时已扩）→ 修复 = 把热键路由提到 CM 最高优先级、在原生动作之前处理真选区，命中即
+preventDefault+stopPropagation 防 window 双触发。**对抗评审 5 维 18 verdict → 13 确认/部分 → 去重
+4 根因修复**：① `lineBounds` 对 doc=`"\n"`+全选 `start>end` → code-block/callout 建 `from>to` 抛
+RangeError（加 `end<start→end=start` 守不变量）；② **IME `isComposing` 守卫**（CJK 合成期不误触
+命令，zh 用户高频）；③ **`defaultPrevented` 守卫**（防 CM 延迟派发次序双触发）；④ `toggleHeading`
+无空格 `#Heading` 产出 `# #Heading`（strip 正则改空格可选 `/^#{1,6} ?/` → 干净 `# Heading`）。其余
+证伪：insertLink 光标 off-by-one（评审误数、e2e 实证 selFrom=8 正确）、分屏 undo（与打字同 dispatch
+路径无新风险）、多行加粗/选区端点（镜像 Obsidian 非缺陷）。**零新 vault 写路径**（CM 事务→autosave，
+B 类写守卫全继承，autosave→`vault.read` 落盘实测）。验证：浏览器 `r33-e2e` **37/37**（26 纯函数
+probe + 9 live：Cmd+B/I 包裹+往返、Cmd+K 建链、注册/available + 2 评审修复边界）+ 桌面 release
+`r33-probe` **12/12** 真实 WKWebView runtime + r23–r32 全套不回退（r32 24/probe16 / r31 21 / r25 17 /
+r24 12 / r23 22）+ `r26-bytes` 0 违例（markdown.ts 未动）+ typecheck/cargo/build 绿。**显式取舍**：
+toggle-heading = 循环（none→H1..H6→none）而非二态 toggle（一键更实用，记偏差）；callout/code-block
+wrap 后选中整块（非光标定位，可后续打磨）；10 个非 B/I/K 命令无默认键（镜像 Obsidian，用户自绑）。
+
 ### R32 — v0.32（2026-06-13）macOS Cmd（Mod）修饰键支持（R32+ 候选池 #① = **头号缺口**）
 
 **实测头号缺口收口**：迁移前 Ctrl+P 开命令面板、**Cmd+P 无反应**——`core/commands.ts` 三处
@@ -880,7 +913,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
 | ~~**① macOS Cmd（Mod）修饰键支持**~~ | **R32 已完成（v0.32，见上）**——`core/commands.ts` `isMacPlatform` + `Mod` 升一等修饰符（mac→⌘/metaKey、其余→Ctrl/ctrlKey）+ `matchParsedHotkey(p,e,isMac)` 四态全等 + `formatHotkey`（⌃⌥⇧⌘ / `Ctrl+`）+ 默认键 `Ctrl+…`→`Mod+…` + `__geodeHotkey` 双平台探针。验证 r32-e2e 24/24（含 live Cmd+P 开面板）+ desktop probe 16/16 真实 runtime。 | 显式延期：compat 外部插件 `Keymap`/`Scope` 热键路径（另一套、自包含）；非 mac `Mod`/`Ctrl` 同 ctrlKey 但 canonical 不同 → 冲突检测不互判（与 Obsidian 一致）。 |
-| **② Markdown 格式化命令 + 快捷键** | **缺**（**实测** 选区 "Hello" 按 Ctrl+B 不加粗；源码无 toggleBold/wrapSelection/toggle-heading 任何命令；markdownKeymap 不含格式化键）| Obsidian 默认：Cmd/Ctrl-B 粗、Cmd/Ctrl-I 斜（仅 `*`/`**` 记法）、Cmd-K 链接，另有 toggle heading/quote/code/callout/checklist 命令（可绑键）。切入：新 `features/editor/formatCommands.ts` 选区包裹/切换纯函数（幂等 toggle：已包裹则脱）+ 注册 app 命令（依赖 ① 的 Mod 归一）+ 默认键。 |
+| ~~**② Markdown 格式化命令 + 快捷键**~~ | **R33 已完成（v0.33，见上）**——`core/format.ts` `applyFormatOp` 唯一入口（13 op：bold/italic/strike/highlight/inline-code 幂等包裹 + 强调符歧义守卫、link、heading 循环、blockquote/bullet/numbered/checklist/code-block/callout 行变换）+ `features/editor/formatCommands.ts` CM dispatch + 注册 13 命令（仅 Mod+B/I/K 默认键）+ `cmExtensions` `Prec.highest` keydown 拦截器（修原生 Cmd+I 扩选区）+ handleKeydown isComposing/defaultPrevented 守卫 + `__geodeFormat` 探针。验证 r33-e2e 37/37 + desktop probe 12/12 真实 runtime。 | 余项（按需求驱动）：toggle-heading 循环 vs 二态（选了循环）；callout/code-block wrap 后选整块非光标定位；选中文本敲 `[`/`*` 包裹（属 ④ closeBrackets）；多光标包裹；非 B/I/K 命令默认无键（用户自绑）。 |
 | **③ 编辑器内查找 / 替换（Cmd/Ctrl-F、Cmd-H）** | **缺**（**实测/核实** `@codemirror/search` 仅 compat loader 引入，features/editor 无 searchKeymap/openSearchPanel）| 切入：`cmExtensions` 加 `search({top})` + `searchKeymap`（CM 自带面板，phrases 本地化）；与全局 SearchPanel（左栏全库搜索）区分=文内 CM 面板。低成本。 |
 | **④ 括号/引号自动配对 + 选区包裹** | **缺**（**实测** 敲 `[` 得 `[` 不补 `]`；源码无 closeBrackets）| 切入：`@codemirror/autocomplete` 的 `closeBrackets()` + `closeBracketsKeymap`；Obsidian 另有「选中文本敲 `[`/`*`/`` ` `` 包裹」。注意 `[[`/`![[` 与既有 wikilink 补全源协同。 |
 | **⑤ 标签页快捷键** | **缺**（命令表无 next/prev-tab、go-to-tab N、new-tab、reopen-closed；仅 focus-next/prev-pane 空间移动）| Obsidian：Ctrl+Tab/Ctrl+Shift+Tab 循环、Cmd/Ctrl+1..8 第 N 标签、+9 末标签、Cmd/Ctrl+T 新标签、Cmd/Ctrl+Shift+T 重开。切入：`core/workspace.ts` 加 nextTab/prevTab/goToTab + recentlyClosed 栈，App.tsx 注册命令+默认键。 |
