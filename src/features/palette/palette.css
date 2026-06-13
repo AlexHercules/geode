@@ -40,6 +40,17 @@
   background: var(--accent-muted);
 }
 
+.palette-item-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.palette-block-id {
+  color: var(--text-muted);
+}
+
 .palette-item-name {
   flex: 1;
   overflow: hidden;

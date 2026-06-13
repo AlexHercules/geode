@@ -82,8 +82,12 @@ export const en = {
 
   // ---- quick switcher ----
   "switcher.aria": "Quick switcher",
-  "switcher.placeholder": "Find or create a note…",
+  "switcher.placeholder": "Find/create a note · # heading · ^ block…",
+  "switcher.placeholderHeading": "Jump to heading (# vault-wide)…",
+  "switcher.placeholderBlock": "Jump to block by id (^…)…",
   "switcher.empty": "No notes in vault",
+  "switcher.emptyHeading": "No matching headings",
+  "switcher.emptyBlock": "No matching blocks",
   "switcher.create": "Create note: {name}",
 } as const;
 
@@ -162,7 +166,11 @@ export const zh: Record<keyof typeof en, string> = {
 
   // ---- quick switcher ----
   "switcher.aria": "快速切换",
-  "switcher.placeholder": "查找或创建笔记…",
+  "switcher.placeholder": "查找/新建笔记 · # 标题 · ^ 块…",
+  "switcher.placeholderHeading": "跳转到标题（# 全库）…",
+  "switcher.placeholderBlock": "跳转到块（^ 按 id）…",
   "switcher.empty": "库中没有笔记。",
+  "switcher.emptyHeading": "无匹配标题",
+  "switcher.emptyBlock": "无匹配块",
   "switcher.create": "新建笔记：{name}",
 };

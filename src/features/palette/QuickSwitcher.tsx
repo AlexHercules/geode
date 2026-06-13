@@ -4,14 +4,17 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
-import type { FileNode } from "@core/types";
+import type { FileNode, HeadingRef, BlockRef } from "@core/types";
 import { allTabs } from "@core/workspace";
 import { fuzzyMatch, toSegments } from "@core/fuzzy";
+import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import "./palette.css";
 
 type Row =
   | { kind: "create"; name: string }
-  | { kind: "file"; file: FileNode; indices: number[] };
+  | { kind: "file"; file: FileNode; indices: number[] }
+  | { kind: "heading"; path: string; heading: HeadingRef; indices: number[] }
+  | { kind: "block"; path: string; block: BlockRef; indices: number[] };
 
 /**
  * Hard cap on rendered rows. Fuzzy-scoring 10k files takes ~3ms, but
@@ -57,6 +60,17 @@ export function QuickSwitcher() {
     }
 
     function computeRows(): Row[] {
+    const mode = switcherMode(query);
+    if (mode === "heading") {
+      return searchHeadings(app.metadata.getAll(), stripSigil(query), app.workspace.getActiveFile()).map(
+        (h) => ({ kind: "heading" as const, path: h.path, heading: h.heading, indices: h.indices }),
+      );
+    }
+    if (mode === "block") {
+      return searchBlocks(app.metadata.getAll(), stripSigil(query), app.workspace.getActiveFile()).map(
+        (b) => ({ kind: "block" as const, path: b.path, block: b.block, indices: b.indices }),
+      );
+    }
     const q = query.trim();
 
     if (!q) {
@@ -123,6 +137,19 @@ export function QuickSwitcher() {
       app.workspace.openFile(row.file.path); // openFile also closes the modal
       return;
     }
+    if (row.kind === "heading") {
+      app.workspace.openFile(row.path); // closes modal (modal:null), then reveal
+      // reveal anchors on `from` (the flash + scroll ignore `to`); the exact
+      // heading-line length isn't reconstructable from HeadingRef, so anchor at
+      // the heading start rather than fabricate an imprecise span (R38 review).
+      app.workspace.requestReveal(row.path, row.heading.from, row.heading.from);
+      return;
+    }
+    if (row.kind === "block") {
+      app.workspace.openFile(row.path);
+      app.workspace.requestReveal(row.path, row.block.from, row.block.to);
+      return;
+    }
     const path = app.vault.uniquePath("", row.name);
     app.workspace.closeModal();
     void app.vault.create(path).then(() => app.workspace.openFile(path));
@@ -146,6 +173,16 @@ export function QuickSwitcher() {
     if (e.target === e.currentTarget) app.workspace.closeModal();
   };
 
+  const mode = switcherMode(query);
+  const placeholder =
+    mode === "heading" ? t("switcher.placeholderHeading")
+    : mode === "block" ? t("switcher.placeholderBlock")
+    : t("switcher.placeholder");
+  const emptyText =
+    mode === "heading" ? t("switcher.emptyHeading")
+    : mode === "block" ? t("switcher.emptyBlock")
+    : t("switcher.empty");
+
   return (
     <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="quick-switcher">
       <div className="modal-panel" role="dialog" aria-label={t("switcher.aria")}>
@@ -156,14 +193,14 @@ export function QuickSwitcher() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={t("switcher.placeholder")}
+            placeholder={placeholder}
             spellCheck={false}
             data-testid="switcher-input"
           />
         </div>
         <div className="palette-list" ref={listRef} role="listbox">
           {rows.length === 0 ? (
-            <div className="palette-empty">{t("switcher.empty")}</div>
+            <div className="palette-empty">{emptyText}</div>
           ) : (
             rows.map((row, i) => {
               const isSel = i === sel;
@@ -190,6 +227,51 @@ export function QuickSwitcher() {
                       {after}
                     </span>
                     <span className="palette-hotkey">Enter</span>
+                  </div>
+                );
+              }
+              if (row.kind === "heading") {
+                const base = (row.path.replace(/\.md$/, "").split("/").pop()) ?? row.path;
+                return (
+                  <div
+                    key={`h:${row.path}:${row.heading.from}`}
+                    className={`palette-item${isSel ? " is-selected" : ""}`}
+                    role="option"
+                    aria-selected={isSel}
+                    onMouseMove={() => setSelected(i)}
+                    onClick={() => activate(row)}
+                    data-testid="switcher-item"
+                  >
+                    <span className="palette-item-icon"><Icon name="hash" size={14} /></span>
+                    <span className="palette-item-name">
+                      {toSegments(row.heading.text, row.indices).map((seg, j) =>
+                        seg.hit ? <span key={j} className="fz-hit">{seg.text}</span> : <span key={j}>{seg.text}</span>,
+                      )}
+                    </span>
+                    <span className="palette-path" title={base}>{base}</span>
+                  </div>
+                );
+              }
+              if (row.kind === "block") {
+                const base = (row.path.replace(/\.md$/, "").split("/").pop()) ?? row.path;
+                return (
+                  <div
+                    key={`b:${row.path}:${row.block.id}`}
+                    className={`palette-item${isSel ? " is-selected" : ""}`}
+                    role="option"
+                    aria-selected={isSel}
+                    onMouseMove={() => setSelected(i)}
+                    onClick={() => activate(row)}
+                    data-testid="switcher-item"
+                  >
+                    <span className="palette-item-icon"><Icon name="link" size={14} /></span>
+                    <span className="palette-item-name">
+                      <span className="palette-block-id">^</span>
+                      {toSegments(row.block.id, row.indices).map((seg, j) =>
+                        seg.hit ? <span key={j} className="fz-hit">{seg.text}</span> : <span key={j}>{seg.text}</span>,
+                      )}
+                    </span>
+                    <span className="palette-path" title={base}>{base}</span>
                   </div>
                 );
               }

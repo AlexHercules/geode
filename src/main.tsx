@@ -38,6 +38,7 @@ import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
+import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
@@ -334,6 +335,30 @@ async function bootstrap() {
       renamePropertyAcrossVault({ vault, metadata, documents }, oldKey, newKey),
     values: (key) => metadata.getPropertyValues(key),
     keyCounts: () => [...metadata.getPropertyKeyCounts().entries()],
+  };
+
+  // always-on quick-switcher sub-mode probe (R38): exposes the PURE heading/block
+  // search (core/switcherSearch) so browser/desktop E2E drive #/^ modes
+  // deterministically (the live modal — typing # in a real QuickSwitcher — is
+  // exercised by the browser E2E). Same pure-gate approach as __geodeFormat;
+  // assigned BEFORE loadExternal.
+  const switcherHost = globalThis as typeof globalThis & {
+    __geodeSwitcher?: {
+      mode: (q: string) => "file" | "heading" | "block";
+      headings: (q: string) => Array<{ path: string; text: string; from: number }>;
+      blocks: (q: string) => Array<{ path: string; id: string }>;
+    };
+  };
+  switcherHost.__geodeSwitcher = {
+    mode: (q) => switcherMode(q),
+    headings: (q) =>
+      searchHeadings(metadata.getAll(), stripSigil(q), workspace.getActiveFile()).map((h) => ({
+        path: h.path, text: h.heading.text, from: h.heading.from,
+      })),
+    blocks: (q) =>
+      searchBlocks(metadata.getAll(), stripSigil(q), workspace.getActiveFile()).map((b) => ({
+        path: b.path, id: b.block.id,
+      })),
   };
 
   // always-on slash-command probe (R31): drives the trigger gate + candidate
