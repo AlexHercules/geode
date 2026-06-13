@@ -42,6 +42,7 @@ import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/sw
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid } from "@core/dailyNote";
+import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
 import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
@@ -454,6 +455,24 @@ async function bootstrap() {
     path: (y, m0, d) => dailyNotePath(new Date(y, m0, d)),
     parse: (s) => { const dt = parseDailyStamp(s); return dt ? dailyStamp(dt) : null; },
     gridDims: (year, month0) => { const g = monthGrid(year, month0); return { weeks: g.length, cols: g[0].length, first: dailyStamp(g[0][0]), last: dailyStamp(g[g.length - 1][6]) }; },
+  };
+
+  // always-on note-composer probe (R44): pure extract helpers (name/content/link).
+  // The live command path (editor:extract-selection on a real CM view) is exercised
+  // by the browser E2E; App effects don't run in a backgrounded webview, so the
+  // desktop probe drives only these pure functions. Same pure-gate approach as
+  // __geodeFormat/__geodeDaily; assigned BEFORE loadExternal.
+  const composerHost = globalThis as typeof globalThis & {
+    __geodeComposer?: {
+      derive: (selected: string) => string;
+      content: (selected: string) => string;
+      replacement: (name: string, mode: "link" | "embed") => string;
+    };
+  };
+  composerHost.__geodeComposer = {
+    derive: (selected) => deriveNoteName(selected),
+    content: (selected) => extractedContent(selected),
+    replacement: (name, mode) => extractReplacement(name, mode),
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll
