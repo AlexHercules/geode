@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R42 套件回归（2026-06-14，macOS release 二进制 v0.42.0 实测 `r42-probe-vault`）
+
+R42 = 回收站 本地 `.trash/`（数据安全关键轮；已核实缺口：删除=永久、compat `trash*` 仅 stub）。**compat trash gap 部分关闭**
+（`trashLocal`/`Vault.trash(local)` → core `vault.trash` 真本地回收站；`trashSystem` 仍 false[系统回收站不做]）。Rust 加
+`vault_trash`/`vault_list_trash`（仅 `std::fs`，**零新 crate**）；vault.ts adapter.trash/listTrash（含 binaryFiles）+ Memory
+listTree skip `.` 前缀 + Vault.trash/listTrash/restoreFromTrash。**修永久删=丢数据底线**：删除移到 `.trash/`（可恢复）。macOS
+probe 实测：新增 **r42-probe 10/10**——含**真 fs 数据安全核心**：删除文件物理移到 `<vault>/.trash/`（Node 直读磁盘确认）、内容字节
+保留、restore 回原位（绝不永久丢）。**r41/r40/…/r24/r28/r31 套件不回退**（浏览器 r42-e2e **17/17** + r41 21、r40 19、r39 17、
+r38 19、r37 36、r36 47、r35 25、r34 15、r33 37、r32 24、r31 21、r28 23、r24 12 全绿；`r26-bytes` 0）。**3 维对抗评审 18 finding →
+5 修复**（3 major：MemoryVaultAdapter.trash 漏 binaryFiles[浏览器删图片静默失败] / 文件夹 trash 漏 binaryFiles 子项[孤儿复活] /
+restoreFromTrash 恢复文件夹不重索引子项[改 emit file:renamed→reindexFolder]；2 defensive：vault_trash 空路径守卫 / trash 前
+flushAll 无损）**+ 13 nit/by-design/证伪**（trash flatten 丢原路径=Obsidian 同 / TOCTOU 覆盖已删数据 / to_string_lossy 非 UTF8 /
+失败场景全 fail-safe）。
+
 ### R41 套件回归（2026-06-14，macOS release 二进制 v0.41.0 实测 `r41-probe-vault`）
 
 R41 = 标签面板 + 编辑器 `#` 标签补全（已核实缺口：getTagMap 无面板消费、无 `#` 补全源）。**compat API 表面零代码改动**

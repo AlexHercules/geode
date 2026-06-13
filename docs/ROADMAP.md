@@ -982,7 +982,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
 | ~~**⑩ 标签面板 + 编辑器 `#` 标签补全**~~ | **R41 已完成（v0.41，见上）**——`features/tags/TagsPanel`（右栏，`useStore(metadata.revision)`，getTagMap 计数降序，点击 `workspace.requestSearch("#"+tag)`）+ `features/editor/tagCompletion.ts`（`#` 补全源镜像 slashCommands，gate `(^|[\s(])`，`__geodeTag` 探针）+ cmExtensions override 三源 + 新增 `searchRequest` consume-once Store。getTagMap 加 revision 缓存、frontmatter 退化标签索引层过滤。r41-e2e 21/21 + r41-probe 11/11。 | 余项（按需求驱动）：标签计数=文件数非出现数；CJK 仅 BMP 表意（三正则同步）；code 内仍弹补全（三源共有）；标签重命名/层级折叠；面板搜索框过滤。 |
-| **⑪ 回收站 + 文件恢复快照** | **缺 / 数据安全相关**（删除=永久；compat `trash*` 仅 stub；无 `.trash`/快照）| Obsidian「File recovery」定期快照 + 删除入 `.trash`。切入：Rust 后端 move-to-`.trash` + 周期快照。**必触发 data-safety skill**（可能需依赖决策）。 |
+| **⑪ 回收站 + 文件恢复快照** | **部分 / 数据安全**（本地 `.trash/` 回收站 **R42 已完成（v0.42，见上）**：Rust `vault_trash`/`vault_list_trash`[仅 std::fs 无新 crate] + vault.ts adapter.trash/listTrash[含 binaryFiles] + Vault.trash/listTrash/restoreFromTrash[restore emit file:renamed 重索引文件夹子项] + Explorer trash 前 flushAll 无损 + compat trash 接通 + `.trash` 自动隐藏。**修永久删=丢数据底线**。r42-e2e 17/17 + r42-probe 10/10[真 fs 验证]；**文件恢复快照[周期内容快照]仍缺**）| 余项切入：snapshots = Rust 周期写 `.geode/snapshots/<file>/<ts>` 副本 + 恢复 UI；系统回收站（需 `trash` crate=新依赖，待用户拍板）；回收站 UI 面板（listTrash/restoreFromTrash 已就绪，restore 原路径需自携）。 |
 | **⑫ 日记日历 + 可配置日记** | **部分**（daily-note 插件仅命令、格式写死、无日历/模板/前后日导航）| 切入：daily-note 设置（格式/文件夹/模板）+ 侧栏月历（自绘，零依赖）+ 前/后一日命令。 |
 | **⑬ 笔记合并/拆分（Note composer）** | **缺** | Obsidian：合并两笔记、按标题/选区拆分为新笔记、提取并替换为链接。切入：core 文本操作 + 复用 `renameWithLinkUpdate`/link 改写。 |
 | **⑭ 保存的工作区布局（Workspaces）** | **缺**（无 serializeLayout/workspaces.json）| 切入：workspace 状态序列化 + `.obsidian/workspaces.json` 兼容 + 切换 UI。 |

@@ -4,8 +4,9 @@
 
 ### ① 当前状态（每轮收尾**必须**刷新这几行）
 
-- 版本 **v0.41.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
-- 上一轮：**R41 标签面板 + 编辑器 `#` 标签补全 ✓ 已交付**（R32+ 候选池第三梯队 #⑩）。① `features/tags/TagsPanel`(右栏,镜像 R30 allproperties,`useStore(metadata.revision)` 反应式,getTagMap 建列表/计数降序/点击 `requestSearch`);② `features/editor/tagCompletion.ts`(`#` 补全源,镜像 R31 slashCommands:`tagTrigger`/`tagCandidates`/`tagCompletionSource`,gate `(^|[\s(])` 同 metadata)→ cmExtensions override 三源 + `__geodeTag` 探针;③ 新增 consume-once `workspace.searchRequest` Store + `requestSearch`(点标签注入搜索,SearchPanel 消费)。**零新依赖**。`r41-e2e` **21/21** + 桌面 `r41-probe` **11/11** + r24/r31-r40 不回退 + r26-bytes 0。**3 维对抗评审 19 finding → 3 确认修复**(getTagMap 加 revision 缓存防补全热路径全扫 / 退化 frontmatter 标签 `["#","bad space"]` 索引层过滤 / `(#tag` 补全 gate 对齐 `(^|[\s(])`)+ 16 nit/证伪。
+- 版本 **v0.42.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
+- 上一轮：**R42 回收站 本地 `.trash/` ✓ 已交付（数据安全关键轮）**（R32+ 候选池第三梯队 **#⑪ 的 trash 切片**;#⑪=回收站+文件恢复快照,**快照延后**）。**修永久删=丢数据底线违规**:删除原走 Rust `vault_delete`(`fs::remove_*` 永久)→ 改 `vault_trash`(移到 `<vault>/.trash/`,**可恢复**)。**零新 crate**(仅 `std::fs`;系统回收站[需 trash crate]显式不做)。Rust 加 `vault_trash`/`vault_list_trash`;vault.ts 加 adapter.trash/listTrash(Tauri invoke + Memory move,含 binaryFiles)+ Memory listTree skip `.` 前缀 + Vault.trash/listTrash/restoreFromTrash(restore emit `file:renamed` 让文件夹子项重索引);Explorer 删除走 trash(+ trash 前 flushAll 无损)+ compat trash 接通。`.trash` 自动隐藏(tree walk skip `.`)。`r42-e2e` **17/17** + 桌面 `r42-probe` **10/10(含真 fs:文件物理移到 .trash、内容保留、restore 回原位)** + r24/r28/r31-r41 不回退 + r26-bytes 0。**3 维对抗评审 18 finding → 5 修复(3 major:Memory binary trash/文件夹含 binary/文件夹 restore 重索引 + 2 defensive:空路径守卫/trash 前 flush)**。
+- **下一项 = R42→R43 = R32+ 候选池第三梯队 #⑫ 日记日历 + 可配置日记**（daily-note 插件仅命令、格式写死、无日历/模板/前后日导航）。切入:① daily-note 设置(格式/文件夹/模板,镜像 settings 模式)+ ② 侧栏月历(**自绘,零依赖**——SVG/CSS grid 画月格,点日期开/建当日笔记,有笔记的日期高亮)+ ③ 前/后一日命令。**零新依赖、无 Rust**(纯前端,clean 轮)。**#⑪ 余项**(文件恢复快照=周期内容快照,数据安全相关,延后)+ **#⑧ 余项**(stacked tabs / linked view)仍延后。其后队列:⑬ note composer → ⑭ workspaces →（全队列见 ROADMAP R32+ 候选池第三/四梯队）。① `features/tags/TagsPanel`(右栏,镜像 R30 allproperties,`useStore(metadata.revision)` 反应式,getTagMap 建列表/计数降序/点击 `requestSearch`);② `features/editor/tagCompletion.ts`(`#` 补全源,镜像 R31 slashCommands:`tagTrigger`/`tagCandidates`/`tagCompletionSource`,gate `(^|[\s(])` 同 metadata)→ cmExtensions override 三源 + `__geodeTag` 探针;③ 新增 consume-once `workspace.searchRequest` Store + `requestSearch`(点标签注入搜索,SearchPanel 消费)。**零新依赖**。`r41-e2e` **21/21** + 桌面 `r41-probe` **11/11** + r24/r31-r40 不回退 + r26-bytes 0。**3 维对抗评审 19 finding → 3 确认修复**(getTagMap 加 revision 缓存防补全热路径全扫 / 退化 frontmatter 标签 `["#","bad space"]` 索引层过滤 / `(#tag` 补全 gate 对齐 `(^|[\s(])`)+ 16 nit/证伪。
 - **下一项 = R41→R42 = R32+ 候选池第三梯队 #⑪ 回收站 + 文件恢复快照**（删除=永久;compat `trash*` 仅 stub;无 `.trash`/快照）。Obsidian:删除入 `.trash` + 定期快照(File recovery)。切入:Rust 后端 `move-to-.trash`(`<vault>/.trash/` 用 `std::fs::rename`,**无需新 crate** → 不撞「新依赖」硬边界)+ 删除命令改走 trash + 可选周期快照(`.geode/snapshots/` 写副本,亦无新依赖)。**⚠️ 数据安全关键轮:必加载 data-safety skill 全清单**(删除竞态、回声指纹、TOCTOU);**先评估是否需新依赖**——若基本 trash 用既有 Rust fs 即可(预判可以),则不撞硬边界;若快照/trash 库确需新 crate→停下问用户(硬边界#5)。**#⑧ 余项**(stacked tabs / linked view)仍延后。其后队列:⑫ 日记日历 → ⑬ note composer →（全队列见 ROADMAP）。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
@@ -58,6 +59,18 @@ OBSIDIAN-COMPAT 套件矩阵不回退（macOS 下 = probe 插件方案）。用�
 
 ## 给接续者的三句话背景
 
+- **R42（回收站 .trash · 数据安全关键轮）核心教训三条**：① **改 vault IO 操作必须双 adapter（Memory + Tauri）+ 三类
+  实体（files/folders/binaryFiles）全覆盖**——B 初版 Memory.trash 只处理 files/folders,漏 binaryFiles → 浏览器删图片附件
+  静默 throw(桌面 Rust fs::rename 不挑内容、没漏)。文件夹递归也漏 binaryFiles 子项 → listTree 复活孤儿文件夹。**凡动
+  Memory adapter 的文件操作,先列全 files/folders/binaryFiles 三个 Map,确保每个都处理(文件分支 + 文件夹递归两处)**。
+  ② **"恢复/创建"一个文件夹时,emit 的事件必须能让 metadata 递归重索引子项**——restoreFromTrash 初版 emit `file:created`,
+  但 metadata 的 reindexFile 对非 `.md` 路径早退 → 恢复文件夹后子笔记的 backlinks/graph/search 全失效。改 emit `file:renamed`
+  (metadata 对文件夹走 reindexFolder 递归;且 `file:renamed` 事件本身不改写链接文本——改写在显式 renameWithLinkUpdate)。
+  **emit 文件夹级事件前,查 metadata 对该事件的 文件 vs 文件夹 分支处理,别让文件夹路径掉进只认 `.md` 的早退**。
+  ③ **数据安全轮的最强验证 = 探针在真二进制后用 Node fs 直读磁盘**——r42-probe 不只查 app 内 store 真值,更让 Node 脚本读
+  `<vault>/.trash/` 确认删除文件物理移过去、内容字节保留、restore 回原位。**「删除可恢复」这种底线,要在真 fs 上眼见为实,
+  不能只信 app 内 API**。**18 finding → 5 修复**:3 major 全在「Memory adapter binary 覆盖 / 文件夹事件重索引」,核心 trash
+  逻辑(Rust + 双端对称)零缺陷——契约先行 + data-safety skill 全清单 + 真 fs 探针让数据安全轮稳落地。
 - **R41（标签面板 + `#` 补全）核心教训三条**：① **「首次直接消费某个既有索引 API 的 keys」会暴露该索引一直容忍的脏数据**
   ——`getTagMap()` 一直把 frontmatter `tags: ["#","bad space"]` 的空串/带空格键收进来(行内 tag 因 TAG_RE 的 `+` 永不脏,
   无人注意),R41 的标签面板/补全首次直接 `[...keys()]` 消费 → 空名行 + `#bad space` 畸形补全。根因修在**索引层**(parseNote

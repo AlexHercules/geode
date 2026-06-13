@@ -71,6 +71,69 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 42 additions — 回收站（本地 `.trash/` recoverable delete）【As-built v0.42】
+
+> **状态：As-built（2026-06-14）。数据安全关键轮（已加载 data-safety skill）。** R32+ 候选池第三梯队 #⑪ 的 **trash 切片**
+> （#⑪ = 回收站 + 文件恢复快照;本轮只取「本地 `.trash/` 回收站」,**快照 + 专用 UI 延后**）。**修数据安全底线违规**:
+> 删除原走 Rust `vault_delete`（`fs::remove_*` **永久删 = 丢数据**）→ 改为移到 `<vault>/.trash/`（**可恢复**）。**零新 crate
+> 依赖**（仅 `std::fs::rename`/`create_dir_all`/`read_dir` → **不撞硬边界 #5**；系统回收站[需 `trash` crate]显式不做）。
+> `.trash` 自动隐藏:Rust+Memory tree walk 都 skip `.` 前缀 → 不入可见树、不被索引。
+
+### 契约（冻结）
+
+**src-tauri/src/main.rs — 2 新命令（`std::fs` only）+ 注册到 invoke_handler**：
+```rust
+fn vault_trash(vault, path) -> CmdResult<String>   // safe_join → mkdir .trash → 唯一名（碰撞加 ` <n>`）→ fs::rename → 返回 ".trash/<name>"
+fn vault_list_trash(vault) -> CmdResult<Vec<String>> // read_dir(.trash) → [".trash/<entry>", ...]（不存在则空）
+```
+
+**src/core/vault.ts**：
+- `VaultAdapter` 接口加 `trash(path): Promise<string>`（返回 trash 相对路径）+ `listTrash(): Promise<string[]>`。
+- `TauriVaultAdapter`：`trash`→`invoke("vault_trash",{vault,path})`;`listTrash`→`invoke("vault_list_trash",{vault})`。
+- `MemoryVaultAdapter`：`trash`=把 `files`/`folders` 条目移到 `.trash/<唯一名>`（含文件夹递归移子项,collision 加 ` <n>`）;
+  `listTrash`=过滤 `.trash/` 顶层条目;**`listTree` 加 skip：首段 `startsWith(".")` 的路径不入树**（对齐 Rust walk,防 `.trash` 显示/被索引）。
+- `Vault`：`trash(path)`（adapter.trash + 清 cache（path 及其子）+ refreshTree + emit `file:deleted` + `vault:changed "delete"`;返回 trashPath）;
+  `listTrash()`（透传 adapter）;`restoreFromTrash(trashRelPath, targetPath)`（**adapter.rename 原始 move,绝不走 Vault.rename 的链接改写** + refreshTree + emit `file:created` + `vault:changed "create"`）。
+
+**接线**：`features/explorer/Explorer.tsx` 删除 `vault.remove(node.path)` → `vault.trash(node.path)`（确认对话文案改「移到回收站」如有）;`compat/obsidian/vault.ts` 的 `trash`/`trashLocal` stub → `vault.trash`（gap 关闭）;**`delete`/`vault.remove` 保留永久删**（内部/未来 empty-trash 用）。版本 0.42。
+
+### 文件所有权（并行 implementer）
+- **A（Rust）**：`src-tauri/src/main.rs`（vault_trash + vault_list_trash + 注册）。
+- **B（vault.ts 全部）**：`src/core/vault.ts`（接口 + 两 adapter trash/listTrash + Memory listTree dot-skip + Vault trash/listTrash/restoreFromTrash）。
+- **C（接线+版本）**：`src/features/explorer/Explorer.tsx` + `src/compat/obsidian/vault.ts` + 三处版本号 + i18n（删除文案如有）。
+- **me（验证，数据安全关键）**：`.calibration/r42-e2e.mjs`（memory：删→listTrash 含它→restore 回来→tab/index 反应）+ `.calibration/r42-probe.mjs`（**真二进制：删一个文件 → Node fs 读 `<vault>/.trash/` 确认它在那里、原位置消失（绝不永久丢）→ restore → 回原位**）。
+
+### As-built（评审修复 + 教训）
+
+> **验证**：typecheck 0 + 浏览器 `r42-e2e` **17/17**（trash 可恢复 + restore + 开着 tab 关闭 + 碰撞 + **binary 附件 trash +
+> 文件夹含 binary 全移除 + 文件夹 restore 重索引子项 + 空路径拒绝**）+ 桌面 `r42-probe` **10/10**（**真 fs：删除文件物理移到
+> `.trash/`、内容保留、restore 回原位**）+ r24/r28/r31-r41 不回退 + r26-bytes 0 + cargo/build 绿。
+> **3 维对抗评审 18 finding → 5 修复（3 major + 2 defensive）+ 13 nit/by-design/证伪**。
+
+**3 个 major（已修）**：① **MemoryVaultAdapter.trash 不处理 `binaryFiles`**——浏览器删二进制附件（粘贴的图片）落 else 分支
+`throw "Path not found"` → Explorer catch 后静默无反应（桌面 `fs::rename` 不受影响）。修 = 加 `binaryFiles` 分支（move 条目）+
+碰撞检测 `taken()` 含 binaryFiles。② **文件夹 trash 遗漏 binaryFiles 子项**——trash 含图片的文件夹时图片滞留 binaryFiles →
+`listTree` 把已删文件夹「复活」容纳孤儿 → 树/底层不一致。修 = 文件夹递归分支同时搬 binaryFiles 子项。③ **`restoreFromTrash`
+恢复「文件夹」时其 `.md` 子项不重索引**——原 emit `file:created{folderPath}` → metadata `reindexFile` 因非 `.md` 早退 →
+backlinks/graph/search/switcher 全缺失至重载。修 = **改 emit `file:renamed{oldPath:trashRel, newPath:target}`**（metadata 对
+文件走 reindexFile、对**文件夹走 reindexFolder 递归**;`file:renamed` 事件不改写链接文本——那在显式 `renameWithLinkUpdate`,非
+事件监听器）。
+
+**2 个 defensive（已修）**：④ **`vault_trash` 空/`.` 路径无守卫**（safe_join 放行 CurDir → 可对整库根 rename;虽 EINVAL 失败
+安全）→ 加显式 `path 空/"."/"./"` → Err。⑤ **trash 前不 flush 活动编辑器**（删开着且脏的文件 → 未保存编辑丢、`.trash` 只存
+last-saved;同旧 remove 非回退,但本轮文案改「移到回收站」升了无损预期）→ Explorer.deleteNode 在 trash 前 `await
+workspace.flushAll()`（**trash-before-flush = 真正无损**）。
+
+### 已知偏差（写给后续轮）
+- **只做本地 `.trash/`，不做系统回收站**（OS trash 需 `trash` crate = 新依赖，硬边界,显式不做）。
+- **不做文件恢复快照（File recovery）**（#⑪ 另一半,延后;`.trash` 已修永久删底线）。
+- **无专用回收站 UI 面板**（`.trash` 隐藏于树;restore 走核心方法 + 未来 UI;listTrash/restoreFromTrash 已就绪供接）。
+- **trash flatten 丢原始目录**：trash `a/b/note.md` → `.trash/note.md`（只取 basename）;`listTrash` **不携带原路径**,
+  `restoreFromTrash` 必须由**调用方指定 targetPath**,默认无法自动回原嵌套目录（Obsidian 本地 `.trash` 同样 flatten）——接 restore UI 时注意。
+- **`.trash` 碰撞用 ` <n>` 计数后缀**（含点文件夹名如 `My.Notes` 会切成 `My 1.Notes`,双端一致,纯美观）。
+- **`vault_trash` 用 `to_string_lossy`**：Linux 非法 UTF-8 文件名 rename 后名字可能损坏（内容不丢;macOS 强制 UTF-8 不触发;未来可对齐 `vault_write` 的 OsString 路径）。
+- **碰撞命名 exists()→rename 非原子（TOCTOU）**：外部进程在窄窗口落同名 `.trash` 文件时 Unix rename 覆盖之（覆盖的是已删数据,影响极小）。
+
 ## Round 41 additions — 标签面板 + 编辑器 `#` 标签补全（Tags pane + `#` tag completion）【As-built v0.41】
 
 > **状态：As-built（2026-06-14）。** R32+ 候选池第三梯队 #⑩ = 已核实缺口（`metadata.getTagMap()` 有数据无面板消费;
