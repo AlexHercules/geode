@@ -377,6 +377,58 @@ export function App() {
     disposers.push(
       ...registerSearchCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
     );
+    // R36 tab keyboard shortcuts. next/prev use LITERAL Ctrl on every platform
+    // (Cmd+Tab is the macOS app switcher); go-to-N / new / reopen use Mod (Cmd on
+    // mac, Ctrl elsewhere). All operate on the ACTIVE pane (Obsidian cycles within
+    // the current tab group). Ctrl+Tab in the editor is intercepted by the R33
+    // Prec.highest keydown handler before CM treats Tab as indentation.
+    disposers.push(
+      commands.register({
+        id: "app:next-tab",
+        name: () => t("cmd.nextTab"),
+        hotkey: "Ctrl+Tab",
+        callback: () => workspace.cycleActiveTab(1),
+      }),
+      commands.register({
+        id: "app:previous-tab",
+        name: () => t("cmd.previousTab"),
+        hotkey: "Ctrl+Shift+Tab",
+        callback: () => workspace.cycleActiveTab(-1),
+      }),
+      ...Array.from({ length: 8 }, (_, i) => {
+        const n = i + 1;
+        return commands.register({
+          id: `app:go-to-tab-${n}`,
+          name: () => t("cmd.goToTab", { n }),
+          hotkey: `Mod+${n}`,
+          callback: () => workspace.activateTabAt(n - 1),
+        });
+      }),
+      commands.register({
+        id: "app:go-to-last-tab",
+        name: () => t("cmd.goToLastTab"),
+        hotkey: "Mod+9",
+        callback: () => workspace.activateLastTab(),
+      }),
+      commands.register({
+        id: "app:new-tab",
+        name: () => t("cmd.newTab"),
+        hotkey: "Mod+T",
+        callback: () => {
+          void (async () => {
+            const path = vault.uniquePath("", "Untitled");
+            await vault.create(path, "");
+            workspace.openFile(path, { newTab: true });
+          })();
+        },
+      }),
+      commands.register({
+        id: "app:reopen-closed-tab",
+        name: () => t("cmd.reopenClosedTab"),
+        hotkey: "Mod+Shift+T",
+        callback: () => workspace.reopenClosedTab(),
+      }),
+    );
     if (isTauri()) {
       disposers.push(
         commands.register({

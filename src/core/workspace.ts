@@ -16,6 +16,16 @@ import { Store } from "./store";
 import { basename, stripExtension } from "./vault";
 
 const PERSIST_KEY = "geode.workspace.v1";
+const RECENTLY_CLOSED_MAX = 20;
+
+/** A user-closed tab, captured for reopen (Mod+Shift+T). Session-only. */
+interface ClosedTab {
+  viewType: "markdown" | "graph";
+  filePath: string | null;
+  mode: ViewMode;
+  /** the pane it was closed from — reopen prefers it if it still exists */
+  paneId: string;
+}
 let tabCounter = 0;
 let paneCounter = 0;
 const newTabId = () => `tab-${++tabCounter}-${Math.random().toString(36).slice(2, 7)}`;
@@ -167,6 +177,10 @@ export class Workspace {
    *  openFile so the consuming pane already targets `path`. */
   readonly revealTarget = new Store<{ path: string; from: number; to: number } | null>(null);
   private flushers = new Set<() => void | Promise<void>>();
+  /** Most-recent-LAST stack of user-closed tabs for Mod+Shift+T. Session-only —
+   *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds
+   *  it; reactive cleanups (delete/rename/missing) purge it. */
+  private recentlyClosed: ClosedTab[] = [];
 
   constructor(private events: EventBus) {
     this.restore();
@@ -174,6 +188,14 @@ export class Workspace {
     // when a file is deleted/renamed, fix tabs that point at it
     events.on("file:deleted", ({ path }) => this.handleDeleted(path));
     events.on("file:renamed", ({ oldPath, newPath }) => this.handleRenamed(oldPath, newPath));
+    // a vault switch (reason "load") invalidates every old-vault relative path —
+    // drop the reopen stack so Mod+Shift+T can't resurrect a SAME-NAMED file in
+    // the new vault (closeMissingFileTabs' exists() guard would let such a stale
+    // entry survive). Mirrors openVaultFlow's lastActiveFile reset + Document
+    // manager's handle invalidation on the same event. (R36 review fix.)
+    events.on("vault:changed", ({ reason }) => {
+      if (reason === "load") this.recentlyClosed = [];
+    });
   }
 
   /* ---------- selectors ---------- */
@@ -264,6 +286,20 @@ export class Workspace {
   }
 
   closeTab(id: string) {
+    // capture BEFORE the mutation so Mod+Shift+T can reopen it (LIFO). Only an
+    // explicit user close feeds this stack — reactive cleanups purge instead.
+    const s0 = this.state.get();
+    const holder0 = findTabLeaf(s0.root, id);
+    const closing = holder0?.tabs.find((t) => t.id === id);
+    if (closing && holder0) {
+      this.recentlyClosed.push({
+        viewType: closing.viewType,
+        filePath: closing.filePath,
+        mode: closing.mode,
+        paneId: holder0.id,
+      });
+      if (this.recentlyClosed.length > RECENTLY_CLOSED_MAX) this.recentlyClosed.shift();
+    }
     this.update((s) => {
       const holder = findTabLeaf(s.root, id);
       if (!holder) return s;
@@ -324,6 +360,8 @@ export class Workspace {
     const last = this.lastActiveFile.get();
     if (last !== null && !exists(last)) this.lastActiveFile.set(null);
     console.info(`[workspace] closed ${stale.size} tab(s) pointing at missing files`);
+    // a missing file can't be reopened either — purge it from the reopen stack
+    this.recentlyClosed = this.recentlyClosed.filter((c) => c.filePath === null || exists(c.filePath));
     this.emitActiveFile();
     return stale.size;
   }
@@ -492,6 +530,54 @@ export class Workspace {
     this.setActivePane(next.id);
   }
 
+  /* ---------- tab navigation (R36) ---------- */
+
+  /** Cycle the ACTIVE pane's active tab by delta (+1 next / -1 prev), wrapping.
+   *  No-op when the active pane has < 2 tabs. (Obsidian Ctrl+Tab cycles within
+   *  the current tab group.) */
+  cycleActiveTab(delta: 1 | -1) {
+    const leaf = this.getActivePane();
+    if (leaf.tabs.length < 2) return;
+    const idx = leaf.tabs.findIndex((t) => t.id === leaf.activeTabId);
+    const base = idx < 0 ? 0 : idx;
+    const next = leaf.tabs[(base + delta + leaf.tabs.length) % leaf.tabs.length];
+    this.setActiveTab(next.id);
+  }
+
+  /** Activate the tab at 0-based `index` in the active pane; out-of-range = no-op
+   *  (Obsidian: Cmd+5 with 3 tabs does nothing). (Mod+1..8 → index 0..7.) */
+  activateTabAt(index: number) {
+    const tab = this.getActivePane().tabs[index];
+    if (tab) this.setActiveTab(tab.id);
+  }
+
+  /** Activate the LAST tab in the active pane; no-op when empty. (Mod+9.) */
+  activateLastTab() {
+    const tabs = this.getActivePane().tabs;
+    if (tabs.length === 0) return;
+    this.setActiveTab(tabs[tabs.length - 1].id);
+  }
+
+  /** Reopen the most-recently user-closed tab (LIFO), restoring its view mode, in
+   *  a NEW tab — preferring its original pane if it still exists, else the active
+   *  pane (openFile's paneId fallback). Returns whether one was reopened. (Mod+
+   *  Shift+T.) */
+  reopenClosedTab(): boolean {
+    const entry = this.recentlyClosed.pop();
+    if (!entry) return false;
+    if (entry.viewType === "graph") {
+      this.openGraph();
+      return true;
+    }
+    if (entry.filePath === null) return false;
+    this.openFile(entry.filePath, { newTab: true, paneId: entry.paneId });
+    const tab = this.getActiveTab();
+    if (tab && tab.filePath === entry.filePath && tab.mode !== entry.mode) {
+      this.setTabMode(tab.id, entry.mode);
+    }
+    return true;
+  }
+
   /* ---------- panels / modals / theme ---------- */
 
   setLeftPanel(panel: LeftPanelKind) {
@@ -641,6 +727,10 @@ export class Workspace {
     if (last !== null && (last === path || last.startsWith(path + "/"))) {
       this.lastActiveFile.set(null);
     }
+    // a deleted file can never be reopened — drop it from the reopen stack
+    this.recentlyClosed = this.recentlyClosed.filter(
+      (c) => !(c.filePath !== null && (c.filePath === path || c.filePath.startsWith(path + "/"))),
+    );
     this.emitActiveFile();
   }
 
@@ -671,6 +761,15 @@ export class Workspace {
     } else if (last !== null && last.startsWith(oldPath + "/")) {
       this.lastActiveFile.set(newPath + last.slice(oldPath.length));
     }
+    // keep the reopen stack pointing at the renamed path (same rule as tabs)
+    this.recentlyClosed = this.recentlyClosed.map((c) => {
+      if (c.filePath === null) return c;
+      if (c.filePath === oldPath) return { ...c, filePath: newPath };
+      if (c.filePath.startsWith(oldPath + "/")) {
+        return { ...c, filePath: newPath + c.filePath.slice(oldPath.length) };
+      }
+      return c;
+    });
     this.emitActiveFile();
   }
 
