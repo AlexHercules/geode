@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 67 additions — 拖拽 vault 文件入编辑器 → 链接/嵌入（候选池第五梯队 ㉛）【As-built v0.64】
+
+> **状态：As-built（v0.64 交付,2026-06-14）。** 第五梯队 ㉛——**【小】项至此清空**，下一项进【中】㉜。**两道前置门**：① grep 确认外部文件摄入（R17 粘贴/拖图片入库）+ 文件树拖拽移动（R28）已在，但 **vault 内文件拖入编辑器生成链接** 是缺口；② WebSearch 确认 Obsidian 核心（help/drag-and-drop：拖文件入编辑器插入链接）。
+> **实现 = 编辑器 drop handler（attachments.ts）识别 `EXPLORER_MIME`（核心共享 MIME，explorer dragstart 设、editor 读）**：① `dragover` 接管（explorer 拖只带 EXPLORER_MIME 无 text/plain → CM text-d&d 不接管 → 必须自己 `preventDefault`+`dropEffect="copy"`）；② `drop` 分支在外部文件分支**之前**：读 path → `internalDropSnippet` → sync `view.dispatch` 插入到落点（`posAtCoords ?? selection.head`）。**sync read+dispatch 无 await（无 R44 重入）**，纯编辑器内容插入走 autosave，不写 vault。explorer `effectAllowed` move→**copyMove**（编辑器 copy 光标；R28 tree-move 仍用 move，copyMove 允许）。
+> 验证：typecheck 0 · `r67-e2e.mjs` **9/9**（note→[[Name]]/附件→![[name.ext]]/文件夹+未知跳过/纯插入/**重名消歧→全路径**/**特殊字符跳过**/dragover preventDefault）· `r67-probe.mjs` **4/4**（真 Tauri fs：fileExists 区分文件/文件夹——drop folder-skip 依赖它，Memory adapter 可能与真 fs 不同）· 回归 r28[tree drag-move]23/23 + r35 25/25 绿。
+> **对抗评审（Workflow 3 lens + verify）抓到 1 主根因（3 lens 命中 major/minor）+ 1 major + nits → 修主根因**。**根因 = 把原始 basename 裸包进 `[[]]`**：① **重名消歧缺失**（3 lens：drop-correctness/dnd/datasafety 都命中）——`[[Spec]]` 在 `A/Spec.md`+`B/Spec.md` 共存时静默解析到错的那个（resolveLink 同名 tiebreak=同文件夹优先/sort 首个）；② **wikilink-unsafe 字符**（`[ ] # | ^`）——`Foo#Bar.md`→`[[Foo#Bar]]` 渲染器 wikilinkTarget 按 `#` 切→错目标（ARCHITECTURE R17 已记的同类限制；validateName 仅拒 `\`/`/`，故这些名合法可拖）。**修 = 复用全代码库的 fileToLinktext 规则（第 4 处：importAttachment/buildLinkInsert/linkRewrite/本轮）**：`internalDropSnippet(app, path, fromPath)` 取「解析回本文件的最短形」——basename 若 `resolve(base,fromPath)===path` 否则全路径；**且 form 含 wikilink-unsafe 字符则返回 null（不插，胜过插一个静默坏链——对齐既有 builder 的「必须可解析否则失败」哲学 + R17 限制）**。**nit 接受**：拖文件夹时 dragover 仍显 copy 光标（drop no-op 正确，仅光标；修需给文件夹加 MIME 标记=契约变更，不成比例）。**证伪**：拖拽落点 caret 反馈（CM 已有 dropCursor）。
+> **核心元教训**：**「从文件名构造一个 wikilink」不是 `[[basename]]` 这么简单——它是 fileToLinktext 规则（解析回验 + 重名→全路径 + 特殊字符不可表达则不产出）**，全代码库已在 importAttachment/buildLinkInsert/rename 三处实现。**新写「文件→链接」路径前先 grep 既有的 linktext builder，照它的「解析验证 + 必须可解析否则失败」来，别裸包 basename**（裸包=静默错链/坏链，本轮 + R44 同源「文件名→链接是对抗输入」）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**features/editor/attachments.ts**：`internalDropSnippet(app, path, fromPath): string | null`——`fileExists(path)` 否则 null；`isMd = base.endsWith(".md")`；`resolve = isMd ? resolveLink : resolveAttachment`；`form = resolve(baseForm)===path ? baseForm : resolve(fullForm)===path ? fullForm : null`；`form===null || /[[\]#|^]/.test(form)` → null；否则 `[[form]]`/`![[form]]`。`dragover` handler（EXPLORER_MIME → preventDefault + dropEffect copy + return true）。`drop` handler EXPLORER_MIME 分支（在 files 分支前，sync dispatch 到落点，传 `getPath()`）。import `EXPLORER_MIME` from `@core/explorerMove`。
+**features/explorer/Explorer.tsx**：dragstart `effectAllowed = "copyMove"`（原 "move"）。
+
+### 已知偏差 / 待办（写给后续轮）
+- **wikilink-unsafe 名（`[ ] # | ^`）的文件拖入不插入**（返回 null）——同 ARCHITECTURE R17 wikilink 限制（全代码库 wikilink builder 共有）；未来若 Geode 支持 markdown 内链 `[name](path)` 可作 fallback（但 metadata 仅索引 wikilink，会失反链）。
+- **拖文件夹 dragover 显 copy 光标**（drop no-op）——cosmetic；修需文件夹 MIME 标记（契约变更），接受 nit。
+- **多文件拖拽**——explorer 单路径拖，故单插入；Obsidian 支持多选拖，未来若 explorer 多选拖再扩。
+
 ## Round 66 additions — 状态栏增强：后链数 + 选中字数（候选池第五梯队 ㉙）【As-built v0.63】
 
 > **状态：As-built（v0.63 交付,2026-06-14）。** 第五梯队 ㉙。**分项 Gate 2**（官方 help 确认 Obsidian 核心状态栏显示「后链数 / 编辑器视图 / 字数」）：后链数 + 选中字数 = 核心 → 做；**光标行:列 = 非核心**（社区插件）→ **移除**（同 ㉔ smart typography 处理）。

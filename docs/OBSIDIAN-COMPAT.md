@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R67 套件回归（2026-06-14，macOS release 二进制 v0.64.0 实测 `r67-probe-vault`）
+
+R67 = 拖拽 vault 文件入编辑器 → 链接/嵌入（候选池第五梯队 ㉛，原生功能非 compat shim）。对照 Obsidian 核心 drag-and-drop（help：拖文件入编辑器插入链接）。
+编辑器 drop handler 识别 `EXPLORER_MIME`（核心共享 MIME，explorer 设/editor 读）：note→[[Name]]、附件→![[name.ext]]、文件夹/未知跳过；dragover 接管；effectAllowed move→copyMove。sync insert 无 await 不写 vault。**纯前端、零依赖、无 Rust**。
+新增套件：`r67-e2e.mjs` **9/9**（note/附件/文件夹+未知跳过/纯插入/重名消歧→全路径/特殊字符跳过/dragover preventDefault）+ `r67-probe.mjs` **4/4**（真 Tauri fs fileExists 区分文件/文件夹）。
+**对抗评审（Workflow 3 lens + verify）：1 主根因（3 lens 命中）+1 major → 修**。裸包 basename 的两病：重名消歧缺失（链错文件）+ wikilink-unsafe 字符（坏链）→ 修=复用全代码库 fileToLinktext 规则（解析回本文件的最短形 + 含 unsafe 字符不插）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r28[tree drag-move]23/23 + r35 25/25 绿（effectAllowed copyMove 不破树拖拽移动）。**OBSIDIAN-COMPAT 缺口表无变化**（R67 原生功能）。**候选池第五梯队【小】项至此清空，进【中】梯队。**
+
 ### R66 套件回归（2026-06-14，macOS release 二进制 v0.63.0 实测 `r66-probe-vault`）
 
 R66 = 状态栏增强：后链数 + 选中字数（候选池第五梯队 ㉙，原生功能非 compat shim）。对照 Obsidian 核心状态栏（官方 help：后链数/编辑器视图/字数）。

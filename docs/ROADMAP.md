@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R67 — v0.64（2026-06-14）拖拽 vault 文件入编辑器 → 链接/嵌入（第五梯队 ㉛ → 出队；**【小】项清空**）
+两道前置门：grep 确认外部文件摄入(R17)+树拖拽移动(R28)已在但 vault 内文件拖入编辑器是缺口 + WebSearch 确认 Obsidian 核心。
+实现 = 编辑器 drop handler 识别 `EXPLORER_MIME`（核心共享 MIME）：dragover 接管（explorer 拖无 text/plain）+ drop 分支 sync 插入到落点；effectAllowed move→copyMove（编辑器 copy 光标，R28 不破）。sync 无 await（无 R44 重入）不写 vault。
+验证：typecheck 0 · `r67-e2e` **9/9** · `r67-probe` **4/4**（真 Tauri fs fileExists 区分文件/文件夹）· 回归 r28/r35 绿。
+**对抗评审（Workflow 3 lens）1 主根因（3 lens 命中）+1 major → 修**：裸包 basename 的两个病——① 重名消歧缺失（`[[Spec]]` 在 A/Spec+B/Spec 共存时静默链错文件）；② wikilink-unsafe 字符（`Foo#Bar`→渲染器按 # 切→错目标）。**修=复用全代码库 fileToLinktext 规则（第 4 处）**：取解析回本文件的最短形（basename 若解析回本文件否则全路径）+ 含 unsafe 字符则不插（胜过静默坏链）。nit 接受：拖文件夹 dragover copy 光标（drop no-op）。**元教训**：「从文件名构造 wikilink」=fileToLinktext 规则（解析回验+重名→全路径+特殊字符不可表达则不产出），全代码库已 3 处实现；新写「文件→链接」路径先 grep 既有 builder 照它来，别裸包 basename（R44 同源「文件名→链接是对抗输入」）。
+
 ### R66 — v0.63（2026-06-14）状态栏增强：后链数 + 选中字数（第五梯队 ㉙ → 出队，核心项）
 分项 Gate 2（官方 help 确认 Obsidian 核心状态栏 = 后链数/编辑器视图/字数）：后链数+选中字数=核心 → 做；光标行:列=非核心（社区插件）→ **移除**（同 ㉔）。
 实现 = 两个纯 view 状态栏项（零核心 API 新增）：① 新 `backlink-count` 插件（getBacklinks 提及总数，metadata.revision 跨文件更新）；② word-count 加「N selected words」（getActiveView 选区，selection-changed）。
@@ -1226,7 +1232,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**㉘ Footnotes view 脚注面板**~~ | ✅ **R65 完成**（v0.62）| 独立右栏 tab `features/footnotes/`（镜像 OutlinePanel）：metadata 新增脚注索引（`getFootnotes`，行扫描 `[^id]:` on masked 排除围栏，content 取原文）；列 id+content，点击 jumpTo 定义（复用 `geode:scroll-to-heading`）。**Gate 2 确认**：Obsidian 1.9 核心 Footnotes view 插件（WebSearch），非社区。纯 view 零依赖。 |
 | ~~**㉙ 状态栏增强**~~ | ✅ **R66 完成**（v0.63，核心项）| 新 `backlink-count` 插件（"N backlinks"=后链总提及，metadata.revision 跨文件更新）+ word-count 加「N selected words」（`getActiveView` 选区，`document:selection-changed`）。**Gate 2**：后链数/选中词=Obsidian 核心状态栏项（官方 help 确认）；**光标行:列 移除=非核心**（社区插件，同 ㉔/Smart typography 处理）。 |
 | ~~**㉚ Callout 自定义类型 fallback**~~ | **R60 出队 = 实为已完成**（code-verify：`markdown.ts:902-944`）| 任意 `[!foo]` → `class="callout" data-callout="foo"`（主题可 `[data-callout=foo]` 上色）+ 无标题时类型名首字母大写作 fallback 标题（`[!tldr]`→"Tldr"）。**第四次「缺口」实为已完成**（HANDOFF 教训再验证）。 |
-| **㉛ 拖拽文件入编辑器生成链接/嵌入** | **缺/待核**（R28 有文件树拖拽移动，编辑器拖入待核）| 拖文件到编辑器 → 插入 `[[link]]`（md）或 `![[embed]]`（图片/附件）。CM drop handler + 路径解析。 |
+| ~~**㉛ 拖拽文件入编辑器生成链接/嵌入**~~ | ✅ **R67 完成**（v0.64）| 编辑器 drop handler（attachments.ts）识别 EXPLORER_MIME（核心共享 MIME）→ vault 内文件拖入：.md → `[[Name]]`、附件 → `![[name.ext]]`，文件夹/未知跳过（`fileExists`）；dragover 接管（explorer 拖只带 EXPLORER_MIME 无 text/plain）；effectAllowed move→copyMove（编辑器 copy 光标，R28 tree-move 不破）。**Gate 2**：Obsidian 核心（help/drag-and-drop 确认）。sync insert 无 await。**第五梯队【小】项至此清空** → 下一项进【中】㉜。 |
 
 **【中】一轮可做（次优先）**
 
