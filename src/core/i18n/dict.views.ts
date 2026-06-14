@@ -74,6 +74,10 @@ export const en = {
   "settings.dailyNoteFolder": "New file location",
   "settings.dailyNoteFormat": "Date format",
   "settings.dailyNoteTemplate": "Template file location",
+  "settings.uniqueNotes": "Unique note creator",
+  "settings.uniqueNoteFolder": "New file location",
+  "settings.uniqueNoteFormat": "Unique prefix format",
+  "settings.uniqueNoteTemplate": "Template file location",
 
   // ---- settings: plugins ----
   // note split around the inline <code> element (word order differs per locale)
@@ -291,6 +295,10 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.dailyNoteFolder": "新文件位置",
   "settings.dailyNoteFormat": "日期格式",
   "settings.dailyNoteTemplate": "模板文件位置",
+  "settings.uniqueNotes": "唯一笔记创建器",
+  "settings.uniqueNoteFolder": "新文件位置",
+  "settings.uniqueNoteFormat": "唯一前缀格式",
+  "settings.uniqueNoteTemplate": "模板文件位置",
 
   // ---- settings: plugins ----
   "settings.pluginsNotePre": "内置插件为 Geode 提供命令、状态栏项等扩展能力。也可以在运行时通过 ",

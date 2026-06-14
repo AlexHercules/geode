@@ -54,6 +54,7 @@ import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/sw
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
+import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
 import { mergeNotes } from "@core/noteMerge";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
@@ -575,6 +576,25 @@ async function bootstrap() {
     gridDims: (year, month0) => { const g = monthGrid(year, month0); return { weeks: g.length, cols: g[0].length, first: dailyStamp(g[0][0]), last: dailyStamp(g[g.length - 1][6]) }; },
     setFormat: (f) => setDailyNoteFormat(f),
     setFolder: (f) => setDailyNoteFolder(f),
+  };
+
+  // always-on unique-note probe (R53): pure name / path-preview generation + config
+  // reactivity. The create flow (unique-note:create → vault.create) is a live async
+  // write exercised by the browser E2E; the desktop probe drives only these pure
+  // functions (App-Nap-safe — no async/effects). Assigned BEFORE loadExternal.
+  const uniqueHost = globalThis as typeof globalThis & {
+    __geodeUnique?: {
+      name: (y: number, m0: number, d: number, h: number, mi: number, s: number) => string;
+      path: (y: number, m0: number, d: number, h: number, mi: number, s: number) => string;
+      setFormat: (f: string) => void;
+      setFolder: (f: string) => void;
+    };
+  };
+  uniqueHost.__geodeUnique = {
+    name: (y, m0, d, h, mi, s) => uniqueNoteName(new Date(y, m0, d, h, mi, s)),
+    path: (y, m0, d, h, mi, s) => uniqueNotePathPreview(new Date(y, m0, d, h, mi, s)),
+    setFormat: (f) => setUniqueNoteFormat(f),
+    setFolder: (f) => setUniqueNoteFolder(f),
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).

@@ -16,6 +16,14 @@ import {
   setDailyNoteFormat,
   setDailyNoteTemplate,
 } from "@core/dailyNote";
+import {
+  uniqueNoteFolder,
+  uniqueNoteFormat,
+  uniqueNoteTemplate,
+  setUniqueNoteFolder,
+  setUniqueNoteFormat,
+  setUniqueNoteTemplate,
+} from "@core/uniqueNote";
 import { getCommandName, hotkeyFromEvent, formatHotkey, isMacPlatform } from "@core/commands";
 import {
   pagePreviewEnabled,
@@ -50,7 +58,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.52.0";
+const APP_VERSION = "0.53.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -158,6 +166,10 @@ function AppearanceSection() {
   const dailyFolder = useStore(dailyNoteFolder);
   const dailyFormat = useStore(dailyNoteFormat);
   const dailyTemplate = useStore(dailyNoteTemplate);
+  /* R53: unique note creator — folder / prefix format / template, stored verbatim */
+  const uniqueFolder = useStore(uniqueNoteFolder);
+  const uniqueFormat = useStore(uniqueNoteFormat);
+  const uniqueTemplate = useStore(uniqueNoteTemplate);
   /* R22: in-document properties display (visible | hidden | source) */
   const propsDisplay = useStore(app.workspace.propertiesInDocument);
   /* R25: page preview (hover) — settings Stores from core/hover */
@@ -563,6 +575,56 @@ function AppearanceSection() {
           aria-label={t("settings.dailyNoteTemplate")}
           data-testid="settings-daily-template"
           onChange={(e) => setDailyNoteTemplate(e.target.value)}
+        />
+      </div>
+
+      <h2 className="settings-heading">{t("settings.uniqueNotes")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.uniqueNoteFolder")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={uniqueFolder}
+          placeholder="/"
+          spellCheck={false}
+          aria-label={t("settings.uniqueNoteFolder")}
+          data-testid="settings-unique-folder"
+          onChange={(e) => setUniqueNoteFolder(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.uniqueNoteFormat")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={uniqueFormat}
+          placeholder="YYYYMMDDHHmmss"
+          spellCheck={false}
+          aria-label={t("settings.uniqueNoteFormat")}
+          data-testid="settings-unique-format"
+          onChange={(e) => setUniqueNoteFormat(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.uniqueNoteTemplate")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={uniqueTemplate}
+          placeholder=""
+          spellCheck={false}
+          aria-label={t("settings.uniqueNoteTemplate")}
+          data-testid="settings-unique-template"
+          onChange={(e) => setUniqueNoteTemplate(e.target.value)}
         />
       </div>
     </section>

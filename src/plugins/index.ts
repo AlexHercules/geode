@@ -1,6 +1,7 @@
 import type { GeodePlugin } from "@core/plugins";
 import { dailyNotePlugin } from "./daily-note";
 import { randomNotePlugin } from "./random-note";
+import { uniqueNotePlugin } from "./unique-note";
 import { wordCountPlugin } from "./word-count";
 
 /**
@@ -11,4 +12,5 @@ export const BUILTIN_PLUGINS: GeodePlugin[] = [
   wordCountPlugin,
   dailyNotePlugin,
   randomNotePlugin,
+  uniqueNotePlugin,
 ];

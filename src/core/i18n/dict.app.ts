@@ -122,6 +122,7 @@ export const en = {
   "cmd.dailyNoteNext": "Open next day's daily note",
   "cmd.dailyNotePrev": "Open previous day's daily note",
   "cmd.randomNote": "Open random note",
+  "cmd.uniqueNote": "Create new unique note",
   "plugin.wordCount": "{words} words · {chars} chars",
   "plugin.wordCount.name": "Word count",
   "plugin.wordCount.desc":
@@ -132,6 +133,9 @@ export const en = {
   "plugin.randomNote.name": "Random note",
   "plugin.randomNote.desc":
     "Open a random markdown note from the vault via the command palette.",
+  "plugin.uniqueNote.name": "Unique note creator",
+  "plugin.uniqueNote.desc":
+    "Create a new note named by a timestamp (Zettelkasten id) via the command palette.",
   // ---- workspaces (src/features/workspaces) ----
   "cmd.manageWorkspaces": "Manage workspaces",
   "workspaces.title": "Manage workspaces",
@@ -268,6 +272,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.dailyNoteNext": "打开后一天日记",
   "cmd.dailyNotePrev": "打开前一天日记",
   "cmd.randomNote": "打开随机笔记",
+  "cmd.uniqueNote": "新建唯一笔记",
   "plugin.wordCount": "{words} 词 · {chars} 字符",
   "plugin.wordCount.name": "字数统计",
   "plugin.wordCount.desc": "在状态栏显示当前笔记的字数与字符数。",
@@ -275,6 +280,8 @@ export const zh: Record<keyof typeof en, string> = {
   "plugin.dailyNote.desc": "使用 Ctrl+D 打开（或创建）今天位于 \"Daily Notes/\" 下的日记。",
   "plugin.randomNote.name": "随机笔记",
   "plugin.randomNote.desc": "通过命令面板打开库中随机一篇 Markdown 笔记。",
+  "plugin.uniqueNote.name": "唯一笔记创建器",
+  "plugin.uniqueNote.desc": "通过命令面板新建一篇以时间戳命名（Zettelkasten id）的笔记。",
   // ---- workspaces (src/features/workspaces) ----
   "cmd.manageWorkspaces": "管理工作区",
   "workspaces.title": "管理工作区",
