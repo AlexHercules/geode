@@ -6,11 +6,13 @@
  * (explicit non-persistence, recorded in the contract).
  *
  * Frozen foldService semantics:
- * - heading: an ATXHeading1-6 node at line start (syntaxTree — headings inside
- *   fences are never parsed as headings) folds from the heading line's end to
- *   the section end: the end of the line before the next line-start ATXHeading
- *   with level <= the current one, or doc end when there is no successor.
- *   SetextHeading is out of scope this round.
+ * - heading: an ATXHeading1-6 OR SetextHeading1-2 node at line start (syntaxTree —
+ *   headings inside fences are never parsed as headings) folds from the heading
+ *   line's end to the section end: the end of the line before the next line-start
+ *   heading (ATX or Setext) with level <= the current one, or doc end when there is
+ *   no successor. A Setext heading spans text + `===`/`---` underline but its fold
+ *   point is on the first (text) line, so folding it hides the underline + section
+ *   (R54 — Setext was deferred in R17, now in scope).
  * - list item: a ListItem spanning more than one line folds from its first
  *   line's end to node.to (covering nested children/continuation lines);
  *   nested ListItems provide their own fold points on their own first lines.
@@ -31,6 +33,19 @@ import { type EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 
 const ATX_HEADING_RE = /^ATXHeading([1-6])$/;
+// R54: SetextHeading1/2 = a text line underlined by `===` (h1) / `---` (h2). The
+// node spans BOTH lines; its fold point sits on the first (text) line.
+const SETEXT_HEADING_RE = /^SetextHeading([12])$/;
+
+/** Heading level (1-6) for an ATX *or* Setext heading node, else null. Unifies
+ *  the two so a Setext heading both folds and terminates sections (R54). */
+function headingLevel(name: string): number | null {
+  const atx = ATX_HEADING_RE.exec(name);
+  if (atx) return Number(atx[1]);
+  const setext = SETEXT_HEADING_RE.exec(name);
+  if (setext) return Number(setext[1]);
+  return null;
+}
 
 type FoldRange = { from: number; to: number } | null;
 
@@ -73,17 +88,19 @@ function frontmatterEnd(state: EditorState): number {
 
 /**
  * Section end for a heading of `level` whose line ends at `lineEnd`: the end
- * of the line preceding the next line-owning ATXHeading with level <= `level`,
- * or doc.length when no such heading follows. Cursor-based forward walk with
- * a real early exit (tree.iterate cannot abort across siblings — on large
- * documents that made every gutter query O(doc), review fix).
+ * of the line preceding the next line-owning heading (ATX *or* Setext, R54) with
+ * level <= `level`, or doc.length when no such heading follows. Cursor-based
+ * forward walk with a real early exit (tree.iterate cannot abort across siblings —
+ * on large documents that made every gutter query O(doc), review fix).
  */
 function headingSectionEnd(state: EditorState, level: number, lineEnd: number): number {
   const doc = state.doc;
   const cursor = syntaxTree(state).cursorAt(lineEnd, 1);
   do {
-    const m = ATX_HEADING_RE.exec(cursor.name);
-    if (m && cursor.from > lineEnd && Number(m[1]) <= level) {
+    const lvl = headingLevel(cursor.name);
+    // cursor.from > lineEnd excludes the current heading; a Setext node's own
+    // HeaderMark (`===`) sits past lineEnd but headingLevel() returns null for it.
+    if (lvl !== null && cursor.from > lineEnd && lvl <= level) {
       const line = doc.lineAt(cursor.from);
       if (ownsLine(state, line.from, cursor.from)) {
         return doc.lineAt(line.from - 1).to;
@@ -102,8 +119,9 @@ function trimTrailingNewline(state: EditorState, to: number): number {
   return to > 0 && state.doc.lineAt(to).from === to ? state.doc.lineAt(to - 1).to : to;
 }
 
-/** The frozen foldService: heading sections + multi-line list items. */
-function markdownFoldRange(state: EditorState, lineStart: number, lineEnd: number): FoldRange {
+/** The frozen foldService: heading sections (ATX + Setext, R54) + multi-line list
+ *  items. Exported so the always-on probe can assert the pure fold-range geometry. */
+export function markdownFoldRange(state: EditorState, lineStart: number, lineEnd: number): FoldRange {
   // frontmatter lines never fold — the parser sees YAML as markdown
   if (lineStart < frontmatterEnd(state)) return null;
   let result: FoldRange = null;
@@ -112,9 +130,12 @@ function markdownFoldRange(state: EditorState, lineStart: number, lineEnd: numbe
     to: lineEnd,
     enter: (n) => {
       if (result) return false;
-      const heading = ATX_HEADING_RE.exec(n.name);
-      if (heading && ownsLine(state, lineStart, n.from)) {
-        const end = headingSectionEnd(state, Number(heading[1]), lineEnd);
+      // ATX headings own a single line; a SetextHeading node spans text + underline
+      // but its `from` is on the (first) text line, so the same ownsLine + lineEnd
+      // fold-from point works for both. Section end walks ATX *and* Setext terminators.
+      const level = headingLevel(n.name);
+      if (level !== null && ownsLine(state, lineStart, n.from)) {
+        const end = headingSectionEnd(state, level, lineEnd);
         if (end > lineEnd) result = { from: lineEnd, to: end };
         // a heading line folds as a section or not at all
         return false;

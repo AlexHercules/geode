@@ -48,6 +48,7 @@ import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } 
 import { EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { ensureSyntaxTree } from "@codemirror/language";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -64,6 +65,7 @@ import { slashCandidates, slashTrigger } from "@features/editor/slashCommands";
 import { tagCandidates, tagTrigger } from "@features/editor/tagCompletion";
 import { installSearchProbe } from "@features/editor/searchCommands";
 import { handleObsidianUri } from "@features/editor/obsidianUriHandler";
+import { markdownFoldRange } from "@features/editor/folding";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -595,6 +597,23 @@ async function bootstrap() {
     path: (y, m0, d, h, mi, s) => uniqueNotePathPreview(new Date(y, m0, d, h, mi, s)),
     setFormat: (f) => setUniqueNoteFormat(f),
     setFolder: (f) => setUniqueNoteFolder(f),
+  };
+
+  // always-on heading-fold probe (R54): the pure markdownFoldRange geometry for ATX +
+  // Setext headings on a throwaway EditorState. The live fold gutter / fold commands are
+  // a view behavior the backgrounded desktop webview can't drive (App Nap) — exercised by
+  // the browser E2E; this asserts the section-end math deterministically. Pre-loadExternal.
+  const foldRangeHost = globalThis as typeof globalThis & {
+    __geodeFoldRange?: { range: (doc: string, line1: number) => { from: number; to: number } | null };
+  };
+  foldRangeHost.__geodeFoldRange = {
+    range: (doc: string, line1: number) => {
+      const state = EditorState.create({ doc, extensions: [markdown()] });
+      ensureSyntaxTree(state, doc.length, 2000);
+      if (line1 < 1 || line1 > state.doc.lines) return null;
+      const line = state.doc.line(line1);
+      return markdownFoldRange(state, line.from, line.to);
+    },
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).
