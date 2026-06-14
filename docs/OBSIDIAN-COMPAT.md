@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R64 套件回归（2026-06-14，macOS release 二进制 v0.61.0 · 纯 view boot smoke）
+
+R64 = Outline 内搜索过滤（候选池第五梯队 ㉗，原生编辑器/面板功能非 compat shim）。对照 Obsidian 核心 Outline 插件的过滤栏（WebSearch 确认是核心功能，非社区插件）。
+`OutlinePanel.tsx` 新增 `filterRows` 纯函数：大小写不敏感 substring → 命中标题 + 祖先（淡显）不含后代（对齐 Obsidian）；query 切文件清空；过滤忽略 collapse、无匹配空态。**纯前端、零依赖、无 Rust、不碰 vault/document**。
+新增套件：`r64-e2e.mjs` **15/15**（过滤=命中+祖先不含后代 / 大小写不敏感 / 无匹配空态 / 清空恢复 / 过滤时跳转可用 / 切文件重置）。**桌面 = 纯 view 无平台面**：binary build + boot smoke（r63-probe 4/4，R64 frontend 在真 WKWebView 启动+编辑器栈完好）；浏览器 e2e 跑真 React 组件即双端权威（不另造重复探针）。
+**对抗评审（Workflow 3 lens + verify）：2 确认（minor+nit，本轮引入）+ 10 证伪**。修：① 切文件 query 被动 useEffect（paint 后）重置→闪「无匹配」一帧→改 useLayoutEffect；② is-ancestor 淡显 specificity 压过 hover→加 hover 规则。证伪：filterRows 逻辑全边角正确、纯 view 无写（数据安全满足）、count 显总数可辩护。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归编辑器/面板套件全绿。**OBSIDIAN-COMPAT 缺口表无变化**（R64 原生功能）。
+
 ### R63 套件回归（2026-06-14，macOS release 二进制 v0.60.0 实测 `r63-probe-vault`）
 
 R63 = 多光标/多选 foundation（候选池第五梯队 ㉕，原生编辑器功能非 compat shim）+ ㉔ Smart typography 移除（非核心）。

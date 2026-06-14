@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R64 — v0.61（2026-06-14）Outline 内搜索过滤（第五梯队 ㉗ → 出队）
+**两道前置门**：① grep 确认 OutlinePanel 无过滤框（真缺口）；② WebSearch 确认 Obsidian 核心 Outline 插件**确有过滤栏**（核心非社区插件 → 做，与 ㉔ 相反）。
+**实现 = 纯 view**：`filterRows` 纯函数（镜像 buildRows/visibleRows 范式）大小写不敏感 substring → 显示命中 + 祖先（淡显，保留层级）不含后代（对齐 Obsidian）；query state 切文件清空；过滤忽略 collapse、无匹配空态。纯前端零依赖不碰 vault。
+验证：typecheck 0 · `r64-e2e` **15/15** · 桌面纯 view 无平台面 → binary build + boot smoke r63-probe 4/4（真 WKWebView 启动+编辑器栈完好），浏览器 e2e 跑真 React 组件即双端权威 · 回归不退。
+**对抗评审（Workflow 3 lens）2 确认（minor+nit，本轮引入）+ 10 证伪**：① 切文件 query 在被动 useEffect（paint 后）重置 → 新笔记先渲一帧旧 query → 可能闪「无匹配」（React 反模式）→ **修=useLayoutEffect**（paint 前重置）；② is-ancestor 淡显 specificity(0,3,0) 压过 hover(0,1,0) → 祖先 hover 不变亮 → 加 `.is-ancestor:hover .outline-label` 规则。证伪：filterRows 逻辑全边角正确、纯 view 无写、count 显总数可辩护。**元教训**：「换 prop 重置 UI state」用 useLayoutEffect（或 during-render ref-guard 正式写法），别用 useEffect——被动 effect paint 后才重置，先渲一帧「旧 state×新数据」错配。
+
 ### R63 — v0.60（2026-06-14）多光标 / 多选 foundation（第五梯队 ㉕ → 出队；㉔ 移除=非核心）
 **两道前置门**：① **faithfulness 门**——㉔ Smart typography（弯引号/em-dash/省略号）WebSearch 证实是社区插件（mgmeyers）**非 Obsidian 核心** → 与 `{{date+3d}}` 同类**出队不做**（R60 候选池又一次把社区功能误登记为核心）。② **grep/derisk 门**——㉕ 真实缺口 = Geode 根本无法持有/渲染 >1 光标（无 allowMultipleSelections/drawSelection）；命令早全在 keymap（Mod-Alt-↑/↓ addCursor、Esc simplify）只是静默 no-op（R51 同源）。
 **修 = 2 行 foundation**：buildEditorExtensions 加 `allowMultipleSelections.of(true)` + `drawSelection()` + `rectangularSelection()`+`crosshairCursor()`（列选）。零依赖、无 Rust、纯 view。Cmd+D 冲突裁决：保留 daily-note Mod+D（select-next 也是社区插件非核心，无让位压力，避免跨 feature churn）。
@@ -1204,7 +1210,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**㉔ Smart typography 智能排版**~~ | ❌ **R63 移除：非 Obsidian 核心**（社区插件 mgmeyers/obsidian-smart-typography）| WebSearch + 官方确认：弯引号/em-dash/省略号自动转换是**社区插件**，**非 Obsidian 核心功能**。与 `{{date+3d}}`（社区 Templater）同类 → 按「复刻 Obsidian **核心**」使命**不做**。出队。 |
 | ~~**㉕ 多光标 / 多选命令**~~ | ✅ **R63 完成**（v0.60）| 2 行 foundation（`allowMultipleSelections`+`drawSelection`+`rectangularSelection`+`crosshairCursor`）解锁已有 keymap：Mod-Alt-↑/↓ 加光标、Esc 收起、Alt-drag 列选。**纠误**：R60 说的「Cmd+D 选下一个相同词」是社区插件非核心 → 保留 daily-note Mod+D。鼠标点击加光标属未来 polish。 |
 | ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |
-| **㉗ Outline 内搜索过滤** | **缺**（OutlinePanel 无过滤框）| 大纲面板顶部加过滤输入框，实时过滤标题（fuzzy 或 substring）。纯前端，改 `features/outline/OutlinePanel.tsx`。 |
+| ~~**㉗ Outline 内搜索过滤**~~ | ✅ **R64 完成**（v0.61）| 大纲顶部过滤输入框（大小写不敏感 substring）；显示匹配标题 + 祖先（淡显，保留层级上下文）不含后代（对齐 Obsidian 核心 Outline 过滤）；无匹配空态；切文件清空。纯前端 `OutlinePanel.tsx` filterRows。**Gate 2 确认**：Obsidian 核心 Outline 确有过滤框（WebSearch），非社区插件。 |
 | **㉘ Footnotes view 脚注面板** | **缺**（#㉑ 列项之一）| 新右栏面板，列当前笔记的脚注定义 + 点击跳转。复用 metadata/markdown 脚注解析（阅读视图已渲染脚注）。零依赖。 |
 | **㉙ 状态栏增强** | **部分**（word-count 插件在状态栏，缺光标行列/后链数）| 状态栏加：光标行:列、选中字数、当前笔记后链数。复用 backlinks 索引 + CM selection。逐块加，零依赖。 |
 | ~~**㉚ Callout 自定义类型 fallback**~~ | **R60 出队 = 实为已完成**（code-verify：`markdown.ts:902-944`）| 任意 `[!foo]` → `class="callout" data-callout="foo"`（主题可 `[data-callout=foo]` 上色）+ 无标题时类型名首字母大写作 fallback 标题（`[!tldr]`→"Tldr"）。**第四次「缺口」实为已完成**（HANDOFF 教训再验证）。 |

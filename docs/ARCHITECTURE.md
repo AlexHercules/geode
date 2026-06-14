@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 64 additions — Outline 内搜索过滤（候选池第五梯队 ㉗）【As-built v0.61】
+
+> **状态：As-built（v0.61 交付,2026-06-14）。** 第五梯队 ㉗。**两道前置门**：① grep `OutlinePanel` 确认无过滤框（真缺口）；② **WebSearch 确认 Obsidian 核心 Outline 插件确有过滤栏**（非社区插件——与 ㉔ smart typography 相反，本项是核心，做）。
+> **实现 = 纯 view 过滤**：`OutlinePanel.tsx` 新增 `filterRows(rows, query)` 纯函数（镜像既有 `buildRows`/`visibleRows` 同文件 helper 范式）——大小写不敏感 substring 命中标题，**显示命中 + 其祖先标题**（淡显 `is-ancestor`，保留层级上下文）**不含后代**（对齐 Obsidian：论坛证实其过滤不展开匹配项的子标题）。祖先回溯：对每个命中 index 向前走，加入 level 更浅的行并降低追踪 level（到 level 1 止）。`query` state 切文件清空；过滤时忽略 collapse（`display = filtering ? filtered.rows : shown`）、chevron 变 spacer、无匹配显示 `outline.noMatch`。**纯前端、零依赖、无 Rust、不碰 vault/document（评审证伪写竞态）**。
+> 验证：typecheck 0 · `r64-e2e.mjs` **15/15**（过滤=命中+祖先不含后代 / 大小写不敏感 / 无匹配空态 / 清空恢复 / 过滤时跳转可用 / 切文件重置）· 桌面 = 纯 view 无平台面，binary build + **boot smoke r63-probe 4/4**（R64 frontend 在真 WKWebView 启动 + 编辑器栈完好）；浏览器 e2e 跑真 React 组件即双端权威 · 回归编辑器/面板套件不回退。
+> **对抗评审（Workflow 3 lens + verify）：2 确认（minor+nit，均本轮引入）+ 10 证伪**。**确认①（minor）**：切文件时 `query` 在**被动 `useEffect`**（paint 后才跑）里重置 → 新笔记先用旧 query 渲染一帧 → 可能闪「无匹配」（React 「在 effect 里按 prop 变化重置 state」反模式）。**修 = `useLayoutEffect`**（DOM 变更后、paint 前同步重置，无闪；曾试 ref-guard during-render 重置但破了重置逻辑→回退到 useLayoutEffect，评审给的备选方案）。**确认②（nit）**：`.outline-item.is-ancestor .outline-label` 的 `color:faint`(0,3,0) specificity 高于 `.outline-item:hover`(0,1,0) → 淡显祖先 hover 不变亮（虽可点）。**修 = 加 `.outline-item.is-ancestor:hover .outline-label { color: var(--text-normal) }`**(0,4,0)。**证伪**：filterRows 祖先回溯逐边角正确（跳级/重名/level≠1 起首/深嵌套/注入全安全）、纯 view 无写、count 徽标显总数（可辩护）、无清除按钮/Escape 清空（可接受）、reset-on-file-change（与既有 collapse 重置一致）。
+> **元教训**：**「切文件/换 prop 时重置 UI state」用 `useLayoutEffect`（或 React 的 during-render ref-guard 正式写法），不要用 `useEffect`**——被动 effect 在 paint 后才重置，会先渲染一帧「旧 state × 新数据」的错配（这里旧 query × 新文件标题 → 闪空态）。凡「派生自 prop 的 UI state 需随 prop 变化清零」，要么 during-render 重置（需严格 ref-guard，易错），要么至少 `useLayoutEffect`。
+
+### 契约（交付即实现，已纳评审修复）
+
+**features/outline/OutlinePanel.tsx**：新增 `filterRows(rows: OutlineRow[], query: string): { rows: OutlineRow[]; matched: ReadonlySet<number> }`（非导出，同文件 helper）。`query` useState；`useLayoutEffect([activePath])` 重置 collapsed + query。`filtering = query.trim() !== ""`；`filtered = useMemo(filterRows)`；`display = filtering ? filtered.rows : shown`。过滤输入 `data-testid="outline-filter"`（仅 activePath && rows.length>0 时渲染）；过滤时行 chevron→spacer、`is-ancestor` class 给非命中行、`display.length===0` → `outline.noMatch`。
+**features/outline/outline.css**：`.outline-filter` 输入框 + `.outline-item.is-ancestor .outline-label`(淡显) + `.outline-item.is-ancestor:hover .outline-label`(hover 变亮)。
+**i18n** `dict.panels.ts`：`outline.filterPlaceholder` + `outline.noMatch`（en+zh）。
+
+### 已知偏差 / 待办（写给后续轮）
+- **count 徽标过滤时仍显总标题数**（非过滤后命中数）——可辩护（总览），未来可改显 `命中/总`。
+- **过滤框无清除(×)按钮 / 无 Escape 清空**——清空靠手删；Obsidian 同款够用，未来 polish。
+- **无匹配空态无 `aria-live` 通知**——a11y 细节，未来 polish。
+
 ## Round 63 additions — 多光标 / 多选 foundation（候选池第五梯队 ㉕；㉔ 出队=非核心）【As-built v0.60】
 
 > **状态：As-built（v0.60 交付,2026-06-14）。** 本轮含一个**faithfulness 纠正**和一个**功能**：
