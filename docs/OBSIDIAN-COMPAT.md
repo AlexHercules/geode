@@ -172,6 +172,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R53 套件回归（2026-06-14，macOS release 二进制 v0.53.0 实测 `r53-probe-vault`）
+
+R53 = Unique note creator 唯一笔记创建器（R32+ 候选池第四梯队 #㉑）。对照 Obsidian「Unique note creator」核心插件。
+`core/uniqueNote.ts`（镜像 dailyNote R48）+ `plugins/unique-note.ts`（`unique-note:create` 命令，无默认键）：一条命令建一篇时间戳命名（Zettelkasten id，默认 `YYYYMMDDHHmmss`）的新笔记，
+放可配置文件夹（默认 vault root）、可选模板、建后打开。`createUniqueNote` collision-retry 循环防同 tick 双触发只建一篇。SettingsModal 3 字段 + `__geodeUnique` 探针 + i18n。
+macOS probe 实测：新增 **r53-probe 6/6**——真实 WKWebView 上 `__geodeUnique` 纯名/路径生成（name→`20260614090807`、root path、`Zettel/` 文件夹、traversal `../evil`→root 拒）。
+**r52/r48/r50/r44/r24 套件不回退**（浏览器 r53-e2e **11/11**[5 纯变换 + 5 live create 含同 tick 竞态 + 1 设置 UI] + r48 13、r50 15、r44 25、r24 12 抽样实测全绿）。
+**对抗评审 1 真缺陷（minor）修 / 11 证伪**：同 tick 双触发原只建一篇（create_new 拒后静默打开第一篇）→ collision-retry 拿 `X 1.md` + 补 Promise.all 竞态回归断言。data-safety：路径穿越被 assertSafeRelPath(JS)+Rust safe_join+create_new 三层拦死，防覆盖原子性可靠。显式延期：#⑧ stacked tabs（真版=内容级 cascade，需多 EditorPane，专门大轮）；format 含 "/"→子目录、非法字符→优雅降级（已知偏差）。
+
 ### R52 套件回归（2026-06-14，macOS release 二进制 v0.52.0 实测 `r52-probe-vault`）
 
 R52 = 编辑命令补全 II（toggle-comment / indent / unindent / insert-blank-line / select-line，R32+ 候选池第四梯队 #⑳余项）。对照 Obsidian 的 toggle-comment / Indent / Unindent 命令。

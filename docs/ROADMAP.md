@@ -637,6 +637,15 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R53 — v0.53（2026-06-14）Unique note creator（唯一笔记 / Zettelkasten）（R32+ 候选池第四梯队 #㉑）
+`core/uniqueNote.ts`（NEW，镜像 `core/dailyNote.ts` R48）：`uniqueNoteFolder`/`uniqueNoteFormat`/`uniqueNoteTemplate` Store + setter（localStorage）。
+`uniqueNoteName(date)` = `moment(date).format(effFormat())`（默认 `YYYYMMDDHHmmss`）；`effFolder()` 默认 `""`=vault root（Obsidian 同款，与 daily 回落具名文件夹不同），traversal/dot 段回落 root。
+`createUniqueNote` = createFolder → await content（模板展开或空）→ **collision-retry 循环**（`vault.uniquePath` → `vault.create`，reject 且文件已存在=竞态→重算后缀重试）→ openFile。
+`plugins/unique-note.ts`（NEW）：`unique-note:create` 命令（无默认键）。SettingsModal 加 3 字段 + `__geodeUnique` 探针 + i18n（cmd/plugin/settings，en+zh）。**零新依赖、无 Rust**。
+`r53-e2e` **11/11**（5 纯变换 + 5 live create[含同 tick 竞态] + 1 设置 UI）+ `r53-probe` **6/6** + 回归 r48/r50/r44/r24 不回退。
+**评审 1 真缺陷（minor）修 / 11 证伪**：同 tick 双触发原只建一篇（create_new 拒后静默打开第一篇）→ createUniqueNote collision-retry 循环（拿 `X 1.md`）+ 补 Promise.all 竞态回归断言。
+**scope 记一句**：原定 #⑧ stacked tabs，探明真 Obsidian 版 = 内容级 cascade（需多 EditorPane 挂载，大轮）→ 改取确定能一轮干净交付的 #㉑。
+
 ### R52 — v0.52（2026-06-14）编辑命令补全 II（toggle-comment / indent / 行操作）（R32+ 候选池第四梯队 #⑳余项）
 `features/editor/editorEditCommands.ts`（NEW）：`registerEditorEditCommands(app, getView)` 把 `@codemirror/commands` 的 5 个 StateCommand
 （`toggleComment`/`indentMore`/`indentLess`/`insertBlankLine`/`selectLine`）暴露成命名命令（`editor:toggle-comment`[Mod+/]/`editor:indent`/`editor:unindent`/`editor:insert-blank-line`/`editor:select-line`）。
@@ -1107,7 +1116,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | ~~**⑥ 前进/后退导航历史**~~ | **R37 已完成（v0.37，见上）**——`core/workspace.ts` per-tab `tabHistory` Map（session-only、cap 50）+ `recordNavigation`（hook openFile replace 分支、清 forward）+ `navigateBack/Forward`+`canTabNavigateBack/Forward`+`setTabLocation` + 5 处清理（close/delete/rename/missing/vault-switch）；App.tsx `app:navigate-back/forward`（`Mod+Alt+←/→`，focus-pane 让出默认键）+ TabBar 箭头按钮（反应式靠 useStore，无独立 Store）+ icons.tsx arrow-left/right。与 R36 recentlyClosed 两套独立栈。r37-e2e 36/36 + r37-probe 18/18。 | 余项（按需求驱动）：导航历史跨重启持久化；**split 复制 tab 时历史不随之复制**（已知偏差）；back/forward 限单 tab；导航到删除文件从历史 purge（已做）。 |
 | ~~**⑦ 快速切换器子模式 / 文内标题跳转**~~ | **R38 已完成（v0.38，见上）**——`core/switcherSearch.ts` 纯函数（`switcherMode`/`stripSigil`/`searchHeadings`/`searchBlocks`，复用 `metadata.getAll()` + `core/fuzzy`，空 query browse=活动文件优先、非空=fuzzy 打分）+ QuickSwitcher.tsx `#`全库标题/`^`全库块 模式（render hash 图标 + fuzzy 高亮，activate `openFile`+`requestReveal` 跳转）+ `__geodeSwitcher` 探针。r38-e2e 19/19 + r38-probe 13/13。 | 余项（按需求驱动）：`^` 块模式无文本预览（BlockRef 仅 id）；非空搜索不 boost 活动文件（合契约，QS++ 有小加权）；symbol/`@` 模式；同分跨文件非确定序（getAll 既有属性）。 |
-| **⑧ 固定标签页 + 堆叠标签 + 链接面板** | **部分**（pinned 切片 **R39 已完成（v0.39，见上）**：`TabState.pinned` + openFile 固定 tab 不替换强制新 tab + recordNavigation skip + `toggleTabPin` + 双击/命令切换 + pin 图标 + split 剔除/reopen 恢复 pin + 持久化；r39-e2e 17/17 + r39-probe 8/8）；**stacked tabs（标签堆叠）+ linked view（local graph/backlinks/outline 跟随某 tab）仍缺** | 余项切入：stacked = workspace `PaneLeaf` 加 `stacked?` 字段 + TabBar 堆叠渲染；linked view = 右侧栏面板加「跟随活动 tab」开关（backlinks/outline 已有面板，接 active-file 事件）。 |
+| **⑧ 固定标签页 + 堆叠标签 + 链接面板** | **部分**（pinned 切片 **R39 已完成（v0.39，见上）**：`TabState.pinned` + openFile 固定 tab 不替换强制新 tab + recordNavigation skip + `toggleTabPin` + 双击/命令切换 + pin 图标 + split 剔除/reopen 恢复 pin + 持久化；r39-e2e 17/17 + r39-probe 8/8）；**stacked tabs（标签堆叠）+ linked view（local graph/backlinks/outline 跟随某 tab）仍缺** | ⚠️ **R53 探明 scope**：真 Obsidian stacked tabs = **内容级横向 cascade**（同时挂载所有 tab 的窗格、横向滚动），而 Geode 当前 `PaneLeafView` 只渲染 active tab 内容（App.tsx:1142）→ 忠实实现需同时挂载多个 EditorPane = **大改 + 多编辑器 data-safety 重，需专门大轮**（非一轮加性）。仅加 `PaneLeaf.stacked` + 竖排 tab 条是 minimal 但不忠实。linked view = 右侧栏面板加 `linkedLeafId` + UI 控件 + 读 linked leaf 活动文件（中等、散，动 3+ 面板）。两者均非「零依赖小加性轮」，建议作专门轮（或与用户确认 scope）。 |
 | ~~**⑨ 键盘切换复选框**~~ | **R40 已完成（v0.40，见上）**——整套复用 R33 format 基建：`core/format.ts` 加纯 op `toggle-task` + `toggleTaskStatus`（任务行翻转勾选含自定义态 `[/]`/`[-]` 就地翻转、非任务行转 `- [ ]`、空行/缩进规则）→ 经 `applyFormatOp` 接通 → `__geodeFormat` 探针自动可驱动；`editor:toggle-checkbox`（`Mod+L`）走既有 applyFormat→CM 事务→autosave。r40-e2e 19/19 + r40-probe 11/11。 | 余项（按需求驱动）：`]` 后无空格的 `- [ ]task` 可 toggle 但渲染层不显示（三处「任务」定义未收敛）；blockquote 内任务不识别；全空多行 select-all 塌缩（极端边角）。 |
 
 #### 第三梯队 — 整块缺失功能
@@ -1130,7 +1139,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
 | ~~**⑲ 拼写检查 / 可读行宽 / 应用级缩放**~~ | **R50 已完成（v0.50，见上）**：`core/appearance.ts`（`readableLineLength`/`spellcheckEnabled` Store + setter，localStorage）。Readable line length = `.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel 的 `max-width` 改 `var(--readable-line-width, 46em)`，setReadableLineLength 切 documentElement var（OFF=none）。Spellcheck = EditorPane `useStore(spellcheckEnabled)` + effect 设 contentDOM。Zoom = `app:zoom-in`/`out`/`reset`（Mod+=/-/0 → `setFontSize`）。SettingsModal 2 toggle + i18n + `__geodeAppearance` 探针。r50-e2e 15/15 + r50-probe 6/6。默认保持现状（readable ON / spellcheck OFF）。 | 余项：可读行宽数值可调（固定 46em）；UI chrome 缩放（仅正文）；spellcheck 默认 ON（取 OFF 不惊扰）。 |
 | ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51+R52 已完成**：move/copy line（**R51**，`editorMotionCommands.ts`，move=`Alt+ArrowUp/Down`/copy=`Shift+Alt+ArrowUp/Down`，与 CM defaultKeymap 同键经 Prec.highest 拦截器单次触发，r51-e2e 10 + probe 6）；toggle-comment/indent/unindent/insert-blank-line/select-line（**R52**，`editorEditCommands.ts`，toggle-comment=`Mod+/` 产出 Obsidian `%%…%%`[cmExtensions 加 `%%` commentTokens]，其余无键 palette/可重绑，r52-e2e 11 + probe 6）。两轮均 `getActiveFileEditorView` 门控 + `__geode{Motion,Edit}` 纯变换探针 + i18n，零依赖。评审各 0 真缺陷。 | 余项：`deleteLine` 等 `Command` 类（非 StateCommand，需真实 view，探针驱动不了；按需可单独接但只能 live 测）；其它长尾 CM 命令按需逐个。**#⑳ 视为完成。** |
-| **㉑ 小众核心插件** | **缺**：Footnotes view / Unique note creator / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；多数零/轻依赖可做。 |
+| **㉑ 小众核心插件** | **部分**：**Unique note creator R53 已完成（v0.53，见上）**（`core/uniqueNote.ts` + `plugins/unique-note.ts`，`unique-note:create` 时间戳命名笔记 + 文件夹/格式/模板设置，镜像 dailyNote，collision-retry 防同 tick 双触发，r53-e2e 11 + probe 6，评审 1 minor 修）。**仍缺**：Footnotes view / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；Footnotes view（面板，零依赖）/ Format converter（纯转换，零依赖）较清爽可先；Slides/Web viewer/Bases/Audio recorder 偏重或需新能力。 |
 
 ## 已知技术债
 

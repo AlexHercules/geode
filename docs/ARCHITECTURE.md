@@ -71,6 +71,33 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 53 additions — Unique note creator（唯一笔记 / Zettelkasten）【As-built v0.53】
+
+> **状态：As-built（v0.53 交付,2026-06-14）。** R32+ 候选池第四梯队 #㉑（小众核心插件）。Obsidian「Unique note creator」核心插件：一条命令建一篇**时间戳命名**（Zettelkasten id）的新笔记,
+> 放可配置文件夹、可选模板、建后打开。**镜像 `core/dailyNote.ts`（R48 可配置日记）**——同款 Store/localStorage/effFolder/模板展开形状,但**去掉日期回解/日历/相对导航**（unique note 永不按 id 回访,故无 parseStamp/isUniquePath/monthGrid）。**零新依赖、无 Rust**。
+> **scope 决策（记一句）**：本轮原定候选池既定顺序的 #⑧ 余项 = stacked tabs。探明后发现**真正的 Obsidian stacked tabs = 内容级横向 cascade**（同时挂载所有 tab 的窗格、横向滚动），而 Geode 当前只渲染 active tab 内容 → 忠实实现需同时挂载多个 EditorPane = 大改 + 多编辑器 data-safety 重,超一轮干净交付；做「竖排 tab 条」minimal 版又不忠实。故 **#⑧ stacked tabs 留作专门大轮**,本轮取确定能一轮干净交付的忠实 #㉑ 项。
+> 验证:typecheck 0 · `r53-e2e.mjs` **11/11**（5 纯变换 + 5 live create[含**同 tick 竞态**] + 1 设置 UI 接线）· `r53-probe.mjs` **6/6** · cargo release 真实重建 37s · 回归 r48/r50/r44/r24 不回退。
+> **评审 1 真缺陷（minor）修 / 11 证伪**：同 tick 双触发原只建一篇（第二次 create 被 `create_new` 拒→catch 见文件已存在→静默打开第一篇而非 `X 1.md`）——非 data-loss（防覆盖原子性可靠）,但违反「每次必建新笔记」语义 → **createUniqueNote 改 collision-retry 循环**（reject 且文件已存在=竞态→重算 uniquePath 拿下一后缀；非竞态失败=路径仍缺→返 null；50 次封顶）+ 补 `Promise.all` 同 tick 双触发回归断言。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/uniqueNote.ts（新）**:`uniqueNoteFolder`/`uniqueNoteFormat`/`uniqueNoteTemplate` Store<string> + setter（localStorage,镜像 dailyNote）。
+`effFolder()`：trim + strip 首尾斜杠,**`""`(root) 是合法默认**（Obsidian unique note 默认在 vault root,**与 dailyNote 回落具名 "Daily Notes" 不同**）,traversal/`.`/`..`/dot-前缀段 → 回落 root。`effFormat()` → trim || `YYYYMMDDHHmmss`。
+`uniqueNoteName(date)` = `moment(date).format(effFormat())`（纯）。`uniqueNotePathPreview(date)` = `folder ? folder/name.md : name.md`（纯,pre-collision,探针用）。
+`createUniqueNote(vault, workspace, date)`：createFolder(若具名) → 先 `await uniqueNoteContent`（模板展开或空,Obsidian unique note 默认空）→ **collision-retry 循环**：`vault.uniquePath(folder, base)` → `vault.create` → 成功 openFile + return path；reject 且 fileExists=竞态→重算重试；reject 且路径缺=真失败→return null。
+**plugins/unique-note.ts（新）**:`unique-note:create` 命令（无默认键,Obsidian 同款）→ `createUniqueNote(app.vault, app.workspace, new Date())`。注册进 `plugins/index.ts` `BUILTIN_PLUGINS`。
+**features/settings/SettingsModal.tsx**:AppearanceSection 加「Unique notes」3 字段（folder/format/template,`data-testid="settings-unique-{folder,format,template}"`,useStore + setter,镜像 daily-notes）。
+**main.tsx（探针）**:`__geodeUnique`（name/path/setFormat/setFolder,纯函数,App-Nap-safe;create 流走 live E2E）。
+**i18n**:`cmd.uniqueNote` + `plugin.uniqueNote.name/desc`（dict.app）+ `settings.uniqueNote{s,Folder,Format,Template}`（dict.views），en+zh。版本 0.52→0.53。
+
+### 文件所有权（本轮单人独占）
+- `src/core/uniqueNote.ts`（新）+ `src/plugins/unique-note.ts`（新）+ `src/plugins/index.ts`（注册）+ `src/features/settings/SettingsModal.tsx`（设置）+ `src/main.tsx`（探针）+ `src/core/i18n/dict.{app,views}.ts` + `.calibration/r53-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **#⑧ stacked tabs 未做**（真 Obsidian 版 = 内容级 cascade,需多 EditorPane 挂载 = 专门大轮；本轮 scope 判断后改取 #㉑）。
+- **format 含 "/" → 子目录、含文件系统非法字符 → create 失败优雅降级（返 null 不开）**：均已知偏差（header 注释声明）。路径穿越（format/folder 嵌 `..`）被 `assertSafeRelPath`(JS) + Rust `safe_join` + `create_new` 三层拦死。
+- **unique note 默认空内容**（Obsidian 同款；设模板则 expandTemplate）。
+
 ## Round 52 additions — 编辑命令补全 II（toggle-comment / indent / 行操作）【As-built v0.52】
 
 > **状态：As-built（v0.52 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑳ 的余项延续（R51 做了 move/copy line，本轮补 5 条编辑命令）。把 `@codemirror/commands` 的 5 个
