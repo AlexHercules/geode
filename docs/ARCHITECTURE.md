@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 51 additions — 移动行 / 复制行编辑命令（Line motion）【As-built v0.51】
+
+> **状态：As-built（v0.51 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑳。把 `@codemirror/commands` 的 `moveLineUp`/`moveLineDown`/`copyLineUp`/`copyLineDown`
+> 暴露成**命名、palette 可发现、可重绑**的命令（Obsidian 同款 `editor:move-line-up` 等）。**关键认知**:CM 的 `defaultKeymap` **已绑** `Alt-Arrow`→move /
+> `Shift-Alt-Arrow`→copy（CM/VS Code/Sublime/Obsidian-CM6 通用约定）→ 这些行为今天已能用,本轮的价值 = **命名化 + 可重绑**,不是新功能。**零新依赖、无 Rust、无新 vault 写路径**（每条命令 = 单 CM transaction → dirty → autosave，与 R33 format 同管线）。
+> 验证:typecheck 0 · `r51-e2e.mjs` **10/10**（6 纯变换 + 3 live 命令 + **1 真实 `Alt+ArrowUp` 键击路由**）· `r51-probe.mjs` **6/6** · cargo release 真实重建 37s · 回归 r33/r40/r24 不回退。
+> **评审 0 真缺陷 / 4 维全证伪**（热键冲突/StateCommand 类型/边角数据安全/分层 i18n 全清）。评审点名 2 处非缺陷 → **本轮主动处理 1**:键位由 `Mod+Shift+Arrow` 改 `Alt+Arrow`(move)/`Shift+Alt+Arrow`(copy) —— 对齐 CM/Obsidian 约定、消与 defaultKeymap 的冗余、消 macOS 原生 `Cmd+Shift+↑`(选到文档头) 遮蔽;并补真实键击断言（评审点名的覆盖盲点）。
+
+### 契约（交付即实现）
+
+**features/editor/editorMotionCommands.ts（新）**:`registerEditorMotionCommands(app, getView)` → 注册 4 条命令（`editor:move-line-up`/`-down`/`editor:copy-line-up`/`-down`），thin wrapper 包 `@codemirror/commands` 的 4 个 StateCommand。`name` 是 thunk（`() => t(spec.nameKey)`）。`available: () => getView() !== null`（阅读视图无 view → palette 隐藏 + hotkey 跳过 + callback no-op）。callback = `spec.cmd(view); view.focus()`。
+**键位**:move = `Alt+ArrowUp`/`Alt+ArrowDown`;copy = `Shift+Alt+ArrowUp`/`Shift+Alt+ArrowDown`。与 CM defaultKeymap **同键**——cmExtensions 的 Prec.highest `app.commands.handleKeydown` 拦截器在 defaultKeymap **之前**匹配 → `preventDefault`+`stopPropagation`+`return true` → defaultKeymap 不再触发 → **单次触发,无双发**（E2E section C 用真实 `Alt+ArrowUp` 键击验证落点 `beta\nalpha\ngamma` = 恰好一次 move）。
+**app/App.tsx（接线）**:`disposers.push(...registerEditorMotionCommands(app, () => getActiveFileEditorView(app)?.view ?? null))`（与 registerFormatCommands/registerComposerCommands 并列；`getActiveFileEditorView` 双侧门控 → 命令永不改非活动文件）。
+**main.tsx（探针）**:`__geodeMotion.runMotion(cmd, doc, anchor)` —— 用一次性 `EditorState` + 捕获式 dispatch 跑 StateCommand,返回结果 doc（纯函数,桌面 probe 可驱动,不依赖 live view）。暴露 moveUp/moveDown/copyUp/copyDown。
+**i18n**:`cmd.moveLineUp`/`cmd.moveLineDown`/`cmd.copyLineUp`/`cmd.copyLineDown`（en+zh，dict.app.ts）。版本 0.50→0.51。
+
+### 文件所有权（本轮单人独占,无并行冲突）
+- `src/features/editor/editorMotionCommands.ts`（新）+ `src/app/App.tsx`（接线 1 行 + import）+ `src/main.tsx`（探针）+ `src/core/i18n/dict.app.ts`（4 键）+ `.calibration/r51-*` + 版本三处。
+
+### 已知偏差（写给后续轮）
+- **copy-line 现在有默认键**（`Shift+Alt+Arrow`,Obsidian 该命令默认无键）—— 取 CM/VS Code 约定,可重绑/清除。
+- **StateCommand 当 (view)=>bool 用**：`moveLineUp` 等签名是 `(target:{state,dispatch})=>bool`,传 `EditorView`（superset）语义正确（CM 内部只读这两字段）。typecheck 0。
+
 ## Round 50 additions — 可读行宽 + 拼写检查 + 应用级缩放（Appearance）【As-built v0.50】
 
 > **状态：As-built（v0.50 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑲。Obsidian Appearance 高频设置:**Readable line length** / **拼写检查** /

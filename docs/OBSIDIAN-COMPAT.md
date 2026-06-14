@@ -172,6 +172,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R51 套件回归（2026-06-14，macOS release 二进制 v0.51.0 实测 `r51-probe-vault`）
+
+R51 = 移动行 / 复制行编辑命令（Line motion，R32+ 候选池第四梯队 #⑳）。对照 Obsidian 的 `editor:move-line-up`/`-down` 命令。
+`features/editor/editorMotionCommands.ts` 把 `@codemirror/commands` 的 `moveLineUp`/`moveLineDown`/`copyLineUp`/`copyLineDown` 暴露成命名、
+palette 可发现、可重绑的命令。键 move=`Alt+ArrowUp/Down`、copy=`Shift+Alt+ArrowUp/Down`（CM defaultKeymap 已绑的通用约定 → 本轮价值 = 命名化）。
+macOS probe 实测：新增 **r51-probe 6/6**——真实 WKWebView 上 `__geodeMotion` 纯变换（moveUp→`b\na\nc`、moveDown→`a\nc\nb`、copyUp→`a\nb\nb\nc`、首行 no-op）。
+**r50/r49/…/r33/r40/r24 套件不回退**（浏览器 r51-e2e **10/10**[6 纯变换 + 3 live 命令 + 1 真实 `Alt+ArrowUp` 键击路由] + r33 37、r40 19、r24 12 抽样实测全绿）。
+**对抗评审 0 真缺陷 / 4 维全证伪**（热键冲突/StateCommand 类型/边角数据安全/分层 i18n）；主动处理评审点名 1 项（键位由 `Mod+Shift+Arrow` 改 `Alt+Arrow` 对齐约定 + 消 macOS 原生 `Cmd+Shift+↑` 遮蔽 + 补真实键击断言）。显式延期：`insertBlankLine`/`toggleComment` 等其它 CM 编辑命令未接（按需逐个）。
+
 ### R50 套件回归（2026-06-14，macOS release 二进制 v0.50.0 实测 `r50-probe-vault`）
 
 R50 = 可读行宽 + 拼写检查 + 应用级缩放（Appearance，R32+ 候选池第四梯队 #⑲）。对照 Obsidian Appearance「Readable line length」/

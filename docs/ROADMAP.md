@@ -637,6 +637,17 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R51 — v0.51（2026-06-14）移动行 / 复制行编辑命令（Line motion）（R32+ 候选池第四梯队 #⑳）
+`features/editor/editorMotionCommands.ts`（NEW）：`registerEditorMotionCommands(app, getView)` 把 `@codemirror/commands` 的
+`moveLineUp`/`moveLineDown`/`copyLineUp`/`copyLineDown` 4 个 StateCommand 暴露成命名命令（`editor:move-line-up`/`-down`/`copy-line-up`/`-down`），
+thin wrapper，`name` thunk，`available: () => getView()!==null`（阅读视图 no-op），callback = `cmd(view); view.focus()`。
+**键位** move=`Alt+ArrowUp/Down`、copy=`Shift+Alt+ArrowUp/Down`（CM/VS Code/Sublime/Obsidian-CM6 通用约定）。
+**关键认知**：CM `defaultKeymap` **已绑**这些键 → 行为今天已能用；本轮价值 = **命名化 + palette 可发现 + 可重绑**。键与 defaultKeymap 同键时，
+cmExtensions 的 Prec.highest `handleKeydown` 拦截器在 defaultKeymap **之前**匹配 → `preventDefault`+`return true` → **单次触发无双发**。
+App.tsx 接线（`getActiveFileEditorView` 双侧门控，与 format/composer 并列）+ `__geodeMotion` 探针（一次性 EditorState 跑纯变换）+ i18n 4 键。
+**零新依赖、无 Rust、无新 vault 写路径**（单 CM transaction → autosave，与 R33 同管线）。`r51-e2e` **10/10**（6 纯变换 + 3 live + 1 真实 `Alt+ArrowUp` 键击路由）+ `r51-probe` **6/6** + 回归 r33/r40/r24 不回退。
+**评审 0 真缺陷 / 4 维全证伪**；主动处理评审点名 1 项：键位由初版 `Mod+Shift+Arrow` 改 `Alt+Arrow`（对齐约定、消 defaultKeymap 冗余、消 macOS 原生 `Cmd+Shift+↑` 遮蔽）+ 补真实键击断言（评审点名覆盖盲点）。
+
 ### R50 — v0.50（2026-06-14）可读行宽 + 拼写检查 + 应用级缩放（Appearance）（R32+ 候选池第四梯队 #⑲）
 `core/appearance.ts`（NEW）：`readableLineLength`/`spellcheckEnabled` Store + setter（localStorage，镜像 autoUpdateLinks）。
 **Readable line length** = 正文行宽 cap（`.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel）由写死 46em
@@ -1109,7 +1120,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
 | ~~**⑲ 拼写检查 / 可读行宽 / 应用级缩放**~~ | **R50 已完成（v0.50，见上）**：`core/appearance.ts`（`readableLineLength`/`spellcheckEnabled` Store + setter，localStorage）。Readable line length = `.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel 的 `max-width` 改 `var(--readable-line-width, 46em)`，setReadableLineLength 切 documentElement var（OFF=none）。Spellcheck = EditorPane `useStore(spellcheckEnabled)` + effect 设 contentDOM。Zoom = `app:zoom-in`/`out`/`reset`（Mod+=/-/0 → `setFontSize`）。SettingsModal 2 toggle + i18n + `__geodeAppearance` 探针。r50-e2e 15/15 + r50-probe 6/6。默认保持现状（readable ON / spellcheck OFF）。 | 余项：可读行宽数值可调（固定 46em）；UI chrome 缩放（仅正文）；spellcheck 默认 ON（取 OFF 不惊扰）。 |
-| **⑳ 移动行上下 + 其它编辑命令** | **部分**（defaultKeymap 经 Mod 已给 deleteLine 等；move-line-up/down Obsidian 有、CM 默认无）| 切入：`@codemirror/commands` `moveLineUp/Down` 接命令+键。 |
+| ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51 已完成（v0.51，见上）**：`features/editor/editorMotionCommands.ts` 把 `@codemirror/commands` 的 `moveLineUp/Down`/`copyLineUp/Down` 暴露成命名命令（`editor:move-line-up`/`-down`/`copy-line-up`/`-down`），键 move=`Alt+ArrowUp/Down`、copy=`Shift+Alt+ArrowUp/Down`（与 CM defaultKeymap 同键，Prec.highest 拦截器先匹配→单次触发）。App.tsx 接线（`getActiveFileEditorView` 门控）+ `__geodeMotion` 探针 + i18n。r51-e2e 10/10 + r51-probe 6/6。评审 0 真缺陷。 | 余项：`insertBlankLine`/`toggleComment`/`indentMore` 等 CM 现成编辑命令未接（按需逐个，零成本）。 |
 | **㉑ 小众核心插件** | **缺**：Footnotes view / Unique note creator / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；多数零/轻依赖可做。 |
 
 ## 已知技术债
