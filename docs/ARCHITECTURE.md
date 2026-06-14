@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 62 additions — 专用「Outgoing Links 出链」侧栏面板（候选池第五梯队 ㉓）【As-built v0.59】
+
+> **状态：As-built（v0.59 交付,2026-06-14）。** 第五梯队 ㉓。**先 grep 现状（铁律）**：出链**数据 + 显示早已存在**——`metadata.getOutgoingLinks()` + `BacklinksPanel` 内嵌「出链」分区（R24 起）。真实缺口 = Obsidian 把 **Outgoing Links 作为独立核心插件面板**（与 Backlinks 分开、可独立打开/切换），Geode 只把它折叠进组合反链面板。**第 5 次「候选池缺口」实为「部分已实现」**（Setext R54 / Setext-dim R55 / `%%` R58 / 粘贴URL·callout R60 / ㉓ 出链 R62）。
+> **本轮 = 新增独立 Outgoing Links 右栏 tab**（镜像 OutlinePanel/BacklinksPanel 范式），复用现成 `getOutgoingLinks` 索引；**刻意不动组合 BacklinksPanel**（其出链分区是 Geode 既有便利 UX，重构组合面板哲学属未来项，非 ㉓ scope）→ 出链同时出现在两处 = 评审证伪为「可接受的 deliberate scoping」（Obsidian 用户也可同开 Backlinks + Outgoing Links 两栏）。**纯只读 view**，唯一写 = 点未解析链接 createAndOpen（与 BacklinksPanel 同款，评审数据安全 lens 证伪攻击面：`uniquePath`+`create` 不覆盖、路径守卫拦穿越、rejection 已 catch）。
+> 验证：typecheck 0 · `r62-e2e.mjs` **14/14**（tab 开面板/resolved 进 Links·unresolved 进 Unresolved 红/计数 2:1/点击导航/命令重开/两种空态含真 no-active-file `ol-empty`）· `r62-probe.mjs` **5/5**（真 WKWebView：setRightPanel 持久化 + 真 fs metadata getOutgoingLinks resolved=[Alpha,Beta] unresolved=[Ghost Note]）· cargo release 真重建 · 回归 r30[allproperties]25/25 + r41[tags]21/21 面板切换不回退。
+> **对抗评审（Workflow 4 lens + verify）：19 finding → 7 确认（全 nit/minor，0 critical/major）+ 12 证伪**。确认修：① 别名链接 `[[a|b]]` 应显示 `b` 非 `a`（对齐 Geode 自身 `display = alias || target` 约定，阅读视图/live 都这么做）；② 用自有 `outgoinglinks.*` i18n 键替代借用 `backlinks.*`（与「Section 组件刻意复制」同一 self-containment 原则）；③ dict.panels.ts 命名空间头注释补全；④ e2e 补真 no-active-file `ol-empty` 用例；⑤ 本节（契约 As-built）。**证伪**：createAndOpen 数据安全（无穿越/无覆盖/已 catch）、subpath `[[a#h1]]`/`[[a#h2]]` 折叠成一行（Obsidian 也按目标笔记去重）、两栏冗余（deliberate）、命令名措辞、Unresolved 分区恒显。
+> **元收获**：候选池「缺口」第 5 次实为「部分已实现」——这次 Step 0 grep **救了大半轮**（直接发现 getOutgoingLinks + BacklinksPanel 出链分区已在，把 scope 从「从零做出链」收窄成「抽独立面板」）。「先 grep 现状」已从教训变成本轮**实际挡住返工**的流程。
+
+### 契约（交付即实现，已纳评审修复）
+
+**新增内置右栏面板（非 compat registerView）**：`features/outgoinglinks/OutgoingLinksPanel.tsx`（export `OutgoingLinksPanel`，panel id 字符串 `"outgoinglinks"`）。`useApp` + `useStore(workspace.state)` + `useStore(metadata.revision)`；`findActiveTab` → activePath（仅 markdown）；`getOutgoingLinks(path)` → 按 `resolvedPath ?? "unresolved:"+target.toLowerCase()` 去重 → 拆「Links」(resolved) + 「Unresolved links」(unresolved) 两分区。行：label=`alias || target`，title/dedup/click 锚 target/resolvedPath；resolved→`openFile`，unresolved→`createAndOpen`(`uniquePath`+`create`+`openFile`，catch 错误)。自带 `Section` 组件（分层禁 import 别的 feature）+ `ol-` 前缀 CSS。
+**core/types.ts**：`RightPanelKind` 字面量扩 `"outgoinglinks"`，并把 `"tags"`/`"calendar"` 从 `(string & {})` fallback 提为显式字面量（**supersede R41 line 780 的「tags 留 fallback」决定**；纯加性、行为中性——`(string & {})` 早已使 union 非穷尽，无 switch 受影响）。
+**app/App.tsx**（4 处 + 命令）：import；`effectiveRight` 三元链 +1 分支；右栏 tab `<button>`（`data-testid="right-tab-outgoinglinks"`，`Icon external-link`，`setRightPanel("outgoinglinks")`）；body 三元链 +1 分支；命令 `app:show-outgoing-links` → `setRightPanel("outgoinglinks")`。**app/icons.tsx**：加 `external-link` 图标。**i18n**：`app.tabOutgoingLinks` + `cmd.showOutgoingLinks` + `outgoinglinks.*`（title/empty/links/noLinks/unresolved/noUnresolved/createTitle/newBadge，en+zh）。
+
+### 文件所有权（本轮单人独占）
+- 新建 `src/features/outgoinglinks/`（OutgoingLinksPanel.tsx + outgoinglinks.css + index.ts）+ `src/app/App.tsx`（4 处+命令）+ `src/app/icons.tsx`（图标）+ `src/core/types.ts`（RightPanelKind）+ `src/core/i18n/dict.app.ts` + `dict.panels.ts` + `.calibration/r62-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **出链显示在两处**（组合 BacklinksPanel 出链分区 + 新独立面板）——deliberate（不动既有组合面板）；真正的 Obsidian 偏差是「Backlinks 面板还带出链分区」，未来若做组合→拆分面板对齐再统一移除。
+- **行 label 显示 `alias || target` 的原始 target（含文件夹路径如 `Notes/Welcome`）**，未规整成 resolved basename——与 BacklinksPanel 出链分区一致（Geode 既有约定），属未来「出链行规整」polish 项。
+- **subpath 链接 `[[a#h1]]`/`[[a#h2]]` 按目标笔记折叠成一行**——与 Obsidian 一致（按目标去重），非缺陷。
+
 ## Round 61 additions — 图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（候选池第五梯队 ㉒）【As-built v0.58】
 
 > **状态：As-built（v0.58 交付,2026-06-14）。** 第五梯队 ㉒ = Obsidian 图片嵌入尺寸语法。官方语义（WebFetch obsidian.md/help/embeds 确认）：`|宽` 只给宽=等比缩放（高 auto）；`|宽x高` 设双维，分隔符**小写 `x`**；**仅图片**支持（video/audio/pdf 无此语法——FileEmbed 分支不动，对照评审 REFUTE）。

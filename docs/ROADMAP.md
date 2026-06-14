@@ -637,6 +637,11 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R62 — v0.59（2026-06-14）专用 Outgoing Links 出链面板（第五梯队 ㉓ → 出队）
+**Step 0 grep 现状救场**：出链数据(`getOutgoingLinks`)+显示(`BacklinksPanel` 出链分区,R24 起)早已存在 → **㉓ 第 5 次「缺口」实为部分已实现**（Setext R54/Setext-dim R55/`%%` R58/粘贴URL·callout R60）。真缺口 = Obsidian 把 Outgoing Links 作独立核心插件面板,Geode 只折叠进组合反链面板 → 本轮抽**独立右栏 tab**（镜像 OutlinePanel,复用 getOutgoingLinks,拆 Links/Unresolved 两分区 + 命令 `app:show-outgoing-links`）。刻意不动组合 BacklinksPanel（出链同显两处 = 评审证伪为可接受 deliberate scoping）。纯只读 view,唯一写=点未解析 createAndOpen（与反链同款,数据安全证伪）。
+验证：typecheck 0 · `r62-e2e` **14/14** · `r62-probe` **5/5**（真 WKWebView setRightPanel 持久化 + 真 fs metadata）· 回归 r30/r41 面板切换不回退。
+**对抗评审（Workflow 4 lens + verify）：19 finding → 7 确认（全 nit/minor,0 critical/major）+ 12 证伪**。确认修：别名链接显示 `alias||target`（对齐 Geode 阅读/live 约定）/ 自有 `outgoinglinks.*` i18n 键替代借用 backlinks.*（self-containment）/ dict 头注释补全 / e2e 补真 no-active-file ol-empty / ARCHITECTURE Round 62 节。证伪：createAndOpen 数据安全（无穿越/覆盖/已 catch）、subpath 折叠（Obsidian 同款按目标去重）、两栏冗余（deliberate）。**元教训**：Step 0 grep 现状这次直接把 scope 从「从零做出链」收窄成「抽独立面板」,救了大半轮——「先 grep」从教训变成实际挡返工的流程。
+
 ### R61 — v0.58（2026-06-14）图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（第五梯队 ㉒ → 出队）
 Obsidian 图片尺寸语法（WebFetch 确认：`|宽`=等比缩放、`|宽x高`=双维、小写 `x`、**仅图片**）。三态一致：阅读视图 `markdown.ts` 占位 `<img width height>`、导出 `export.ts` **零改动**（hydrate 只设 src，尺寸继承）、live `EmbedWidget` 加 width/height。**核心**：reading 与 live **共用 `parseEmbedSize` 单一解析器**（去漂移，R56/R57 延续）。数字别名当尺寸+alt 回落文件名；非数字别名仍当 alt（字节级不变）。**零依赖、无 Rust、纯 view**。
 验证：typecheck 0 · `r26-bytes` **41 案 0 违反**（重捕基线 + size 案翻 non-media 锁死）· `r61-e2e` **15/15** · `r61-probe` **8/8**（真 WKWebView 真 png）· 回归 r26/r57 不回退。
@@ -1189,7 +1194,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
 | ~~**㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100`~~ | ✅ **R61 完成**（v0.58）| 共享 `parseEmbedSize`（reading+live 单一解析器）→ `<img width height>`，导出零改动继承；非数字别名仍当 alt（字节级不变）；评审修巨数三端漂移=正则封 5 位。 |
-| **㉓ Outgoing links 出链面板** | **缺**（只有 backlinks R24，无独立出链面板）| Obsidian 独立核心插件，复刻品最常漏。新右栏面板 `features/outgoing/`，复用 `metadata.getMetadata(path).links`（已有索引）列当前笔记的出链 + 未解析链接（红色）；镜像 OutlinePanel/BacklinksPanel 结构。纯前端零依赖。 |
+| ~~**㉓ Outgoing links 出链面板**~~ | ✅ **R62 完成**（v0.59）| 独立右栏 tab `features/outgoinglinks/`（镜像 OutlinePanel，复用 `getOutgoingLinks`，拆 Links/Unresolved 两分区 + `app:show-outgoing-links` 命令）。组合 BacklinksPanel 出链分区刻意保留（deliberate）。**Step 0 grep 现状救场**：出链数据/显示早已存在，真缺口仅是「独立面板」。 |
 | **㉔ Smart typography 智能排版** | **缺** | 编辑器输入变换：弯引号 `"`/`'`、`--`→—、`---`→—、`...`→…；设置开关（默认可 OFF）。CM `EditorState.transactionFilter` 或 inputHandler。注意代码块/数学内不变换 + IME 守卫（R33 先例）。 |
 | **㉕ 多光标 / 多选命令** | **缺/细化**（R60 code-verify：`searchKeymap` 已挂 `Mod-d` 但因缺 `EditorState.allowMultipleSelections`+`drawSelection` → 当前 no-op）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。**补 `allowMultipleSelections`+`drawSelection`+列选** 即解锁（比「零实现」更省）；接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |
 | ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |

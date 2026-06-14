@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R62 套件回归（2026-06-14，macOS release 二进制 v0.59.0 实测 `r62-probe-vault`）
+
+R62 = 专用 Outgoing Links 出链面板（候选池第五梯队 ㉓，原生功能非 compat shim）。对照 Obsidian「Outgoing Links」核心插件（独立侧栏面板，与 Backlinks 分开）。
+新增独立右栏 tab `features/outgoinglinks/`（镜像 OutlinePanel，复用 `metadata.getOutgoingLinks`，拆 Links/Unresolved 两分区 + `app:show-outgoing-links` 命令）；组合 BacklinksPanel 出链分区刻意保留（出链同显两处=deliberate，评审证伪）。纯只读 view，唯一写=点未解析链接 createAndOpen（数据安全证伪）。**零新依赖、无 Rust、compat 调用面零改动**。
+新增套件：`r62-e2e.mjs` **14/14**（tab 开面板/resolved·unresolved 分区/计数/导航/命令/两种空态含真 no-active-file ol-empty）+ `r62-probe.mjs` **5/5**（真 WKWebView：setRightPanel 持久化 + 真 fs metadata getOutgoingLinks）。
+**对抗评审（Workflow 4 lens + verify）：19 finding → 7 确认（全 nit/minor）+ 12 证伪**。确认修：别名显示 `alias||target`（对齐 Geode 约定）/ 自有 `outgoinglinks.*` i18n 键（self-containment）/ dict 头注释 / e2e 补 ol-empty / ARCHITECTURE Round 62 节。证伪：createAndOpen 数据安全（无穿越/覆盖/已 catch）、subpath 折叠（Obsidian 同款）、两栏冗余（deliberate）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r30[allproperties]25/25 + r41[tags]21/21 面板切换全绿。**OBSIDIAN-COMPAT 缺口表无变化**（R62 原生功能，不动插件 API 面；惟 ㊷「反链/出链面板增强」的「出链独立面板」子项 = ㉓ 已由本轮交付）。
+
 ### R61 套件回归（2026-06-14，macOS release 二进制 v0.58.0 实测 `r61-probe-vault`）
 
 R61 = 图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（候选池第五梯队 ㉒，原生功能非 compat shim）。对照 Obsidian 图片尺寸语法（WebFetch obsidian.md/help/embeds 确认：`|宽`=等比、`|宽x高`=双维、小写 `x`、**仅图片**）。
