@@ -172,6 +172,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R50 套件回归（2026-06-14，macOS release 二进制 v0.50.0 实测 `r50-probe-vault`）
+
+R50 = 可读行宽 + 拼写检查 + 应用级缩放（Appearance，R32+ 候选池第四梯队 #⑲）。对照 Obsidian Appearance「Readable line length」/
+Spellcheck / 缩放。`core/appearance.ts`（localStorage Store）。Readable = 正文 `max-width` 改 `var(--readable-line-width, 46em)`（4 处:
+`.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel），setter 切 documentElement var。Spellcheck = CM
+contentDOM 属性反应式。Zoom = 既有 `setFontSize`。**默认保持现状**（readable ON / spellcheck OFF——故对既有用户零行为变化）。macOS probe
+实测：新增 **r50-probe 6/6**——真实 WKWebView 上 `__geodeAppearance.setReadable` → `--readable-line-width` var 跟随（default→none→default）。
+**r49/r48/…/r24/r25/r33 套件不回退**（浏览器 r50-e2e **15/15** + r33 37、r24 12、r25 17、r49 12 抽样实测全绿；`r26-bytes` 0）。
+**2 维对抗评审 2 finding → 1 确认（minor，去重）修**（阅读视图 `.editor-preview > .properties-panel` 硬编码 46em 漏跟随 readable-line
+开关→改同源 `var(--readable-line-width, 46em)` + 补 E2E 断言）。显式延期：行宽数值可调 / UI chrome 缩放 / spellcheck 默认 ON。
+
 ### R49 套件回归（2026-06-14，macOS release 二进制 v0.49.0 实测 `r49-probe-vault`）
 
 R49 = 文件恢复快照（File recovery snapshots，R32+ 候选池第三梯队 #⑪ 另一半 → **#⑪ 完成**）。对照 Obsidian **File recovery**：周期保存

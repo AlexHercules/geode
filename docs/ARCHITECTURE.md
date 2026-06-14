@@ -71,6 +71,35 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 50 additions — 可读行宽 + 拼写检查 + 应用级缩放（Appearance）【As-built v0.50】
+
+> **状态：As-built（v0.50 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑲。Obsidian Appearance 高频设置:**Readable line length** / **拼写检查** /
+> **应用级缩放**（Cmd±）。**关键复用**:`.cm-content`/`.preview-content` **已 cap 46em** → 改 CSS 变量 `--readable-line-width` 即可配;
+> `workspace.setFontSize(px)` 已存在（clamp + `--editor-font-size` var）→ zoom 命令直接调;CM spellcheck 走 contentDOM 属性（EditorPane useStore+effect 反应式）。**零新依赖、无 Rust、低风险加性轮**。**默认保持现状**（readable ON=现 46em cap;spellcheck OFF）。
+> 验证:typecheck 0 · `r50-e2e.mjs` **15/15** · `r50-probe.mjs` **6/6** · cargo release 真实重建 38s · 回归 r33/r24/r25/r49 不回退。
+> **评审 2 finding → 1 确认（minor,去重）修**:阅读视图 `.editor-preview > .properties-panel` 仍硬编码 46em（漏跟随）→ readable OFF 时与正文错位 → 改 `var(--readable-line-width, 46em)`（与 `.cm-content`/`.preview-content`/`.editor-loading` 同源）+ 补 E2E 断言。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/appearance.ts（已落）**:`readableLineLength`/`spellcheckEnabled` Store<boolean> + setter（localStorage,镜像 autoUpdateLinks）。
+`setReadableLineLength(on)` → 切 documentElement `--readable-line-width`（on=removeProperty→CSS 46em fallback;off="none"=full width）。`applyAppearanceSettings()` boot 应用。
+**main.tsx（已落）**:`applyAppearanceSettings()` boot + `__geodeAppearance` 探针（setReadable/setSpellcheck/readableVar）。
+
+**features/settings/SettingsModal.tsx（B）**:AppearanceSection 加 2 toggle（Readable line length / Spellcheck,镜像 autoUpdate `role="switch"` `.settings-toggle`,`data-testid="settings-readable-toggle"/"settings-spellcheck-toggle"`,`useStore` + setter）。
+**features/editor/EditorPane.tsx（B）**:`const spell = useStore(spellcheckEnabled)`;view 创建 effect 后 `view.contentDOM.setAttribute("spellcheck", String(spellcheckEnabled.get()))`;+ `useEffect(() => viewRef.current?.contentDOM.setAttribute("spellcheck", String(spell)), [spell])` 实时切换。
+**app/App.tsx（B）**:注册 `app:zoom-in`(Mod+=,`setFontSize(fontSize+1)`)/`app:zoom-out`(Mod+-,`-1`)/`app:zoom-reset`(Mod+0,`setFontSize(16)`)（读 `workspace.state.get().fontSize`）。
+**features/editor/editor.css + cmExtensions.ts（B）**:`.cm-content`/`.preview-content`（及编辑器 wrapper 的 46em cap）`max-width: 46em` → `var(--readable-line-width, 46em)`。
+**i18n（B）**:`settings.readableLineLength`/`settings.spellcheck`/`cmd.zoomIn`/`cmd.zoomOut`/`cmd.zoomReset`（en+zh）。版本 0.49→0.50。
+
+### 文件所有权
+- **me（core + 探针 + 验证,已落核心）**:`src/core/appearance.ts` + `src/main.tsx` + `.calibration/r50-*`。
+- **B（UI）**:SettingsModal + EditorPane + App.tsx + editor.css + cmExtensions.ts + i18n + 版本三处。
+
+### 已知偏差（写给后续轮）
+- **spellcheck 默认 OFF**（Obsidian 默认 ON;为不改现状取 OFF,用户可开）。
+- **readable line length 仅控行宽 cap**（Obsidian 该设置同款;可读宽度值固定 46em 不可调——余项）。
+- **zoom 仅调 `--editor-font-size`**（影响正文;UI chrome 字号不随——Obsidian 缩放亦主要正文）。
+
 ## Round 49 additions — 文件恢复快照（File recovery snapshots）【As-built v0.49】
 
 > **状态：As-built（v0.49 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑪ 的**另一半**（R42 做了回收站=删除恢复;快照=**编辑恢复**;**#⑪ 至此完成**）。

@@ -637,6 +637,17 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R50 — v0.50（2026-06-14）可读行宽 + 拼写检查 + 应用级缩放（Appearance）（R32+ 候选池第四梯队 #⑲）
+`core/appearance.ts`（NEW）：`readableLineLength`/`spellcheckEnabled` Store + setter（localStorage，镜像 autoUpdateLinks）。
+**Readable line length** = 正文行宽 cap（`.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel）由写死 46em
+改 `var(--readable-line-width, 46em)`，`setReadableLineLength(on)` 切 documentElement `--readable-line-width`（OFF=`none`=全宽）。
+**Spellcheck** = EditorPane `useStore(spellcheckEnabled)` + effect 设 CM contentDOM `spellcheck` 属性（反应式 + view 重建跟随）。
+**Zoom** = `app:zoom-in`(Mod+=)/`app:zoom-out`(Mod+-)/`app:zoom-reset`(Mod+0) → 既有 `workspace.setFontSize`（clamp + `--editor-font-size` var）。
+SettingsModal AppearanceSection 2 toggle（镜像 autoUpdate switch）+ `applyAppearanceSettings()` boot 应用 + `__geodeAppearance` 探针 + i18n。
+**零新依赖、无 Rust、低风险加性轮**（默认保持现状：readable ON / spellcheck OFF）。验证：typecheck 0 · `r50-e2e.mjs` **15/15** ·
+桌面 `r50-probe.mjs` **6/6** · cargo release 真实重建 38s · 回归 r33/r24/r25/r49 不回退。**2 维对抗评审 2 finding → 1 确认（minor，去重）修**
+（阅读视图 `.editor-preview > .properties-panel` 硬编码 46em 漏跟随 readable-line→改同源 var + 补 E2E 断言）。显式延期：行宽数值可调 / UI chrome 缩放 / spellcheck 默认 ON。
+
 ### R49 — v0.49（2026-06-14）文件恢复快照（File recovery snapshots）（R32+ 候选池第三梯队 #⑪ 另一半 → #⑪ 完成）
 **数据安全相关轮。** `core/snapshots.ts`（NEW）：编辑恢复（R42 trash = 删除恢复的另一半）。存储 = 每 note 单 JSON
 `.obsidian/snapshots/<encodeURIComponent(path)>.json` = `{path, snapshots:[{ts,content}]}`（复用 `vault.adapter.writeConfig`
@@ -1097,7 +1108,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
 | **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
-| **⑲ 拼写检查 / 可读行宽 / 应用级缩放** | **缺**（所有 input `spellCheck={false}`；无 readableLineLength；缩放仅图谱内）| Obsidian Appearance「Readable line length」很常用。切入：CSS max-width 开关 + spellcheck 设置 + Cmd+± 字号缩放。 |
+| ~~**⑲ 拼写检查 / 可读行宽 / 应用级缩放**~~ | **R50 已完成（v0.50，见上）**：`core/appearance.ts`（`readableLineLength`/`spellcheckEnabled` Store + setter，localStorage）。Readable line length = `.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel 的 `max-width` 改 `var(--readable-line-width, 46em)`，setReadableLineLength 切 documentElement var（OFF=none）。Spellcheck = EditorPane `useStore(spellcheckEnabled)` + effect 设 contentDOM。Zoom = `app:zoom-in`/`out`/`reset`（Mod+=/-/0 → `setFontSize`）。SettingsModal 2 toggle + i18n + `__geodeAppearance` 探针。r50-e2e 15/15 + r50-probe 6/6。默认保持现状（readable ON / spellcheck OFF）。 | 余项：可读行宽数值可调（固定 46em）；UI chrome 缩放（仅正文）；spellcheck 默认 ON（取 OFF 不惊扰）。 |
 | **⑳ 移动行上下 + 其它编辑命令** | **部分**（defaultKeymap 经 Mod 已给 deleteLine 等；move-line-up/down Obsidian 有、CM 默认无）| 切入：`@codemirror/commands` `moveLineUp/Down` 接命令+键。 |
 | **㉑ 小众核心插件** | **缺**：Footnotes view / Unique note creator / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；多数零/轻依赖可做。 |
 
