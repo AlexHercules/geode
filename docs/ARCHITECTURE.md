@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 56 additions — Live preview mermaid + 共享 block widget 抽取（#⑱）【As-built v0.56】
+
+> **状态：As-built（v0.56 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。① 把 R55 live 表格的 cursor-aware block widget 机制**抽到共享 `liveBlockWidget.ts`**（重构 liveTables 复用，r55-e2e 15/15 护航零回退）；
+> ② 新 `liveMermaid.ts`：` ```mermaid ` 围栏在 **live preview 渲染为图**（R19 显式延后的「live mermaid 需 StateField 跨行 replace」正是 R55 范式）。**复用阅读视图管线**：`renderMarkdownToHtml` 出 `.geode-mermaid` 占位 → `hydrateEmbeds` 异步渲染 SVG（含 R19 的 `mermaidBatchChain` 全局串行链 → 多 widget 不并发串图）。**零新依赖、无 Rust、纯 view 装饰不改文档**。
+> 验证:typecheck 0 · `r56-e2e.mjs` **13/13**（5 纯检测/占位 + 8 live widget[渲染**异步 SVG** headless 真出/揭示/源码不变/无报错]）· `r56-probe.mjs` **7/7** · cargo release 真实重建 38s · 回归 r55[重构]/r51/r52/r35/r33/r24/r29 不回退。
+> **评审 0 真缺陷 / 5 维全证伪**（重构等价[r55 15/15]、检测=渲染器判定一致[仅 1 安全方向偏差]、异步水合并发[`mermaidBatchChain` 串行实测 2 图无串色]、data-safety[零文档修改/无锁死/无 XSS]、分层）。
+
+### 契约（交付即实现）
+
+**features/editor/liveBlockWidget.ts（新，共享）**:`liveBlockWidgets(spec: { ranges(state), widget(source, from) })` = StateField（create/update[`docChanged||selection` rebuild 否则 `value.map`] + provide decorations+atomicRanges）。`buildDecos`：`spec.ranges` → **行首守卫**（`from !== lineAt(from).from` 跳过=非行首[blockquote/list/缩进]块降级源码）→ selection 相交跳过（揭示）→ `Decoration.replace({block:true, widget})`。**block 装饰必须 StateField（R55 踩坑：ViewPlugin block 装饰崩 RangeSet.spans）**。
+**features/editor/liveTables.ts（重构）**:保留 `findTableRanges`（探针）+ `TableWidget`（eq 比 source+from+html）；`liveTables` 改用 `liveBlockWidgets({ ranges: findTableRanges, widget: ... renderMarkdownToHtml ... })`。
+**features/editor/liveMermaid.ts（新）**:`findMermaidRanges`（syntaxTree 取 `FencedCode` 且 `node.getChild("CodeInfo")` 首词 `split(/\s+/)[0]==="mermaid"` 大小写敏感——镜像 core/markdown fence renderer 判定，**缺 `unescapeAll`** = 仅 HTML-实体 info 检测窄[安全方向，显源码]）。`MermaidWidget`（toDOM = `.geode-mermaid` 占位 innerHTML + `void hydrateEmbeds(wrap, app, getPath())` 异步 SVG + mousedown 揭示；eq 比 source+from[占位由 source 确定]）。`liveMermaid` = `liveBlockWidgets`。
+**livePreview.ts**:`liveTables` + `liveMermaid` 接入 `livePreview()`（仅 live 模式）。**main.tsx**:`__geodeMermaid.ranges/placeholder` 探针。**editor.css**:`.cm-live-mermaid`。
+
+### 文件所有权（本轮单人独占）
+- `src/features/editor/liveBlockWidget.ts`（新）+ `liveMermaid.ts`（新）+ `liveTables.ts`（重构）+ `livePreview.ts`（接入）+ `src/main.tsx`（探针）+ `editor.css` + `.calibration/r56-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **theme 切换后已渲染的 live widget（mermaid SVG / table）不即时重渲染**（StateField 只在 doc/selection rebuild，eq 复用缓存 DOM）——与既有 EmbedWidget 同类限制。
+- **HTML-实体 info（如 `` ```mermaid&#32; ``）的 mermaid fence 检测窄 → 显示源码**（检测器缺 `unescapeAll`，安全方向，exotic）。
+- **嵌套（blockquote/list）mermaid fence 不 live 渲染**（行首守卫降级源码，同 R55 表格）。
+- **#⑱ 余项可复用 `liveBlockWidget`**（`spec.ranges` 是任意函数，不限 syntaxTree 节点）：跨行 `$$` 数学[katex，`$$` 可能需 scan-based ranges 非 lezer 节点]、`%%` 注释隐藏。
+
 ## Round 55 additions — Live preview 表格（live tables，#⑱）【As-built v0.55】
 
 > **状态：As-built（v0.55 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。GFM 管道表格在 **live preview 渲染为真 `<table>`**（复用阅读视图 `renderMarkdownToHtml`）——

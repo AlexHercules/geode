@@ -172,6 +172,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R56 套件回归（2026-06-14，macOS release 二进制 v0.56.0 实测 `r56-probe-vault`）
+
+R56 = Live preview mermaid + 共享 block widget 抽取（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 渲染 mermaid 图。
+① 抽共享 `liveBlockWidget.ts`（R55 表格机制），重构 liveTables 复用；② `liveMermaid.ts`：```mermaid 围栏 live 渲染为图——`findMermaidRanges`（FencedCode CodeInfo 首词 mermaid，镜像 fence renderer）+ `MermaidWidget`（renderMarkdownToHtml 占位 + hydrateEmbeds 异步 SVG，复用 R19 管线含 mermaidBatchChain 全局串行）。纯 view 不改文档。
+macOS probe 实测：新增 **r56-probe 7/7**——真实 WKWebView 上 `__geodeMermaid` 检测（findMermaidRanges 找 1 mermaid fence、js/大小写不匹配）+ 占位（renderMarkdownToHtml→.geode-mermaid）。
+**r55/r51/r52/r35/r33/r24/r29 套件不回退**（浏览器 r56-e2e **13/13**[5 纯 + 8 live widget 含**异步 SVG headless 真渲染**/揭示/源码不变/无报错] + r55 15[重构零回退]、r51 10、r52 11 抽样实测全绿）。
+**对抗评审 0 真缺陷 / 5 维全证伪**（重构等价、检测=渲染器判定一致[仅 HTML-实体 info 1 安全方向偏差]、**异步水合并发被 mermaidBatchChain 全局串行化**[实测 2 图无串色]、data-safety 零文档修改/无 XSS[复用 R19 strict DOMPurify]）。显式延期：跨行 `$$`·`%%`（复用 liveBlockWidget）；嵌套表格/mermaid live 渲染；theme 切换不重渲染。
+
 ### R55 套件回归（2026-06-14，macOS release 二进制 v0.55.0 实测 `r55-probe-vault`）
 
 R55 = Live preview 表格（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 把 GFM 管道表格渲染为真表格。
