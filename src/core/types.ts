@@ -26,15 +26,20 @@ export type VaultNode = FileNode | FolderNode;
 
 /** A wikilink or markdown link found inside a note. */
 export interface LinkRef {
-  /** raw link target as written, e.g. "Welcome" or "Notes/Welcome" */
+  /** raw link target as written. wikilink: "Welcome" / "Notes/Welcome";
+   *  markdown: the raw href as written, e.g. "note.md" / "folder/note.md#sec"
+   *  (URL-encoded, with anchor — `resolveMarkdownLink` decodes/strips). */
   target: string;
-  /** display alias if given via [[target|alias]] */
+  /** display alias if given via [[target|alias]], or the markdown link text. */
   alias?: string;
   /** character offset of the link in the file */
   from: number;
   to: number;
   /** surrounding-line snippet captured at parse time (for backlink context) */
   context?: string;
+  /** R70: `[[wikilink]]` vs `[text](markdown.md)` — drives the rewrite engine's
+   *  per-kind splice/reconstruction branch. */
+  kind: "wikilink" | "markdown";
 }
 
 export interface HeadingRef {

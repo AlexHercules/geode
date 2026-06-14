@@ -58,6 +58,8 @@ interface CaptureEntry {
   newFile: string;
   /** resolved through the markdown name map (vs the attachment map) */
   isMd: boolean;
+  /** R70: `[[wikilink]]` vs `[text](md.md)` — drives the per-kind rewrite branch */
+  kind: "wikilink" | "markdown";
 }
 
 /** A verified splice plus the file the rewritten link must resolve to. */
@@ -66,6 +68,8 @@ interface PlannedEdit {
   to: number;
   insert: string;
   expect: string;
+  /** R70: which resolver verifies `expect` in the post-rewrite re-parse */
+  kind: "wikilink" | "markdown";
 }
 
 /** Serializes engine runs (R16 review fix): three entry points (Explorer,
@@ -170,13 +174,31 @@ async function doLinkUpdate(
     for (const meta of metadata.getAll()) {
       let map: Map<string, CaptureEntry> | undefined;
       for (const link of meta.links) {
-        const key = link.target.toLowerCase();
+        // key includes kind: a wikilink and a markdown link in one file may
+        // share a lowercased target string but resolve / rewrite differently.
+        const key = link.kind + " " + link.target.toLowerCase();
         if (map?.has(key)) continue;
+        if (link.kind === "markdown") {
+          // markdown hrefs resolve via the dedicated decoder/normalizer; a md
+          // link may point at an md note OR an attachment (`[x](pic.png)`)
+          const resolved = metadata.resolveMarkdownLink(link.target, meta.path);
+          if (resolved === null) continue;
+          const destMd = affectedMd.get(resolved);
+          if (destMd !== undefined) {
+            (map ??= new Map()).set(key, { oldFile: resolved, newFile: destMd, isMd: true, kind: "markdown" });
+            continue;
+          }
+          const destAtt = affectedAtt.get(resolved);
+          if (destAtt !== undefined) {
+            (map ??= new Map()).set(key, { oldFile: resolved, newFile: destAtt, isMd: false, kind: "markdown" });
+          }
+          continue;
+        }
         const md = metadata.resolveLink(link.target, meta.path);
         if (md !== null) {
           const dest = affectedMd.get(md);
           if (dest !== undefined) {
-            (map ??= new Map()).set(key, { oldFile: md, newFile: dest, isMd: true });
+            (map ??= new Map()).set(key, { oldFile: md, newFile: dest, isMd: true, kind: "wikilink" });
           }
           continue;
         }
@@ -184,7 +206,7 @@ async function doLinkUpdate(
         if (att !== null) {
           const dest = affectedAtt.get(att);
           if (dest !== undefined) {
-            (map ??= new Map()).set(key, { oldFile: att, newFile: dest, isMd: false });
+            (map ??= new Map()).set(key, { oldFile: att, newFile: dest, isMd: false, kind: "wikilink" });
           }
         }
       }
@@ -239,6 +261,35 @@ async function doLinkUpdate(
     }
     return resolveUnified(t, fromPath) === cap.newFile;
   };
+  // markdown variant: judge the normalized (decoded, anchor-stripped, relative-
+  // resolved) path. Same only-fix-broken discipline — a path-form href is alive
+  // only on an exact path match (a stale folder prefix that still navigates via
+  // basename is NOT alive: the bytes are wrong, see stillResolves rationale).
+  const stillResolvesMd = (href: string, fromPath: string, cap: CaptureEntry): boolean => {
+    const p = metadata.normalizeMdHref(href, fromPath);
+    if (p === null) return false;
+    if (p.includes("/")) {
+      const exact = cap.isMd ? p.replace(/\.md$/i, "") + ".md" : p;
+      return exact.toLowerCase() === cap.newFile.toLowerCase();
+    }
+    return metadata.resolveMarkdownLink(href, fromPath) === cap.newFile;
+  };
+  // Re-encode a vault path as a markdown href. Percent-encode EVERY character
+  // that is syntactically significant inside `(...)` — not just spaces: a literal
+  // `(` / `)` would truncate the href on re-parse (MARKDOWN_LINK_RE stops at `)`),
+  // and a literal `#` / `?` would be misread as an anchor / query, both leaving a
+  // dangling link after the file was already renamed (review R70 major). `%` is
+  // encoded first so the encodings we introduce are not double-encoded;
+  // normalizeMdHref's decodeURIComponent is the exact inverse. `/` is preserved
+  // as the path separator.
+  const encodeMdHref = (path: string): string =>
+    path
+      .replace(/%/g, "%25")
+      .replace(/ /g, "%20")
+      .replace(/\(/g, "%28")
+      .replace(/\)/g, "%29")
+      .replace(/#/g, "%23")
+      .replace(/\?/g, "%3F");
 
   /* ---- step 4: verified rewrite, one referrer at a time ---- */
 
@@ -258,8 +309,37 @@ async function doLinkUpdate(
       const parsed = parseNote(rPath, content);
       const edits: PlannedEdit[] = [];
       for (const link of parsed.links) {
-        const cap = map.get(link.target.toLowerCase());
+        const cap = map.get(link.kind + " " + link.target.toLowerCase());
         if (cap === undefined) continue;
+
+        // ---- R70: markdown link `[text](href)` branch ----
+        if (link.kind === "markdown") {
+          if (stillResolvesMd(link.target, rPath, cap)) continue;
+          const raw = content.slice(link.from, link.to);
+          // splice verification — NEVER blind-write: the span must still be a
+          // markdown link whose href matches the captured target byte-for-byte
+          const mm = /^\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+("[^"]*"))?\s*\)$/.exec(raw);
+          if (mm === null) {
+            throw new Error(`span ${link.from}-${link.to} is not a markdown link: "${raw}"`);
+          }
+          const text = mm[1];
+          const url = mm[2];
+          const titlePart = mm[3] ? ` ${mm[3]}` : "";
+          if (url !== link.target) {
+            throw new Error(`md href mismatch at ${link.from}: "${url}" != "${link.target}"`);
+          }
+          // preserve the whole tail from the first `#` OR `?` verbatim (anchor
+          // and/or query) — only the path part is replaced (review R70 minor:
+          // a `?query` after the path was being dropped).
+          const tailAt = url.search(/[#?]/);
+          const tail = tailAt === -1 ? "" : url.slice(tailAt);
+          // new href = the new file's vault-relative path (unambiguous absolute
+          // form; basename disambiguation / author style is ㉞-c). md keeps the
+          // extension; syntax-sensitive chars re-encoded (see encodeMdHref).
+          const insert = `[${text}](${encodeMdHref(cap.newFile)}${tail}${titlePart})`;
+          edits.push({ from: link.from, to: link.to, insert, expect: cap.newFile, kind: "markdown" });
+          continue;
+        }
 
         // only-fix-broken (minimal diff): a basename link survives a folder
         // move, an alias link travels with the frontmatter — leave them alone.
@@ -305,9 +385,14 @@ async function doLinkUpdate(
           to: link.to,
           insert: `[[${next}${subPart}${aliasPart}]]`,
           expect: cap.newFile,
+          kind: "wikilink",
         });
       }
       if (edits.length === 0) continue;
+      // parsed.links lists all wikilinks THEN all markdown links (two scans), so
+      // the collected edits are not globally ordered — sort by offset before the
+      // splice construction + apply (both require ascending, non-overlapping).
+      edits.sort((a, b) => a.from - b.from);
 
       // post-rewrite assertion (probe-grade): apply to a copy and confirm
       // every rewritten link resolves to its new file BEFORE anything is written
@@ -324,7 +409,15 @@ async function doLinkUpdate(
         const at = e.from + delta;
         delta += e.insert.length - (e.to - e.from);
         const now = reparsed.links.find((l) => l.from === at);
-        if (!now || resolveUnified(now.target, rPath) !== e.expect) {
+        // markdown hrefs resolve through the decoder (resolveUnified can't decode
+        // %20 / relative forms); wikilinks through the unified md/attachment rule.
+        const got =
+          now === undefined
+            ? null
+            : e.kind === "markdown"
+              ? metadata.resolveMarkdownLink(now.target, rPath)
+              : resolveUnified(now.target, rPath);
+        if (got !== e.expect) {
           throw new Error(`post-rewrite verification failed at offset ${at} (expected ${e.expect})`);
         }
       }

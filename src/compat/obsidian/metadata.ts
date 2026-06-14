@@ -245,10 +245,14 @@ export class MetadataCache extends Events {
     if (meta.links.length > 0) {
       out.links = meta.links.map((l) => ({
         link: l.target,
+        // R70: the no-content fallback must reconstruct the link in its OWN
+        // syntax — a markdown link `[text](href)` is not `[[href]]`.
         original:
           content !== undefined
             ? content.slice(l.from, l.to)
-            : `[[${l.target}${l.alias ? `|${l.alias}` : ""}]]`,
+            : l.kind === "markdown"
+              ? `[${l.alias ?? ""}](${l.target})`
+              : `[[${l.target}${l.alias ? `|${l.alias}` : ""}]]`,
         ...(l.alias !== undefined ? { displayText: l.alias } : {}),
         position: pos(l.from, l.to),
       }));
@@ -339,7 +343,9 @@ export class MetadataCache extends Events {
 
   private addLinkRows(meta: NoteMetadata, resolved: LinkTable, unresolved: LinkTable): void {
     for (const link of meta.links) {
-      const dest = this.handle.metadata.resolveLink(link.target, meta.path);
+      // R70: route by kind so markdown hrefs (anchored / encoded / relative)
+      // land in resolvedLinks, not unresolvedLinks (plugin-visible API).
+      const dest = this.handle.metadata.resolveByKind(link, meta.path);
       const table = dest ? resolved : unresolved;
       const key = dest ?? link.target;
       const row = (table[meta.path] ??= {});

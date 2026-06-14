@@ -17,6 +17,11 @@ import { EventBus } from "./events";
 import { Store } from "./store";
 
 const WIKILINK_RE = /\[\[([^\[\]\|#]+)(?:#[^\[\]\|]*)?(?:\|([^\[\]]*))?\]\]/g;
+/** Standard markdown inline link/image `[text](href)` / `![alt](href "title")`
+ *  (R70). m[1]=optional `!`, m[2]=text, m[3]=href (no whitespace/`)`). Title is
+ *  matched-and-discarded. Reference-style `[a][b]` and angle `(<url>)` forms are
+ *  out of scope (Obsidian writes bare hrefs, %20-encoding spaces). */
+const MARKDOWN_LINK_RE = /(!?)\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+"[^"]*")?\s*\)/g;
 /** Inline `#tag` recognition (frozen): a tag follows a line-start/space/`(`
  *  boundary (m[1]) and its body (m[2], no leading #) admits `/` for nesting and
  *  BMP CJK. Exported so `core/tagRewrite.ts` scans tags with the EXACT same
@@ -165,6 +170,25 @@ export function parseNote(path: string, content: string): NoteMetadata {
       from: m.index!,
       to: m.index! + m[0].length,
       context: makeSnippet(content, m.index!, m.index! + m[0].length),
+      kind: "wikilink",
+    });
+  }
+  // R70: standard markdown links `[text](href)` — indexed so file renames can
+  // rewrite them too (R16 closed only wikilinks). Image embeds `![](…)` (m[1]),
+  // external schemes (`https:` / `mailto:` …), protocol-relative `//`, and pure
+  // same-file anchors `#x` are NOT vault links → skipped. The raw href is kept
+  // verbatim as the target (resolveMarkdownLink decodes/strips at resolution).
+  for (const m of masked.matchAll(MARKDOWN_LINK_RE)) {
+    if (m[1] === "!") continue; // image embed — markdown embeds deferred (㉞ follow-up)
+    const href = m[3];
+    if (href.startsWith("#") || href.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+    links.push({
+      target: href,
+      alias: m[2] || undefined,
+      from: m.index!,
+      to: m.index! + m[0].length,
+      context: makeSnippet(content, m.index!, m.index! + m[0].length),
+      kind: "markdown",
     });
   }
 
@@ -519,6 +543,79 @@ export class MetadataIndex {
   }
 
   /**
+   * Normalize a markdown-link href to a vault-relative path STRING (R70) — does
+   * NOT consult the index (returns the path even if no file exists there). Decodes
+   * `%xx`, drops the `#anchor` / `?query`, resolves `./` `../` against fromPath's
+   * folder and a leading `/` against the vault root. Returns null for external
+   * schemes (`https:`/`mailto:`/…), protocol-relative `//`, pure anchors, empty,
+   * or a `..` that escapes the vault root. Used by resolveMarkdownLink and by the
+   * rewrite engine's path-form only-fix-broken check.
+   */
+  normalizeMdHref(href: string, fromPath: string): string | null {
+    let h = href.trim();
+    if (h === "" || h.startsWith("#") || h.startsWith("//")) return null;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(h)) return null; // external scheme
+    h = h.split("#")[0].split("?")[0];
+    if (h === "") return null;
+    try {
+      h = decodeURIComponent(h);
+    } catch {
+      /* malformed %xx — keep raw */
+    }
+    // base folder depends ONLY on the prefix (consistent resolution, review R70):
+    // `/x` = vault root; `./x` / `../x` = relative to the referrer's folder;
+    // everything else = vault-root-relative (matches resolveLink's wikilink rule).
+    // The `.`/`..` segment loop then always runs, so `sub/../x.md` and `sub/x.md`
+    // resolve under the same base rather than diverging.
+    let segs: string[];
+    if (h.startsWith("/")) {
+      segs = [];
+      h = h.slice(1);
+    } else if (h.startsWith("./") || h.startsWith("../")) {
+      segs = fromPath.includes("/") ? fromPath.slice(0, fromPath.lastIndexOf("/")).split("/") : [];
+    } else {
+      segs = [];
+    }
+    for (const seg of h.split("/")) {
+      if (seg === "" || seg === ".") continue;
+      if (seg === "..") {
+        if (segs.length === 0) return null; // escaped the vault root
+        segs.pop();
+        continue;
+      }
+      segs.push(seg);
+    }
+    return segs.join("/");
+  }
+
+  /**
+   * Resolve a markdown-link href to a vault path (R70). Mirrors resolveLink's
+   * lenient md-or-attachment resolution but over a normalized markdown href.
+   * Returns the resolved vault path or null. NEVER touches resolveLink's frozen
+   * signature — markdown's relative/encoded/anchored forms live here.
+   */
+  resolveMarkdownLink(href: string, fromPath: string): string | null {
+    const p = this.normalizeMdHref(href, fromPath);
+    if (p === null) return null;
+    return this.resolveLink(p, fromPath) ?? this.resolveAttachment(p, fromPath);
+  }
+
+  /**
+   * Resolve a LinkRef to a vault path with the resolver matching its kind (R70):
+   * markdown hrefs route through resolveMarkdownLink (decode / strip anchor /
+   * relative), wikilinks through resolveLink. EVERY meta.links consumer
+   * (backlinks / outgoing links / graph / compat resolvedLinks) must use this —
+   * resolving a markdown href with the wikilink resolver drops anchored/encoded/
+   * relative md links into the unresolved bucket (review R70: ghost graph nodes,
+   * missing backlinks).
+   */
+  resolveByKind(link: LinkRef, fromPath: string): string | null {
+    return link.kind === "markdown"
+      ? this.resolveMarkdownLink(link.target, fromPath)
+      : this.resolveLink(link.target, fromPath);
+  }
+
+  /**
    * Resolve a NON-markdown attachment target ("img.png" / "assets/img.png").
    * Mirrors resolveLink: a target containing "/" tries an exact relative-path
    * match first (case-insensitive); otherwise it matches by basename including
@@ -563,7 +660,7 @@ export class MetadataIndex {
     const out: BacklinkEntry[] = [];
     for (const meta of this.byPath.values()) {
       if (meta.path === path) continue;
-      const hits = meta.links.filter((l) => this.resolveLink(l.target, meta.path) === path);
+      const hits = meta.links.filter((l) => this.resolveByKind(l, meta.path) === path);
       if (hits.length === 0) continue;
       out.push({
         sourcePath: meta.path,
@@ -580,7 +677,7 @@ export class MetadataIndex {
   getOutgoingLinks(path: string): Array<{ link: LinkRef; resolvedPath: string | null }> {
     const meta = this.byPath.get(path);
     if (!meta) return [];
-    return meta.links.map((link) => ({ link, resolvedPath: this.resolveLink(link.target, path) }));
+    return meta.links.map((link) => ({ link, resolvedPath: this.resolveByKind(link, path) }));
   }
 
   /** R65: footnote definitions for a file, in document order. */
@@ -695,7 +792,13 @@ export class MetadataIndex {
     }
     for (const meta of this.byPath.values()) {
       for (const link of meta.links) {
-        const resolved = this.resolveLink(link.target, meta.path);
+        // graph nodes are notes only (byPath); a markdown link can resolve to an
+        // ATTACHMENT (resolveMarkdownLink falls back to resolveAttachment) which
+        // has no node — treat any non-note resolution as a ghost, matching how a
+        // wikilink-to-attachment already behaves (resolveLink returns null). This
+        // also guards the degree++ below from an absent target node.
+        const resolvedRaw = this.resolveByKind(link, meta.path);
+        const resolved = resolvedRaw !== null && nodes.has(resolvedRaw) ? resolvedRaw : null;
         const targetId = resolved ?? `unresolved:${link.target.toLowerCase()}`;
         if (!resolved && !nodes.has(targetId)) {
           nodes.set(targetId, { id: targetId, label: link.target, resolved: false, degree: 0 });
