@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R71 套件回归（2026-06-15，macOS release 二进制 v0.68.0 实测 `r71-probe-vault`）
+
+R71 = markdown 内部链接渲染 + 点击导航（候选池第五梯队【中】㉞-b，原生功能）。对照 Obsidian 核心：解析为 vault 路径的 md 链接渲染为内部可点击链接、点击导航（阅读视图 + live + hover 预览）。
+改 core/markdown.ts 阅读视图管线（字节敏感）：`link_open` 对解析到 .md 笔记的 md href 产 internal-link anchor（data-target=已解析全路径，复用 wikilink 点击机器）；live `.cm-live-mdlink` 加 data-link-target + hover；新 `resolveMdLink` 由 5 渲染调用点注入。**字节契约**：r26-bytes `--baseline` 改前重捕 → 改后 **0 invariant violations**（仅 md-link-internal/-sub 两例预期变，44 例逐字节不变）。**纯前端 core+features，零依赖、无 Rust。**
+新增套件：`r71-e2e.mjs` **17/17**（阅读+live 渲染/点击/根-绝对/角括号/Ctrl-点）+ `r71-probe.mjs` **8/8**（真 WKWebView __geodeRenderMarkdown）。
+**对抗评审（Workflow 3 lens + verify）9 确认 → 修 5 根因 + 自查**：live Ctrl-点导航（非 window.open）/ hover 预览 / embeds+卡片传 resolveMdLink / 角括号剥 `<>` / **根-绝对 href 精确解析（修 R70 resolveMarkdownLink basename 模糊 MAJOR）**。**插件 API**：md 内部链接渲染走核心管线，compat MarkdownRenderer 同步获益。**已知偏差**：㉞-c 新链接格式设置（续）/ title tooltip nit / 重命名后陈旧 anchor（重渲消除）。
+- **套件矩阵不回退**：compat 调用面仅 MarkdownRenderer 渲染获益（加性），r31/…/r57 全 compat 套件不动；原生回归 r23[editor]22 + r25[hover]17 + r26[embeds]12 + r35[brackets]25 + r55[live tables]15 + r63[multicursor]9 + r70[md rename]23 全绿（markdown.ts 字节不回退 + 编辑器栈不破）。
+
 ### R70 套件回归（2026-06-14，macOS release 二进制 v0.67.0 实测 `r70-probe-vault`）
 
 R70 = markdown 标准链接 `[text](note.md)` 重命名改写（候选池第五梯队【中】㉞-a，原生功能）。对照 Obsidian 核心：重命名同步更新 markdown 链接。

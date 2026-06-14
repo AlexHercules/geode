@@ -71,6 +71,34 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 71 additions — markdown 内部链接渲染 + 点击导航（候选池第五梯队【中】㉞-b）【As-built v0.68】
+
+> **状态：As-built（v0.68 交付,2026-06-15）。** ㉞-b = 让 R70 已索引/已改写的 markdown 链接 `[text](note.md)` 在阅读视图 + live preview **渲染为内部链接并可点击导航**（R70 前只索引/改写，渲染端当外链不导航）。**改 `core/markdown.ts` 阅读视图管线 = 字节契约敏感**：数据安全 §C 纪律——改前 `r26-bytes.mjs --baseline` 重捕，改后 diff 仅 `md-link-internal`/`-sub` 两例变（标记预期），其余 44 例（external/attachment/unresolved/mailto md 链接 + 全部既有 markdown）逐字节不变。
+> **关键设计：md 内部链接复用 wikilink 的渲染 + 点击机器**——anchor 用 `data-target = 已解析的 vault 全路径`（非裸 href），阅读视图点击委托 + live 点击都喂 `openWikilink(已解析路径)`，openWikilink 对完整路径 `resolveLink` 必命中 → openFile，**永不进 create-note 分支**。只对解析到 `.md` **笔记**的 md 链接产内部链接（`/\.md$/i` 门控）——附件 md 链接会让 openWikilink 的笔记-only resolver 误建笔记，故附件/unresolved/external 保持旧 `<a href>`（字节不变）。
+> **架构卡点**：`renderMarkdownToHtml(source, resolve, opts?)` 只收一个 `resolve`（wikilink 解析器），markdown.ts 内拿不到 sourcePath/metadata → 新增 `RenderMarkdownOptions.resolveMdLink?: (href)=>string|null`，由**每个渲染调用点**绑 `metadata.resolveMarkdownLink(href, sourcePath)`（main.tsx `__geodeRenderMarkdown` / EditorPane renderPreview / compat util / **embeds.ts 转写** / **HoverPreview 卡片**——后两处评审补绑）。
+> 验证：typecheck 0 · `r26-bytes.mjs` **0 invariant violations** · `r71-e2e.mjs` **17/17**（阅读+live 渲染/点击导航/根-绝对/角括号/Ctrl-点/相对）· `r71-probe.mjs` **8/8** 真 WKWebView · 回归 r23/r25/r26/r35/r55/r63/r70 绿。
+> **简化门**：clean（字节锁定输出 + 契约注入点 + `.md` 门控/decode 皆承重）。
+> **对抗评审（Workflow 3 lens byte-render/nav-createnote/adversarial-contract + verify）9 确认 + 3 partial → 修 5 根因 + 记 3 nit**：
+>   - **Fix A（minor×2）= live Ctrl/Cmd-点内部 md 链接 window.open 裸路径**（而非导航）→ 内部 md 分支（有 data-link-target）**无视修饰键**走 openWikilink，window.open 仅在无 data-link-target（外链）时。
+>   - **Fix B（minor×2）= live 内部 md 链接无 hover 预览**（hoverController.extractTrigger 缺 `.cm-live-mdlink` 分支）→ 加 `.cm-live-mdlink[data-link-target]` 分支（读 data-link-target/subpath，与 wikilink 并列）。
+>   - **Fix C（minor）= 笔记转写 + hover 卡片渲染未传 resolveMdLink** → embeds.ts:312 + HoverPreview.tsx:187 补绑，使嵌入/卡片内 md 链接与主阅读视图一致可点。
+>   - **Fix D（minor）= 角括号 `[x](<note.md>)` 双端不一致**（markdown-it 阅读视图剥 `<>`，live 不剥）→ livePreview 取 url 后剥一对 `<>` 再解析 + 写 data-url。
+>   - **Fix E（MAJOR）= 根-绝对 `[a](/Z.md)` / 相对 href 被 basename 模糊解析到错笔记**（R70 `resolveMarkdownLink` 缺陷，R71 首次让其可点暴露）：`/Z.md` 从子目录解析到 `子目录/Z.md`。**修 = position-bearing href（`/`/`./`/`../` 前缀）走 EXACT 路径解析**（`lowerPathToPath` 精确查），bare basename 保持 resolveLink 最短路径行为。
+
+### 契约（冻结，已纳评审修复）
+
+**core/markdown.ts**：`RenderMarkdownOptions += resolveMdLink?: (href: string) => string | null`；`PreviewEnv += geodeResolveMdLink`；`link_open` 规则：非 external 非 placeholder href，`resolveMdLink(href)` 命中 `.md` 笔记 → 改写 token（`class="internal-link"` + `data-target=已解析路径` + `data-subpath=decode(锚点)` + `href="#"`），否则旧行为不变；`renderMarkdownToHtml` 设 `env.geodeResolveMdLink = opts?.resolveMdLink`。
+**core/metadata.ts**：`resolveMarkdownLink` position-bearing 分支（`/`/`./`/`../` 前缀 → `lowerPathToPath` 精确查 `.md`，否则 resolveAttachment；bare → resolveLink ?? resolveAttachment）。
+**features/editor/livePreview.ts**：Link 装饰对 `.md`-解析 href 加 `data-link-target=已解析路径` + `data-link-subpath`（剥 `<>` 后解析）；`liveClickHandler` 内部 md 链接（有 data-link-target）无视修饰键 openWikilink。
+**features/hover/hoverController.ts**：`extractTrigger` 加 `.cm-live-mdlink[data-link-target]` 分支。
+**调用点**：main.tsx / EditorPane / compat util / embeds.ts / HoverPreview.tsx 各绑 `resolveMdLink`。
+
+### 已知偏差 / 待办
+- **㉞-c（续）= 新链接格式设置**（wikilink↔md × 最短/相对/绝对），影响全部链接构造点——㉞ 最后一子轮。
+- **内部 md 链接保留 `title=href` tooltip**（wikilink 无）——cosmetic（评审 nit），暂留（href 提示有用）。
+- **渲染时刻已解析路径存进 data-target，目标随后被重命名/删除 → 点击落 create-note**——阅读视图随 metadata bump 重渲消除陈旧 anchor，实际窗口极窄（评审 nit）。
+- **r26-bytes 基线陈旧则字节守卫静默失效**——流程脆弱性（`.calibration` 不入 CI），非代码 bug；每次改 markdown.ts 前必 `--baseline` 重捕。
+
 ## Round 70 additions — markdown 标准链接 `[text](note.md)` 重命名改写（候选池第五梯队【中】㉞-a）【As-built v0.67】
 
 > **状态：As-built（v0.67 交付,2026-06-14）。** 验证：typecheck 0 · `r70-e2e.mjs` **23/23**（basename/path/anchor/titled/%20编码/wiki共存/external+self+code跳过/md图片嵌入延后/附件链接改写/folder移动/相对路径/**括号文件名编码/?query保留/锚点md链接算反链+图谱无幽灵节点**/wikilink回归）· `r70-probe.mjs` **9/9** 真 WKWebView 真实 fs · 回归 r44 25 / r47 11 / r28 23 / r62 14 / r66 8 / r24 12 绿。
