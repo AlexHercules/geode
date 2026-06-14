@@ -71,6 +71,65 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 69 additions — 全库标签重命名 `#old`→`#new`（候选池第五梯队【中】㉝）【As-built v0.66】
+
+> **状态：As-built（v0.66 交付,2026-06-14）。** 验证：typecheck 0 · `r69-e2e.mjs` **36/36**（inline/nested/boundary/frontmatter array+scalar/code-skip/CJK/no-op/descendant-guard/invalid/open-buffer/junk-item/UI 右键 rename + 无效名守卫）· `r69-probe.mjs` **10/10** 真 WKWebView 实测真实 fs · 回归 r41 21 / r30 25 / r24 12 绿。
+> **简化门**：2 net-negative（删两处不可达死分支——`newNorm===oldNorm`（line 111 已 return）、UI `newTag===tag`（已 return））。
+> **对抗评审（Workflow 3 lens data-safety/adversarial-inputs/contract-layering-UI + verify）9 确认（多为 minor/nit）+ 2 partial + 4 证伪 → 修 3 根因 + 记 3 已知偏差**：
+>   - **Fix A（minor, data-safety lens）= frontmatter 重写集 ⊄ 索引集**：引擎原用 `replace(/^#+/)` + 无空白守卫，但 `parseNote`（metadata.ts:243-248）索引 frontmatter tag 用 `replace(/^#/)` + 丢弃含空白/空项。后果：一个 `parseNote` 从不索引、用户在 Tags 面板看不到的垃圾项（`tags: ["a/b with space"]`）仍会被静默 xform。**修 = frontmatter map 逐字镜像 parseNote 的索引判据**（`replace(/^#/)` + `norm!=="" && !/\s/.test(norm)`）→ 重写集 ⊆ 索引集，绝不动用户看不见的 token（R68「对齐 N 处定义」教训的直接应用）。
+>   - **Fix C（minor, contract lens）= 全跳过路径吞掉 skip 数**：`filesChanged===0` 分支只显 `renameNoop`，吞了 `res.skipped.length`（继承自 AllPropertiesPanel 同款）。**修 = 任何分支都拼接 renameSkipped**（R47「接部分失败报告必须消费 skipped」教训）。
+>   - **Fix D（nit）= 死 import**：`fmField` 导入但实现内联了 case-insensitive 键查（`Object.keys().find()`），未用 → 删（简化门漏网的 SIMPLIFY-YES③）。
+>
+> ㉝ = 右键标签 → 全库重命名（含嵌套 `#old/sub`→`#new/sub` + frontmatter `tags:`）。**两道前置门**：① grep 确认 R41 TagsPanel 有标签**面板**但**无重命名**；R16 linkRewrite / R30 propertyRewrite 改写引擎已就绪（标签是另一类引用）；② WebSearch 确认 Obsidian 核心右键标签 → rename 全库（含嵌套）。**数据安全最高敏感轮**（批量改写 .md）。
+>
+> **关键决策：镜像 R30 `propertyRewrite.ts`（逐文件重构 edit），不是 R16 `linkRewrite.ts`（按 link.from/to 字节偏移）。** 理由：`TagRef`（types.ts:47）**只有 `from` 无 `to`**，且 inline 与 frontmatter 标签在同一 `tags: TagRef[]` 里**不可区分**（frontmatter 的 `from:0` 是哨兵）→ **不能**靠索引偏移做替换。必须在每个命中文件内**重新构造** edit：inline 部分用 `TAG_RE` 重扫 `masked` 现算偏移 splice，frontmatter 部分走 `properties.ts buildSetProperty` 重写 `tags:` 数组（**绝不手写 YAML**）。
+>
+> **五步算法（逐字镜像 R30 / R16 verified-rewrite 纪律）**：
+>  1. **guards**：`oldNorm`/`newNorm` = `replace(/^#+/,"").trim()`；空 / `isValidTagName(newNorm)` 假 / `oldNorm===newNorm` / **`newNorm` 是 `oldNorm` 的后代（`newNorm.startsWith(oldNorm+"/")`，重命名进自己子树）** → 返回空结果（no-op）。
+>  2. **capture（写前收敛）**：`await documents.flushAll()` → `await metadata.ensureFresh(getOpenPaths, p=>documents.get(p)?.getText())` → 遍历 `metadata.getAll()`，affected = `meta.tags.some(tagMatches)`。`tagMatches(t) = t===oldNorm || t.startsWith(oldNorm+"/")`（**大小写敏感**——`#Foo`/`#foo` 在 R41 面板即分列，逐变体重命名，可预测，不做跨大小写合并）。
+>  3. **逐文件 verified rewrite（串行 runTail，never concurrent）**：真值源 = `documents.get(path)?.getText() ?? await vault.readFresh(path)`（**never cache**）。构造**合并** edit 组（一个 undo 步）：
+>     - **inline**：`withoutFm = fm? " ".repeat(fm.to)+content.slice(fm.to) : content`；`masked = maskCodeRegions(withoutFm)`；`for m of masked.matchAll(TAG_RE)` 若 `tagMatches(m[2])`：`hashPos=m.index+m[1].length`；edit `{from:hashPos, to:hashPos+1+m[2].length, insert:"#"+newNorm+m[2].slice(oldNorm.length)}`（保留 `/sub` 尾）。**复用 metadata 导出的 `TAG_RE`**（同一正则=与索引器零分歧，R68「一个概念 N 处定义须对齐」教训）。
+>     - **frontmatter**：`key` = `fields` 中 case-insensitive 命中 `tags`/`tag` 的实际键；`list = asList(fmField(fields,key))`；逐项 `norm = raw.replace(/^#+/,"").trim()`，命中 `tagMatches` 则换 `newNorm+norm.slice(oldNorm.length)`（**canonical 无 `#`**），未命中保留原项。`buildSetProperty(content, key, 标量则标量/数组则数组)`（保 arity；entryRoundTrips 自验）。
+>     - inline edits（在 `fm.to` 之后）与 frontmatter edit（在 `[0,fm.to]`）**天然不相交**；合并按 `from` 排序。
+>  4. **post-rewrite 复解析断言（never blind-write）**：对 `rewritten` 应用 edits 后 `parseNote(path,rewritten)`：① `after.tags.length === before.tags.length`（纯重命名零增减=防 splice 损坏）；② `!after.tags.some(tagMatches)`（旧命名空间全消——因禁后代故安全，无需大小写豁免）；③ `intended>0` 时 `after.tags.filter(newMatches).length >= intended`（新命名空间到位）。任一不符 → throw → per-file `skipped.push`，不停队列。
+>  5. **apply**：open 文件 `handle.applyExternalEdits(sortedEdits)`（一次事务=一个 undo 步，触发 autosave）；closed 文件 `await vault.modify(path, rewritten)`（FNV 指纹抑回声）。无 types.json 步（标签非类型化键）。写盘 → `file:modified` → reindex → `metadata.revision` bump → TagsPanel `useStore` 自动刷新。
+
+### 契约（冻结，并行实现照此）
+
+**core/tagRewrite.ts（新建，纯 core）**：
+```ts
+export interface TagRewriteSkip { path: string; reason: string; }
+export interface TagRewriteResult { filesChanged: number; tagsRewritten: number; skipped: TagRewriteSkip[]; }
+export interface TagRewriteDeps { vault: Vault; metadata: MetadataIndex; documents: DocumentManager; }
+export function isValidTagName(t: string): boolean; // 段为 TAG charset、单斜杠、无空段
+export function renameTagAcrossVault(deps: TagRewriteDeps, oldTag: string, newTag: string): Promise<TagRewriteResult>;
+```
+- `tagsRewritten` = 改写的标签**出现次数**总和（inline + frontmatter）；`filesChanged` = 实际写/改的文件数。
+- runTail 串行化（R16/R24/R30 先例）；fire-and-forget 内部 `.catch`。
+- 只 import `vault/metadata/documents/properties`，**绝不** import features/app/compat。
+
+**core/metadata.ts**：`export const TAG_RE`（原 module-private，加 `export` 供引擎复用——同一正则零分歧）+ `export function asList`（同）。**索引逻辑零改动**。
+
+**core/i18n/dict.panels.ts**：新增 `tags.rename` / `tags.renamePrompt`（`{tag}`）/ `tags.renameDone`（`{old}{new}{changed}`）/ `tags.renameSkipped`（`{skip}`）/ `tags.renameNoop` / `tags.renameInvalid` / `tags.menu`（en + zh）。
+
+**features/tags/TagsPanel.tsx + tags.css**：右键 `tag-row` → `MenuState{x,y,tag}`（照搬 AllPropertiesPanel 的 onContextMenu + click-outside/Escape，**feature 不 import feature 故复制逻辑**）→ menu（`data-testid="tag-menu"` / `tag-rename`）→ `doRename`：`window.prompt(renamePrompt, tag)` → 前端 `isValidTagName` + 非空非等非后代校验（失败显 `renameInvalid`）→ `renameTagAcrossVault(...).then(消费 res.skipped)` → 结果显 `tags-result`（`role="status"`）。
+
+**main.tsx**：`__geodeRenameTag(oldTag,newTag) => renameTagAcrossVault({vault,metadata,documents},oldTag,newTag)`（镜像 `__geodeRename`；**避开 R34 `__geodeTag`/`__geodeRename` 占用**，R68 命名查重教训）。
+
+### 文件所有权（并行）
+| 区 | 独占文件 | 职责 |
+|---|---|---|
+| chief（主对话） | `tagRewrite.ts`（引擎）·`metadata.ts`（导出 TAG_RE/asList）·`dict.panels.ts`(i18n)·`main.tsx`(hook)·`.calibration/r69-*` | 数据安全核心引擎 + 接线 + 套件 |
+| feature implementer | `features/tags/TagsPanel.tsx`·`features/tags/tags.css` | 右键 rename UI（照搬 AllProperties 菜单先例） |
+
+### 已知偏差 / 待办（写给后续轮）
+- **大小写敏感重命名**：`#Foo`/`#foo` 视为不同标签（R41 面板即分列），不做跨大小写合并——可预测、保守。Obsidian 实际大小写不敏感合并；未来若需可加。
+- **frontmatter `tags:` 格式规范化**：命中文件的 `tags` 字段经 `buildSetProperty` 重序列化（inline `[a,b]` → block list；renamed 项写 canonical 无 `#`）——Obsidian 接受两种，记一句。
+- **禁重命名进自己子树**（`old`→`old/x`）：guard 拒（no-op）；UI 显 `renameInvalid`。语义上是合法操作但 post-check「旧消失」断言会与之冲突，v1 不支持。
+- **重命名进同文件已有兄弟会留 frontmatter 重复项**（评审 B，minor）：`tags:[a/x, a/y]` rename `a/x`→`a/y` 写出 `[a/y, a/y]`。**有意不去重**——去重需放弃强 `===` count 断言（数据安全轮的更差权衡），且 Obsidian 加载时自动合并重复 frontmatter tag（零功能损害）。post 断言全过（纯重命名，count 不变）。
+- **引号标量含逗号被切分**（评审 P2，nit）：`tags: "a, b"`（引号标量内含逗号）经 `asList` 按逗号切成两项、引号语义丢失——但这与 `parseNote` 索引口径**一致**（索引也这么切），故重命名忠实于索引所见，罕见边界，不修。
+- **右键菜单极窄窗口负坐标**（评审 F，nit）：`Math.min(x, innerWidth-200)` 无下界——`照搬` AllPropertiesPanel 同款 clamp（契约要求一致），正常桌面窗口不可达，不单独偏离先例去修。
+
 ## Round 68 additions — 搜索运算符扩展 `task:` 家族 + `[property]`（候选池第五梯队 ㉜）【As-built v0.65】
 
 > **状态：As-built（v0.65 交付,2026-06-14）。** 第五梯队进【中】首项 ㉜——扩展 R21 冻结的零依赖手写搜索解析器（`core/search.ts`）。**两道前置门**：① grep 确认 R21 已实现 `file/path/content/tag/line/match-case/ignore-case`，但 `task*` 与 `[property]` 当年延后；② WebSearch 确认 `task:`/`task-todo:`/`task-done:` 与 `[property]`/`[property:value]` 均为 Obsidian **核心** search 运算符（非社区插件）。`section:`/`block:` **故意延后**——官方论坛证实它们在 Obsidian 与 `line:` 行为无差异（同行约束），低价值。

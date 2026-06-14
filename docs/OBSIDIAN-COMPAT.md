@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R69 套件回归（2026-06-14，macOS release 二进制 v0.66.0 实测 `r69-probe-vault`）
+
+R69 = 全库标签重命名（候选池第五梯队【中】㉝，原生功能非 compat shim）。对照 Obsidian 核心右键标签 → rename（含嵌套）。
+新建 `core/tagRewrite.ts` 镜像 R30 propertyRewrite 五步 verified-rewrite 纪律（inline 复用 metadata 导出的 `TAG_RE` 重扫现算偏移 + frontmatter 走 `buildSetProperty` + post-rewrite 复解析断言 + per-file skip + runTail 串行）。TagsPanel 右键 rename UI。**数据安全最高敏感（批量改写 .md）**，**纯前端 core 逻辑、零依赖、无 Rust**。
+新增套件：`r69-e2e.mjs` **36/36**（inline/nested/boundary `#old-x`/frontmatter array+scalar/code-skip/CJK/no-op/descendant-guard/invalid/open-buffer/junk-item/UI 右键 rename）+ `r69-probe.mjs` **10/10**（真 WKWebView 真实 fs：inline+nested+frontmatter+code-skip）。
+**对抗评审（Workflow 3 lens + verify）9 确认（多 minor/nit）→ 修 3 根因**：① frontmatter 重写集对齐 parseNote 索引判据 ⊆ 索引集（不动用户看不见的垃圾项）；② 全跳过仍显 skip 数（R47）；③ 删死 import。**已知偏差**：大小写敏感（不跨大小写合并）/ frontmatter 格式规范化（block list）/ 禁重命名进自己子树 / 自兄弟碰撞留重复项（Obsidian 加载自动合并）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r41[tags]21/21 + r30[propertyRewrite]25/25 + r24[link rewrite]12/12 绿（同族改写引擎不破）。**OBSIDIAN-COMPAT 缺口表无变化**（R69 原生功能）。
+
 ### R68 套件回归（2026-06-14，macOS release 二进制 v0.65.0 实测 `r68-probe-vault`）
 
 R68 = 搜索运算符扩展（候选池第五梯队【中】首项 ㉜，原生功能非 compat shim）。对照 Obsidian 核心 search：`task:`/`task-todo:`/`task-done:` + `[property]`/`[property:value]` 均 WebSearch 确认为核心运算符（非社区插件）。
