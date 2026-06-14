@@ -26,6 +26,7 @@ import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
+import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri } from "@core/vault";
 import { expandTemplate, templatePickerMode } from "@core/templates";
@@ -418,6 +419,7 @@ export function App() {
     disposers.push(
       ...registerFormatCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerComposerCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+      ...registerEditorMotionCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
     );
     // R34 in-editor find/replace commands (Mod+F search; replace = no default key,
     // macOS reserves Cmd+H). Same active-file gating as format commands.

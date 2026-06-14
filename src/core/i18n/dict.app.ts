@@ -93,6 +93,10 @@ export const en = {
   "cmd.toggleNumberedList": "Toggle numbered list",
   "cmd.toggleChecklist": "Toggle checklist",
   "cmd.toggleCheckbox": "Toggle checkbox status",
+  "cmd.moveLineUp": "Move line up",
+  "cmd.moveLineDown": "Move line down",
+  "cmd.copyLineUp": "Copy line up",
+  "cmd.copyLineDown": "Copy line down",
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
 
@@ -231,6 +235,10 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.toggleNumberedList": "切换有序列表",
   "cmd.toggleChecklist": "切换任务列表",
   "cmd.toggleCheckbox": "切换复选框勾选状态",
+  "cmd.moveLineUp": "上移行",
+  "cmd.moveLineDown": "下移行",
+  "cmd.copyLineUp": "向上复制行",
+  "cmd.copyLineDown": "向下复制行",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
 

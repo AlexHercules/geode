@@ -45,6 +45,8 @@ import {
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
 import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } from "@core/appearance";
+import { EditorState } from "@codemirror/state";
+import { copyLineDown, copyLineUp, moveLineDown, moveLineUp } from "@codemirror/commands";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -463,6 +465,34 @@ async function bootstrap() {
   };
   formatHost.__geodeFormat = {
     apply: (op, text, from, to) => applyFormatOp(op, text, from, to),
+  };
+
+  // always-on line-motion probe (R51): runs the CM move/copy-line StateCommands on
+  // a throwaway EditorState so the transform is asserted deterministically (the live
+  // command — editor:move-line-up on a real CM view — is exercised by the browser E2E).
+  const runMotion = (
+    cmd: (target: { state: EditorState; dispatch: (tr: { state: EditorState }) => void }) => boolean,
+    doc: string,
+    anchor: number,
+  ): string => {
+    const state = EditorState.create({ doc, selection: { anchor } });
+    let out = doc;
+    cmd({ state, dispatch: (tr) => { out = tr.state.doc.toString(); } });
+    return out;
+  };
+  const motionHost = globalThis as typeof globalThis & {
+    __geodeMotion?: {
+      moveUp: (doc: string, anchor: number) => string;
+      moveDown: (doc: string, anchor: number) => string;
+      copyUp: (doc: string, anchor: number) => string;
+      copyDown: (doc: string, anchor: number) => string;
+    };
+  };
+  motionHost.__geodeMotion = {
+    moveUp: (doc, anchor) => runMotion(moveLineUp, doc, anchor),
+    moveDown: (doc, anchor) => runMotion(moveLineDown, doc, anchor),
+    copyUp: (doc, anchor) => runMotion(copyLineUp, doc, anchor),
+    copyDown: (doc, anchor) => runMotion(copyLineDown, doc, anchor),
   };
 
   // always-on bracket/quote auto-pair probe (R35): exposes the pure markdown
