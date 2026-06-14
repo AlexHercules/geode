@@ -190,6 +190,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R68 套件回归（2026-06-14，macOS release 二进制 v0.65.0 实测 `r68-probe-vault`）
+
+R68 = 搜索运算符扩展（候选池第五梯队【中】首项 ㉜，原生功能非 compat shim）。对照 Obsidian 核心 search：`task:`/`task-todo:`/`task-done:` + `[property]`/`[property:value]` 均 WebSearch 确认为核心运算符（非社区插件）。
+扩展 R21 冻结的零依赖手写解析器：task 家族复用 `line:` 行级机制 + `TASK_LINE_RE`；property 查 `SearchInput.frontmatter`（大小写不敏感键 + 字符串/数组值子串）。`section:`/`block:` 故意延后（与 `line:` 无差异）。**纯只读、零依赖、无 Rust**。
+新增套件：`r68-e2e.mjs` **40/40**（task 家族 11 + 自定义状态 5 + property 11 + 否定组合 3 + R21 回归 10）+ `r68-probe.mjs` **16/16**（真 WKWebView `__geodeSearchQuery` 纯函数）。
+**对抗评审（Workflow 3 lens parser/evaluator/contract-faithful + verify）：2 根因修 + 1 已知偏差记**。① `TASK_LINE_RE` `[ xX]`→`[^\]]` 收敛 R40 `TASK_BOX_RE`（自定义复选框态 `[/]`/`[-]`/`[>]` 算 task）— 避免 task 定义第 4 次漂移；② `[key:]` 空值降级 key-exists。
+- **已知偏差（R68 新增）**：裸方括号 token `[…]` 现按 frontmatter 属性谓词（`[key]`/`[key:value]`）解析，**非 R21 的字面方括号文本**。搜索字面方括号用 `content:[…]` 或引号 `"[…]"`。渲染器 `markdown.ts` `TASK_RE` 仍 `[ xX]`-only，与搜索/format 的 `[^\]]` 待收敛（单独记录的低优缺口）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r34[find]15/15 + r41[tags]21/21 + r46 18/18 + r38 19/19（搜索解析器栈全绿，R21 frozen grammar 不破）。**OBSIDIAN-COMPAT 缺口表无变化**（R68 原生功能）。
+
 ### R67 套件回归（2026-06-14，macOS release 二进制 v0.64.0 实测 `r67-probe-vault`）
 
 R67 = 拖拽 vault 文件入编辑器 → 链接/嵌入（候选池第五梯队 ㉛，原生功能非 compat shim）。对照 Obsidian 核心 drag-and-drop（help：拖文件入编辑器插入链接）。

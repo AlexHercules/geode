@@ -71,6 +71,30 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 68 additions — 搜索运算符扩展 `task:` 家族 + `[property]`（候选池第五梯队 ㉜）【As-built v0.65】
+
+> **状态：As-built（v0.65 交付,2026-06-14）。** 第五梯队进【中】首项 ㉜——扩展 R21 冻结的零依赖手写搜索解析器（`core/search.ts`）。**两道前置门**：① grep 确认 R21 已实现 `file/path/content/tag/line/match-case/ignore-case`，但 `task*` 与 `[property]` 当年延后；② WebSearch 确认 `task:`/`task-todo:`/`task-done:` 与 `[property]`/`[property:value]` 均为 Obsidian **核心** search 运算符（非社区插件）。`section:`/`block:` **故意延后**——官方论坛证实它们在 Obsidian 与 `line:` 行为无差异（同行约束），低价值。
+> **实现 = R21 解析器最小扩展（不破冻结 grammar）**：① `OPERATOR_RE` 加 `task-todo|task-done|task`（**长变体在前**，否则 `task` 先吃掉 `task-todo` 前缀）；② 新 AST 节点 `{type:"task",state,child}`（复用 `line:` 的行级机制——`splitLines` 惰性 + 每行 `TASK_LINE_RE` 判定 + state 过滤 + child 在行作用域内求值）与 `{type:"property",key,value}`（`parsePrimary` 见 `[` 时 `parseProperty`，对 `SearchInput.frontmatter` 做大小写不敏感键查 + 字符串/数组值子串）；③ `SearchInput += frontmatter?: Readonly<Record<string,string|string[]>>`，`SearchPanel` 从 `app.metadata.getMetadata(f.path).frontmatter.fields` 注入。`task*` 空操作数 = 「任意 task 行」（child=null）。**纯只读**（search 无写路径）；frontmatter 缺省时 property 谓词返回 NO_MATCH（line 552 守卫）。
+> 验证：typecheck 0 · `r68-e2e.mjs` **40/40**（task: 家族 11 + 自定义状态 5 + property 11 + 否定/组合 3 + R21 回归 10）· `r68-probe.mjs` **16/16**（真 WKWebView via `__geodeSearchQuery` 纯函数 probe，App-Nap 安全）· 回归 r34 15 / r41 21 / r46 18 / r38 19 绿。
+> **简化门**：applied 1 net-negative（task eval 分支扁平化——`const r = expr.child ? evalExpr(...) : MATCH_NO_RANGES; if (!r.matched) continue;`，去一层嵌套）。
+> **对抗评审（Workflow 3 lens parser/evaluator/contract-faithful + verify）抓到 2 根因（1 minor×2 lens + 1 nit）+ 1 nit 文档化 → 修 2 改 1 记**：
+>   - **根因①（minor, parser+evaluator 双命中）= `TASK_LINE_RE` 的 `[ xX]` 只认空格/x/X**，使自定义复选框态 `[/]`/`[-]`/`[>]`（Obsidian 视任意单字符为复选框）全部不算 task。**关键：这是与代码库自身的不一致**——R40 toggle 命令已**刻意**把 `core/format.ts` `TASK_BOX_RE` 放宽到 `[^\]]`（R40 As-built 明确修过这个「`[ xX]` 太窄」bug 并警告「多处 task 定义会漂移」），R68 等于**第 4 次重新引入窄形**。**修 = `[ xX]`→`[^\]]`**（与 R40 收敛 + 对齐 Obsidian；`done = box[1] !== " "` 既有逻辑天然给出正确切分：空格=todo、其余单字符=done）。`[]`（空盒）/`[ab]`（多字符）正确仍非 task（`\[([^\]])\]` 要求恰好一个非 `]` 字符）。
+>   - **根因②（nit）= `[key:]` 空值经 `"".includes` 匹配任意值** → 行为等同 `[key]` 但语义含混。**修 = 空 rawVal 降级 `value=null`**（key-exists 分支），杜绝「空子串匹配一切」。
+>   - **已知偏差（nit, 文档化不改码）= 裸 `[link]` 现按属性谓词解析**（R21 中是字面方括号文本）——这是本功能的预期语义（Obsidian 方括号属性语法）。**转义口**：`content:[…]`（fieldOp 用 `wordEnd` 整词读，不破方括号）或 `"[…]"`（引号字面）。三条 e2e 锁死该语义 + 双转义口。
+> **核心元教训**：**「一行是不是 task」在本代码库已有 4 处定义（search `TASK_LINE_RE` / format `TASK_BOX_RE` / markdown 渲染 `TASK_RE` / live preview）——新增第 N 处前先 grep 既有的，对齐最宽的那个（R40 已把 `TASK_BOX_RE` 放宽到 `[^\]]` 认任意单字符复选框态），别默认 `[ xX]`**（默认窄形=与 toggle 命令/Obsidian 双重不一致，本轮 + R40 同源「task 定义漂移」）。渲染器 `markdown.ts` `TASK_RE` 仍是 `[ xX]`-only，作为**单独记录的待收敛缺口**（渲染只画勾叉，与搜索/toggle 的「认 task」语义可暂不同步）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/search.ts**：① `TASK_LINE_RE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+\[([^\]])\]/`（任意单非 `]` 字符为复选框态，收敛 R40 `TASK_BOX_RE`）；② `OPERATOR_RE` 含 `task-todo|task-done|task`（长变体在前）；③ AST：`| {type:"task";state:"any"|"todo"|"done";child:SearchExpr|null}`、`| {type:"property";key:string;value:{kind:"text";text:string;caseMode:CaseMode}|null}`；④ `parseProperty()`（`[` → `indexOf("]")`，无 `]`/空 key 返 null 降级为字面；空 value 留 `value=null` 即 key-exists）；⑤ `evalExpr` task 分支（惰性 `splitLines`，`done = box[1] !== " "`，child 在行作用域求值），property 分支（`ctx.input.frontmatter`，大小写不敏感键查，值 null→key-exists 否则字符串/数组子串）；⑥ `rebindField`/`rebindCase` task 递归 child、property 为叶（rebindCase 写 `value.caseMode`）。`SearchInput += frontmatter?: Readonly<Record<string, string | string[]>>`。
+**features/search/SearchPanel.tsx**：hoist `const meta = app.metadata.getMetadata(f.path)`，`SearchInput` 加 `frontmatter: meta?.frontmatter?.fields`。
+**main.tsx**：`__geodeSearchQuery(query, input)` probe（**改名避开 R34 `__geodeSearch` 对象碰撞**）——`parseSearchQuery` + `evaluateSearch` 跑合成 `SearchInput`，返回 boolean matched。
+
+### 已知偏差 / 待办（写给后续轮）
+- **裸 `[…]` = 属性谓词，非字面方括号文本**（R21 偏差）——转义口 `content:[…]` / `"[…]"`。OBSIDIAN-COMPAT 已记。
+- **渲染器 `markdown.ts` `TASK_RE` 仍 `[ xX]`-only**——与搜索/format 的 `[^\]]` 待收敛（渲染只画勾叉，语义可暂分离）；未来若画自定义复选框态再统一。
+- **`section:`/`block:` 未实现**——Obsidian 与 `line:` 行为无差异，低价值延后。
+- **property 值仅字符串子串**——正则 / OR 子查询 / 数值比较（`[count:>5]`）是文档化后续。
+
 ## Round 67 additions — 拖拽 vault 文件入编辑器 → 链接/嵌入（候选池第五梯队 ㉛）【As-built v0.64】
 
 > **状态：As-built（v0.64 交付,2026-06-14）。** 第五梯队 ㉛——**【小】项至此清空**，下一项进【中】㉜。**两道前置门**：① grep 确认外部文件摄入（R17 粘贴/拖图片入库）+ 文件树拖拽移动（R28）已在，但 **vault 内文件拖入编辑器生成链接** 是缺口；② WebSearch 确认 Obsidian 核心（help/drag-and-drop：拖文件入编辑器插入链接）。

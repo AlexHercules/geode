@@ -1238,7 +1238,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **㉜ 搜索运算符扩展** | **部分**（R21 有 `path:`/`tag:`/`file:`/正则）| 缺 `task:`/`task-todo:`/`task-done:`/`[property]`/`[property:value]`/`line:()`/`section:()`/`block:()`。官方确认全套。`core/search.ts` 逐运算符切片，可拆多轮（先 task 系，再 property，再 line/section/block）。 |
+| ~~**㉜ 搜索运算符扩展**~~ | ✅ **R68 完成核心**（v0.65）| 加 `task:`/`task-todo:`/`task-done:`（复用 line: 行级机制 + TASK_LINE_RE）+ `[property]`/`[property:value]`（frontmatter 子串，新 SearchInput.frontmatter）。`line:` R21 已有。**section:/block: 故意延后**：官方论坛证实它们在 Obsidian 与 line: 行为无差异（低价值）。R21 grammar 不破（40 e2e 含回归）。**评审修 2 根因**：① TASK_LINE_RE `[ xX]`→`[^\]]` 收敛 R40 TASK_BOX_RE（自定义状态 `[/]`/`[-]`/`[>]` 算 task，非空格=done）— 避免「task 定义第 4 次漂移」；② `[key:]` 空值降级为 key-exists（否则空子串匹配任意值）。**已记已知偏差**：`[link]` 现按属性谓词解析（非 R21 字面文本），转义口 `content:[…]`/`"[…]"`。 |
 | **㉝ 标签重命名（全库）** | **缺**（TagsPanel R41 无重命名）| `#old`→`#new` 全库替换（含嵌套 `#old/x`）。复用 R16 verified-rewrite 引擎思路（标签是另一类引用）；右键标签 → rename。**数据安全**（批量改写，必走 flushAll + 验证）。 |
 | **㉞ 链接格式策略 + markdown 链接改写** | **部分/已知偏差**（R16 只改写 wikilink，`[text](note.md)` 不改写）| 设置：wikilink↔markdown 链接格式、最短路径/相对/绝对。改写引擎扩展到 markdown 标准链接（R16 已知偏差出队）。**数据安全**（动改写引擎，R16 五步算法必读）。 |
 | **㉟ Properties 类型化编辑 UI** | **部分**（R22 properties 渲染 + R30 All Properties 视图，缺类型化编辑）| Obsidian 6 类型 text/list/number/checkbox/date/datetime + 点图标改类型 + 对应输入控件（date picker 等）。`core/properties.ts` builder 已有，补编辑 UI。 |
