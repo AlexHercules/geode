@@ -1,24 +1,20 @@
 /**
  * R55 live-preview tables (#⑱) — render GFM pipe tables as real <table>s in live
  * preview, reusing the reading-view renderer (core/markdown renderMarkdownToHtml).
+ * R56: the cursor-aware block-widget machinery moved to ./liveBlockWidget (shared
+ * with mermaid); this file keeps the table-specific detection + widget.
  *
- * Model: a ViewPlugin scans the lezer `Table` nodes in the viewport and, for every
- * table the selection is NOT inside, REPLACES its source lines with a block widget
- * containing the rendered table. When the selection intersects a table's range the
- * widget is dropped so the raw pipe source shows for editing — Geode's first
- * cursor-aware block widget (the "block-level cross-line replace needs a StateField /
- * viewport plugin" gap noted in ARCHITECTURE R18). Clicking a rendered table dispatches
- * the cursor to its start, which reveals the source on the next update.
- *
- * Data-safety: the decoration is a VIEW concern only — the document is never modified;
- * the pipe source always lives in the doc and is one selection away from editing. The
- * widget's only side effect is a selection dispatch (no doc change).
+ * A table the selection is NOT inside is replaced by a block widget containing the
+ * rendered <table>; selection inside reveals the pipe source. Clicking a rendered
+ * table drops the cursor at its start to reveal the source. The document is never
+ * modified — pure view layer (R55 review confirmed data-safe).
  */
 import { syntaxTree } from "@codemirror/language";
-import { type EditorState, type Extension, RangeSetBuilder, StateField } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
+import { type EditorState, type Extension } from "@codemirror/state";
+import { EditorView, WidgetType } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { renderMarkdownToHtml } from "@core/markdown";
+import { liveBlockWidgets } from "./liveBlockWidget";
 
 /** Table ranges in `state` (pure — also drives the desktop probe). */
 export function findTableRanges(state: EditorState): Array<{ from: number; to: number }> {
@@ -71,45 +67,11 @@ class TableWidget extends WidgetType {
   }
 }
 
-function buildTableDecos(state: EditorState, app: GeodeApp, getPath: () => string): DecorationSet {
-  const builder = new RangeSetBuilder<Decoration>();
-  const ranges = state.selection.ranges;
-  const resolve = (target: string) => app.metadata.resolveLink(target, getPath());
-  // findTableRanges yields document-order ranges (RangeSetBuilder needs ascending from)
-  for (const { from, to } of findTableRanges(state)) {
-    // R55 review (major): a block-replace decoration MUST be line-aligned. A Table
-    // inside a blockquote / list / indentation has node.from mid-line (after the `>`
-    // or indent) → a mid-line block widget corrupts the view. Skip those — they keep
-    // their pipe source (nested-table live render is out of scope this round).
-    if (from !== state.doc.lineAt(from).from) continue;
-    // reveal (no widget) when any cursor/selection touches the table — keeps the pipe
-    // source editable; one click (TableWidget) drops the cursor here to reveal it.
-    const inside = ranges.some((r) => r.from <= to && r.to >= from);
-    if (inside) continue;
-    const source = state.sliceDoc(from, to);
-    const html = renderMarkdownToHtml(source, resolve);
-    builder.add(from, to, Decoration.replace({ widget: new TableWidget(source, html, from), block: true }));
-  }
-  return builder.finish();
-}
-
-/** The live-table extension: a StateField of block-replace widgets + atomicRanges so
- *  the caret treats a rendered table as a unit (it can't park invisibly inside the
- *  replaced range — mirrors the frontmatter field, R22). Block decorations MUST come
- *  from a StateField, not a ViewPlugin (CM constraint). Rebuilds on doc/selection
- *  change so entering/leaving a table toggles render↔source. `getPath` resolves
- *  wikilinks in cells. */
+/** The live-table extension. `getPath` resolves wikilinks inside cells. */
 export function liveTables(app: GeodeApp, getPath: () => string): Extension {
-  const field = StateField.define<DecorationSet>({
-    create: (state) => buildTableDecos(state, app, getPath),
-    update: (value, tr) => {
-      if (tr.docChanged || tr.selection) return buildTableDecos(tr.state, app, getPath);
-      return value.map(tr.changes);
-    },
-    provide: (f) => [
-      EditorView.decorations.from(f),
-      EditorView.atomicRanges.of((view) => view.state.field(f, false) ?? Decoration.none),
-    ],
+  const resolve = (target: string) => app.metadata.resolveLink(target, getPath());
+  return liveBlockWidgets({
+    ranges: findTableRanges,
+    widget: (source, from) => new TableWidget(source, renderMarkdownToHtml(source, resolve), from),
   });
-  return field;
 }

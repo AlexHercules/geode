@@ -67,6 +67,7 @@ import { installSearchProbe } from "@features/editor/searchCommands";
 import { handleObsidianUri } from "@features/editor/obsidianUriHandler";
 import { markdownFoldRange } from "@features/editor/folding";
 import { findTableRanges } from "@features/editor/liveTables";
+import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -635,6 +636,25 @@ async function bootstrap() {
       return findTableRanges(state);
     },
     renders: (tableSrc: string) => renderMarkdownToHtml(tableSrc, () => null).includes("<table"),
+  };
+
+  // always-on live-mermaid probe (R56): the pure ```mermaid fence detection
+  // (findMermaidRanges) + the reused fence renderer (renderMarkdownToHtml →
+  // .geode-mermaid placeholder). The live block widget + async SVG hydration is a view
+  // behavior exercised by the browser E2E; this asserts detection + placeholder.
+  const mermaidHost = globalThis as typeof globalThis & {
+    __geodeMermaid?: {
+      ranges: (doc: string) => Array<{ from: number; to: number }>;
+      placeholder: (fenceSrc: string) => boolean;
+    };
+  };
+  mermaidHost.__geodeMermaid = {
+    ranges: (doc: string) => {
+      const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+      ensureSyntaxTree(state, doc.length, 2000);
+      return findMermaidRanges(state);
+    },
+    placeholder: (fenceSrc: string) => renderMarkdownToHtml(fenceSrc, () => null).includes('class="geode-mermaid"'),
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).

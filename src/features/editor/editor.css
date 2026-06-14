@@ -644,6 +644,13 @@ iframe.geode-embed-pdf.cm-live-embed {
   font-weight: 600;
 }
 
+/* R56 — live-preview rendered mermaid diagrams (liveMermaid.ts block widget); click
+   to edit. The inner .geode-mermaid keeps its R19 reading-view styling. */
+.cm-live-mermaid {
+  margin: 0.3em 0;
+  cursor: text;
+}
+
 .preview-content img {
   max-width: 100%;
 }
