@@ -96,6 +96,13 @@ export const en = {
   "tags.title": "Tags",
   "tags.empty": "No tags in vault",
   "tags.count": "{count} file(s)",
+  "tags.menu": "Tag actions",
+  "tags.rename": "Rename tag…",
+  "tags.renamePrompt": "Rename #{tag} across the whole vault to:",
+  "tags.renameDone": "Renamed #{old} → #{new} in {changed} file(s).",
+  "tags.renameSkipped": " {skip} file(s) skipped.",
+  "tags.renameNoop": "No occurrences renamed.",
+  "tags.renameInvalid": "Invalid tag name.",
 
   // ---- calendar ----
   "calendar.today": "Today",
@@ -210,6 +217,13 @@ export const zh: Record<keyof typeof en, string> = {
   "tags.title": "标签",
   "tags.empty": "库中没有标签",
   "tags.count": "{count} 个文件",
+  "tags.menu": "标签操作",
+  "tags.rename": "重命名标签…",
+  "tags.renamePrompt": "将 #{tag} 在全库重命名为：",
+  "tags.renameDone": "已将 #{old} → #{new}，改写 {changed} 个文件。",
+  "tags.renameSkipped": " 跳过 {skip} 个文件。",
+  "tags.renameNoop": "没有可重命名的标签。",
+  "tags.renameInvalid": "标签名不合法。",
 
   // ---- calendar ----
   "calendar.today": "今天",

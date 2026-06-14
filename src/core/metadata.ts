@@ -17,7 +17,11 @@ import { EventBus } from "./events";
 import { Store } from "./store";
 
 const WIKILINK_RE = /\[\[([^\[\]\|#]+)(?:#[^\[\]\|]*)?(?:\|([^\[\]]*))?\]\]/g;
-const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
+/** Inline `#tag` recognition (frozen): a tag follows a line-start/space/`(`
+ *  boundary (m[1]) and its body (m[2], no leading #) admits `/` for nesting and
+ *  BMP CJK. Exported so `core/tagRewrite.ts` scans tags with the EXACT same
+ *  regex the indexer uses — detector/rewriter never diverge (R68 lesson). */
+export const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
 const HEADING_RE = /^(#{1,6})\s+(.+)$/gm;
 const CODE_FENCE_RE = /```[\s\S]*?(```|$)/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
@@ -120,7 +124,10 @@ function unquote(s: string): string {
   return /^(['"]).*\1$/.test(t) ? t.slice(1, -1) : t;
 }
 
-function asList(v: string | string[] | undefined): string[] {
+/** Normalize a frontmatter field value to a trimmed, non-empty string list
+ *  (scalar → comma-split). Exported so `core/tagRewrite.ts` reads `tags:` values
+ *  through the same lens the indexer uses. */
+export function asList(v: string | string[] | undefined): string[] {
   if (v === undefined) return [];
   return (Array.isArray(v) ? v : v.split(",")).map((s) => s.trim()).filter(Boolean);
 }

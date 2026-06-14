@@ -23,6 +23,7 @@ import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
+import { renameTagAcrossVault, type TagRewriteResult } from "@core/tagRewrite";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -197,6 +198,16 @@ async function bootstrap() {
   };
   probeHost.__geodeRename = (oldPath, newPath) =>
     renameWithLinkUpdate({ vault, metadata, documents }, oldPath, newPath);
+
+  // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
+  // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).
+  // Distinct key from __geodeRename (file rename) and __geodeTag (R-?? tag
+  // completion) — R68 naming-collision lesson.
+  const tagRenameHost = globalThis as unknown as {
+    __geodeRenameTag?: (oldTag: string, newTag: string) => Promise<TagRewriteResult>;
+  };
+  tagRenameHost.__geodeRenameTag = (oldTag, newTag) =>
+    renameTagAcrossVault({ vault, metadata, documents }, oldTag, newTag);
 
   // always-on unlinked-mentions probe (R24): drive the matcher + link engine
   // directly from browser/desktop E2E (WKWebView has no CDP — desktop verifies

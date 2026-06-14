@@ -7,3 +7,48 @@
 .tag-row-icon { display: inline-flex; color: var(--text-faint); flex-shrink: 0; }
 .tag-row-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag-row-count { color: var(--text-faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+/* R69: vault-wide rename result banner + right-click menu (mirrors .ap-result / .ap-menu) */
+.tags-result {
+  margin: 0 12px 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-radius: 6px;
+}
+
+.tag-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+}
+
+.tag-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.tag-menu button svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tag-menu button:hover {
+  background: var(--bg-hover);
+}
