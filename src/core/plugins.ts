@@ -180,8 +180,15 @@ export class PluginManager {
       ui: {
         setStatusBarItem: (id, text) => {
           const scoped = `${record.plugin.id}:${id}`;
+          const cur = this.statusBarItems.get();
+          // R66: skip the Store write (and the App-root re-render it triggers) when
+          // the text is unchanged — status items refresh on hot paths (cursor move,
+          // every metadata revision). Register the cleanup disposer ONLY when the
+          // item is newly added, so repeated refreshes don't grow record.disposers.
+          if (cur.get(scoped) === text) return;
+          const isNew = !cur.has(scoped);
           this.statusBarItems.update((m) => new Map(m).set(scoped, text));
-          record.disposers.push(() => this.removeItem(scoped));
+          if (isNew) record.disposers.push(() => this.removeItem(scoped));
         },
         removeStatusBarItem: (id) => this.removeItem(`${record.plugin.id}:${id}`),
       },

@@ -128,9 +128,14 @@ export const en = {
   "cmd.randomNote": "Open random note",
   "cmd.uniqueNote": "Create new unique note",
   "plugin.wordCount": "{words} words · {chars} chars",
+  "plugin.wordCount.selected": "{words} selected words",
   "plugin.wordCount.name": "Word count",
   "plugin.wordCount.desc":
     "Shows word and character counts for the active note in the status bar.",
+  "plugin.backlinkCount": "{count} backlinks",
+  "plugin.backlinkCount.name": "Backlink count",
+  "plugin.backlinkCount.desc":
+    "Shows the active note's backlink count in the status bar.",
   "plugin.dailyNote.name": "Daily notes",
   "plugin.dailyNote.desc":
     'Open (or create) a note for today under "Daily Notes/" with Ctrl+D.',
@@ -282,8 +287,12 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.randomNote": "打开随机笔记",
   "cmd.uniqueNote": "新建唯一笔记",
   "plugin.wordCount": "{words} 词 · {chars} 字符",
+  "plugin.wordCount.selected": "已选 {words} 词",
   "plugin.wordCount.name": "字数统计",
   "plugin.wordCount.desc": "在状态栏显示当前笔记的字数与字符数。",
+  "plugin.backlinkCount": "{count} 条反向链接",
+  "plugin.backlinkCount.name": "反链计数",
+  "plugin.backlinkCount.desc": "在状态栏显示当前笔记的反向链接数。",
   "plugin.dailyNote.name": "日记",
   "plugin.dailyNote.desc": "使用 Ctrl+D 打开（或创建）今天位于 \"Daily Notes/\" 下的日记。",
   "plugin.randomNote.name": "随机笔记",
