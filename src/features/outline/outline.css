@@ -26,6 +26,29 @@
   text-align: center;
 }
 
+/* ㉗ filter input */
+.outline-filter {
+  margin: 4px 8px 2px;
+  padding: 4px 8px;
+  font-size: 12.5px;
+  color: var(--text-normal);
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  outline: none;
+}
+.outline-filter:focus {
+  border-color: var(--accent);
+}
+/* ancestor rows shown only for context while filtering — dimmed vs matches */
+.outline-item.is-ancestor .outline-label {
+  color: var(--text-faint);
+}
+/* …but still brighten on hover (they are clickable) — beats the dim rule's specificity */
+.outline-item.is-ancestor:hover .outline-label {
+  color: var(--text-normal);
+}
+
 .outline-scroll {
   flex: 1;
   min-height: 0;

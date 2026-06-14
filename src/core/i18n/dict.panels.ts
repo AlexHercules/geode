@@ -84,6 +84,8 @@ export const en = {
   "outline.ariaTree": "Document outline",
   "outline.expandSection": "Expand section",
   "outline.collapseSection": "Collapse section",
+  "outline.filterPlaceholder": "Filter…",
+  "outline.noMatch": "No matching headings",
 
   // ---- tags ----
   "tags.title": "Tags",
@@ -191,6 +193,8 @@ export const zh: Record<keyof typeof en, string> = {
   "outline.ariaTree": "文档大纲",
   "outline.expandSection": "展开小节",
   "outline.collapseSection": "折叠小节",
+  "outline.filterPlaceholder": "过滤…",
+  "outline.noMatch": "无匹配标题。",
 
   // ---- tags ----
   "tags.title": "标签",

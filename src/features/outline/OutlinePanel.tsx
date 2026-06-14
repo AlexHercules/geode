@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
@@ -44,6 +44,37 @@ function visibleRows(rows: OutlineRow[], collapsed: ReadonlySet<number>): Outlin
   return out;
 }
 
+/**
+ * ㉗ filter: keep rows whose heading text matches `query` (case-insensitive
+ * substring) PLUS their ancestor headings, so a deep match still shows its path.
+ * Descendants of a match are NOT included (matches Obsidian's outline filter).
+ * Returns the rows to show and the set of indices that actually matched
+ * (ancestors render dimmed). Empty/whitespace query → all rows, no matches.
+ */
+function filterRows(
+  rows: OutlineRow[],
+  query: string,
+): { rows: OutlineRow[]; matched: ReadonlySet<number> } {
+  const q = query.trim().toLowerCase();
+  if (!q) return { rows, matched: new Set() };
+  const matched = new Set<number>();
+  for (const row of rows) {
+    if (row.heading.text.toLowerCase().includes(q)) matched.add(row.index);
+  }
+  const show = new Set<number>(matched);
+  for (const i of matched) {
+    let level = rows[i].heading.level;
+    for (let j = i - 1; j >= 0; j--) {
+      if (rows[j].heading.level < level) {
+        show.add(j);
+        level = rows[j].heading.level;
+        if (level === 1) break;
+      }
+    }
+  }
+  return { rows: rows.filter((r) => show.has(r.index)), matched };
+}
+
 export function OutlinePanel() {
   const app = useApp();
   const t = useI18n();
@@ -55,8 +86,14 @@ export function OutlinePanel() {
 
   // Collapse state keyed by heading index; reset whenever the file changes.
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
-  useEffect(() => {
+  // ㉗ filter query; reset (with collapse) on file change.
+  const [query, setQuery] = useState("");
+  // useLayoutEffect (not useEffect): runs after DOM mutation but BEFORE paint, so
+  // a newly-opened note never shows a frame filtered by the previous note's query
+  // (which could flash "no matches"); a passive effect would reset after paint.
+  useLayoutEffect(() => {
     setCollapsed(new Set());
+    setQuery("");
   }, [activePath]);
 
   const rows = useMemo(() => {
@@ -66,6 +103,11 @@ export function OutlinePanel() {
   }, [app, activePath, rev]);
 
   const shown = useMemo(() => visibleRows(rows, collapsed), [rows, collapsed]);
+  const filtering = query.trim() !== "";
+  const filtered = useMemo(() => filterRows(rows, query), [rows, query]);
+  // when filtering, show matches+ancestors (collapse ignored); else the
+  // collapse-aware view.
+  const display = filtering ? filtered.rows : shown;
 
   const toggleCollapse = (index: number) => {
     setCollapsed((prev) => {
@@ -103,6 +145,18 @@ export function OutlinePanel() {
         )}
       </div>
 
+      {activePath !== null && rows.length > 0 && (
+        <input
+          className="outline-filter"
+          data-testid="outline-filter"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t("outline.filterPlaceholder")}
+          aria-label={t("outline.filterPlaceholder")}
+        />
+      )}
+
       {!activePath ? (
         <div className="outline-empty" data-testid="outline-empty">
           {t("outline.empty")}
@@ -111,20 +165,27 @@ export function OutlinePanel() {
         <div className="outline-empty" data-testid="outline-empty">
           {t("outline.noHeadings")}
         </div>
+      ) : display.length === 0 ? (
+        <div className="outline-empty" data-testid="outline-empty">
+          {t("outline.noMatch")}
+        </div>
       ) : (
         <div className="outline-scroll" role="tree" aria-label={t("outline.ariaTree")}>
-          {shown.map((row) => (
+          {display.map((row) => (
             <div
               key={row.index}
-              className="outline-item"
+              className={
+                "outline-item" +
+                (filtering && !filtered.matched.has(row.index) ? " is-ancestor" : "")
+              }
               data-testid="outline-item"
               data-from={row.heading.from}
               data-level={row.heading.level}
               role="treeitem"
-              aria-expanded={row.hasChildren ? !collapsed.has(row.index) : undefined}
+              aria-expanded={!filtering && row.hasChildren ? !collapsed.has(row.index) : undefined}
               style={{ "--outline-depth": row.heading.level - 1 } as CSSProperties}
             >
-              {row.hasChildren ? (
+              {!filtering && row.hasChildren ? (
                 <button
                   className="outline-chevron"
                   data-testid="outline-chevron"
