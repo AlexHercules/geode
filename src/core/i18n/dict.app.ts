@@ -129,6 +129,13 @@ export const en = {
   "workspaces.delete": "Delete",
   "workspaces.empty": "No saved workspaces yet",
   "workspaces.placeholder": "Workspace name",
+  // ---- file recovery (src/features/recovery) ----
+  "cmd.fileRecovery": "Browse file recovery snapshots…",
+  "recovery.title": "File recovery",
+  "recovery.restore": "Restore",
+  "recovery.empty": "No snapshots for this file yet",
+  "recovery.noFile": "Open a note to see its recovery snapshots",
+  "recovery.preview": "Preview",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -253,4 +260,11 @@ export const zh: Record<keyof typeof en, string> = {
   "workspaces.delete": "删除",
   "workspaces.empty": "暂无保存的工作区",
   "workspaces.placeholder": "工作区名称",
+  // ---- file recovery (src/features/recovery) ----
+  "cmd.fileRecovery": "浏览文件恢复快照…",
+  "recovery.title": "文件恢复",
+  "recovery.restore": "还原",
+  "recovery.empty": "此文件暂无快照",
+  "recovery.noFile": "打开笔记以查看其恢复快照",
+  "recovery.preview": "预览",
 };

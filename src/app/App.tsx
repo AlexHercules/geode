@@ -20,6 +20,7 @@ import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
 import { WorkspacesModal } from "@features/workspaces";
+import { RecoveryModal } from "@features/recovery";
 import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
@@ -491,6 +492,17 @@ export function App() {
         callback: () => workspace.openModal("workspaces"),
       }),
     );
+    // R49 file recovery — browse / restore version snapshots of the active note.
+    // No default key (Obsidian's core "File recovery" plugin assigns none);
+    // unavailable when there is no active file (no snapshots to browse).
+    disposers.push(
+      commands.register({
+        id: "editor:file-recovery",
+        name: () => t("cmd.fileRecovery"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => workspace.openModal("recovery"),
+      }),
+    );
     if (isTauri()) {
       disposers.push(
         commands.register({
@@ -772,6 +784,7 @@ export function App() {
       {ws.modal === "templates" && <TemplateSelector />}
       {ws.modal === "settings" && <SettingsModal />}
       {ws.modal === "workspaces" && <WorkspacesModal />}
+      {ws.modal === "recovery" && <RecoveryModal />}
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />

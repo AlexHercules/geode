@@ -43,6 +43,7 @@ import {
   getWorkspaceLayout,
   listWorkspaceNames,
 } from "@core/workspaces";
+import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -546,6 +547,21 @@ async function bootstrap() {
     },
   };
 
+  // always-on file-recovery snapshot probe (R49): drives the core (store/vault
+  // level → drivable in a backgrounded WKWebView; deterministic ts for assertions).
+  const snapHost = globalThis as typeof globalThis & {
+    __geodeSnapshots?: {
+      record: (path: string, content: string, ts: number) => void;
+      list: (path: string) => Promise<{ ts: number; content: string }[]>;
+      restore: (path: string, ts: number, now: number) => Promise<boolean>;
+    };
+  };
+  snapHost.__geodeSnapshots = {
+    record: (path, content, ts) => { void recordSnapshot(vault, path, content, ts, true); },
+    list: (path) => listSnapshots(vault, path),
+    restore: (path, ts, now) => restoreSnapshot(vault, documents, path, ts, now),
+  };
+
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll
   // on the active view from browser/desktop E2E (WKWebView has no CDP). Assigned
   // BEFORE loadExternal, same as __geodeFormat/__geodeHotkey/__geodeSlash.
@@ -634,6 +650,11 @@ async function bootstrap() {
   events.on("vault:changed", ({ reason }) => {
     if (reason === "load") void initWorkspaces(vault);
   });
+
+  // R49: file-recovery snapshots — subscribe to file:modified once; the vault
+  // object is re-pointed in place on a vault switch (same as bookmarks), so the
+  // single subscription stays valid.
+  initSnapshots(vault, events);
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
