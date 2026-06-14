@@ -172,6 +172,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R54 套件回归（2026-06-14，macOS release 二进制 v0.54.0 实测 `r54-probe-vault`）
+
+R54 = Setext 标题折叠（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian 对 Setext 标题（`text\n===`/`text\n---`）的折叠支持。
+**纠过时判断**：Setext live 样式早已有（`syntaxHighlighting(mdHighlight)` 把 lezer heading1/2 tag 映射 `cm-md-h1/2`，覆盖 Setext）；真实缺口=折叠。本轮扩展 `folding.ts` foldService：
+`headingLevel` 统一 ATX/Setext 层级，Setext 在文本行加折叠点（折隐藏下划线+section），ATX+Setext 互为 section 终止符。export `markdownFoldRange` + `__geodeFoldRange` 探针。**不碰 markdown.ts**（阅读视图 markdown-it lheading 已渲染）。
+macOS probe 实测：新增 **r54-probe 8/8**——真实 WKWebView 上 `__geodeFoldRange` 纯几何（Setext H1→`{2,26}`、Setext H2→`{16,26}`、ATX→`{30,35}`、段落/下划线→null、多行 Setext 首行→`{5,16}`）。
+**r29/r51/r52/r35/r33/r24 套件不回退**（浏览器 r54-e2e **11/11**[7 纯 fold-range + 4 live 折叠 editor:toggle-fold→`.cm-foldPlaceholder`] + r29 fold 持久化 19、r51 10、r52 11 抽样实测全绿）。
+**对抗评审 0 真缺陷 / 全维证伪**（折叠几何 / `---`·`===`·frontmatter·fence 歧义 / 探针-live 解析树逐字节一致 / 分层）；顺带修「ATX section 折穿后续 Setext 同级标题」latent bug（纯 ATX 文档折叠逐行不变）。显式延期：Setext 下划线 dim 精修（需 cursor-aware 装饰）；live 表格 / 跨行 `$$`·`%%` / mermaid live（需块级 StateField）。
+
 ### R53 套件回归（2026-06-14，macOS release 二进制 v0.53.0 实测 `r53-probe-vault`）
 
 R53 = Unique note creator 唯一笔记创建器（R32+ 候选池第四梯队 #㉑）。对照 Obsidian「Unique note creator」核心插件。

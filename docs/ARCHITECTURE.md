@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 54 additions — Setext 标题折叠（live render 长尾 #⑱）【As-built v0.54】
+
+> **状态：As-built（v0.54 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱（live 渲染长尾）。**先纠一个过时判断**：探明后发现 Setext 标题（`text\n===`=h1 / `text\n---`=h2）的 **live 样式早已存在**——
+> `syntaxHighlighting(mdHighlight)` 把 lezer 的 `t.heading1/2` 映射成 `cm-md-h1/2`，而 lezer **给 Setext 文本也打 heading1/2 tag**（derisk 实测 `"Setext\n==="` → `cm-md-h1`）→ 阅读视图（markdown-it `lheading` 默认开）+ live 都已渲染。**真实缺口 = 折叠**：`folding.ts` 自 R17 起注释明写「SetextHeading is out of scope」→ Setext 标题无折叠点。本轮 = **扩展 foldService 支持 Setext 折叠**。**零新依赖、无 Rust、不碰 `core/markdown.ts`**（阅读视图已对，无需动字节级管线）。
+> 验证:typecheck 0 · `r54-e2e.mjs` **11/11**（7 纯 fold-range[Setext H1/H2 section-end / ATX / 段落 null / 下划线行 null / 多行 Setext 首行折 / 续行 null] + 4 live 折叠[editor:toggle-fold → `.cm-foldPlaceholder`]）· `r54-probe.mjs` **8/8** · cargo release 真实重建 38s · 回归 r29[fold 持久化]/r51/r52/r35/r33/r24 不回退。
+> **评审 0 真缺陷 / 全维证伪**（折叠几何 / `---`·`===`·frontmatter·fence 歧义 / 探针-live 解析树逐字节一致 / 分层 全清）。**顺带修一个 latent bug**：headingSectionEnd 现在把 Setext 也当 section 终止符 → 「ATX section 后跟 Setext 同级标题」之前会折穿（把 Setext 标题折没），现在在它前停（纯 ATX 文档折叠**逐行不变**，评审实测 old==new）。
+
+### 契约（交付即实现）
+
+**features/editor/folding.ts**:新增 `SETEXT_HEADING_RE = /^SetextHeading([12])$/` + `headingLevel(name)`（ATX 1-6 或 Setext 1-2 统一返回层级，否则 null）。
+`headingSectionEnd` 改用 `headingLevel` → ATX **和** Setext 都作 section 终止符（`cursor.from > lineEnd` 守卫排除当前节点；Setext 自身 HeaderMark `===` 的 headingLevel 返回 null 自然跳过）。
+`markdownFoldRange` 改用 `headingLevel`：Setext 节点跨「文本行 + 下划线行」两行，但 `from` 落在首（文本）行 → 同一 `ownsLine` + `from: lineEnd`（文本行尾）折叠点对 ATX/Setext 通用；折叠隐藏「下划线 + section」，标记落文本行。**export `markdownFoldRange`** 供探针。
+**main.tsx（探针）**:`__geodeFoldRange.range(doc, line1)` = 一次性 `EditorState([markdown()])` + `ensureSyntaxTree` + `markdownFoldRange`，返回 `{from,to}|null`（纯几何，App-Nap-safe；live 折叠 gutter/命令走 E2E）。`import { markdownFoldRange } from "@features/editor/folding"`（与既有 main.tsx import @features/editor/* 一致）。
+
+### 文件所有权（本轮单人独占）
+- `src/features/editor/folding.ts`（核心）+ `src/main.tsx`（探针 + 2 import）+ `.calibration/r54-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **多行 Setext 标题**（下划线作用于多行前驱段落）从首行末折叠 → 折叠会隐藏首行后的续行标题文本（与 ATX 「从首行末折」机制一致，纯 view 态不删字节，可接受）。
+- **`===`/`---` 下划线行 live 渲染为 heading 字号**（mdHighlight 把整个 Setext 节点含下划线打成 cm-md-h1/2）→ `===` 显得偏大。**Setext 下划线视觉精修（dim 标记）= 余项**（需 cursor-aware ViewPlugin 装饰，view 依赖、probe 难驱动，单列一轮）。
+- **#⑱ 其余长尾**（live 表格 / 跨行 `$$`·`%%` / mermaid live widget）仍缺，**需块级 StateField**（更硬）。
+
 ## Round 53 additions — Unique note creator（唯一笔记 / Zettelkasten）【As-built v0.53】
 
 > **状态：As-built（v0.53 交付,2026-06-14）。** R32+ 候选池第四梯队 #㉑（小众核心插件）。Obsidian「Unique note creator」核心插件：一条命令建一篇**时间戳命名**（Zettelkasten id）的新笔记,

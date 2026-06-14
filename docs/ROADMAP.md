@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R54 — v0.54（2026-06-14）Setext 标题折叠（R32+ 候选池第四梯队 #⑱ live 渲染长尾）
+**先纠过时判断**：Setext 标题（`text\n===`/`text\n---`）的 live 样式**早已存在**（`syntaxHighlighting(mdHighlight)` 把 lezer 的 heading1/2 tag 映射成 `cm-md-h1/2`，lezer 给 Setext 文本也打这些 tag）。**真实缺口 = 折叠**（`folding.ts` 自 R17 注释明写「SetextHeading out of scope」）。
+本轮扩展 foldService：新增 `SETEXT_HEADING_RE` + `headingLevel(name)`（ATX 1-6/Setext 1-2 统一层级）；`headingSectionEnd` + `markdownFoldRange` 改用它 → Setext 在文本行加折叠点（折隐藏下划线+section）、ATX+Setext 互为 section 终止符。export `markdownFoldRange` + `__geodeFoldRange` 探针。
+**顺带修 latent bug**：「ATX section 后跟 Setext 同级标题」之前折穿（把 Setext 折没），现在在它前停（纯 ATX 文档折叠逐行不变）。**零新依赖、无 Rust、不碰 markdown.ts**。
+`r54-e2e` **11/11**（7 纯 fold-range + 4 live 折叠）+ `r54-probe` **8/8** + 回归 r29/r51/r52/r35/r33/r24 不回退。**评审 0 真缺陷 / 全维证伪**（折叠几何 / `---`·`===`·frontmatter·fence 歧义 / 探针-live 解析树逐字节一致）。
+
 ### R53 — v0.53（2026-06-14）Unique note creator（唯一笔记 / Zettelkasten）（R32+ 候选池第四梯队 #㉑）
 `core/uniqueNote.ts`（NEW，镜像 `core/dailyNote.ts` R48）：`uniqueNoteFolder`/`uniqueNoteFormat`/`uniqueNoteTemplate` Store + setter（localStorage）。
 `uniqueNoteName(date)` = `moment(date).format(effFormat())`（默认 `YYYYMMDDHHmmss`）；`effFolder()` 默认 `""`=vault root（Obsidian 同款，与 daily 回落具名文件夹不同），traversal/dot 段回落 root。
@@ -1136,7 +1142,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
+| **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / ~~Setext 标题~~** | **部分**（**Setext 标题 R54 已完成（v0.54，见上）**：纠错——Setext live **样式早已有**[`syntaxHighlighting(mdHighlight)` 给 lezer heading1/2 tag → `cm-md-h1/2`，覆盖 Setext]；真实缺口=**折叠**，本轮扩展 `folding.ts` foldService 支持 SetextHeading1/2[`headingLevel` 统一 ATX/Setext 层级 + 文本行折叠点]，顺带修「ATX 折穿后续 Setext 同级标题」latent bug；r54-e2e 11 + probe 8，评审 0 真缺陷）。**仍缺**：live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现——均 R18/R19 显式偏差）| 余项共同难点 = 块级跨行 `replace` 需 **StateField**（与跨行 `$$` 同因，较硬）。另：Setext 下划线 `===`/`---` live 渲染为 heading 字号（偏大），dim 标记精修=小余项（需 cursor-aware 装饰）。逐项可拆。 |
 | ~~**⑲ 拼写检查 / 可读行宽 / 应用级缩放**~~ | **R50 已完成（v0.50，见上）**：`core/appearance.ts`（`readableLineLength`/`spellcheckEnabled` Store + setter，localStorage）。Readable line length = `.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel 的 `max-width` 改 `var(--readable-line-width, 46em)`，setReadableLineLength 切 documentElement var（OFF=none）。Spellcheck = EditorPane `useStore(spellcheckEnabled)` + effect 设 contentDOM。Zoom = `app:zoom-in`/`out`/`reset`（Mod+=/-/0 → `setFontSize`）。SettingsModal 2 toggle + i18n + `__geodeAppearance` 探针。r50-e2e 15/15 + r50-probe 6/6。默认保持现状（readable ON / spellcheck OFF）。 | 余项：可读行宽数值可调（固定 46em）；UI chrome 缩放（仅正文）；spellcheck 默认 ON（取 OFF 不惊扰）。 |
 | ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51+R52 已完成**：move/copy line（**R51**，`editorMotionCommands.ts`，move=`Alt+ArrowUp/Down`/copy=`Shift+Alt+ArrowUp/Down`，与 CM defaultKeymap 同键经 Prec.highest 拦截器单次触发，r51-e2e 10 + probe 6）；toggle-comment/indent/unindent/insert-blank-line/select-line（**R52**，`editorEditCommands.ts`，toggle-comment=`Mod+/` 产出 Obsidian `%%…%%`[cmExtensions 加 `%%` commentTokens]，其余无键 palette/可重绑，r52-e2e 11 + probe 6）。两轮均 `getActiveFileEditorView` 门控 + `__geode{Motion,Edit}` 纯变换探针 + i18n，零依赖。评审各 0 真缺陷。 | 余项：`deleteLine` 等 `Command` 类（非 StateCommand，需真实 view，探针驱动不了；按需可单独接但只能 live 测）；其它长尾 CM 命令按需逐个。**#⑳ 视为完成。** |
 | **㉑ 小众核心插件** | **部分**：**Unique note creator R53 已完成（v0.53，见上）**（`core/uniqueNote.ts` + `plugins/unique-note.ts`，`unique-note:create` 时间戳命名笔记 + 文件夹/格式/模板设置，镜像 dailyNote，collision-retry 防同 tick 双触发，r53-e2e 11 + probe 6，评审 1 minor 修）。**仍缺**：Footnotes view / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；Footnotes view（面板，零依赖）/ Format converter（纯转换，零依赖）较清爽可先；Slides/Web viewer/Bases/Audio recorder 偏重或需新能力。 |
