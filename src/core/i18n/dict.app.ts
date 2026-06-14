@@ -97,6 +97,11 @@ export const en = {
   "cmd.moveLineDown": "Move line down",
   "cmd.copyLineUp": "Copy line up",
   "cmd.copyLineDown": "Copy line down",
+  "cmd.toggleComment": "Toggle comment",
+  "cmd.indent": "Indent",
+  "cmd.unindent": "Unindent",
+  "cmd.insertBlankLine": "Insert blank line below",
+  "cmd.selectLine": "Select current line",
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
 
@@ -239,6 +244,11 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.moveLineDown": "下移行",
   "cmd.copyLineUp": "向上复制行",
   "cmd.copyLineDown": "向下复制行",
+  "cmd.toggleComment": "切换注释",
+  "cmd.indent": "增加缩进",
+  "cmd.unindent": "减少缩进",
+  "cmd.insertBlankLine": "在下方插入空行",
+  "cmd.selectLine": "选中当前行",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
 

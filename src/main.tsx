@@ -46,7 +46,8 @@ import {
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
 import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } from "@core/appearance";
 import { EditorState } from "@codemirror/state";
-import { copyLineDown, copyLineUp, moveLineDown, moveLineUp } from "@codemirror/commands";
+import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
+import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -493,6 +494,52 @@ async function bootstrap() {
     moveDown: (doc, anchor) => runMotion(moveLineDown, doc, anchor),
     copyUp: (doc, anchor) => runMotion(copyLineUp, doc, anchor),
     copyDown: (doc, anchor) => runMotion(copyLineDown, doc, anchor),
+  };
+
+  // always-on editing-command probe (R52): runs the CM editing StateCommands
+  // (toggle-comment / indent / unindent / insert-blank-line / select-line) on a
+  // throwaway EditorState built WITH the markdown language + `%%` commentTokens, so
+  // toggleComment resolves the same block-comment as the live editor. Returns the
+  // resulting doc AND selection (selectLine changes only the selection, not the doc).
+  const runEdit = (
+    cmd: (target: { state: EditorState; dispatch: (tr: { state: EditorState }) => void }) => boolean,
+    doc: string,
+    anchor: number,
+    head: number,
+  ): { doc: string; from: number; to: number } => {
+    const state = EditorState.create({
+      doc,
+      selection: { anchor, head },
+      extensions: [
+        markdown(),
+        markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } }),
+      ],
+    });
+    let result = { doc, from: anchor, to: head };
+    cmd({
+      state,
+      dispatch: (tr) => {
+        const s = (tr as { state: EditorState }).state;
+        result = { doc: s.doc.toString(), from: s.selection.main.from, to: s.selection.main.to };
+      },
+    });
+    return result;
+  };
+  const editHost = globalThis as typeof globalThis & {
+    __geodeEdit?: {
+      toggleComment: (doc: string, from: number, to: number) => { doc: string; from: number; to: number };
+      indent: (doc: string, anchor: number) => { doc: string; from: number; to: number };
+      unindent: (doc: string, anchor: number) => { doc: string; from: number; to: number };
+      insertBlankLine: (doc: string, anchor: number) => { doc: string; from: number; to: number };
+      selectLine: (doc: string, anchor: number) => { doc: string; from: number; to: number };
+    };
+  };
+  editHost.__geodeEdit = {
+    toggleComment: (doc, from, to) => runEdit(toggleComment, doc, from, to),
+    indent: (doc, anchor) => runEdit(indentMore, doc, anchor, anchor),
+    unindent: (doc, anchor) => runEdit(indentLess, doc, anchor, anchor),
+    insertBlankLine: (doc, anchor) => runEdit(insertBlankLine, doc, anchor, anchor),
+    selectLine: (doc, anchor) => runEdit(selectLine, doc, anchor, anchor),
   };
 
   // always-on bracket/quote auto-pair probe (R35): exposes the pure markdown

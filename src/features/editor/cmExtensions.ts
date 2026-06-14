@@ -438,6 +438,11 @@ export function buildEditorExtensions(opts: {
     revealFlashField,
     markdownSansHeaderFold(),
     syntaxHighlighting(mdHighlight),
+    // R52 — markdown defines no comment tokens, so give the `editor:toggle-comment`
+    // command (and CM's comment commands) Obsidian's `%%…%%` block comment. With no
+    // line-comment token toggleComment falls through to the block path and wraps /
+    // unwraps the selection (or current line) in `%%`.
+    markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } }),
     EditorView.lineWrapping,
     // resolved at view build time — a locale switch applies to views built after it
     placeholder(tr("editor.placeholder")),
