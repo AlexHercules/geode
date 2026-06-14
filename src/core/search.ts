@@ -9,10 +9,12 @@
  *   primary := "(" or ")" | "..." | /regex/flags | operator operand | word
  *
  * Operators (lowercase only): file: path: content: tag: line: match-case:
- * ignore-case:. The operand is the single token (word / phrase / regex) or
- * paren group glued to the colon; an empty operand degrades the whole token
- * to a literal word. Field operators rebind only default-field terms inside
- * a group operand; explicit operators inside keep their own field.
+ * ignore-case: task: task-todo: task-done:. The operand is the single token
+ * (word / phrase / regex) or paren group glued to the colon; an empty operand
+ * degrades the whole token to a literal word (except task*, whose empty operand
+ * = "any task line"). Field operators rebind only default-field terms inside a
+ * group operand; explicit operators inside keep their own field.
+ * Property predicate: `[key]` (key exists) / `[key:value]` (substring value).
  */
 
 export type CaseMode = "default" | "sensitive" | "insensitive";
@@ -28,7 +30,13 @@ export type SearchExpr =
   | { type: "or"; children: SearchExpr[] }
   | { type: "not"; child: SearchExpr }
   | { type: "term"; field: SearchField | "default"; matcher: SearchMatcher }
-  | { type: "line"; child: SearchExpr };
+  | { type: "line"; child: SearchExpr }
+  // R68: `task:`/`task-todo:`/`task-done:` — a list-item checkbox line. `child`
+  // is an optional same-line constraint (`task:foo`); null = any task line.
+  | { type: "task"; state: "any" | "todo" | "done"; child: SearchExpr | null }
+  // R68: `[key]` / `[key:value]` — note-level frontmatter property predicate.
+  // value null = key exists; else a substring text match against the value(s).
+  | { type: "property"; key: string; value: { kind: "text"; text: string; caseMode: CaseMode } | null };
 
 export type SearchParseErrorCode =
   | "bad-regex"
@@ -47,6 +55,9 @@ export interface SearchInput {
   basename: string;
   content: string;
   tags: readonly string[];
+  /** R68: frontmatter fields for `[property]` search (case-insensitive key
+   *  lookup). Absent when the note has no frontmatter. */
+  frontmatter?: Readonly<Record<string, string | string[]>>;
 }
 
 export interface SearchMatchRange {
@@ -65,7 +76,13 @@ export interface SearchOutcome {
 // ---------------------------------------------------------------------------
 // Parser
 
-const OPERATOR_RE = /^(file|path|content|tag|line|match-case|ignore-case):/;
+// longer task variants MUST precede `task` so `task-todo:` isn't read as `task:`
+const OPERATOR_RE =
+  /^(task-todo|task-done|task|file|path|content|tag|line|match-case|ignore-case):/;
+/** A markdown list item with a checkbox: `- [ ] …` / `* [x] …` / `1. [/] …`.
+ *  Any single non-`]` char is a checkbox state (matches R40 TASK_BOX_RE +
+ *  Obsidian): `[ ]` = todo, anything else (x/X/`/`/`-`/`>`…) = done. */
+const TASK_LINE_RE = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]+\[([^\]])\]/;
 const REGEX_FLAGS = "imsu";
 
 class ParseFailure extends Error {
@@ -175,6 +192,10 @@ class Parser {
     if (c === "(") return this.parseGroup();
     if (c === '"') return textTerm("default", this.parseQuoted());
     if (c === "/") return { type: "term", field: "default", matcher: this.parseRegex() };
+    if (c === "[") {
+      const prop = this.parseProperty();
+      if (prop) return prop; // null ⇒ not a well-formed [property]; fall through
+    }
     const op = OPERATOR_RE.exec(this.s.slice(this.pos));
     if (op) return this.parseOperator(op[1], op[0].length);
     return this.parseBareWord();
@@ -250,9 +271,12 @@ class Parser {
 
   private parseOperator(name: string, prefixLen: number): SearchExpr {
     this.pos += prefixLen;
+    const taskState =
+      name === "task" ? "any" : name === "task-todo" ? "todo" : name === "task-done" ? "done" : null;
     const c = this.s[this.pos];
     if (c === undefined || this.isWs(c) || c === ")") {
-      // empty operand: the whole token degrades to a literal word
+      // empty operand: task* = "any task line"; others degrade to a literal word
+      if (taskState) return { type: "task", state: taskState, child: null };
       return textTerm("default", `${name}:`);
     }
     const fieldOp = name === "file" || name === "path" || name === "content" || name === "tag";
@@ -268,6 +292,7 @@ class Parser {
     } else {
       operand = this.parsePrimary();
     }
+    if (taskState) return { type: "task", state: taskState, child: operand };
     switch (name) {
       case "line":
         return { type: "line", child: operand };
@@ -278,6 +303,33 @@ class Parser {
       default:
         return rebindField(operand, name as SearchField);
     }
+  }
+
+  /** `[key]` / `[key:value]` — null (no consumption) when the `[` does not begin
+   *  a well-formed bracket token, so the caller falls through to word/operator. */
+  private parseProperty(): SearchExpr | null {
+    const close = this.s.indexOf("]", this.pos + 1);
+    if (close < 0) return null; // no closing "]" — treat "[" as ordinary text
+    const inner = this.s.slice(this.pos + 1, close);
+    const colon = inner.indexOf(":");
+    const key = (colon < 0 ? inner : inner.slice(0, colon)).trim();
+    if (!key) return null; // "[]" / "[:x]" — not a property
+    let value: { kind: "text"; text: string; caseMode: CaseMode } | null = null;
+    if (colon >= 0) {
+      const rawVal = inner.slice(colon + 1).trim();
+      // a quoted value keeps inner spaces; regex / OR sub-queries in the value
+      // are a documented follow-up. An empty value (`[key:]`) degrades to the
+      // key-exists predicate (else an empty-substring would match any value).
+      if (rawVal.length > 0) {
+        const text =
+          rawVal.length >= 2 && rawVal.startsWith('"') && rawVal.endsWith('"')
+            ? rawVal.slice(1, -1)
+            : rawVal;
+        value = { kind: "text", text, caseMode: "default" };
+      }
+    }
+    this.pos = close + 1;
+    return { type: "property", key, value };
   }
 
   private parseBareWord(): SearchExpr {
@@ -304,6 +356,11 @@ function rebindField(expr: SearchExpr, field: SearchField): SearchExpr {
     case "line":
       rebindField(expr.child, field);
       return expr;
+    case "task":
+      if (expr.child) rebindField(expr.child, field);
+      return expr;
+    case "property":
+      return expr; // note-level leaf — no default-field term to rebind
     default:
       for (const child of expr.children) rebindField(child, field);
       return expr;
@@ -323,6 +380,12 @@ function rebindCase(expr: SearchExpr, mode: "sensitive" | "insensitive"): Search
     case "not":
     case "line":
       rebindCase(expr.child, mode);
+      return expr;
+    case "task":
+      if (expr.child) rebindCase(expr.child, mode);
+      return expr;
+    case "property":
+      if (expr.value) expr.value.caseMode = mode;
       return expr;
     default:
       for (const child of expr.children) rebindCase(child, mode);
@@ -465,6 +528,45 @@ function evalExpr(expr: SearchExpr, ctx: EvalCtx, scope: Scope, collect: boolean
         nameRanges.push(...r.nameRanges);
       }
       return matched ? { matched: true, ranges, nameRanges } : NO_MATCH;
+    }
+    case "task": {
+      // R68: like `line:`, but each line must be a checkbox item of the right
+      // state; an optional child constrains the same line.
+      if (!scope.lines) scope.lines = splitLines(scope);
+      let matched = false;
+      const ranges: SearchMatchRange[] = [];
+      const nameRanges: SearchMatchRange[] = [];
+      for (const line of scope.lines) {
+        const box = TASK_LINE_RE.exec(line.text);
+        if (!box) continue;
+        const done = box[1] !== " ";
+        if (expr.state === "todo" && done) continue;
+        if (expr.state === "done" && !done) continue;
+        const r = expr.child ? evalExpr(expr.child, ctx, line, collect) : MATCH_NO_RANGES;
+        if (!r.matched) continue;
+        matched = true;
+        if (!collect) break;
+        ranges.push(...r.ranges);
+        nameRanges.push(...r.nameRanges);
+      }
+      return matched ? { matched: true, ranges, nameRanges } : NO_MATCH;
+    }
+    case "property": {
+      // R68: note-level frontmatter predicate (scope-independent, like tag).
+      const fields = ctx.input.frontmatter;
+      if (!fields) return NO_MATCH;
+      const realKey = Object.keys(fields).find((k) => k.toLowerCase() === expr.key.toLowerCase());
+      if (realKey === undefined) return NO_MATCH;
+      if (expr.value === null) return MATCH_NO_RANGES; // key exists
+      const sensitive = expr.value.caseMode === "sensitive";
+      const needle = sensitive ? expr.value.text : expr.value.text.toLowerCase();
+      const raw = fields[realKey];
+      const values = Array.isArray(raw) ? raw : [raw];
+      for (const val of values) {
+        const hay = sensitive ? val : val.toLowerCase();
+        if (hay.includes(needle)) return MATCH_NO_RANGES;
+      }
+      return NO_MATCH;
     }
     case "term":
       return evalTerm(expr, ctx, scope, collect);

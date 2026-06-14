@@ -206,13 +206,16 @@ export function SearchPanel() {
           continue;
         }
         if (cancelled) return;
+        const meta = app.metadata.getMetadata(f.path);
         const input: SearchInput = {
           path: f.path,
           fileName: f.path.split("/").pop() ?? f.path,
           basename: f.basename,
           content,
           // metadata index stores tags without '#' already
-          tags: app.metadata.getMetadata(f.path)?.tags.map((tag) => tag.tag) ?? [],
+          tags: meta?.tags.map((tag) => tag.tag) ?? [],
+          // R68: frontmatter fields drive the `[property]` operator
+          frontmatter: meta?.frontmatter?.fields,
         };
         const outcome = evaluateSearch(expr, input);
         if (!outcome.matched) continue;

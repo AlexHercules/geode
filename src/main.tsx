@@ -33,6 +33,7 @@ import {
   type MentionSpan,
 } from "@core/unlinkedMentions";
 import { MetadataIndex } from "@core/metadata";
+import { parseSearchQuery, evaluateSearch, type SearchInput } from "@core/search";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
@@ -675,6 +676,34 @@ async function bootstrap() {
       return findMathBlockRanges(state);
     },
     placeholder: (mathSrc: string) => renderMarkdownToHtml(mathSrc, () => null).includes("geode-math-block"),
+  };
+
+  // always-on search-operator probe (R68, ㉜): runs the pure parser + evaluator
+  // (parseSearchQuery → evaluateSearch) on a synthetic SearchInput so task:/
+  // [property] semantics are testable deterministically on browser + desktop
+  // (no UI / debounce). Returns whether the query matches the given input.
+  // (window.__geodeSearch is taken by the R34 in-editor find/replace probe; this
+  // query-parser probe uses a distinct name.)
+  const searchHost = globalThis as typeof globalThis & {
+    __geodeSearchQuery?: (
+      query: string,
+      input: Partial<Pick<SearchInput, "content" | "basename" | "path" | "frontmatter">> & {
+        tags?: string[];
+      },
+    ) => boolean;
+  };
+  searchHost.__geodeSearchQuery = (query, input) => {
+    const parsed = parseSearchQuery(query);
+    if (!parsed.expr) return false;
+    const path = input.path ?? "Note.md";
+    return evaluateSearch(parsed.expr, {
+      path,
+      fileName: path.split("/").pop() ?? path,
+      basename: input.basename ?? "Note",
+      content: input.content ?? "",
+      tags: input.tags ?? [],
+      frontmatter: input.frontmatter,
+    }).matched;
   };
 
   // always-on multi-cursor probe (R63, ㉕): verifies the STATE foundation on the
