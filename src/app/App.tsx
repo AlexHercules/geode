@@ -13,6 +13,7 @@ import { AllPropertiesPanel } from "@features/allproperties/AllPropertiesPanel";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
+import { OutgoingLinksPanel } from "@features/outgoinglinks";
 import { TagsPanel } from "@features/tags";
 import { CalendarPanel } from "@features/calendar";
 import { CommandPalette } from "@features/palette/CommandPalette";
@@ -103,13 +104,15 @@ export function App() {
     ? activeRightPanel.id
     : ws.rightPanel === "outline"
       ? "outline"
-      : ws.rightPanel === "allproperties"
-        ? "allproperties"
-        : ws.rightPanel === "tags"
-          ? "tags"
-          : ws.rightPanel === "calendar"
-            ? "calendar"
-            : "backlinks";
+      : ws.rightPanel === "outgoinglinks"
+        ? "outgoinglinks"
+        : ws.rightPanel === "allproperties"
+          ? "allproperties"
+          : ws.rightPanel === "tags"
+            ? "tags"
+            : ws.rightPanel === "calendar"
+              ? "calendar"
+              : "backlinks";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -220,6 +223,11 @@ export function App() {
         id: "app:toggle-right-sidebar",
         name: () => t("cmd.toggleRightSidebar"),
         callback: () => workspace.toggleRightSidebar(),
+      }),
+      commands.register({
+        id: "app:show-outgoing-links",
+        name: () => t("cmd.showOutgoingLinks"),
+        callback: () => workspace.setRightPanel("outgoinglinks"),
       }),
       commands.register({
         id: "app:close-tab",
@@ -714,6 +722,16 @@ export function App() {
               </button>
               <button
                 role="tab"
+                aria-selected={effectiveRight === "outgoinglinks"}
+                className={`right-tab${effectiveRight === "outgoinglinks" ? " is-active" : ""}`}
+                title={t("app.tabOutgoingLinks")}
+                data-testid="right-tab-outgoinglinks"
+                onClick={() => app.workspace.setRightPanel("outgoinglinks")}
+              >
+                <Icon name="external-link" size={15} />
+              </button>
+              <button
+                role="tab"
                 aria-selected={effectiveRight === "outline"}
                 className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
                 title={t("app.tabOutline")}
@@ -772,6 +790,8 @@ export function App() {
                 <SidebarPanelHost key={activeRightPanel.id} panel={activeRightPanel} />
               ) : ws.rightPanel === "outline" ? (
                 <OutlinePanel />
+              ) : ws.rightPanel === "outgoinglinks" ? (
+                <OutgoingLinksPanel />
               ) : ws.rightPanel === "allproperties" ? (
                 <AllPropertiesPanel />
               ) : ws.rightPanel === "tags" ? (

@@ -1,0 +1,108 @@
+/* Outgoing Links pane (R62, ㉓) — dedicated right-sidebar panel.
+   Mirrors the backlinks panel's section/link styling with an `ol-` prefix
+   (features must not depend on one another's CSS). Colors via CSS variables. */
+.outgoinglinks-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ol-empty {
+  padding: 28px 18px;
+  color: var(--text-faint);
+  text-align: center;
+}
+.ol-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 12px;
+}
+.ol-section {
+  margin-top: 4px;
+}
+.ol-section-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 5px 4px;
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  user-select: none;
+}
+.ol-section-title:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+.ol-chevron {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+.ol-section-label {
+  flex: 1;
+  min-width: 0;
+}
+.ol-count {
+  flex-shrink: 0;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 0 6px;
+  border-radius: 8px;
+}
+.ol-section-body {
+  padding: 2px 0 6px;
+}
+.ol-empty-sub {
+  padding: 4px 8px 6px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.ol-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ol-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: var(--accent);
+  text-align: left;
+}
+.ol-link:hover {
+  background: var(--bg-hover);
+}
+.ol-link svg {
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+.ol-link.is-unresolved {
+  color: var(--link-unresolved);
+}
+.ol-ellipsis {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.ol-new {
+  flex-shrink: 0;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}

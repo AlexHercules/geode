@@ -1,7 +1,7 @@
 /**
  * i18n dictionary fragment — sidebar panels + palette strings (R8).
  * Owner: sweep-panels agent. Namespaces: explorer.* / search.* / backlinks.* /
- * outline.* / palette.* / switcher.*
+ * outgoinglinks.* / outline.* / palette.* / switcher.* / tags.* / calendar.*
  * `zh` is keyed against `en` so a missing translation is a type error.
  */
 export const en = {
@@ -66,6 +66,16 @@ export const en = {
   "backlinks.scanning": "Searching…",
   "backlinks.linkMention": "Link",
   "backlinks.linkAll": "Link all",
+
+  // ---- outgoing links (R62, ㉓ — dedicated pane) ----
+  "outgoinglinks.title": "Outgoing links",
+  "outgoinglinks.empty": "Open a note to see its outgoing links",
+  "outgoinglinks.links": "Links",
+  "outgoinglinks.noLinks": "No outgoing links",
+  "outgoinglinks.unresolved": "Unresolved links",
+  "outgoinglinks.noUnresolved": "No unresolved links",
+  "outgoinglinks.createTitle": 'Create "{name}"',
+  "outgoinglinks.newBadge": "new",
 
   // ---- outline ----
   "outline.title": "Outline",
@@ -163,6 +173,16 @@ export const zh: Record<keyof typeof en, string> = {
   "backlinks.scanning": "搜索中…",
   "backlinks.linkMention": "链接",
   "backlinks.linkAll": "全部链接",
+
+  // ---- outgoing links (R62, ㉓ — dedicated pane) ----
+  "outgoinglinks.title": "出链",
+  "outgoinglinks.empty": "打开笔记以查看其出链。",
+  "outgoinglinks.links": "链接",
+  "outgoinglinks.noLinks": "暂无出链。",
+  "outgoinglinks.unresolved": "未解析链接",
+  "outgoinglinks.noUnresolved": "暂无未解析链接。",
+  "outgoinglinks.createTitle": "新建“{name}”",
+  "outgoinglinks.newBadge": "未创建",
 
   // ---- outline ----
   "outline.title": "大纲",
