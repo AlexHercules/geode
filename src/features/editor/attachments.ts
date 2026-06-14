@@ -10,7 +10,35 @@ import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { importAttachment } from "@core/attachments";
+import { EXPLORER_MIME } from "@core/explorerMove";
 import { IMAGE_EXTS } from "@core/markdown";
+
+/** Chars that break a `[[wikilink]]` — the renderer's wikilinkTarget splits on
+ *  `#` (subpath) and `|` (alias), and `[ ] ^` corrupt the span (ARCHITECTURE
+ *  Round 17 wikilink limitation). A name containing any can't be a clean link. */
+const WIKILINK_UNSAFE = /[[\]#|^]/;
+
+/** R67 (㉛): a vault FILE dragged from the explorer becomes a wikilink (`.md` →
+ *  `[[Name]]`) or an embed (anything else → `![[name.ext]]`) at the drop point.
+ *  Returns null (no insertion) for folders / unknown paths. Uses the shortest
+ *  form that RESOLVES BACK to this exact file (basename when unambiguous, else
+ *  the full path) — the fileToLinktext rule shared by importAttachment /
+ *  buildLinkInsert / the rename engine, so duplicate basenames don't silently
+ *  link the wrong file. A name with wikilink-unsafe chars yields null (skip)
+ *  rather than a silently-broken link. */
+function internalDropSnippet(app: GeodeApp, path: string, fromPath: string): string | null {
+  if (!path || !app.vault.fileExists(path)) return null;
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  const isMd = base.toLowerCase().endsWith(".md");
+  const resolve = (t: string): string | null =>
+    isMd ? app.metadata.resolveLink(t, fromPath) : app.metadata.resolveAttachment(t, fromPath);
+  const baseForm = isMd ? base.slice(0, -3) : base;
+  const fullForm = isMd ? path.replace(/\.md$/i, "") : path;
+  const form =
+    resolve(baseForm) === path ? baseForm : resolve(fullForm) === path ? fullForm : null;
+  if (form === null || WIKILINK_UNSAFE.test(form)) return null;
+  return isMd ? `[[${form}]]` : `![[${form}]]`;
+}
 
 /** MIME → extension map (frozen). */
 const MIME_TO_EXT: Readonly<Record<string, string>> = {
@@ -100,6 +128,15 @@ async function ingestFiles(
 /** CM extension: paste/drop image ingestion handlers. */
 export function attachmentIngest(app: GeodeApp, getPath: () => string): Extension {
   return EditorView.domEventHandlers({
+    // R67 (㉛): the explorer drag carries only EXPLORER_MIME (no text/plain), so
+    // CM's text drag-and-drop never makes the editor a drop target for it — opt in
+    // here. (CM domEventHandler `true` does not auto-preventDefault — do it ourselves.)
+    dragover: (event) => {
+      if (!event.dataTransfer?.types.includes(EXPLORER_MIME)) return false;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      return true;
+    },
     paste: (event, view) => {
       const items = event.clipboardData?.items;
       if (!items) return false;
@@ -126,7 +163,26 @@ export function attachmentIngest(app: GeodeApp, getPath: () => string): Extensio
       return true;
     },
     drop: (event, view) => {
-      const files = event.dataTransfer?.files;
+      // R67 (㉛): a vault file dragged from the explorer (custom MIME, no `.files`)
+      // → insert a wikilink/embed at the drop point. Sync read+dispatch (no await,
+      // so no R44-style re-entrancy). Folders / unknown paths fall through to false.
+      const dt = event.dataTransfer;
+      if (dt?.types.includes(EXPLORER_MIME)) {
+        const snippet = internalDropSnippet(app, dt.getData(EXPLORER_MIME), getPath());
+        if (!snippet) return false;
+        event.preventDefault();
+        const at =
+          view.posAtCoords({ x: event.clientX, y: event.clientY }) ??
+          view.state.selection.main.head;
+        view.dispatch({
+          changes: { from: at, insert: snippet },
+          selection: { anchor: at + snippet.length },
+          userEvent: "input.drop",
+          scrollIntoView: true,
+        });
+        return true;
+      }
+      const files = dt?.files;
       if (!files) return false;
       const pending: PendingFile[] = [];
       for (const file of Array.from(files)) {

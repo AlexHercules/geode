@@ -556,7 +556,8 @@ export function Explorer() {
         draggable={!isRenaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(EXPLORER_MIME, node.path);
-          e.dataTransfer.effectAllowed = "move";
+          // "copyMove": tree drop = move (R28), editor drop = copy/link (R67 ㉛)
+          e.dataTransfer.effectAllowed = "copyMove";
           // defer state update one tick — a same-frame re-render cancels the
           // drag in Chromium (R3 tab-drag precedent)
           window.setTimeout(() => setDraggingPath(node.path), 0);
