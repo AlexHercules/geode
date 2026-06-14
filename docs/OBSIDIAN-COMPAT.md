@@ -172,6 +172,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R55 套件回归（2026-06-14，macOS release 二进制 v0.55.0 实测 `r55-probe-vault`）
+
+R55 = Live preview 表格（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 把 GFM 管道表格渲染为真表格。
+`features/editor/liveTables.ts`：StateField block-replace widget（复用阅读视图 `renderMarkdownToHtml`）+ atomicRanges，光标/点击进入揭示源码——**Geode 首个 cursor-aware block widget**（block 装饰必须经 StateField 非 ViewPlugin，否则 `RangeSet.spans` 崩溃）。纯 view 装饰不改文档。
+macOS probe 实测：新增 **r55-probe 6/6**——真实 WKWebView 上 `__geodeTable` GFM 检测（findTableRanges 找 1 表）+ 渲染（renderMarkdownToHtml→`<table>`）+ 纯段落→无表。
+**r54/r51/r52/r35/r33/r24/r29 套件不回退**（浏览器 r55-e2e **15/15**[4 纯 + 8 live widget 渲染/揭示/源码不变/无报错 + 3 nested-table guard] + r51 10、r52 11、r35 25 抽样实测全绿）。
+**对抗评审 1 major + 2 minor 修 / data-safety 核心全证伪**（零文档修改、无编辑锁死、innerHTML 与阅读视图同信任模型[markdown-it html:false 转义]无 XSS 新面）。major=blockquote/list/缩进表格行中块装饰损坏→行首守卫降级显示源码。显式延期：内嵌表格 live 渲染；mermaid live / 跨行 `$$`·`%%`（复用本轮 block widget 范式）。
+
 ### R54 套件回归（2026-06-14，macOS release 二进制 v0.54.0 实测 `r54-probe-vault`）
 
 R54 = Setext 标题折叠（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian 对 Setext 标题（`text\n===`/`text\n---`）的折叠支持。

@@ -71,6 +71,32 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 55 additions — Live preview 表格（live tables，#⑱）【As-built v0.55】
+
+> **状态：As-built（v0.55 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。GFM 管道表格在 **live preview 渲染为真 `<table>`**（复用阅读视图 `renderMarkdownToHtml`）——
+> **Geode 首个 cursor-aware block-replace widget**（ARCHITECTURE R18/R19 标注的「块级跨行 replace 需 StateField」缺口的首次落地）。**零新依赖、无 Rust、纯 view 装饰不改文档**。
+> **两个探明前的过时假设被 derisk 证伪**（动手前先测）：① Setext 标题 live **样式早已有**（lezer heading tag→cm-md-h1/2）、下划线 `===` 与 ATX `#` **同样是 `cm-md-h1 cm-md-mark`**（一致，无精修可做）→ 弃 Setext-dim；② 改取 live 表格。
+> **关键 CM 约束（踩坑）**：block-replace 装饰**必须经 StateField，不能经 ViewPlugin**（ViewPlugin 提供 block 装饰 → 初次 DocView update 时 `RangeSet.spans` **崩溃**，编辑器白屏）→ 镜像既有 frontmatter `fmField`（StateField + atomicRanges）。
+> 验证:typecheck 0 · `r55-e2e.mjs` **15/15**（4 纯检测/渲染 + 8 live widget[渲染/揭示/源码不变/无报错] + 3 nested-table guard）· `r55-probe.mjs` **6/6** · cargo release 真实重建 38s · 回归 r51/r52/r35/r33/r24/r29 不回退。
+> **评审 1 major + 2 minor 修 / 5 维 data-safety 核心全证伪**（零文档修改、无编辑锁死、无 XSS 新面）。**major**：blockquote/list/缩进表格的 Table 节点 `from` 不在行首 → 行中块装饰致视图损坏 → **行首守卫**（`from !== lineAt(from).from` 则跳过，这些表格降级显示源码，v1）。**minor**：`eq()` 纳入 html（cell wikilink 解析变化后 rebuild 能换 DOM）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**features/editor/liveTables.ts（新）**:`findTableRanges(state)`（纯，遍历 syntaxTree 取 `Table` 节点，文档序升序，探针复用）。`TableWidget extends WidgetType`（`toDOM` = `div.cm-live-table` + `innerHTML = renderMarkdownToHtml(source, resolve)` + mousedown→`view.dispatch({selection:{anchor:from}})` 揭示源码；`eq` 比 source+from+**html**；`ignoreEvent()=false` 放行 mousedown）。`buildTableDecos(state, app, getPath)`：findTableRanges → **行首守卫跳过非行首表格** → selection 相交则跳过（揭示）→ 否则 `Decoration.replace({block:true, widget})`。`liveTables(app, getPath)` = **StateField**（create/update[`docChanged||selection` 则 rebuild，否则 `value.map(tr.changes)`]，`provide` = `EditorView.decorations.from(f)` + `EditorView.atomicRanges.of(...)`）。
+**features/editor/livePreview.ts**:`liveTables(app, getPath)` 接入 `livePreview()` 数组（**仅 live 模式**，source 模式显示原始管道）。
+**main.tsx（探针）**:`__geodeTable.ranges(doc)`（`markdown({base:markdownLanguage})`[GFM 表格]+ensureSyntaxTree+findTableRanges）+ `renders(src)`（renderMarkdownToHtml 含 `<table`）。纯函数 App-Nap-safe；live widget 走 E2E。
+**editor.css**:`.cm-live-table`（margin/cursor:text）+ `table/th/td`（CSS 变量，镜像 `.preview-content table`）。
+
+### 文件所有权（本轮单人独占）
+- `src/features/editor/liveTables.ts`（新）+ `src/features/editor/livePreview.ts`（接入 + import）+ `src/main.tsx`（探针 + import）+ `src/features/editor/editor.css` + `.calibration/r55-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **blockquote / 列表 / 缩进内的表格不 live 渲染**（行首守卫跳过，显示源码）——内嵌表格需「按行剥 `>`/缩进前缀再 render + 块范围扩到整行」，本轮 out of scope。
+- **视口外（大文档未解析区）的表格迟渲染**（StateField 只在 docChanged||selection rebuild，不随 parser 进度）——**光标移动即自愈**，非数据安全，minor。
+- **cell 内 `[[wikilink]]` 解析翻转（创建/重命名目标）后 widget 不即时更新**（StateField 不随 metadata-only 变更 rebuild；与既有 EmbedWidget 等同类限制）。
+- **每次 doc/selection 变更全文档扫 findTableRanges**（无视口裁剪）——大文档/多表格轻退化，v1 可接受。
+- **本轮确立的 cursor-aware block widget 范式（StateField + atomicRanges + selection-reveal + click-to-edit）= 后续 #⑱（mermaid live / 跨行 `$$`·`%%`）的模板**。
+
 ## Round 54 additions — Setext 标题折叠（live render 长尾 #⑱）【As-built v0.54】
 
 > **状态：As-built（v0.54 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱（live 渲染长尾）。**先纠一个过时判断**：探明后发现 Setext 标题（`text\n===`=h1 / `text\n---`=h2）的 **live 样式早已存在**——
