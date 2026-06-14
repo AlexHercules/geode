@@ -172,6 +172,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R57 套件回归（2026-06-14，macOS release 二进制 v0.57.0 实测 `r57-probe-vault`）
+
+R57 = Live preview 跨行 `$$` 数学（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 渲染 `$$` display 数学。
+① 抽共享 `liveHydratedWidget.ts` 的 `HydratedBlockWidget`（R56 mermaid 同款占位+异步 hydrate），重构 liveMermaid 复用；② `liveMath.ts`：`$$…$$` live 渲染为 KaTeX——lezer 无 `$$` 节点 → `findMathBlockRanges` 行扫描（镜像 markdown.ts 块规则）+ renderMarkdownToHtml self-check（slice 必须出 geode-math-block→渲染器为权威，检测零分歧）。纯 view 不改文档。
+macOS probe 实测：新增 **r57-probe 9/9**——真实 WKWebView 上 `__geodeMath` 检测（findMathBlockRanges 含 single/inner-close/无闭合/inline 边角）+ 占位（renderMarkdownToHtml→geode-math-block）。
+**r56/r55/r51/r52/r35/r33/r24/r29 套件不回退**（浏览器 r57-e2e **19/19**[7 纯检测 + 8 live widget 含**异步 KaTeX headless 真渲染**/揭示/源码不变 + 4 D1 缩进守卫] + r56 13[重构零回退]、r55 15 抽样实测全绿）。
+**对抗评审 1 minor 修 / 11 维证伪**（重构等价、扫描=渲染器一致[18 输入实测]、slice-vs-context[仅 blockquote 安全方向]、data-safety 零修改无 XSS、R18 行染色与 R57 widget 干净分工）。D1=列表内缩进 `$$` 被 widget 化→opener 要求 indent===0 修。显式延期：`%%` 注释隐藏（#⑱ 收尾）；缩进/嵌套 math 显示源码。
+
 ### R56 套件回归（2026-06-14，macOS release 二进制 v0.56.0 实测 `r56-probe-vault`）
 
 R56 = Live preview mermaid + 共享 block widget 抽取（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 渲染 mermaid 图。

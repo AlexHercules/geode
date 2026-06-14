@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 57 additions — Live preview 跨行 `$$` 数学 + 共享 HydratedBlockWidget（#⑱）【As-built v0.57】
+
+> **状态：As-built（v0.57 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。① 把 R56 mermaid 的「占位 + 异步 hydrate」widget 抽到共享 `liveHydratedWidget.ts` 的 `HydratedBlockWidget`（重构 liveMermaid 复用，r56-e2e 13/13 护航零回退）；
+> ② 新 `liveMath.ts`：`$$…$$` **display 数学 live 渲染为 KaTeX**（R18 显式延后的「跨行 `$$` 仅淡显不渲染」缺口）。**关键**：lezer-markdown **无 `$$` 节点** → `findMathBlockRanges` 用**行扫描**（镜像 `core/markdown` 块 math opener/closer/inner-close 规则）+ **renderMarkdownToHtml self-check**（slice 必须渲染出 `geode-math-block` 才纳入 → 渲染器为权威，检测永不与阅读视图分歧，R56 教训）。复用 hydrateEmbeds 的 math pass（KaTeX）。**零新依赖、无 Rust、纯 view 不改文档**。
+> 验证:typecheck 0 · `r57-e2e.mjs` **19/19**（7 纯检测[边角:single/inner-close/无闭合/inline] + 8 live widget[**异步 KaTeX headless 真出**/揭示/源码不变] + 4 D1 缩进守卫）· `r57-probe.mjs` **9/9** · cargo release 真实重建 38s · 回归 r56[重构]/r55/r51/r52/r35/r33/r24/r29 不回退。
+> **评审 1 minor 修 / 11 维证伪**（重构等价、扫描=渲染器一致[18 输入实测]、slice-vs-context[仅 blockquote 安全方向]、data-safety[零修改/无锁死/无 XSS]、R18 行染色与 R57 widget 干净分工）。**D1（minor）**：列表内缩进 `$$` 的 range 永远=`line.from`（行首）→ 行首守卫对 math 失效 → 被 widget 化（违反「嵌套→源码」契约，与 tables/mermaid 不一致）→ **修=opener 要求 `indent === 0`**（真顶层；缩进 1-3 math 降级源码）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**features/editor/liveHydratedWidget.ts（新，共享）**:`HydratedBlockWidget(cls, source, html, from, app, getPath)` extends WidgetType（toDOM = `div.cls` + innerHTML=占位 html + `void hydrateEmbeds(wrap, app, getPath())` 异步渲染 + mousedown 揭示；eq 比 cls+source+from；ignoreEvent=false）。mermaid + math 共用（仅 cls/testid 不同）。
+**features/editor/liveMermaid.ts（重构）**:widget 改用 `new HydratedBlockWidget("cm-live-mermaid", ...)`。
+**features/editor/liveMath.ts（新）**:`findMathBlockRanges(state)` 行扫描——**opener `indent === 0`（D1 修）且 trim 起始 `$$`**；inner-close（`$$x$$ foo` 排除）；single-line `$$x$$`；多行扫到结尾 `$$` 行（遇 fence opener 中止）；**renderMarkdownToHtml(slice).includes("geode-math-block") self-check**。`liveMath` = `liveBlockWidgets({ ranges: findMathBlockRanges, widget: new HydratedBlockWidget("cm-live-math", ...) })`。
+**livePreview.ts**:`liveMath` 接入。**main.tsx**:`__geodeMath.ranges/placeholder` 探针。**editor.css**:`.cm-live-math`。
+
+### 文件所有权（本轮单人独占）
+- `src/features/editor/liveHydratedWidget.ts`（新）+ `liveMath.ts`（新）+ `liveMermaid.ts`（重构）+ `livePreview.ts`（接入）+ `src/main.tsx`（探针）+ `editor.css` + `.calibration/r57-*` + 版本三处。
+
+### 已知偏差 / 待办（写给后续轮）
+- **缩进 1-3 的 `$$` 数学块 live 显示源码**（D1 修：仅 `indent===0` 顶层 widget 化；阅读视图仍渲染——一致于「嵌套/缩进→源码」，同 tables/mermaid 行首守卫）。blockquote 内 `$$`（行首 `>`）本就不被扫描。
+- **self-check 每候选 renderMarkdownToHtml**（doc/selection 变更时；无 `$$` 文档零 render，3000 行+500 块 ~1ms）——v1 可接受。
+- **theme 切换后已渲染 widget 不重渲染**（同 R55/R56）。
+- **#⑱ live 渲染长尾仅剩 `%%` 注释隐藏**（其余:Setext 折叠 R54 / 表格 R55 / mermaid R56 / `$$` 数学 R57 均完成）。`%%` 可复用 liveBlockWidget（block `%%…%%`）+ inline mark-hide。
+
 ## Round 56 additions — Live preview mermaid + 共享 block widget 抽取（#⑱）【As-built v0.56】
 
 > **状态：As-built（v0.56 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。① 把 R55 live 表格的 cursor-aware block widget 机制**抽到共享 `liveBlockWidget.ts`**（重构 liveTables 复用，r55-e2e 15/15 护航零回退）；
