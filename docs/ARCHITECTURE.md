@@ -71,6 +71,32 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 52 additions — 编辑命令补全 II（toggle-comment / indent / 行操作）【As-built v0.52】
+
+> **状态：As-built（v0.52 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑳ 的余项延续（R51 做了 move/copy line，本轮补 5 条编辑命令）。把 `@codemirror/commands` 的 5 个
+> **StateCommand** 暴露成命名、palette 可发现、可重绑的命令：`editor:toggle-comment`（`Mod+/`）/`editor:indent`/`editor:unindent`/`editor:insert-blank-line`/`editor:select-line`。
+> **关键决策**：① **headline = toggle-comment 产出 Obsidian 的 `%%…%%` 注释**——markdown 语言**自身无 commentTokens**（toggleComment 会 no-op），故 cmExtensions 加一行
+> `markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } })`；toggleComment 无 line-comment token → 落 block 路径 → 把选区/当前行包/解 `%%`（CM 会加内空格 `%% x %%`，仍是合法 Obsidian 注释）。
+> ② **`deleteLine` 被排除**：它是 `Command`（需真实 `view.moveVertically`），**纯变换探针驱动不了**（同 R51 洞察：probe 只能跑 StateCommand）；Obsidian 也无此默认命令。**零新依赖、无 Rust、无新 vault 写路径**（每条 = 单 CM transaction → dirty → autosave）。
+> 验证:typecheck 0 · `r52-e2e.mjs` **11/11**（7 纯变换 + 3 live 命令 + **1 真实 `Meta+/` 键击路由**）· `r52-probe.mjs` **6/6** · cargo release 真实重建 38s · 回归 r51/r35/r33/r40/r24 不回退。
+> **评审 0 真缺陷 / 5 维全证伪**（Mod+/ 冲突 / %% 数据安全 / 类型探针 / 边角 / 分层 i18n 全清）。一条 by-design 备注（非缺陷）：open===close=`%%` 的 toggle 对「字面含 `%%` 的行」有固有歧义（会被判已注释而 uncomment）——任何同分隔符注释 toggle（含 Obsidian `%%`）的本质语义，可逆、非不可逆损坏。
+
+### 契约（交付即实现）
+
+**features/editor/editorEditCommands.ts（新）**:`registerEditorEditCommands(app, getView)` → 注册 5 条命令，thin wrapper 包 `toggleComment`/`indentMore`/`indentLess`/`insertBlankLine`/`selectLine`（全 StateCommand，`(view:EditorView)` 满足 `{state,dispatch}`）。`name` thunk、`available: () => getView()!==null`（阅读视图 palette 隐藏 + hotkey skip + callback no-op）、callback = `cmd(view); view.focus()`。**唯一默认键 = toggle-comment 的 `Mod+/`**（全仓空闲，注释切换通用约定）；indent/unindent 无键（Tab/Shift-Tab 经 defaultKeymap indentWithTab 已缩进，命名命令补 palette 可发现 + 可重绑）。
+**cmExtensions.ts**:扩展数组加 `markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } })`（纯加性 facet，只被 CM comment 命令经 `languageDataAt` 消费；阅读视图 `core/markdown.ts`[markdown-it] 不读 CM languageData → 零影响）。
+**app/App.tsx**:`disposers.push(...registerEditorEditCommands(app, () => getActiveFileEditorView(app)?.view ?? null))`（与 format/composer/motion 并列；双侧门控）。
+**main.tsx（探针）**:`__geodeEdit.runEdit(cmd, doc, anchor, head)` —— 一次性 `EditorState`（含 `markdown()` + 同款 commentTokens，让 toggleComment 解析到 block token）+ 捕获式 dispatch，返回 `{doc, from, to}`（selectLine 只改选区不改 doc → 必须返回选区）。暴露 toggleComment/indent/unindent/insertBlankLine/selectLine。
+**i18n**:`cmd.toggleComment`/`cmd.indent`/`cmd.unindent`/`cmd.insertBlankLine`/`cmd.selectLine`（en+zh）。版本 0.51→0.52。
+
+### 文件所有权（本轮单人独占）
+- `src/features/editor/editorEditCommands.ts`（新）+ `src/features/editor/cmExtensions.ts`（+1 行）+ `src/app/App.tsx`（接线 + import）+ `src/main.tsx`（探针）+ `src/core/i18n/dict.app.ts`（5 键）+ `.calibration/r52-*` + 版本三处。
+
+### 已知偏差（写给后续轮）
+- **toggle-comment 用 `%% x %%`（CM 加内空格）**：Obsidian 用户惯写 `%%x%%`，但带内空格仍是合法 Obsidian 注释（%% 间任意内容皆注释）。CM toggleBlockComment 默认加内空格，无配置项关闭（除非自写命令）—— 接受。
+- **deleteLine / 其它 `Command` 类命令未接**（需真实 view，探针驱动不了；按需可单独接但只能 live 测）。
+- **indent 缩进单位 = CM 默认 2 空格**（cmExtensions 无自定义 indentUnit；探针与 live 同源）。
+
 ## Round 51 additions — 移动行 / 复制行编辑命令（Line motion）【As-built v0.51】
 
 > **状态：As-built（v0.51 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑳。把 `@codemirror/commands` 的 `moveLineUp`/`moveLineDown`/`copyLineUp`/`copyLineDown`

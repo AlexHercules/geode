@@ -172,6 +172,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R52 套件回归（2026-06-14，macOS release 二进制 v0.52.0 实测 `r52-probe-vault`）
+
+R52 = 编辑命令补全 II（toggle-comment / indent / unindent / insert-blank-line / select-line，R32+ 候选池第四梯队 #⑳余项）。对照 Obsidian 的 toggle-comment / Indent / Unindent 命令。
+`features/editor/editorEditCommands.ts` 把 `@codemirror/commands` 的 5 个 StateCommand 暴露成命名、palette 可发现、可重绑的命令。**headline = toggle-comment（Mod+/）产出 Obsidian `%%…%%` 注释**——
+markdown 自身无 commentTokens，cmExtensions 加 `markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } })` → toggleComment 落 block 路径包/解 `%%`。`deleteLine` 排除（Command 类需真实 view）。
+macOS probe 实测：新增 **r52-probe 6/6**——真实 WKWebView 上 `__geodeEdit` 纯变换（toggle-comment→`%% hello %%`、uncomment→`hello`、indent→2 空格、select-line→`2,4`）。
+**r51/r35/r33/r40/r24 套件不回退**（浏览器 r52-e2e **11/11**[7 纯变换 + 3 live 命令 + 1 真实 `Meta+/` 键击路由] + r51 10、r35 25、r33 37、r40 19、r24 12 抽样实测全绿）。
+**对抗评审 0 真缺陷 / 5 维全证伪**（Mod+/ 冲突 / %% 数据安全 / 类型探针 / 边角 / 分层 i18n）；一条 open===close=`%%` toggle 固有歧义备注（贴近 Obsidian、可逆，by-design 非缺陷）。显式延期：deleteLine 等 Command 类命令、其它长尾 CM 编辑命令未接（按需逐个）。
+
 ### R51 套件回归（2026-06-14，macOS release 二进制 v0.51.0 实测 `r51-probe-vault`）
 
 R51 = 移动行 / 复制行编辑命令（Line motion，R32+ 候选池第四梯队 #⑳）。对照 Obsidian 的 `editor:move-line-up`/`-down` 命令。

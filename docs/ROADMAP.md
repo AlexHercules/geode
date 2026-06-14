@@ -637,6 +637,15 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R52 — v0.52（2026-06-14）编辑命令补全 II（toggle-comment / indent / 行操作）（R32+ 候选池第四梯队 #⑳余项）
+`features/editor/editorEditCommands.ts`（NEW）：`registerEditorEditCommands(app, getView)` 把 `@codemirror/commands` 的 5 个 StateCommand
+（`toggleComment`/`indentMore`/`indentLess`/`insertBlankLine`/`selectLine`）暴露成命名命令（`editor:toggle-comment`[Mod+/]/`editor:indent`/`editor:unindent`/`editor:insert-blank-line`/`editor:select-line`）。
+**headline = toggle-comment 产出 Obsidian `%%…%%` 注释**：markdown 自身无 commentTokens → cmExtensions 加 `markdownLanguage.data.of({ commentTokens: { block: { open: "%%", close: "%%" } } })`，
+toggleComment 落 block 路径包/解 `%%`。**`deleteLine` 排除**（它是 Command 需真实 view，探针驱动不了；Obsidian 亦无此默认命令）。
+App.tsx 接线（getActiveFileEditorView 门控，与 format/composer/motion 并列）+ `__geodeEdit` 探针（一次性 EditorState 含 markdown+commentTokens，返回 {doc,from,to}，selectLine 只改选区）+ i18n 5 键。
+**零新依赖、无 Rust、无新 vault 写路径**（单 CM transaction → autosave）。`r52-e2e` **11/11**（7 纯变换 + 3 live + 1 真实 `Meta+/` 键击）+ `r52-probe` **6/6** + 回归 r51/r35/r33/r40/r24 不回退。
+**评审 0 真缺陷 / 5 维全证伪**（一条 open===close toggle 固有歧义备注，贴近 Obsidian、可逆，by-design 非缺陷）。
+
 ### R51 — v0.51（2026-06-14）移动行 / 复制行编辑命令（Line motion）（R32+ 候选池第四梯队 #⑳）
 `features/editor/editorMotionCommands.ts`（NEW）：`registerEditorMotionCommands(app, getView)` 把 `@codemirror/commands` 的
 `moveLineUp`/`moveLineDown`/`copyLineUp`/`copyLineDown` 4 个 StateCommand 暴露成命名命令（`editor:move-line-up`/`-down`/`copy-line-up`/`-down`），
@@ -1120,7 +1129,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | **⑱ Live preview 表格 / 跨行 `$$`·`%%`·mermaid widget / Setext 标题** | **缺 / 已知偏差**（live 无表格装饰；跨行 `$$`/`%%` 仅淡显不渲染；mermaid live 源码呈现；Setext 标题 live 无样式无折叠点——均 ARCHITECTURE R18/R19 显式偏差）| 共同难点 = 块级跨行 `replace` 需 StateField（与跨行 `$$` 同因）。逐项可拆。 |
 | ~~**⑲ 拼写检查 / 可读行宽 / 应用级缩放**~~ | **R50 已完成（v0.50，见上）**：`core/appearance.ts`（`readableLineLength`/`spellcheckEnabled` Store + setter，localStorage）。Readable line length = `.cm-content`/`.preview-content`/`.editor-loading`/reading-view properties-panel 的 `max-width` 改 `var(--readable-line-width, 46em)`，setReadableLineLength 切 documentElement var（OFF=none）。Spellcheck = EditorPane `useStore(spellcheckEnabled)` + effect 设 contentDOM。Zoom = `app:zoom-in`/`out`/`reset`（Mod+=/-/0 → `setFontSize`）。SettingsModal 2 toggle + i18n + `__geodeAppearance` 探针。r50-e2e 15/15 + r50-probe 6/6。默认保持现状（readable ON / spellcheck OFF）。 | 余项：可读行宽数值可调（固定 46em）；UI chrome 缩放（仅正文）；spellcheck 默认 ON（取 OFF 不惊扰）。 |
-| ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51 已完成（v0.51，见上）**：`features/editor/editorMotionCommands.ts` 把 `@codemirror/commands` 的 `moveLineUp/Down`/`copyLineUp/Down` 暴露成命名命令（`editor:move-line-up`/`-down`/`copy-line-up`/`-down`），键 move=`Alt+ArrowUp/Down`、copy=`Shift+Alt+ArrowUp/Down`（与 CM defaultKeymap 同键，Prec.highest 拦截器先匹配→单次触发）。App.tsx 接线（`getActiveFileEditorView` 门控）+ `__geodeMotion` 探针 + i18n。r51-e2e 10/10 + r51-probe 6/6。评审 0 真缺陷。 | 余项：`insertBlankLine`/`toggleComment`/`indentMore` 等 CM 现成编辑命令未接（按需逐个，零成本）。 |
+| ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51+R52 已完成**：move/copy line（**R51**，`editorMotionCommands.ts`，move=`Alt+ArrowUp/Down`/copy=`Shift+Alt+ArrowUp/Down`，与 CM defaultKeymap 同键经 Prec.highest 拦截器单次触发，r51-e2e 10 + probe 6）；toggle-comment/indent/unindent/insert-blank-line/select-line（**R52**，`editorEditCommands.ts`，toggle-comment=`Mod+/` 产出 Obsidian `%%…%%`[cmExtensions 加 `%%` commentTokens]，其余无键 palette/可重绑，r52-e2e 11 + probe 6）。两轮均 `getActiveFileEditorView` 门控 + `__geode{Motion,Edit}` 纯变换探针 + i18n，零依赖。评审各 0 真缺陷。 | 余项：`deleteLine` 等 `Command` 类（非 StateCommand，需真实 view，探针驱动不了；按需可单独接但只能 live 测）；其它长尾 CM 命令按需逐个。**#⑳ 视为完成。** |
 | **㉑ 小众核心插件** | **缺**：Footnotes view / Unique note creator / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；多数零/轻依赖可做。 |
 
 ## 已知技术债
