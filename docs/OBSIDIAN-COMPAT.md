@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R65 套件回归（2026-06-14，macOS release 二进制 v0.62.0 实测 `r65-probe-vault`）
+
+R65 = Footnotes 脚注面板（候选池第五梯队 ㉘，原生功能非 compat shim）。对照 Obsidian 1.9 核心 Footnotes view 插件（WebSearch 确认核心非社区）。
+metadata 新增脚注索引（镜像 headings：`FOOTNOTE_DEF_RE` 行扫描 on masked 排围栏，content 取原文，`getFootnotes`）+ 新右栏 tab `features/footnotes/`（列 id+content，点击 jumpTo 定义复用 `geode:scroll-to-heading`）。**纯前端、零依赖、无 Rust、不碰 vault/document**。
+新增套件：`r65-e2e.mjs` **12/12**（列 3 定义/围栏排除/leading 内联代码保留/计数/跳转/命令/空态）+ `r65-probe.mjs` **6/6**（真 fs/WKWebView：getFootnotes 解析 3 定义、围栏排除、原文 content、leading-code 保留）。
+**对抗评审（Workflow 3 lens + verify）：1 根因（解析器=阅读视图脚注解析的子集→分歧，R56/R57 再现）→ 部分修+部分记限制**。修 body 首段内联代码丢失（从 `]:` 边界在原文 slice）；记限制 1-3 空格缩进定义被漏（保 col-0 锚定=代码库约定）+ 多行续行不合并（面板单行）。证伪：纯 view 无写、duplicate id 列全部可辩护。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；metadata 索引纯加性，原生回归 r41/r62/r64/r24/r26-bytes 全绿（不动 links/tags/headings/blocks/render）。**OBSIDIAN-COMPAT 缺口表无变化**（R65 原生功能）。
+
 ### R64 套件回归（2026-06-14，macOS release 二进制 v0.61.0 · 纯 view boot smoke）
 
 R64 = Outline 内搜索过滤（候选池第五梯队 ㉗，原生编辑器/面板功能非 compat shim）。对照 Obsidian 核心 Outline 插件的过滤栏（WebSearch 确认是核心功能，非社区插件）。

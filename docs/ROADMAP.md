@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R65 — v0.62（2026-06-14）Footnotes 脚注面板（第五梯队 ㉘ → 出队）
+两道前置门：grep 确认脚注解析存在（R18 阅读视图渲染）但无 metadata 索引/无面板（真缺口）+ WebSearch 确认 Obsidian 1.9 把 Footnotes view 做成**核心插件**（核心非社区 → 做）。
+实现 = metadata 索引（镜像 headings：`FOOTNOTE_DEF_RE` 行扫描 on masked 排围栏，content 取原文，`getFootnotes`）+ 新右栏 tab `features/footnotes/`（列 id+content，点击 jumpTo 定义复用 `geode:scroll-to-heading`）。纯前端零依赖不碰 vault。
+验证：typecheck 0 · `r65-e2e` **12/12** · `r65-probe` **6/6**（真 fs/WKWebView：解析+围栏排除+原文 content+leading-code 保留）· metadata 回归 r41/r62/r64/r24/r26-bytes 全绿。
+**对抗评审（Workflow 3 lens）1 根因（解析器是阅读视图脚注解析的子集→分歧，R56/R57「检测=渲染对齐」再现）→ 部分修+部分记限制**。修（content 正确性）：body 以内联代码开头丢失（原从 masked m[2] 取偏移，贪婪空格吃掉 masking 空格）→ **改从 `]:` 边界在原文 slice**。记限制：1-3 空格缩进定义被漏（保持 col-0 锚定=与 HEADING_RE/TAG_RE/BLOCK_MARKER_RE 同约定）；多行续行不合并（面板单行省略号；完整 markdown-it 块续行镜像不成比例）。证伪：纯 view 无写、duplicate id 列全部可辩护、跳转到定义可辩护。**元教训**：渲染器逻辑深绑框架（markdown-it 块状态）无法干净抽共享时，「镜像渲染器」要权衡——修高价值常见分歧、对罕见分歧记限制而非硬手抄镜像（手抄可能引入新分歧）。
+
 ### R64 — v0.61（2026-06-14）Outline 内搜索过滤（第五梯队 ㉗ → 出队）
 **两道前置门**：① grep 确认 OutlinePanel 无过滤框（真缺口）；② WebSearch 确认 Obsidian 核心 Outline 插件**确有过滤栏**（核心非社区插件 → 做，与 ㉔ 相反）。
 **实现 = 纯 view**：`filterRows` 纯函数（镜像 buildRows/visibleRows 范式）大小写不敏感 substring → 显示命中 + 祖先（淡显，保留层级）不含后代（对齐 Obsidian）；query state 切文件清空；过滤忽略 collapse、无匹配空态。纯前端零依赖不碰 vault。
@@ -1211,7 +1217,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**㉕ 多光标 / 多选命令**~~ | ✅ **R63 完成**（v0.60）| 2 行 foundation（`allowMultipleSelections`+`drawSelection`+`rectangularSelection`+`crosshairCursor`）解锁已有 keymap：Mod-Alt-↑/↓ 加光标、Esc 收起、Alt-drag 列选。**纠误**：R60 说的「Cmd+D 选下一个相同词」是社区插件非核心 → 保留 daily-note Mod+D。鼠标点击加光标属未来 polish。 |
 | ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |
 | ~~**㉗ Outline 内搜索过滤**~~ | ✅ **R64 完成**（v0.61）| 大纲顶部过滤输入框（大小写不敏感 substring）；显示匹配标题 + 祖先（淡显，保留层级上下文）不含后代（对齐 Obsidian 核心 Outline 过滤）；无匹配空态；切文件清空。纯前端 `OutlinePanel.tsx` filterRows。**Gate 2 确认**：Obsidian 核心 Outline 确有过滤框（WebSearch），非社区插件。 |
-| **㉘ Footnotes view 脚注面板** | **缺**（#㉑ 列项之一）| 新右栏面板，列当前笔记的脚注定义 + 点击跳转。复用 metadata/markdown 脚注解析（阅读视图已渲染脚注）。零依赖。 |
+| ~~**㉘ Footnotes view 脚注面板**~~ | ✅ **R65 完成**（v0.62）| 独立右栏 tab `features/footnotes/`（镜像 OutlinePanel）：metadata 新增脚注索引（`getFootnotes`，行扫描 `[^id]:` on masked 排除围栏，content 取原文）；列 id+content，点击 jumpTo 定义（复用 `geode:scroll-to-heading`）。**Gate 2 确认**：Obsidian 1.9 核心 Footnotes view 插件（WebSearch），非社区。纯 view 零依赖。 |
 | **㉙ 状态栏增强** | **部分**（word-count 插件在状态栏，缺光标行列/后链数）| 状态栏加：光标行:列、选中字数、当前笔记后链数。复用 backlinks 索引 + CM selection。逐块加，零依赖。 |
 | ~~**㉚ Callout 自定义类型 fallback**~~ | **R60 出队 = 实为已完成**（code-verify：`markdown.ts:902-944`）| 任意 `[!foo]` → `class="callout" data-callout="foo"`（主题可 `[data-callout=foo]` 上色）+ 无标题时类型名首字母大写作 fallback 标题（`[!tldr]`→"Tldr"）。**第四次「缺口」实为已完成**（HANDOFF 教训再验证）。 |
 | **㉛ 拖拽文件入编辑器生成链接/嵌入** | **缺/待核**（R28 有文件树拖拽移动，编辑器拖入待核）| 拖文件到编辑器 → 插入 `[[link]]`（md）或 `![[embed]]`（图片/附件）。CM drop handler + 路径解析。 |

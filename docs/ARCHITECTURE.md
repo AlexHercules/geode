@@ -71,6 +71,27 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 65 additions — Footnotes 脚注面板（候选池第五梯队 ㉘）【As-built v0.62】
+
+> **状态：As-built（v0.62 交付,2026-06-14）。** 第五梯队 ㉘。**两道前置门**：① grep 确认脚注**解析存在**（markdown.ts R18 阅读视图渲染脚注）但**无 metadata 索引、无面板**（真缺口，同 ㉓）；② WebSearch 确认 **Obsidian 1.9 把 Footnotes view 做成核心插件**（核心非社区，做）。
+> **实现 = metadata 索引 + 纯 view 面板**：① `metadata.ts` 镜像 headings 加脚注索引——`FOOTNOTE_DEF_RE` 行扫描 `[^id]:` on `masked`（排除围栏/frontmatter，offset 与原文对齐），content 从**原文** slice（保留 body 内联代码）；`NoteMetadata.footnotes` + `getFootnotes(path)`。② 新右栏 tab `features/footnotes/`（镜像 OutlinePanel/OutgoingLinksPanel）列 id+content，点击 `jumpTo` 定义（**复用 `geode:scroll-to-heading` 通用 offset 事件**，EditorPane clamp 后滚动，零新事件）。**纯前端、零依赖、无 Rust、不碰 vault/document（评审证伪写竞态）**。
+> 验证：typecheck 0 · `r65-e2e.mjs` **12/12**（列 3 定义/围栏排除/**leading 内联代码保留**/计数/跳转/命令/空态）· `r65-probe.mjs` **6/6**（真 fs/WKWebView：getFootnotes 解析 3 定义、围栏排除、原文 content、leading-code 保留）· cargo release 真重建 · metadata 回归 r41/r62/r64/r24/r26-bytes 全绿（脚注索引纯加性，不动 links/tags/headings/blocks/render）。
+> **对抗评审（Workflow 3 lens + verify）：1 根因（解析器是阅读视图脚注解析的子集 → 二者分歧）确认 → 部分修 + 部分记限制**。**根因 = R56/R57/R61「检测器须与渲染器对齐」再现**：metadata 脚注解析与 markdown.ts 冻结的 `geode-footnote-def`（R18 权威）规则不一致。**修（content 正确性，本轮做）**：body 以内联代码开头时丢失——原 `contentStart` 从 **masked** 的 `m[2]` 取偏移，贪婪 `[ \t]*` 吃掉 masking 留下的空格 → 漏首段代码。**改 = 从 `]:` 边界（id 字符集排除 `]`，首个 `]:` 即定义的）在原文 slice + trim**，不依赖 masked 内容组。**记为已知限制（本轮不修，proportionate）**：① 1-3 空格缩进的定义被漏（**保持 col-0 锚定 = 与 HEADING_RE/TAG_RE/BLOCK_MARKER_RE 同一代码库约定**，缩进标题同样被大纲漏，评审认可一致性）；② 多行续行 body 不合并（面板 CSS 单行省略号，多行显示价值低；完整 markdown-it 块续行镜像需复刻其 indent/blkIndent 语义，对罕见模式不成比例、且手抄镜像本身有漂移风险——空首行 `[^1]:\n  body` 退化为空 content 行，罕见）。**元教训**：「检测器镜像渲染器」当渲染器逻辑深绑框架（markdown-it 块状态）**无法干净抽取共享**时，权衡=修高价值/常见分歧（内联代码 content）、对低价值/罕见分歧（多行续行）记限制而非强行手抄镜像（手抄镜像可能引入新分歧，违背 lesson 初衷）。
+> **证伪**：纯 view 无写（数据安全满足）、duplicate id 保留两条（面板列全部定义，可辩护）、跳转到定义（vs reference，可辩护）。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/types.ts**：`FootnoteRef { id; content; from }`；`NoteMetadata.footnotes: FootnoteRef[]`；`RightPanelKind += "footnotes"`。
+**core/metadata.ts**：`FOOTNOTE_DEF_RE = /^\[\^([^\s[\]]+)\]:.*$/gm`（col-0 锚定）；parseNote 在 headings 后 `matchAll` on `masked`，`afterColon = m.index + m[0].indexOf("]:") + 2`，content 从原文 `content.slice(afterColon, lineEnd).trim()`；`footnotes` 入 return；`getFootnotes(path)` getter。
+**features/footnotes/FootnotesPanel.tsx**（新）：`useApp`+`useStore(workspace.state)`+`useStore(metadata.revision)`；`getFootnotes(activePath)`；行 `^id` marker + content；`jumpTo(from)` = openFile + rAF + dispatch `geode:scroll-to-heading {path, from}`；空态。`footnotes.css`（`fn-` 前缀）+ `index.ts`。
+**app/App.tsx**（4 处 + 命令）：import；effectiveRight 分支；tab（`data-testid="right-tab-footnotes"`，`Icon footnote`）；body 分支；命令 `app:show-footnotes`。**icons.tsx**：`footnote` 星号图标。**i18n**：`app.tabFootnotes`/`cmd.showFootnotes`/`footnotes.{title,empty,noFootnotes}`（en+zh）。
+
+### 已知偏差 / 待办（写给后续轮）
+- **1-3 空格缩进的脚注定义被漏**——col-0 锚定（与 headings/tags/blocks 索引同约定）；缩进定义罕见。未来若要可改 `^ {0,3}`（注意会引入「缩进 `[^x]:` 续行歧义」）。
+- **多行脚注 body 续行不合并**——面板单行预览（CSS 省略号）；空首行 `[^1]:\n  body` 退化为空 content 行（罕见）。完整镜像需复刻 markdown-it 块续行语义。
+- **跳转到定义行**（非 reference 标记）——v1；未来可加 reference offset 索引支持跳到引用处。
+- **duplicate id 保留两条定义**——面板列全部（帮用户发现重复），阅读视图渲染第一条；面板=诊断视图，可辩护。
+
 ## Round 64 additions — Outline 内搜索过滤（候选池第五梯队 ㉗）【As-built v0.61】
 
 > **状态：As-built（v0.61 交付,2026-06-14）。** 第五梯队 ㉗。**两道前置门**：① grep `OutlinePanel` 确认无过滤框（真缺口）；② **WebSearch 确认 Obsidian 核心 Outline 插件确有过滤栏**（非社区插件——与 ㉔ smart typography 相反，本项是核心，做）。
