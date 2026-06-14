@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R61 套件回归（2026-06-14，macOS release 二进制 v0.58.0 实测 `r61-probe-vault`）
+
+R61 = 图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（候选池第五梯队 ㉒，原生功能非 compat shim）。对照 Obsidian 图片尺寸语法（WebFetch obsidian.md/help/embeds 确认：`|宽`=等比、`|宽x高`=双维、小写 `x`、**仅图片**）。
+共享 `parseEmbedSize`（reading+live 单一解析器，去漂移）→ `<img width height>`；导出 `export.ts` 零改动继承（hydrate 只设 src）；非数字别名仍当 alt（字节级 r26-bytes 不变）。**零新依赖、无 Rust、compat 调用面零改动**。
+新增套件：`r61-e2e.mjs` **15/15**（阅读/live/导出继承/数据安全 doc 不变/边角含 cap）+ `r61-probe.mjs` **8/8**（真 WKWebView + 真 png）；字节级 `r26-bytes.mjs` **41 案 0 不变量违反**（重捕基线 + size 案翻 non-media 锁死）。
+**对抗评审（Workflow 4 lens + verify）：1 根因确认修 + ~9 证伪**。确认（minor）：无上界 `Number()` → 巨数别名三端漂移（阅读/导出 `"1e+21"`/`"Infinity"` 无效 HTML→intrinsic；live `img.width` ToUint32→clamp）→ **修=正则封 5 位 `\d{1,5}`**（三端逐字节一致 by construction）。证伪：video/pdf 尺寸（Obsidian 仅图片）/ CSS 不加 height:auto（正确）/ 导出继承（安全）/ caption 当 alt（正确）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r26[嵌入]/r57[live math] 全绿。**OBSIDIAN-COMPAT 缺口表无变化**（R61 是原生功能，不动插件 API 面）。
+
 ### R57 套件回归（2026-06-14，macOS release 二进制 v0.57.0 实测 `r57-probe-vault`）
 
 R57 = Live preview 跨行 `$$` 数学（R32+ 候选池第四梯队 #⑱ live 渲染长尾）。对照 Obsidian Live Preview 渲染 `$$` display 数学。

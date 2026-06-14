@@ -637,6 +637,11 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R61 — v0.58（2026-06-14）图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（第五梯队 ㉒ → 出队）
+Obsidian 图片尺寸语法（WebFetch 确认：`|宽`=等比缩放、`|宽x高`=双维、小写 `x`、**仅图片**）。三态一致：阅读视图 `markdown.ts` 占位 `<img width height>`、导出 `export.ts` **零改动**（hydrate 只设 src，尺寸继承）、live `EmbedWidget` 加 width/height。**核心**：reading 与 live **共用 `parseEmbedSize` 单一解析器**（去漂移，R56/R57 延续）。数字别名当尺寸+alt 回落文件名；非数字别名仍当 alt（字节级不变）。**零依赖、无 Rust、纯 view**。
+验证：typecheck 0 · `r26-bytes` **41 案 0 违反**（重捕基线 + size 案翻 non-media 锁死）· `r61-e2e` **15/15** · `r61-probe` **8/8**（真 WKWebView 真 png）· 回归 r26/r57 不回退。
+**对抗评审（Workflow 4 lens + verify）：1 根因确认修 + ~9 证伪**。确认（minor，3 lens 命中/2 verify REAL）：无上界 `Number()` → 巨数别名三端漂移（阅读/导出发 `"1e+21"`/`"Infinity"` 无效 HTML→intrinsic；live `img.width` 走 ToUint32→clamp）。**修=正则封 5 位 `\d{1,5}`（≤99999px，<2³² 且非指数→三端逐字节一致 by construction）**。证伪：video/pdf 尺寸（Obsidian 仅图片）/ CSS 不加 height:auto（正确）/ 导出继承（安全）。**元教训**：「检测=渲染字节对齐」推广到「N 端共用一解析器」时，**解析器值域必须所有端等价接受**——`Number()` 无界在「拼字符串」端与「赋 IDL 属性」端对极端输入分歧，单一权威也漂移；用输入约束（位数上限）收口。**顺手**剥 ARCHITECTURE/HANDOFF 各 1 NUL+1 US 控制字节（R44/R46 那批，破 grep）。
+
 ### R58 — （2026-06-14）#⑱ `%%` 注释探明=stale gap，无代码改动（修正 + #⑱ 收尾 + 交接用户）
 原定 R58 = `%%` 注释 live 隐藏（#⑱ 最后一项）。**探明发现 `%%` inline 隐藏 R18 早已完成**：livePreview.ts 既有「same-line `%%comment%%` hiding + cross-line comment-block line-tinting」+ 自己的 `commentDelimOffsets`（镜像 markdown.ts）。实测既有处理：inline `%%comment%%` 光标 off 隐藏 / 光标 inside 揭示 / doc 字节不变，全绿。
 本轮一度写了冗余 `liveComments.ts`（与既有冲突，揭示失效暴露了既有实现）→ **已全部 revert**（tree=R57 状态，版本仍 0.57.0，无 feature commit）。
@@ -1183,7 +1188,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（已核实）| 范围与切入点提示 |
 |---|---|---|
-| **㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100` | **缺**（R11 嵌入只渲染图，不解析 `\|尺寸`）| 官方确认：只给宽=等比缩放。纯渲染层——`core/embeds.ts`/`markdown.ts` 解析 `\|` 后的 `宽` 或 `宽x高` → `<img width height>`；live + reading + 导出三态。**高频高价值**。注意改 markdown.ts 触发字节级套件。 |
+| ~~**㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100`~~ | ✅ **R61 完成**（v0.58）| 共享 `parseEmbedSize`（reading+live 单一解析器）→ `<img width height>`，导出零改动继承；非数字别名仍当 alt（字节级不变）；评审修巨数三端漂移=正则封 5 位。 |
 | **㉓ Outgoing links 出链面板** | **缺**（只有 backlinks R24，无独立出链面板）| Obsidian 独立核心插件，复刻品最常漏。新右栏面板 `features/outgoing/`，复用 `metadata.getMetadata(path).links`（已有索引）列当前笔记的出链 + 未解析链接（红色）；镜像 OutlinePanel/BacklinksPanel 结构。纯前端零依赖。 |
 | **㉔ Smart typography 智能排版** | **缺** | 编辑器输入变换：弯引号 `"`/`'`、`--`→—、`---`→—、`...`→…；设置开关（默认可 OFF）。CM `EditorState.transactionFilter` 或 inputHandler。注意代码块/数学内不变换 + IME 守卫（R33 先例）。 |
 | **㉕ 多光标 / 多选命令** | **缺/细化**（R60 code-verify：`searchKeymap` 已挂 `Mod-d` 但因缺 `EditorState.allowMultipleSelections`+`drawSelection` → 当前 no-op）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。**补 `allowMultipleSelections`+`drawSelection`+列选** 即解锁（比「零实现」更省）；接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |

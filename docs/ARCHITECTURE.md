@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 61 additions — 图片嵌入尺寸 `![[img.png|200]]` / `|200x100`（候选池第五梯队 ㉒）【As-built v0.58】
+
+> **状态：As-built（v0.58 交付,2026-06-14）。** 第五梯队 ㉒ = Obsidian 图片嵌入尺寸语法。官方语义（WebFetch obsidian.md/help/embeds 确认）：`|宽` 只给宽=等比缩放（高 auto）；`|宽x高` 设双维，分隔符**小写 `x`**；**仅图片**支持（video/audio/pdf 无此语法——FileEmbed 分支不动，对照评审 REFUTE）。
+> **三态一致**：① 阅读视图 `markdown.ts` 占位 `<img … width="N" height="N">`；② 导出 `export.ts` **零改动**——复用同一 `renderMarkdownToHtml` 占位，`core/embeds.ts` hydrate 只设 `src`，width/height 原样继承（评审证伪「导出会丢尺寸」）；③ live preview `EmbedWidget` 加 `width?/height?` ctor 参数 + `eq` 比对 + `toDOM` 设 `img.width/height`。**核心去漂移**：reading 与 live **共用同一个 `parseEmbedSize` 解析器**（导出器思想——单一权威，两端永不分歧，R56/R57 教训延续）。
+> **数字别名当尺寸、非数字别名仍当 alt**：`|200`→`width=200` 且 alt 回落文件名（Obsidian 同款）；`|caption`→`alt="caption"` 无尺寸（**字节级 r26-bytes 不变**）。**零新依赖、无 Rust、纯 view 不改文档**。
+> 验证：typecheck 0 · `r26-bytes.mjs` **41 案 0 不变量违反**（非数字别名 `|caption`/`|200x`/`|wide`/`|999999` 字节恒等；`|200`/`|200x100` 改后**重捕基线 + 翻 non-media 锁死**，未来回归即违反）· `r61-e2e.mjs` **15/15**（阅读/live/导出继承/数据安全 doc 不变/边角）· `r61-probe.mjs` **8/8**（真 WKWebView 真 png）· cargo release 真重建 · 回归 r26[嵌入]/r57[live math]不回退。
+> **对抗评审：1 根因确认修 + ~9 证伪/nit**。**确认（minor，3 lens 命中、2 verify 判 REAL）**：`parseEmbedSize` 用无上界 `Number(...)` → 巨数别名三端漂移——`Number("9".repeat(21))`→`"1e+21"`、~309 位→`"Infinity"`（阅读/导出发**无效 HTML 属性**→浏览器忽略=intrinsic）；而 live `img.width=N` 的 `unsigned long` IDL setter 走 ToUint32（mod 2³²，10 位即 clamp）→ 同一源阅读 intrinsic、live clamped。**修 = 解析器正则封 5 位 `\d{1,5}`（≤99999px,超任何显示器；< 2³² 且非指数 → 三端逐字节一致 by construction）**——6+ 位降级 alt 文本。**证伪**：video/pdf 尺寸（Obsidian 仅图片）/ caption 当 alt（正确）/ live alt=路径 vs reading=文件名（R11 旧坑,非本轮）/ 空白 trim（正确）/ CSS 不加 `height:auto`（**正确**——加了会破 `|200x100` 强制高）/ 导出继承尺寸（安全）。
+> **元收获**：「检测/渲染要字节对齐」（R56/R57）推广到「**N 个渲染端共用一个解析器**」时，**解析器产出必须是所有端都等价接受的值域**——`Number()` 无界在「拼字符串」端（HTML 属性）与「赋 IDL 属性」端（ToUint32）对极端输入给出不同结果，单一权威也会漂移；用**输入约束（位数上限）**而非各端各自防御来收口，让一致性 by construction。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/markdown.ts**：新导出 `parseEmbedSize(alias: string): {width:number; height?:number} | null`——正则 `/^(\d{1,5})(?:x(\d{1,5}))?$/`（trim 后），非匹配返回 null（别名 = alt 文本）。`WikiLinkInfo` 加 `embedWidth?/embedHeight?: number`。图片分支：`size = parseEmbedSize(alias)`，命中则 `display` 回落 `inner.split("|")[0].trim()`（文件名）+ 设 embedWidth/Height。占位拼装：`width="N"`/`height="N"`（值为 parseEmbedSize 校验过的整数 → 无需 escape）。
+**features/editor/livePreview.ts**：import `parseEmbedSize`；`EmbedWidget` ctor 加 `width?/height?`，`eq` 比对，`toDOM` 设 `img.width/img.height`；图片分支 `parseEmbedSize(m[1].slice(imgPipe+1))` 传入（与阅读侧同一别名抽取规则）。
+**features/export/export.ts**：**不改**（继承占位的 width/height）。**CSS 不改**（`max-width:100%` 既有；`|宽` 高度默认 auto=等比；`|宽x高` 强制双维——加 `height:auto` 会破强制高，评审证伪）。
+
+### 文件所有权（本轮单人独占）
+- `src/core/markdown.ts`（parseEmbedSize + 图片分支 + 占位拼装）+ `src/features/editor/livePreview.ts`（EmbedWidget + 图片分支）+ `.calibration/r61-*` + `.calibration/r26-bytes.mjs`(+baseline 重捕) + 版本三处。**文档清理**：顺手剥 `ARCHITECTURE.md`/`HANDOFF.md` 各 1 个 NUL(0x00)+1 个 US(0x1f) 控制字节（R44/R46 教训那批，破 grep/diff——本轮 grep ARCHITECTURE 整段失灵才暴露；`tr -d` 逐字节核对行数不变）。
+
+### 已知偏差 / 待办（写给后续轮）
+- **6+ 位数字别名降级为 alt 文本**（5 位上限=99999px，超任何真实显示器；为「三端值域一致」让步极端输入的忠实度，纯展示可逆，源码不变）。
+- **PDF 有独立 `#height=[number]` 子路径参数**（Obsidian PDF 专属，非 `|` 别名机制）——本轮未做，属未来 PDF 增强候选项，别与 ㉒ 混。
+- **live preview `<img alt>` = 解析路径，阅读视图 = 文件名/caption**——R11 旧坑（EmbedWidget 自 R11/R26 即 `img.alt = resolvedPath`），非 R61 引入，未改（alt 在 live 通常不可见；改它需碰本轮 diff 外代码 + 可能动字节）。
+
 ## Round 57 additions — Live preview 跨行 `$$` 数学 + 共享 HydratedBlockWidget（#⑱）【As-built v0.57】
 
 > **状态：As-built（v0.57 交付,2026-06-14）。** R32+ 候选池第四梯队 #⑱ live 渲染长尾。① 把 R56 mermaid 的「占位 + 异步 hydrate」widget 抽到共享 `liveHydratedWidget.ts` 的 `HydratedBlockWidget`（重构 liveMermaid 复用，r56-e2e 13/13 护航零回退）；
@@ -441,7 +464,7 @@ export async function mergeNotes(deps: LinkRewriteDeps, sourcePath: string, targ
 4. **`new` create 失败后仍无条件 `openFile` → 幽灵 tab**（指向不存在文件的坏 tab）：**修**：create 后 `if (!vault.fileExists(path)) return false`,只在确实存在才 open。
 5. **`open`/`new` 用 `??` 致 present-but-empty `file=` 遮蔽 path/name**（`file=""` 非 null,`??` 不 fallthrough）：**修**：`file || path` / `file || name`（空串 falsy → fallthrough，"首个非空者胜"）。
 
-> **教训（写给后续轮）**：① **`obsidian://open` ≠ wikilink 点击**——复用 `openWikilink` 顺手继承了它「不存在就建」的语义,但 URI 的 `open` 必须只开既有(Obsidian 口径 + 不可信外部输入不该建文件);**复用一个「带副作用」的 helper 前,先问它的副作用是否属于新调用方的语义**(R45「复用序列化审全字段」同源教训)。② **`??` vs `||` 对用户输入 fallback**——`a ?? b` 只在 null/undefined 落 b,present-but-empty `""` 会遮蔽 b;「首个**非空**者胜」要用 `||`。③ **纵深防御放核心、别只放边界**——路径穿越只被 Rust IPC 边界 `safe_join` 挡,Memory adapter 无守卫,新写路径(URI handler)一来就双端分歧;把路径安全契约下沉到 `core/Vault.create`,所有 adapter + 所有 caller 自动继承。④ **数值控制符范围写成 escape 会渲染成裸字节**（R44 重犯）——`[ -]` 经 Write/Edit 可能落成 NUL/US 裸字节(破 grep/diff);**用 charCode 扫描(`ch.charCodeAt(0) < 0x20`)而非控制符 regex 范围**。
+> **教训（写给后续轮）**：① **`obsidian://open` ≠ wikilink 点击**——复用 `openWikilink` 顺手继承了它「不存在就建」的语义,但 URI 的 `open` 必须只开既有(Obsidian 口径 + 不可信外部输入不该建文件);**复用一个「带副作用」的 helper 前,先问它的副作用是否属于新调用方的语义**(R45「复用序列化审全字段」同源教训)。② **`??` vs `||` 对用户输入 fallback**——`a ?? b` 只在 null/undefined 落 b,present-but-empty `""` 会遮蔽 b;「首个**非空**者胜」要用 `||`。③ **纵深防御放核心、别只放边界**——路径穿越只被 Rust IPC 边界 `safe_join` 挡,Memory adapter 无守卫,新写路径(URI handler)一来就双端分歧;把路径安全契约下沉到 `core/Vault.create`,所有 adapter + 所有 caller 自动继承。④ **数值控制符范围写成 escape 会渲染成裸字节**（R44 重犯）——`[-]` 经 Write/Edit 可能落成 NUL/US 裸字节(破 grep/diff);**用 charCode 扫描(`ch.charCodeAt(0) < 0x20`)而非控制符 regex 范围**。
 
 ### 契约（交付即实现，已纳评审修复）
 
