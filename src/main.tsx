@@ -66,6 +66,7 @@ import { tagCandidates, tagTrigger } from "@features/editor/tagCompletion";
 import { installSearchProbe } from "@features/editor/searchCommands";
 import { handleObsidianUri } from "@features/editor/obsidianUriHandler";
 import { markdownFoldRange } from "@features/editor/folding";
+import { findTableRanges } from "@features/editor/liveTables";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -614,6 +615,26 @@ async function bootstrap() {
       const line = state.doc.line(line1);
       return markdownFoldRange(state, line.from, line.to);
     },
+  };
+
+  // always-on live-table probe (R55): the pure GFM Table detection (findTableRanges)
+  // + the reused reading-view render (renderMarkdownToHtml → <table>). The live block
+  // widget + cursor-reveal is a view behavior the backgrounded webview can't drive (App
+  // Nap) — exercised by the browser E2E; this asserts detection + render geometry.
+  const tableHost = globalThis as typeof globalThis & {
+    __geodeTable?: {
+      ranges: (doc: string) => Array<{ from: number; to: number }>;
+      renders: (tableSrc: string) => boolean;
+    };
+  };
+  tableHost.__geodeTable = {
+    ranges: (doc: string) => {
+      // markdownLanguage base = the GFM extensions (tables) the real editor uses
+      const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+      ensureSyntaxTree(state, doc.length, 2000);
+      return findTableRanges(state);
+    },
+    renders: (tableSrc: string) => renderMarkdownToHtml(tableSrc, () => null).includes("<table"),
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).

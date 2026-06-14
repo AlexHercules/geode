@@ -53,6 +53,7 @@ import { IMAGE_EXTS, fileEmbedKind } from "@core/markdown";
 import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
+import { liveTables } from "./liveTables";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
 /* ================= properties panel host plumbing (R22) ================= */
@@ -1351,6 +1352,9 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
     ),
     livePreviewPlugin(app, getPath),
     liveClickHandler(app, getPath),
+    // R55 — render GFM pipe tables as <table>s in live preview (reveal source on
+    // cursor/click). Block-replace widget + atomicRanges, like the frontmatter field.
+    liveTables(app, getPath),
     liveTheme,
   ];
 }

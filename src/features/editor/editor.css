@@ -626,6 +626,24 @@ iframe.geode-embed-pdf.cm-live-embed {
   font-weight: 600;
 }
 
+/* R55 — live-preview rendered tables (liveTables.ts block widget); click to edit */
+.cm-live-table {
+  margin: 0.3em 0;
+  cursor: text;
+}
+.cm-live-table table {
+  border-collapse: collapse;
+}
+.cm-live-table th,
+.cm-live-table td {
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+}
+.cm-live-table th {
+  background: var(--bg-panel-alt);
+  font-weight: 600;
+}
+
 .preview-content img {
   max-width: 100%;
 }
