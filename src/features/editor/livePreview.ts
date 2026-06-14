@@ -1362,8 +1362,13 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
             deco.between(0, view.state.doc.length, (_f, to) => {
               end = Math.max(end, to);
             });
-            const sel = view.state.selection.main;
-            return sel.empty && end >= 0 && sel.head === end + 1;
+            if (end < 0) return false;
+            // R63: check EVERY range, not just selection.main — multi-cursor
+            // (allowMultipleSelections) can park a SECONDARY empty cursor at the
+            // protected first-body-line start (end+1); deleteCharBackward applies to
+            // all ranges, so a main-only guard would let that cursor delete the
+            // frontmatter closing-fence newline (reopens the INT-3 corruption).
+            return view.state.selection.ranges.some((r) => r.empty && r.head === end + 1);
           },
         },
       ]),

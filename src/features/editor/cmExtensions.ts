@@ -29,12 +29,15 @@ import {
   type Extension,
 } from "@codemirror/state";
 import {
+  crosshairCursor,
   Decoration,
   type DecorationSet,
+  drawSelection,
   EditorView,
   keymap,
   MatchDecorator,
   placeholder,
+  rectangularSelection,
   ViewPlugin,
   type ViewUpdate,
 } from "@codemirror/view";
@@ -447,6 +450,20 @@ export function buildEditorExtensions(opts: {
     // resolved at view build time — a locale switch applies to views built after it
     placeholder(tr("editor.placeholder")),
     editorTheme,
+    // R63 (㉕) — multiple cursors / selections. Native CM6; the real gap was that
+    // Geode could not render >1 cursor AT ALL. This 2-line foundation fixes that:
+    // allowMultipleSelections lets state hold >1 range, drawSelection renders every
+    // cursor/selection (the native browser caret only shows one). It also unlocks
+    // defaultKeymap bindings that were silent no-ops: Mod-Alt-↑/↓ addCursorAbove/
+    // Below and Escape simplifySelection (keyboard-first, per Geode's stated
+    // principle; Obsidian core multi-cursor is mouse-based). NOTE Mod-d is owned by
+    // the daily-note command (interceptor), and select-next is an Obsidian COMMUNITY
+    // plugin not core, so selectNextOccurrence stays shadowed — by design.
+    // rectangularSelection + crosshairCursor add Alt-drag column/rectangular select.
+    EditorState.allowMultipleSelections.of(true),
+    drawSelection(),
+    rectangularSelection(),
+    crosshairCursor(),
     // R35 — Backspace over an empty auto-pair (e.g. `(|)`) deletes BOTH brackets.
     // Above defaultKeymap so the pair-delete wins over the plain backspace.
     keymap.of(closeBracketsKeymap),

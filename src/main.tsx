@@ -45,7 +45,7 @@ import {
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
 import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } from "@core/appearance";
-import { EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
@@ -675,6 +675,26 @@ async function bootstrap() {
       return findMathBlockRanges(state);
     },
     placeholder: (mathSrc: string) => renderMarkdownToHtml(mathSrc, () => null).includes("geode-math-block"),
+  };
+
+  // always-on multi-cursor probe (R63, ㉕): verifies the STATE foundation on the
+  // real binary — with EditorState.allowMultipleSelections a 2-range selection is
+  // held (count=2); without it CM collapses to the main range (count=1). The view
+  // rendering (drawSelection drawing every caret) is a DOM behavior exercised by the
+  // browser E2E on the identical CM editor. `held(true/false)` is the control pair.
+  const multiSelHost = globalThis as typeof globalThis & {
+    __geodeMultiSel?: { held: (allow: boolean) => number };
+  };
+  multiSelHost.__geodeMultiSel = {
+    held: (allow: boolean) => {
+      const sel = EditorSelection.create([EditorSelection.cursor(0), EditorSelection.cursor(2)]);
+      const state = EditorState.create({
+        doc: "abc",
+        selection: sel,
+        extensions: allow ? [EditorState.allowMultipleSelections.of(true)] : [],
+      });
+      return state.selection.ranges.length;
+    },
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).
