@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import {
+  readableLineLength,
+  setReadableLineLength,
+  spellcheckEnabled,
+  setSpellcheckEnabled,
+} from "@core/appearance";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import {
   dailyNoteFolder,
@@ -44,7 +50,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.49.0";
+const APP_VERSION = "0.50.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -139,6 +145,9 @@ function AppearanceSection() {
   const t = useI18n();
   const ws = useStore(app.workspace.state);
   const currentLocale = useStore(locale);
+  /* R50: appearance toggles — readable line length + editor spellcheck */
+  const readable = useStore(readableLineLength);
+  const spell = useStore(spellcheckEnabled);
   const autoUpdate = useStore(autoUpdateLinks);
   const attachFolder = useStore(attachmentFolder);
   /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
@@ -212,6 +221,40 @@ function AppearanceSection() {
             {ws.fontSize}px
           </span>
         </div>
+      </div>
+
+      {/* R50: readable line length — caps the body column width (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.readableLineLength")}</div>
+        </div>
+        <button
+          className={`settings-toggle${readable ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={readable}
+          aria-label={t("settings.readableLineLength")}
+          data-testid="settings-readable-toggle"
+          onClick={() => setReadableLineLength(!readable)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.spellcheck")}</div>
+        </div>
+        <button
+          className={`settings-toggle${spell ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={spell}
+          aria-label={t("settings.spellcheck")}
+          data-testid="settings-spellcheck-toggle"
+          onClick={() => setSpellcheckEnabled(!spell)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
 
       <div className="setting-item">

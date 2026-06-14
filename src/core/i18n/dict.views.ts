@@ -22,6 +22,8 @@ export const en = {
   "settings.fontSizeDesc": "Font size used by the markdown editor and preview.",
   "settings.language": "Language",
   "settings.languageDesc": "Choose the interface language.",
+  "settings.readableLineLength": "Readable line length",
+  "settings.spellcheck": "Spellcheck",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -240,6 +242,8 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.fontSizeDesc": "Markdown 编辑器与预览所使用的字号。",
   "settings.language": "语言",
   "settings.languageDesc": "选择界面语言。",
+  "settings.readableLineLength": "可读行宽",
+  "settings.spellcheck": "拼写检查",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",

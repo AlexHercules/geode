@@ -182,6 +182,27 @@ export function App() {
         name: () => t("cmd.toggleTheme"),
         callback: () => workspace.toggleTheme(),
       }),
+      // R50 zoom — adjust the editor/preview font size (workspace.setFontSize
+      // clamps + drives --editor-font-size). Mod+= / Mod+- / Mod+0 mirror the
+      // Obsidian-canonical zoom keys; reset returns to the 16px default.
+      commands.register({
+        id: "app:zoom-in",
+        name: () => t("cmd.zoomIn"),
+        hotkey: "Mod+=",
+        callback: () => workspace.setFontSize(workspace.state.get().fontSize + 1),
+      }),
+      commands.register({
+        id: "app:zoom-out",
+        name: () => t("cmd.zoomOut"),
+        hotkey: "Mod+-",
+        callback: () => workspace.setFontSize(workspace.state.get().fontSize - 1),
+      }),
+      commands.register({
+        id: "app:zoom-reset",
+        name: () => t("cmd.zoomReset"),
+        hotkey: "Mod+0",
+        callback: () => workspace.setFontSize(16),
+      }),
       commands.register({
         id: "app:open-settings",
         name: () => t("cmd.openSettings"),

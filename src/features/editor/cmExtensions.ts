@@ -115,7 +115,8 @@ const editorTheme = EditorView.theme({
   ".cm-scroller": { fontFamily: "inherit", lineHeight: "1.65", overflow: "auto" },
   ".cm-content": {
     padding: "28px 0 45vh",
-    maxWidth: "46em",
+    // R50: readable line length — "none" (toggle off) → full-width editor body
+    maxWidth: "var(--readable-line-width, 46em)",
     margin: "0 auto",
     /* --caret-color: Obsidian theme knob (R20 bridge defaults it to the
        interactive accent — identical to the old hard-coded accent) */

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { foldEffect } from "@codemirror/language";
+import { spellcheckEnabled } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import type { PropertyEdit } from "@core/properties";
@@ -125,6 +126,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const app = useApp();
   const t = useI18n();
   const metaRevision = useStore(app.metadata.revision);
+  /* R50: editor spellcheck preference — applied per-view reactively below */
+  const spell = useStore(spellcheckEnabled);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -285,6 +288,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
       parent: hostRef.current,
     });
     viewRef.current = view;
+    // R50: seed the new view with the current spellcheck preference (the effect
+    // below keeps it in sync; this covers the initial build before that runs)
+    view.contentDOM.setAttribute("spellcheck", String(spellcheckEnabled.get()));
     const detach = handle.attachView(view);
     // best-effort restore after a preview round-trip (clamped — the document
     // may have changed length while the editor view was gone)
@@ -362,6 +368,12 @@ export function EditorPane({ tab }: { tab: TabState }) {
       effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode)),
     });
   }, [app, handle, tab.mode]);
+
+  /* ---------- spellcheck preference → live CM contentDOM (R50) ---------- */
+
+  useEffect(() => {
+    viewRef.current?.contentDOM.setAttribute("spellcheck", String(spell));
+  }, [spell]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

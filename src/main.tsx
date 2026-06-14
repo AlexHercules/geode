@@ -44,6 +44,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } from "@core/appearance";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
@@ -560,6 +561,21 @@ async function bootstrap() {
     record: (path, content, ts) => { void recordSnapshot(vault, path, content, ts, true); },
     list: (path) => listSnapshots(vault, path),
     restore: (path, ts, now) => restoreSnapshot(vault, documents, path, ts, now),
+  };
+
+  // R50: apply DOM appearance settings (readable line length) on boot + probe.
+  applyAppearanceSettings();
+  const apprHost = globalThis as typeof globalThis & {
+    __geodeAppearance?: {
+      setReadable: (on: boolean) => void;
+      setSpellcheck: (on: boolean) => void;
+      readableVar: () => string;
+    };
+  };
+  apprHost.__geodeAppearance = {
+    setReadable: (on) => setReadableLineLength(on),
+    setSpellcheck: (on) => setSpellcheckEnabled(on),
+    readableVar: () => document.documentElement.style.getPropertyValue("--readable-line-width") || "(default)",
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll

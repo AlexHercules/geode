@@ -95,7 +95,8 @@
 
 .editor-loading {
   flex: 1;
-  max-width: 46em;
+  /* R50: skeleton mirrors the editor body column → follow readable line length */
+  max-width: var(--readable-line-width, 46em);
   width: 100%;
   margin: 0 auto;
   padding: 36px 32px;
@@ -510,7 +511,8 @@ iframe.geode-embed-pdf.cm-live-embed {
 }
 
 .preview-content {
-  max-width: 46em;
+  /* R50: readable line length — full width when --readable-line-width is "none" */
+  max-width: var(--readable-line-width, 46em);
   margin: 0 auto;
   padding: 28px 32px 120px;
   font-size: var(--editor-font-size);
@@ -1303,9 +1305,11 @@ mark {
   display: flow-root;
 }
 
-/* reading view: align with .preview-content (46em column, 32px padding) */
+/* reading view: align with .preview-content (readable-line column, 32px padding) —
+   follow the same --readable-line-width var so it stays aligned when readable line
+   length is toggled OFF (R50 review) */
 .editor-preview > .properties-panel {
-  max-width: 46em;
+  max-width: var(--readable-line-width, 46em);
   margin: 0 auto;
   padding: 20px 32px 0;
 }

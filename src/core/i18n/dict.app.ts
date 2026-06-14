@@ -74,6 +74,9 @@ export const en = {
   "cmd.newNoteFromTemplate": "New note from template",
   "cmd.insertDate": "Insert current date",
   "cmd.insertTime": "Insert current time",
+  "cmd.zoomIn": "Zoom in",
+  "cmd.zoomOut": "Zoom out",
+  "cmd.zoomReset": "Reset zoom",
 
   // ---- markdown formatting commands (R33) ----
   "cmd.toggleBold": "Toggle bold",
@@ -209,6 +212,9 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.newNoteFromTemplate": "从模板新建笔记",
   "cmd.insertDate": "插入当前日期",
   "cmd.insertTime": "插入当前时间",
+  "cmd.zoomIn": "放大",
+  "cmd.zoomOut": "缩小",
+  "cmd.zoomReset": "重置缩放",
 
   // ---- markdown formatting commands (R33) ----
   "cmd.toggleBold": "切换粗体",
