@@ -71,6 +71,53 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 70 additions — markdown 标准链接 `[text](note.md)` 重命名改写（候选池第五梯队【中】㉞-a）【As-built v0.67】
+
+> **状态：As-built（v0.67 交付,2026-06-14）。** 验证：typecheck 0 · `r70-e2e.mjs` **23/23**（basename/path/anchor/titled/%20编码/wiki共存/external+self+code跳过/md图片嵌入延后/附件链接改写/folder移动/相对路径/**括号文件名编码/?query保留/锚点md链接算反链+图谱无幽灵节点**/wikilink回归）· `r70-probe.mjs` **9/9** 真 WKWebView 真实 fs · 回归 r44 25 / r47 11 / r28 23 / r62 14 / r66 8 / r24 12 绿。
+> **简化门**：clean（verified-rewrite 机制全是承重，kind 分支操作不同语法，helper 有 rationale/≥2 调用点）。
+> **对抗评审（Workflow 3 lens engine-datasafety/md-adversarial/contract-regression + verify）12 确认 + 6 partial + 0 证伪 → 修 5 根因 + 自查补 1 崩溃 + 记若干已知偏差**：
+>   - **Fix A（major，3 lens 命中）= `encodeMdHref` 只编码空格**：重命名进含 `( ) # ?` 的文件名 → 构造的 href 在 post-rewrite reparse 被 `MARKDOWN_LINK_RE` 的 `[^\s)]+` 截断 / 误读为 anchor → 断言失败 skip，但文件已改名 → **悬空链接**（fail-safe 但合法文件名下产坏链）。**修 = 百分号编码 `% ( ) # ? 空格`**（`%` 先编码避免双编码；`normalizeMdHref` 的 `decodeURIComponent` 是逆）。
+>   - **Fix B（major，最大涟漪面）= 下游 `meta.links` 消费者用 `resolveLink` 解析 md href**：R70 把 md 链接塞进 `meta.links`，但 `getBacklinks`/`getOutgoingLinks`/`getGraph`/compat `addLinkRows` 仍用 `resolveLink`（不 decode/不剥 anchor/不解析相对）→ 锚点/编码/相对的 md 链接被误判 unresolved → 图谱幽灵节点 + 反链缺失 + compat `resolvedLinks` 错桶。**修 = 新 `resolveByKind(link, fromPath)` helper**（md 走 resolveMarkdownLink，wiki 走 resolveLink），四处消费者统一改走。
+>   - **自查补（review 没抓到）= `getGraph` 崩溃**：md 链接经 resolveByKind 可解析到**附件**路径（resolveMarkdownLink 兜底 resolveAttachment），但图谱节点只建 md 笔记 → `nodes.get(附件).degree++` 崩 `undefined`。**修 = 非笔记解析一律当幽灵**（与 wikilink→附件 既有行为一致）。本轮 e2e 的 graph 断言抓到。
+>   - **Fix C（minor）= compat `CachedMetadata.links` 的 `original` 无 content 兜底对 md 链接造 `[[..]]` 形** → 按 kind 重建 `[text](href)`。
+>   - **Fix D（minor）= `?query` 尾被丢**：anchor 提取只认 `#` → 改保留首个 `#`/`?` 起的整段尾巴（verbatim）。
+>   - **Fix F（minor）= `normalizeMdHref` 相对解析不一致**（`sub/note.md` vault-根相对 vs `sub/../x.md` fromPath 相对）→ base 仅由前缀决定（`./`/`../`→fromPath、其余→根），`.`/`..` 段循环恒跑。
+>
+> ㉞ = 「链接格式策略 + markdown 链接改写」。**两道前置门**：① grep 确认整个链接索引层**只认 wikilink**（`WIKILINK_RE` 不匹配 `[text](path)`，`LinkRef` 无 kind，`resolveLink` 不解析 md 相对路径/锚点/编码）；② WebSearch 确认 Obsidian 核心：重命名同步更新 markdown 链接 + 「新链接格式」设置（wikilink/markdown × 最短/相对/绝对）。
+> **㉞ 拆三轮（数据安全 + 体量，诚实分割）**：
+>   - **R70（本轮，㉞-a）= markdown 链接重命名改写**：补 md 链接索引 + 解析 + 把 R16 五步引擎按 kind 分叉，使重命名/移动文件时 `[text](note.md)` 同步改写（关 R16 已知偏差「md 链接不改写」）。**纯数据安全核心，不动 markdown.ts 渲染字节**（不触发 r18-diff）。
+>   - **㉞-b（后续）= md 内部链接渲染 + 点击导航**：阅读视图 `internal-link` + live `.cm-live-mdlink` 内部变体 + 接 `openWikilink`（动 markdown.ts → 触发 r18-diff 字节套件，单独一轮）。
+>   - **㉞-c（后续）= 新链接格式设置**：wikilink↔markdown + 最短/相对/绝对，影响全部「文件→链接」构造点（cmExtensions/unlinkedMentions/attachments/noteComposer），additive，单独一轮。
+>
+> **关键设计：复用 R16 `linkRewrite.ts` 五步骨架，按 `LinkRef.kind` 分叉三处字面操作**（splice 校验 / 新文本构造 / 解析），不另起第二条引擎。md 链接解析走**新函数 `resolveMarkdownLink`（绝不改冻结的 `resolveLink`）**。R16 三根因纪律全部沿用（never-cache 读 `readFresh` / splice 字面校验 + post-rewrite 复解析双保险 / path-form only-fix-broken exact match / runTail 串行），**新增 external scheme 排除**（`https:`/`mailto:`/`//` 绝不当 vault 链接改写）。
+>
+> **新目标文本 = vault 根相对路径（绝对形）**：md 链接改写一律写 `cap.newFile` 的 vault 相对路径（保 `.md`、空格 `%20` 编码、保 `#anchor` + 文本 + `"title"`），**不做 basename 消歧**（无歧义 by construction，规避 stale-prefix bug；作者风格保留留给 ㉞-c 的格式设置）。
+
+### 契约（冻结，实现照此）
+
+**core/types.ts**：`LinkRef += kind: "wikilink" | "markdown"`（**必填**，唯一构造点 `parseNote`）。
+**core/metadata.ts**：
+- `MARKDOWN_LINK_RE = /(!?)\[([^\]]*)\]\(\s*([^\s)]+)(?:\s+"[^"]*")?\s*\)/g`——`parseNote` 在 `masked` 上扫，`m[1]==="!"`（图片嵌入，延后）/ external scheme / `//` / `#`开头（纯锚点）→ skip；否则 push `{target:m[3], alias:m[2]||undefined, from:m.index, to:m.index+m[0].length, kind:"markdown"}`。wikilink push 加 `kind:"wikilink"`。
+- `normalizeMdHref(href, fromPath): string | null`（新，public）——decode `%xx` + 剥 `#anchor`/`?query` + external/`//`→null + 前导 `/`=vault 绝对 + `./`/`../` 基于 fromPath 目录归一化（`..` 越过根→null）→ 返回 vault 相对路径字符串（**不查索引**）。
+- `resolveMarkdownLink(href, fromPath): string | null`（新，public）——`const p = normalizeMdHref(...); return p===null ? null : (resolveLink(p,fromPath) ?? resolveAttachment(p,fromPath))`。
+**core/linkRewrite.ts**：
+- `CaptureEntry += kind: "wikilink" | "markdown"`；capture/rewrite 的 map key = `link.kind + " " + link.target.toLowerCase()`（避 wiki/md 同 target 串碰撞）。
+- capture：md link 用 `resolveMarkdownLink` 命中 affectedMd/affectedAtt。
+- rewrite：md 分支 = `stillResolvesMd`（path-form 用 `normalizeMdHref` exact 比对 cap.newFile，basename 用 resolveMarkdownLink）跳过未坏 → splice 校验 `^\[…\]\(…\)$` 头尾 + 提取 text/url/title + url 去 anchor 后 `normalizeMdHref` 须 === cap.oldFile → 重组 `[${text}](${encode(newRelPath)}${anchor}${title})` → 同一 post-rewrite 复解析断言（`resolveMarkdownLink(now.target)===expect`）。
+- 冻结签名 `renameWithLinkUpdate`/`rewriteLinksForMerge`/`PlannedEdit` 不变；`__geodeRename` 钩子自动覆盖 md 链接（无需新钩子）。
+
+### 文件所有权（chief 单 owner，数据安全核心紧耦合不并行）
+`types.ts` + `metadata.ts` + `linkRewrite.ts` + `.calibration/r70-*`。
+
+### 已知偏差 / 待办
+- **md 图片嵌入 `![alt](img.png)` 不改写**（本轮只 link 不 embed）——重命名附件后 md 图片仍坏，记 ㉞ 后续。
+- **md 内部链接当前不可点击导航**（渲染端未改）——㉞-b（动 markdown.ts → r18-diff，单独一轮）。
+- **新目标用 vault 绝对形**，不保作者的相对/basename 风格——㉞-c 格式设置落地后再按偏好。
+- **字面括号 href 不被索引**（评审 nit）：`MARKDOWN_LINK_RE` 的 href 组 `[^\s)]+` 在首个 `)` 截断 → 手写 `[x](file(1).md)`（字面括号）索引为残缺 target、重命名漏改。但 Obsidian 自身对 md href 里的括号做 `%28/%29` 编码（编码形 `file%281%29.md` 正常索引+改写，本轮 Fix A 已保证输出编码），故仅影响**手写未编码**的畸形 href。
+- **嵌套图片在链接文本内**（评审 nit）：`[txt ![a](img.png) more](note.md)` 中内层 `![a](img.png)` 被当指向 img.png 的 md 链接（文本组 `[^\]]*` 在首个 `]` 截断）——罕见构造，字节安全（仅误命中），未修。
+- **尖括号 href `[a](<my note.md>)` / 无扩展名裸 basename / 单引号 title 不索引**（评审 nit）：Obsidian 写 bare %20-编码 href + 双引号 title，这些变体罕见，未索引=重命名不改写，记偏差。
+- **splice 校验 as-built = `url === link.target` 字节比对**（比原契约文字「normalizeMdHref(去anchor)===cap.oldFile」更严）——以实现为准。
+
 ## Round 69 additions — 全库标签重命名 `#old`→`#new`（候选池第五梯队【中】㉝）【As-built v0.66】
 
 > **状态：As-built（v0.66 交付,2026-06-14）。** 验证：typecheck 0 · `r69-e2e.mjs` **36/36**（inline/nested/boundary/frontmatter array+scalar/code-skip/CJK/no-op/descendant-guard/invalid/open-buffer/junk-item/UI 右键 rename + 无效名守卫）· `r69-probe.mjs` **10/10** 真 WKWebView 实测真实 fs · 回归 r41 21 / r30 25 / r24 12 绿。

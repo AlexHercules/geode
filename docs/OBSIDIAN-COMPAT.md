@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R70 套件回归（2026-06-14，macOS release 二进制 v0.67.0 实测 `r70-probe-vault`）
+
+R70 = markdown 标准链接 `[text](note.md)` 重命名改写（候选池第五梯队【中】㉞-a，原生功能）。对照 Obsidian 核心：重命名同步更新 markdown 链接。
+把 R16 verified-rewrite 引擎按 `LinkRef.kind` 分叉：补 md 链接索引（`MARKDOWN_LINK_RE`）+ `resolveMarkdownLink`/`normalizeMdHref`，重命名/移动文件时 md 链接随 wikilink 一并改写（R16 三根因纪律全沿用 + external scheme 排除）。**插件 API 涟漪（商业主轴）**：`resolveByKind` 让 `app.metadataCache.resolvedLinks/unresolvedLinks`（compat）正确解析 md href（锚点/编码/相对），不再误入 unresolved 桶。
+新增套件：`r70-e2e.mjs` **23/23** + `r70-probe.mjs` **9/9**（真 WKWebView 真实 fs）。
+**对抗评审（Workflow 3 lens + verify）12 确认 → 修 5 根因 + 自查补 getGraph 附件崩溃**：href 编码 `%28%29%23%3F`、下游消费者 `resolveByKind`、compat original 按 kind、?query 保留、normalizeMdHref 相对一致。**已知偏差**：md 图片嵌入不改写（㉞ 续）/ md 内链不可导航（㉞-b）/ 新 href 用 vault 绝对形（㉞-c）/ 字面括号 href 不索引（Obsidian 编码故仅影响手写畸形）。
+- **套件矩阵不回退**：compat 调用面仅 addLinkRows/buildCache 按 kind 分叉（resolvedLinks 更准），r31/…/r57 全 compat 套件不动；原生回归 r44[folder]25 + r47[merge]11 + r28[move]23 + r62[outgoing]14 + r66[backlink count]8 + r24 12 全绿（同族改写引擎 + 反链/出链/图谱消费者不破）。
+
 ### R69 套件回归（2026-06-14，macOS release 二进制 v0.66.0 实测 `r69-probe-vault`）
 
 R69 = 全库标签重命名（候选池第五梯队【中】㉝，原生功能非 compat shim）。对照 Obsidian 核心右键标签 → rename（含嵌套）。
