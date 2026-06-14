@@ -172,6 +172,20 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
 
+### R49 套件回归（2026-06-14，macOS release 二进制 v0.49.0 实测 `r49-probe-vault`）
+
+R49 = 文件恢复快照（File recovery snapshots，R32+ 候选池第三梯队 #⑪ 另一半 → **#⑪ 完成**）。对照 Obsidian **File recovery**：周期保存
+笔记内容快照、浏览/还原。**数据安全相关轮**。存储 = 每 note 单 JSON `.obsidian/snapshots/<encodeURIComponent(path)>.json`（复用
+`vault.adapter.writeConfig`，配置写不触发 tree 刷新；非 Obsidian 的 IndexedDB——schema 不互通,Geode 自有恢复存储）。`file:modified`
+hook（throttle 60s）→ 串行 RMW append + prune 25。RecoveryModal（浏览/预览/还原）+ `editor:file-recovery` 命令。macOS probe 实测：
+新增 **r49-probe 9/9**——含 **on-disk 数据安全终态**：`__geodeSnapshots.record/restore` → Node 直读 `<vault>/.obsidian/snapshots/` 确认快照
+落盘、restore 写回 OLD 内容、**restore 前 CURRENT 被快照（never lost）**。**r48/r47/…/r24/r27/r43/r45 套件不回退**（浏览器 r49-e2e
+**12/12** + r24 12、r43 22、r27 22、r45 10、r47 11 抽样实测全绿；`r26-bytes` 0）。**3 维对抗评审（数据安全重点）9 finding → 7 确认
+（2 major + 5 minor）逐条修 + 2 证伪**（① 坏 JSON→record 空 list 覆盖丢历史→**写路径 STRICT-parse 拒覆盖**[R45/R27「坏 JSON 拒写」契约
+一致] ② restore 前不 flush→脏 buffer 覆盖丢未保存编辑→**flushAll**[R47 parity] ③ enqueue 静默吞错→guarded+warn ④ lastSnapTs 写失败毒化节流→
+绑成功置位 ⑤ vault 切换不清 lastSnapTs ⑥ modal restore 无 .catch ⑦ revision bump 偷换 sel；证伪：并发 restore append-only 无丢、ts 碰撞）。
+显式延期：周期定时器 / rename 迁移快照 key / 系统回收站[trash crate 待拍板] / 大库存储优化。
+
 ### R48 套件回归（2026-06-14，macOS release 二进制 v0.48.0 实测 `r48-probe-vault`）
 
 R48 = 可配置日记设置（Configurable daily notes，R32+ 候选池第三梯队 #⑫ 另一半 → **#⑫ 完成**）。对照 Obsidian **Daily notes** 设置：

@@ -71,6 +71,61 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 49 additions — 文件恢复快照（File recovery snapshots）【As-built v0.49】
+
+> **状态：As-built（v0.49 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑪ 的**另一半**（R42 做了回收站=删除恢复;快照=**编辑恢复**;**#⑪ 至此完成**）。
+> Obsidian File recovery：周期保存笔记内容快照,可浏览/还原旧版本。**数据安全相关轮**。**关键复用**：`vault.adapter.writeConfig/readConfig`（相对 `.obsidian/`,
+> **配置写不触发 tree 刷新**——镜像 bookmarks/workspaces 安静路径）;`file:modified` 事件触发。**零新依赖、无 Rust**。
+> 验证:typecheck 0 · `r49-e2e.mjs` **12/12** · `r49-probe.mjs` **9/9**（含 **on-disk 数据安全终态**:`.obsidian/snapshots/` 写入 + restore 写回 + restore 前 CURRENT 被快照）·
+> cargo release 真实重建 37s · 回归 r24/r43/r27/r45/r47 不回退。
+
+### As-built（评审根因修复 — 9 finding → 7 确认[2 major + 5 minor] 全修 + 2 证伪）
+
+对抗评审 3 维（数据安全重点）× find→verify。确认并修复:
+
+1. **【major / 数据安全】坏 JSON 的 `snapshots.json` 被 `readList` 吞错回空 → record 用空 list 覆盖,静默删光其余有效快照**（`vault_write_config` 是裸 `fs::write` 非原子,Geode 自身崩溃/断电可产生截断 JSON;与 R45/R27「坏 JSON 拒写」契约不一致）。**修**：**写路径**与读路径分离容错——recordSnapshot 内对 `readConfig` 结果**显式 STRICT JSON.parse**,malformed 即 throw → enqueue catch（见 #3 日志）→ 跳过 writeConfig、保留磁盘原字节;`listSnapshots`/UI 仍用容错 `readList`。
+2. **【major / 数据丢失】restore 前未 flush 活动编辑器 → 脏 buffer 的未保存编辑既不被快照（restore 读磁盘非 buffer）、又在 restore 写盘后被脏 buffer 覆盖**。**修**：`restoreSnapshot` 加 `documents` 依赖,**`await documents.flushAll()`** 后再读当前+force 快照+写回（R47 flush-before-overwrite parity）——未保存编辑落盘并被快照,editor 非脏后 watcher 重载还原内容。
+3. **【minor】`enqueue` 静默吞所有 writeConfig/readConfig reject 无日志**（偏离 bookmarks/workspaces guarded 先例）。**修**：`enqueue` 包 `guarded` try/catch + `console.warn` 再 rethrow。
+4. **【minor】`lastSnapTs` 在 enqueue 外同步置位,写失败不回滚 → 节流窗口被毒化,60s 内真实变更跳过不重试**。**修**：`lastSnapTs.set` 移进 **写成功/dedup 分支**（失败→不置位→下次保存重试）。
+5. **【minor】vault 切换不清 `lastSnapTs` → 新库同名笔记首快照被旧库残留 ts 节流**。**修**：`initSnapshots` 订阅 `vault:changed(load)` → `lastSnapTs.clear()`。
+6. **【minor】`restoreSnapshot` reject 时 RecoveryModal `.then` 无 `.catch` → 静默失败 + unhandled rejection**。**修**：modal restore 加 `.catch`（console.error,模态保持）。
+7. **【minor】`snapshotsRevision` bump 无条件把 `sel` 重置到最新 → 模态开着时后台保存偷换用户选中项**。**修**：useEffect `setSel(prev => 仍存在则保留 prev,否则最新)`。
+
+> **证伪（未改）**：并发 restoreSnapshot 非原子（append-only + last-writer-wins,无正文丢失,by-design）· `key={s.ts}`/同毫秒 ts 碰撞（throttle 保同文件 ts≥60s,force 还原 ts=now 不撞历史）· 分层/i18n/命令门控/写字节安全（合规）。
+
+> **教训（写给后续轮）**：① **「容错读」不能被「写路径」复用**——`readList` 对坏 JSON 回空对**展示**安全,但 record 的 RMW 复用它就把「读容忍」变成「写破坏」（空 list 覆盖丢历史）。**写路径必须 STRICT-parse 拒覆盖 malformed,读路径才容错**——这是 R45/R27 早立的契约,新数据安全模块（自称「bookmarks precedent」）必须把那层守卫一并抄齐（与 R47「复用引擎复用全部消费契约」、R48「纵深防御扫同族全入口」同源,**第三次**反复出现）。② **「读后覆盖」类操作（restore/merge）一律先 `flushAll`**——脏 buffer 的未保存编辑必须先落盘+捕获,否则覆盖丢编辑 + buffer 反噬还原（R47 merge、R49 restore 同根;凡「读当前→写回」都加 flush）。③ **节流/去抖的「窗口推进」要绑成功不绑尝试**——`lastSnapTs` 置位绑「写成功」而非「尝试」,失败才可重试;副作用状态（throttle/dedup 标记）的更新点 = 操作真正生效点。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/snapshots.ts（已落,数据安全核心）**：存储 = 每 note 单 JSON `.obsidian/snapshots/<encodeURIComponent(path)>.json` = `{path, snapshots:[{ts,content}]}`
+（encodeURIComponent 把 "/" → %2F → 整路径成一个文件名段,无穿越无碰撞）。
+```ts
+export interface Snapshot { ts: number; content: string; }
+export const snapshotsRevision: Store<number>; // 每次写快照 bump → 恢复 UI 重渲
+export function recordSnapshot(vault, path, content, now, force?): Promise<void>; // throttle(>=60s,force 绕)+ dedup(同上一份跳)+ prune(MAX_PER_FILE=25,数组 shift)+ 串行 RMW
+export function listSnapshots(vault, path): Promise<Snapshot[]>;                   // 旧→新
+export function restoreSnapshot(vault, path, ts, now): Promise<boolean>;           // **先 force-快照当前** → vault.modify 写回快照;快照/文件缺失→false no-op
+export function initSnapshots(vault, events): () => void;                          // 订阅 file:modified → vault.read → recordSnapshot(Date.now());startup 调一次
+export function isSnapshotable(path): boolean;                                     // .md 且非 dot-prefixed 段
+```
+**main.tsx（已落）**：`initSnapshots(vault, events)` 一次（vault 切换原地 re-point,单订阅有效）+ `__geodeSnapshots` 探针（record/list/restore,确定性 ts）。
+
+**core/types.ts（B）**：`ModalKind` 加 `"recovery"`。
+**features/recovery/RecoveryModal.tsx（B,NEW）+ index + css**：镜像 `features/workspaces/WorkspacesModal`。`activePath = app.workspace.getActiveFile()`;
+`useStore(snapshotsRevision)` + `useEffect` 异步 `listSnapshots(app.vault, activePath)` → state（旧→新,**展示倒序最新在上**）;每项:时间戳（locale 格式化）+ 选中预览内容（只读）+ 还原按钮（`restoreSnapshot(app.vault, activePath, ts, Date.now())` → closeModal）。无活动文件 → 空态 `t("recovery.noFile")`;无快照 → `t("recovery.empty")`。Escape + overlay 关闭。
+**app/App.tsx（B）**：`ws.modal === "recovery" && <RecoveryModal />` + 注册命令 `editor:file-recovery`（无默认键,`available: getActiveFile()!==null`,`openModal("recovery")`)。
+**i18n（B）**：`cmd.fileRecovery` + `recovery.title`/`recovery.restore`/`recovery.empty`/`recovery.noFile`/`recovery.preview`（en+zh）。版本 0.48→0.49。
+
+### 文件所有权
+- **me（core + 探针 + 接线 + 验证,已落核心）**：`src/core/snapshots.ts` + `src/main.tsx` + `.calibration/r49-*`。
+- **B（UI + 命令 + i18n + 版本）**：`src/core/types.ts`(ModalKind) + `src/features/recovery/*`(new) + `src/app/App.tsx` + i18n dict + 版本三处。
+
+### 已知偏差（写给后续轮）
+- **每 note 单 JSON 存 N 份全文**（25 版 × 全文 → 文件可大;RMW 每次读写整文件——throttle 60s 限频。大库/大文件性能为余项）。
+- **快照按 ts 唯一**（throttle 保同文件 ts≥60s 间隔;force 还原-当前 ts=now 与历史不撞）。
+- **改文件名/移动后快照不跟随**（key=路径;rename 后旧快照孤立在旧 key——余项:rename 时迁移 key）。
+- **无周期定时器**（仅 on-save 触发;Obsidian 另有定时快照——余项）。
+
 ## Round 48 additions — 可配置日记设置（Configurable daily notes）【As-built v0.48】
 
 > **状态：As-built（v0.48 交付,2026-06-14）。** R32+ 候选池第三梯队 #⑫ 的**另一半**（R43 做了日历+导航;**#⑫ 至此完成**）。Obsidian Daily notes 设置：
