@@ -1175,6 +1175,40 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**⑳ 移动行上下 + 其它编辑命令**~~ | **R51+R52 已完成**：move/copy line（**R51**，`editorMotionCommands.ts`，move=`Alt+ArrowUp/Down`/copy=`Shift+Alt+ArrowUp/Down`，与 CM defaultKeymap 同键经 Prec.highest 拦截器单次触发，r51-e2e 10 + probe 6）；toggle-comment/indent/unindent/insert-blank-line/select-line（**R52**，`editorEditCommands.ts`，toggle-comment=`Mod+/` 产出 Obsidian `%%…%%`[cmExtensions 加 `%%` commentTokens]，其余无键 palette/可重绑，r52-e2e 11 + probe 6）。两轮均 `getActiveFileEditorView` 门控 + `__geode{Motion,Edit}` 纯变换探针 + i18n，零依赖。评审各 0 真缺陷。 | 余项：`deleteLine` 等 `Command` 类（非 StateCommand，需真实 view，探针驱动不了；按需可单独接但只能 live 测）；其它长尾 CM 命令按需逐个。**#⑳ 视为完成。** |
 | **㉑ 小众核心插件** | **部分**：**Unique note creator R53 已完成（v0.53，见上）**（`core/uniqueNote.ts` + `plugins/unique-note.ts`，`unique-note:create` 时间戳命名笔记 + 文件夹/格式/模板设置，镜像 dailyNote，collision-retry 防同 tick 双触发，r53-e2e 11 + probe 6，评审 1 minor 修）。**仍缺**：Footnotes view / Slides / Web viewer / Bases / Format converter / Audio recorder | 按需逐个，低优先；Footnotes view（面板，零依赖）/ Format converter（纯转换，零依赖）较清爽可先；Slides/Web viewer/Bases/Audio recorder 偏重或需新能力。 |
 
+#### 第五梯队 — Obsidian 差距补充（R59 候选池续命，2026-06-14 全功能对照登记 · 零依赖小项优先 = loop 燃料）
+
+> **登记口径**：用户要求「再挖一轮 Geode vs Obsidian 差距」。两 agent 交叉比对（Geode R1–R58 已实现清单 × Obsidian 官方四页验证的全功能成本表）得出的**真缺口**——Obsidian 有、Geode 无、且**零新依赖可做**。按成本排序：**【小】= 零依赖一轮可做（loop 主燃料）**、**【中】= 中等一轮**。**纠误**：模板日期偏移 `{{date+3d}}` 属社区 Templater 非核心 Templates，**勿加**（Geode 核心模板口径正确）。
+
+**【小】零依赖 · 高遗漏 · 一轮可干净交付（优先取这些续 loop）**
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100` | **缺**（R11 嵌入只渲染图，不解析 `\|尺寸`）| 官方确认：只给宽=等比缩放。纯渲染层——`core/embeds.ts`/`markdown.ts` 解析 `\|` 后的 `宽` 或 `宽x高` → `<img width height>`；live + reading + 导出三态。**高频高价值**。注意改 markdown.ts 触发字节级套件。 |
+| **㉓ Outgoing links 出链面板** | **缺**（只有 backlinks R24，无独立出链面板）| Obsidian 独立核心插件，复刻品最常漏。新右栏面板 `features/outgoing/`，复用 `metadata.getMetadata(path).links`（已有索引）列当前笔记的出链 + 未解析链接（红色）；镜像 OutlinePanel/BacklinksPanel 结构。纯前端零依赖。 |
+| **㉔ Smart typography 智能排版** | **缺** | 编辑器输入变换：弯引号 `"`/`'`、`--`→—、`---`→—、`...`→…；设置开关（默认可 OFF）。CM `EditorState.transactionFilter` 或 inputHandler。注意代码块/数学内不变换 + IME 守卫（R33 先例）。 |
+| **㉕ 多光标 / 多选命令** | **缺**（CM6 原生支持但未暴露命令）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。CM6 `selectNextOccurrence` / 列选原生——`@codemirror/commands` + `@codemirror/search` 已有，接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |
+| **㉖ 粘贴 URL 到选区变链接 + 自动转 URL** | **缺** | 粘贴 handler：选区非空 + 剪贴板是 URL → `[选区](url)`；选区空 + URL → 可选自动转链接。CM `EditorView.domEventHandlers.paste` 或 `clipboardInputFilter`。 |
+| **㉗ Outline 内搜索过滤** | **缺**（OutlinePanel 无过滤框）| 大纲面板顶部加过滤输入框，实时过滤标题（fuzzy 或 substring）。纯前端，改 `features/outline/OutlinePanel.tsx`。 |
+| **㉘ Footnotes view 脚注面板** | **缺**（#㉑ 列项之一）| 新右栏面板，列当前笔记的脚注定义 + 点击跳转。复用 metadata/markdown 脚注解析（阅读视图已渲染脚注）。零依赖。 |
+| **㉙ 状态栏增强** | **部分**（word-count 插件在状态栏，缺光标行列/后链数）| 状态栏加：光标行:列、选中字数、当前笔记后链数。复用 backlinks 索引 + CM selection。逐块加，零依赖。 |
+| **㉚ Callout 自定义类型 fallback** | **部分**（13 内置类型完整，未知 `[!foo]` 行为待核）| 未知 callout 类型 → 默认样式 + 类型名作图标/标题 fallback（Obsidian 同款，配 CSS class `callout-foo` 供主题上色）。若已 fallback 则出队。 |
+| **㉛ 拖拽文件入编辑器生成链接/嵌入** | **缺/待核**（R28 有文件树拖拽移动，编辑器拖入待核）| 拖文件到编辑器 → 插入 `[[link]]`（md）或 `![[embed]]`（图片/附件）。CM drop handler + 路径解析。 |
+
+**【中】一轮可做（次优先）**
+
+| 功能 | 当前状态（已核实）| 范围与切入点提示 |
+|---|---|---|
+| **㉜ 搜索运算符扩展** | **部分**（R21 有 `path:`/`tag:`/`file:`/正则）| 缺 `task:`/`task-todo:`/`task-done:`/`[property]`/`[property:value]`/`line:()`/`section:()`/`block:()`。官方确认全套。`core/search.ts` 逐运算符切片，可拆多轮（先 task 系，再 property，再 line/section/block）。 |
+| **㉝ 标签重命名（全库）** | **缺**（TagsPanel R41 无重命名）| `#old`→`#new` 全库替换（含嵌套 `#old/x`）。复用 R16 verified-rewrite 引擎思路（标签是另一类引用）；右键标签 → rename。**数据安全**（批量改写，必走 flushAll + 验证）。 |
+| **㉞ 链接格式策略 + markdown 链接改写** | **部分/已知偏差**（R16 只改写 wikilink，`[text](note.md)` 不改写）| 设置：wikilink↔markdown 链接格式、最短路径/相对/绝对。改写引擎扩展到 markdown 标准链接（R16 已知偏差出队）。**数据安全**（动改写引擎，R16 五步算法必读）。 |
+| **㉟ Properties 类型化编辑 UI** | **部分**（R22 properties 渲染 + R30 All Properties 视图，缺类型化编辑）| Obsidian 6 类型 text/list/number/checkbox/date/datetime + 点图标改类型 + 对应输入控件（date picker 等）。`core/properties.ts` builder 已有，补编辑 UI。 |
+| **㊱ Slides 演示模式** | **缺**（#㉑）| 极简自实现（非 reveal.js 依赖）：`---` 分页 → 全屏 overlay 逐页渲染（复用 renderMarkdownToHtml）+ 键盘导航 + 计数。注意阅读视图后处理散在 EditorPane（R55 探明），slide v1 可纯静态渲染。 |
+| **㊲ `query` 搜索结果嵌入代码块** | **缺** | ` ```query ` 代码块 → 渲染为实时搜索结果列表（复用 search.ts）。需 live/reading widget（复用 R55 liveBlockWidget 范式）。 |
+| **㊳ 任务自定义状态渲染** | **部分**（R40 toggle 支持 `[/]`/`[-]`，渲染层是否区分待核）| `- [/]`（进行中）`- [-]`（取消）`- [>]`（推迟）等在 live/reading 区分样式（Obsidian + 主题约定）。decoration + CSS。 |
+| **㊴ 块 ID 自动铸造 `^id`** | **部分**（书签/块引用需手动 `^id`）| 给段落/块加引用时自动生成 `^id`（书签 block 类型、`[[note#^]]` switcher 已注「缺自动铸」）。`core/` 加 block-id 生成 + 写回。**数据安全**（写 `.md`）。 |
+
+> **第五梯队取用顺序建议**：先清 **【小】㉒–㉛**（每个零依赖一轮，loop 主燃料，㉒图片尺寸/㉓出链面板/㉕多光标 最高价值），再上 **【中】㉜–㊴**。**㉒/㉞/㊴ 动 markdown.ts/改写引擎/写 .md → 触发 data-safety + 字节级套件纪律**，其余多为纯前端。远期大工程（#⑧/⑯/⑰ canvas/pop-out/stacked）+ 需新依赖（#⑮ deep-link、Vim 模式、Web viewer、Audio recorder、Bases）仍须用户拍板。
+
 ## 已知技术债
 
 - R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/

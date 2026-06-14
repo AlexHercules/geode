@@ -6,14 +6,12 @@
 
 - 版本 **v0.57.0**｜分支 `opus` → `origin/opus`（收尾 `git push`）｜开发机 macOS（本仓库路径）
 - 上一轮：**R58 = `%%` 注释探明=stale gap，无代码改动（修正 + #⑱ 收尾 + 交接用户）**。原定 R58 = `%%` 注释 live 隐藏（#⑱ 最后一项），探明发现 **`%%` inline 隐藏 R18 早已完成**：livePreview.ts 既有「same-line `%%comment%%` hiding + cross-line block line-tinting」+ 自己的 `commentDelimOffsets`（镜像 markdown.ts）。实测既有处理 inline `%%comment%%` 光标 off 隐藏 / inside 揭示 / doc 不变全绿。本轮写的冗余 `liveComments.ts` **已全部 revert**（tree=R57 状态，版本 0.57.0，无 feature commit）。**第三次「候选池缺口」实为已完成**（Setext 样式 R54、Setext-dim R55、`%%` R58）。上上轮 R57：`$$` 数学 live 渲染 + 抽共享 `HydratedBlockWidget`（r57-e2e 19、probe 9，评审 1 minor[D1 indent===0 守卫]修）。
-- **下一项 = 🛑 必须由用户指定**。⚠️ **#⑱ live 渲染长尾视为完成**（Setext 折叠 R54 / 表格 R55 / mermaid R56 / `$$` 数学 R57 / `%%` 注释 R18 早有），**候选池的「零依赖小加性轮」已彻底清空**。剩余候选池**全是大轮 / 需用户拍板项**，自主开发契约不允许自动启动：
-  - **#⑰ Canvas 白板**（JSONCanvas `.canvas` 无限画布，远期大工程）
-  - **#⑯ pop-out 弹出窗口**（Tauri 多 WebviewWindow，远期大工程）
-  - **#⑧ stacked tabs**（内容级横向 cascade，需多 EditorPane 挂载）
-  - **#⑮ OS deep-link**（需新 crate `tauri-plugin-deep-link` = 硬边界#5，须用户批准依赖）
-  - **#⑭ schema 桥接** / **#⑱ cross-line block `%%` tinting→hiding** 小 polish
-  - 其余 #㉑ 重插件（Slides / Web viewer / Bases / Audio recorder，多需新能力/大改）
-  **下一轮 `/continue` 前,用户须先指定做哪个大项（或批准 deep-link 新依赖）。无指定则无可自主推进的小项——这是「候选池小项清空」的自然交接点。** 全队列见 ROADMAP R32+ 候选池。
+- **下一项 = R59 = 候选池第五梯队 ㉒（图片嵌入尺寸）或 ㉓（出链面板）**。**候选池已续命**：用户要求「再挖一轮 Geode vs Obsidian 差距」→ 两 agent 交叉比对（Geode R1–R58 已实现 × Obsidian 官方四页全功能）登记了 **ROADMAP「第五梯队 — Obsidian 差距补充」**：**10 个【小】零依赖一轮项（㉒–㉛）** + 8 个【中】（㉜–㊴）。**#⑱ live 渲染长尾已完成**（Setext R54/表格 R55/mermaid R56/`$$` R57/`%%` R18）。
+  - **【小】loop 燃料（每个零依赖一轮，按价值取）**：㉒**图片嵌入尺寸** `![[img\|200]]`（高频高价值，纯渲染）/ ㉓**Outgoing links 出链面板**（独立核心插件，复用 metadata.links）/ ㉕**多光标多选命令**（CM6 原生，镜像 R51 范式）/ ㉔ Smart typography / ㉖ 粘贴 URL 变链接 / ㉗ Outline 过滤 / ㉘ Footnotes 面板 / ㉙ 状态栏增强 / ㉚ Callout 自定义类型 fallback / ㉛ 拖文件入编辑器。
+  - **【中】次优先**：㉜ 搜索运算符扩展（task:/[property]/line:）/ ㉝ 标签重命名 / ㉞ 链接格式策略 / ㉟ Properties 类型化编辑 / ㊱ Slides / ㊲ query 嵌入 / ㊳ 任务自定义状态渲染 / ㊴ 块 ID 自动铸造。
+  - **⚠️ data-safety 标记**：㉒/㉞/㊴ 动 markdown.ts/改写引擎/写 .md → 触发字节级套件 + data-safety 纪律；其余多纯前端。
+  - **🛑 仍须用户拍板（勿自动启动）**：#⑰ Canvas / #⑯ pop-out / #⑧ stacked tabs（远期大工程）；#⑮ deep-link / Vim / Web viewer / Audio recorder / Bases（需新依赖=硬边界#5）。
+  **纠误**：模板日期偏移 `{{date+3d}}` 属社区 Templater 非核心，**勿加**。全队列见 ROADMAP 第五梯队。
 - ⏸ 待用户拍板（勿自动启动）：发布渠道 / Authenticode 签名 / `.tauri-keys` 私钥找回
 
 ### ② 续接 3 步
