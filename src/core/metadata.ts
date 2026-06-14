@@ -2,6 +2,7 @@ import type {
   BacklinkEntry,
   BlockRef,
   FileNode,
+  FootnoteRef,
   FrontmatterData,
   GraphData,
   GraphEdge,
@@ -22,6 +23,12 @@ const CODE_FENCE_RE = /```[\s\S]*?(```|$)/g;
 const INLINE_CODE_RE = /`[^`\n]*`/g;
 /** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
 const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
+/** `[^id]: content` footnote definition line (R65, ㉘). id charset matches the
+ *  frozen R18 reading-view contract (markdown.ts FOOTNOTE_DEF_RE); multiline so
+ *  matchAll yields every definition with its line-start offset. Column-0 anchored
+ *  like HEADING_RE / TAG_RE / BLOCK_MARKER_RE (the codebase convention — indented
+ *  defs are out of scope, same as indented headings for the outline pane). */
+const FOOTNOTE_DEF_RE = /^\[\^([^\s[\]]+)\]:.*$/gm;
 
 /**
  * Blank out code-fence and inline-code regions with same-length runs of spaces
@@ -164,6 +171,25 @@ export function parseNote(path: string, content: string): NoteMetadata {
     headings.push({ level: m[1].length, text: m[2].trim(), from: m.index! });
   }
 
+  // R65: footnote definitions `[^id]: content`. Matched on `masked` (so defs
+  // inside fenced/inline code are excluded and offsets line up with `content`),
+  // but the content text is sliced from the ORIGINAL `content` so inline code in
+  // the body survives un-masked. The content offset is taken from the `]:`
+  // boundary (the id charset excludes `]`, so the FIRST `]:` is the definition's)
+  // — NOT from a masked content-group length, which would drop a leading inline-
+  // code span (masking blanks it; a greedy `[ \t]*` would then eat the blanks).
+  // Duplicate ids keep BOTH (document order). Multi-line continuation lines are
+  // not merged (panel shows a single-line preview); col-0 anchored (see RE).
+  const footnotes: FootnoteRef[] = [];
+  for (const m of masked.matchAll(FOOTNOTE_DEF_RE)) {
+    const afterColon = m.index! + m[0].indexOf("]:") + 2;
+    footnotes.push({
+      id: m[1],
+      content: content.slice(afterColon, m.index! + m[0].length).trim(),
+      from: m.index!,
+    });
+  }
+
   // `^block-id` markers at line ends (R13). Scanned against `masked` (all
   // replacements are same-length, so offsets line up with `content`), which
   // excludes fences, inline code and the frontmatter block. A block span is
@@ -221,6 +247,7 @@ export function parseNote(path: string, content: string): NoteMetadata {
     tags,
     headings,
     blocks,
+    footnotes,
     frontmatter,
     aliases,
     contentLength: content.length,
@@ -547,6 +574,11 @@ export class MetadataIndex {
     const meta = this.byPath.get(path);
     if (!meta) return [];
     return meta.links.map((link) => ({ link, resolvedPath: this.resolveLink(link.target, path) }));
+  }
+
+  /** R65: footnote definitions for a file, in document order. */
+  getFootnotes(path: string): FootnoteRef[] {
+    return this.byPath.get(path)?.footnotes ?? [];
   }
 
   /** tag (no '#') -> paths that contain it */

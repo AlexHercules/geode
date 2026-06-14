@@ -88,6 +88,8 @@ const PATHS: Record<string, string[]> = {
     "M10 14 21 3",
     "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
   ],
+  // footnote tab — the classic footnote/reference asterisk mark
+  footnote: ["M12 5v14", "m5 8 14 8", "m19 8-14 8"],
   command: [
     "M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3",
   ],

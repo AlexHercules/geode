@@ -59,6 +59,16 @@ export interface BlockRef {
   to: number;
 }
 
+/** A `[^id]: content` footnote definition found in a note (R65, ㉘). */
+export interface FootnoteRef {
+  /** footnote id WITHOUT the '^' (e.g. "1", "note") */
+  id: string;
+  /** definition body text after `[^id]:` (original, un-masked) */
+  content: string;
+  /** char offset of the definition line start */
+  from: number;
+}
+
 /** Parsed metadata for a single markdown file. */
 export interface NoteMetadata {
   path: string;
@@ -67,6 +77,8 @@ export interface NoteMetadata {
   headings: HeadingRef[];
   /** `^block-id` targets, document order; duplicate ids keep the LAST one */
   blocks: BlockRef[];
+  /** R65: `[^id]: content` footnote definitions, document order */
+  footnotes: FootnoteRef[];
   /** YAML frontmatter, if the file starts with a --- block */
   frontmatter?: FrontmatterData;
   /** alternative names from frontmatter `aliases:` — participate in link resolution */
@@ -144,6 +156,7 @@ export type RightPanelKind =
   | "backlinks"
   | "outline"
   | "outgoinglinks"
+  | "footnotes"
   | "allproperties"
   | "tags"
   | "calendar"

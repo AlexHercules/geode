@@ -14,6 +14,7 @@ import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { OutgoingLinksPanel } from "@features/outgoinglinks";
+import { FootnotesPanel } from "@features/footnotes";
 import { TagsPanel } from "@features/tags";
 import { CalendarPanel } from "@features/calendar";
 import { CommandPalette } from "@features/palette/CommandPalette";
@@ -106,6 +107,8 @@ export function App() {
       ? "outline"
       : ws.rightPanel === "outgoinglinks"
         ? "outgoinglinks"
+        : ws.rightPanel === "footnotes"
+          ? "footnotes"
         : ws.rightPanel === "allproperties"
           ? "allproperties"
           : ws.rightPanel === "tags"
@@ -228,6 +231,11 @@ export function App() {
         id: "app:show-outgoing-links",
         name: () => t("cmd.showOutgoingLinks"),
         callback: () => workspace.setRightPanel("outgoinglinks"),
+      }),
+      commands.register({
+        id: "app:show-footnotes",
+        name: () => t("cmd.showFootnotes"),
+        callback: () => workspace.setRightPanel("footnotes"),
       }),
       commands.register({
         id: "app:close-tab",
@@ -732,6 +740,16 @@ export function App() {
               </button>
               <button
                 role="tab"
+                aria-selected={effectiveRight === "footnotes"}
+                className={`right-tab${effectiveRight === "footnotes" ? " is-active" : ""}`}
+                title={t("app.tabFootnotes")}
+                data-testid="right-tab-footnotes"
+                onClick={() => app.workspace.setRightPanel("footnotes")}
+              >
+                <Icon name="footnote" size={15} />
+              </button>
+              <button
+                role="tab"
                 aria-selected={effectiveRight === "outline"}
                 className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
                 title={t("app.tabOutline")}
@@ -792,6 +810,8 @@ export function App() {
                 <OutlinePanel />
               ) : ws.rightPanel === "outgoinglinks" ? (
                 <OutgoingLinksPanel />
+              ) : ws.rightPanel === "footnotes" ? (
+                <FootnotesPanel />
               ) : ws.rightPanel === "allproperties" ? (
                 <AllPropertiesPanel />
               ) : ws.rightPanel === "tags" ? (

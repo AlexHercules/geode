@@ -77,6 +77,11 @@ export const en = {
   "outgoinglinks.createTitle": 'Create "{name}"',
   "outgoinglinks.newBadge": "new",
 
+  // ---- footnotes (R65, ㉘ — dedicated pane) ----
+  "footnotes.title": "Footnotes",
+  "footnotes.empty": "Open a note to see its footnotes",
+  "footnotes.noFootnotes": "No footnotes in this note",
+
   // ---- outline ----
   "outline.title": "Outline",
   "outline.empty": "Open a note to see its outline",
@@ -185,6 +190,11 @@ export const zh: Record<keyof typeof en, string> = {
   "outgoinglinks.noUnresolved": "暂无未解析链接。",
   "outgoinglinks.createTitle": "新建“{name}”",
   "outgoinglinks.newBadge": "未创建",
+
+  // ---- footnotes (R65, ㉘ — dedicated pane) ----
+  "footnotes.title": "脚注",
+  "footnotes.empty": "打开笔记以查看其脚注。",
+  "footnotes.noFootnotes": "此笔记中没有脚注。",
 
   // ---- outline ----
   "outline.title": "大纲",
