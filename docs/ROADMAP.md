@@ -1186,12 +1186,12 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100` | **缺**（R11 嵌入只渲染图，不解析 `\|尺寸`）| 官方确认：只给宽=等比缩放。纯渲染层——`core/embeds.ts`/`markdown.ts` 解析 `\|` 后的 `宽` 或 `宽x高` → `<img width height>`；live + reading + 导出三态。**高频高价值**。注意改 markdown.ts 触发字节级套件。 |
 | **㉓ Outgoing links 出链面板** | **缺**（只有 backlinks R24，无独立出链面板）| Obsidian 独立核心插件，复刻品最常漏。新右栏面板 `features/outgoing/`，复用 `metadata.getMetadata(path).links`（已有索引）列当前笔记的出链 + 未解析链接（红色）；镜像 OutlinePanel/BacklinksPanel 结构。纯前端零依赖。 |
 | **㉔ Smart typography 智能排版** | **缺** | 编辑器输入变换：弯引号 `"`/`'`、`--`→—、`---`→—、`...`→…；设置开关（默认可 OFF）。CM `EditorState.transactionFilter` 或 inputHandler。注意代码块/数学内不变换 + IME 守卫（R33 先例）。 |
-| **㉕ 多光标 / 多选命令** | **缺**（CM6 原生支持但未暴露命令）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。CM6 `selectNextOccurrence` / 列选原生——`@codemirror/commands` + `@codemirror/search` 已有，接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |
-| **㉖ 粘贴 URL 到选区变链接 + 自动转 URL** | **缺** | 粘贴 handler：选区非空 + 剪贴板是 URL → `[选区](url)`；选区空 + URL → 可选自动转链接。CM `EditorView.domEventHandlers.paste` 或 `clipboardInputFilter`。 |
+| **㉕ 多光标 / 多选命令** | **缺/细化**（R60 code-verify：`searchKeymap` 已挂 `Mod-d` 但因缺 `EditorState.allowMultipleSelections`+`drawSelection` → 当前 no-op）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。**补 `allowMultipleSelections`+`drawSelection`+列选** 即解锁（比「零实现」更省）；接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |
+| ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |
 | **㉗ Outline 内搜索过滤** | **缺**（OutlinePanel 无过滤框）| 大纲面板顶部加过滤输入框，实时过滤标题（fuzzy 或 substring）。纯前端，改 `features/outline/OutlinePanel.tsx`。 |
 | **㉘ Footnotes view 脚注面板** | **缺**（#㉑ 列项之一）| 新右栏面板，列当前笔记的脚注定义 + 点击跳转。复用 metadata/markdown 脚注解析（阅读视图已渲染脚注）。零依赖。 |
 | **㉙ 状态栏增强** | **部分**（word-count 插件在状态栏，缺光标行列/后链数）| 状态栏加：光标行:列、选中字数、当前笔记后链数。复用 backlinks 索引 + CM selection。逐块加，零依赖。 |
-| **㉚ Callout 自定义类型 fallback** | **部分**（13 内置类型完整，未知 `[!foo]` 行为待核）| 未知 callout 类型 → 默认样式 + 类型名作图标/标题 fallback（Obsidian 同款，配 CSS class `callout-foo` 供主题上色）。若已 fallback 则出队。 |
+| ~~**㉚ Callout 自定义类型 fallback**~~ | **R60 出队 = 实为已完成**（code-verify：`markdown.ts:902-944`）| 任意 `[!foo]` → `class="callout" data-callout="foo"`（主题可 `[data-callout=foo]` 上色）+ 无标题时类型名首字母大写作 fallback 标题（`[!tldr]`→"Tldr"）。**第四次「缺口」实为已完成**（HANDOFF 教训再验证）。 |
 | **㉛ 拖拽文件入编辑器生成链接/嵌入** | **缺/待核**（R28 有文件树拖拽移动，编辑器拖入待核）| 拖文件到编辑器 → 插入 `[[link]]`（md）或 `![[embed]]`（图片/附件）。CM drop handler + 路径解析。 |
 
 **【中】一轮可做（次优先）**
@@ -1204,10 +1204,39 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **㉟ Properties 类型化编辑 UI** | **部分**（R22 properties 渲染 + R30 All Properties 视图，缺类型化编辑）| Obsidian 6 类型 text/list/number/checkbox/date/datetime + 点图标改类型 + 对应输入控件（date picker 等）。`core/properties.ts` builder 已有，补编辑 UI。 |
 | **㊱ Slides 演示模式** | **缺**（#㉑）| 极简自实现（非 reveal.js 依赖）：`---` 分页 → 全屏 overlay 逐页渲染（复用 renderMarkdownToHtml）+ 键盘导航 + 计数。注意阅读视图后处理散在 EditorPane（R55 探明），slide v1 可纯静态渲染。 |
 | **㊲ `query` 搜索结果嵌入代码块** | **缺** | ` ```query ` 代码块 → 渲染为实时搜索结果列表（复用 search.ts）。需 live/reading widget（复用 R55 liveBlockWidget 范式）。 |
-| **㊳ 任务自定义状态渲染** | **部分**（R40 toggle 支持 `[/]`/`[-]`，渲染层是否区分待核）| `- [/]`（进行中）`- [-]`（取消）`- [>]`（推迟）等在 live/reading 区分样式（Obsidian + 主题约定）。decoration + CSS。 |
+| **㊳ 任务自定义状态渲染** | **缺**（R60 code-verify 纠正「待核」：阅读视图根本不把 `[/]`/`[-]` 当 checkbox 渲染，渲染层零区分；R40 仅 toggle **命令**识别这些标记）| `- [/]`（进行中）`- [-]`（取消）`- [>]`（推迟）等在 live/reading 区分样式（Obsidian + 主题约定）。decoration + CSS（编辑器装饰 + markdown.ts 阅读侧给 checkbox emit `data-task`）。 |
 | **㊴ 块 ID 自动铸造 `^id`** | **部分**（书签/块引用需手动 `^id`）| 给段落/块加引用时自动生成 `^id`（书签 block 类型、`[[note#^]]` switcher 已注「缺自动铸」）。`core/` 加 block-id 生成 + 写回。**数据安全**（写 `.md`）。 |
 
 > **第五梯队取用顺序建议**：先清 **【小】㉒–㉛**（每个零依赖一轮，loop 主燃料，㉒图片尺寸/㉓出链面板/㉕多光标 最高价值），再上 **【中】㉜–㊴**。**㉒/㉞/㊴ 动 markdown.ts/改写引擎/写 .md → 触发 data-safety + 字节级套件纪律**，其余多为纯前端。远期大工程（#⑧/⑯/⑰ canvas/pop-out/stacked）+ 需新依赖（#⑮ deep-link、Vim 模式、Web viewer、Audio recorder、Bases）仍须用户拍板。
+
+#### 第六梯队 — Obsidian 差距深挖补充 II（R60 候选池续命，2026-06-14 · 14 域 Workflow 全景对照 + 147 项 code-verify · 零代码调研轮）
+
+> **登记口径**：用户「再挖一轮 Geode vs Obsidian 差距，按文档格式补充」。本轮用 **Workflow 编排 14 个域 explorer**（编辑器 / markdown 三态 / 链接嵌入 / 属性 / 标签 / 搜索 / 图谱 / 工作区标签 / 命令快捷键 / 核心插件×2 / 外观主题 / 文件附件 / compat-API）逐项盘点 Obsidian 功能 → **每条「缺口」断言由对抗核查 agent 在 `src/` grep 证伪**（防 stale gap）。统计：**152 去重候选 → 147 code-verify → 131 确认真缺口（其中 89 NEW，见下表 ㊵–㊿）、3 项证伪（实为已实现）**。本表只列**原生功能**；**compat-API 缺口（商业主轴 = 插件迁移）落 `OBSIDIAN-COMPAT.md`「全景调研 II」缺口表**（file-menu/editor-menu 右键钩子、`vault.readBinary`、`registerMarkdownPostProcessor` 等）。
+>
+> **状态纠正（4 项，均 code-verify · 第三/四次「缺口实为已完成」再验证 HANDOFF 教训）**：
+> - **㉖ 粘贴 URL 变链接 → 出队（已完成）**：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈，选区非空 + 剪贴板 URL → `[选区](url)` 今天可用（`cmExtensions.ts:400-408` / `@lezer/markdown:458-491`）。
+> - **㉚ Callout 未知类型 fallback → 出队（已完成）**：`markdown.ts:902-944` 任意 `[!foo]`→`.callout`+`data-callout=foo`+类型名 fallback 标题。
+> - **㉕ 多光标 → 细化**：`searchKeymap` 已挂 `Mod-d`，缺 `allowMultipleSelections`+`drawSelection` 致 no-op（补两项即解锁）。
+> - **㊳ 任务自定义状态渲染 → 「待核」改「缺」**：阅读视图根本不把 `[/]`/`[-]` 当 checkbox 渲染。
+
+**【小-中】原生功能补全（㊵–㊿，均零依赖，按「价值 × 低成本」排序）**
+
+| 功能 | 当前状态（code-verified）| 范围与切入点提示 |
+|---|---|---|
+| **㊵ 图谱设置完整化** | **部分**（`features/graph/` 仅 2 文件，`GraphPrefs` 只 `{mode,depth,showAll}`）| Obsidian 图谱四大设置组几乎全缺：**过滤**（标签作节点 / 附件作节点 / 仅现有文件 / 孤立笔记开关——`metadata.getGraph()` 只建 md+unresolved 两类节点）· **分组着色**（按查询着色；节点色硬编码 `GraphView.tsx:328`）· **显示**（箭头 `:305` 纯直线 / 连线粗细 `:304` 硬编码 / 节点大小滑块 / 文本淡出阈值 `:76 LABEL_ZOOM` 硬编码 / 动画按钮）· **力**（中心/斥力/链接力/链接距离 4 滑块，`:578-582` 全硬编码）· **局部图谱**深度>2（`:99 depth:1\|2` 仅两态）+ in/out/neighbor 方向 + 保存为默认。一轮先做「显示+力 持久化设置面板」ROI 最高，过滤/分组次之。 |
+| **㊶ 编辑器设置面板补全** | **部分/缺**（行为多已实现，设置开关缺）| Settings→Editor 大量开关 Geode 无：行号 gutter（`lineNumbers()` 从未 import）· Tab 缩进宽度 + 用 tab/空格（`cmExtensions.ts:453` 仅 indentWithTab）· **fold heading / fold indent 分项开关**（`folding.ts` 常开）· 缩进参考线 · 自动配对**开关化**（R35 行为已做）· 新标签默认视图/编辑模式（硬编码 `workspace.ts:279 mode:"live"`）· 代码块复制按钮（渲染/live 均缺）· **Strict line breaks**（`markdown.ts:478` MarkdownIt 未传 `breaks` → 单换行恒按 CommonMark 软换行，**与 Obsidian 默认观感不符**——动 markdown.ts，**data-safety + 字节级套件**）。多为纯 UI toggle，接 appearance.ts + cmExtensions compartment。 |
+| **㊷ 反链 / 出链面板增强** | **部分**| backlinks-in-document 笔记底部内嵌（现仅侧栏，`BacklinksPanel` 唯一挂载 `App.tsx:782`）+ 面板头部控件（排序 / 折叠全部 / 搜索过滤 / 更多上下文，`BacklinksPanel.tsx:278` 仅标题）+ **出链独立面板**（= ㉓，出链已实现但合并在反链面板内，无独立可拖拽/固定面板）+ 字数选区统计（`word-count.ts` 只整篇，缺「N selected words」）。 |
+| **㊸ 搜索面板 UI 选项** | **缺/部分**（`SearchPanel.tsx` 头部仅 input + clear）| 齿轮菜单全缺：排序（`:229` 硬编码）/ 折叠结果 / 解释搜索词（`explain` 零命中，但 search.ts 已有 AST = 现成）/ 复制结果（`clipboard` 零命中）/ 更多上下文（`CONTEXT_RADIUS=36` 硬编码）/ 匹配大小写。接 SearchPanel 头部工具栏，纯前端。 |
+| **㊹ wikilink 补全增强** | **缺**（`cmExtensions.ts:319-347` 单一 wikilink 补全源）| `[[note#` 标题补全 / `[[note#^` 块补全（与 ㊴ 块ID 相关）/ 别名 alias 候选 / 附件·非 md 文件候选 全缺（补全源不解析 `#`、不列 aliases/附件）。另：多级 `[[note#H1#H2]]` 子路径（`markdown.ts:413` 只取首个 `#`）+ 链接 Cmd/Ctrl/中键点击开新标签（零实现，全 src 仅 `App.tsx:472`/`workspace.ts:629` 传 `newTab`）。 |
+| **㊺ 外观设置补全** | **缺**（`appearance.ts` 仅 readableLineLength+spellcheck；`types.ts:145 ThemeKind` 二态）| 强调色 Accent color 取色器（写 `--accent`/`--interactive-accent` 持久化）+ **系统主题三态**（Adapt to system，随 `prefers-color-scheme`；现 `workspace.ts:838` 二态）+ 字体三族（界面/正文/等宽 `--font-interface/text/monospace`，现仅字号 R50）+ Show inline title（文件名作可编辑 H1 嵌正文顶部，默认开，grep 零命中）+ ribbon 显隐。日常高频，中等。 |
+| **㊻ 标签面板增强** | **部分**（`TagsPanel.tsx` 48 行扁平）| 嵌套标签 `#a/b` 层级树 + 折叠（现整串扁平一行）+ 排序菜单（`:19` 硬编码 count 降序）+ 点击阅读视图 `#tag` pill / 编辑器 hashtag → 搜索（`markdown.ts:1056` 纯 span 无 onClick）+ 计数语义可选（现按文件数，Obsidian 按出现数 `metadata.ts:553 Set<path>`）。 |
+| **㊼ Properties 增强** | **部分**（细化 ㉟）| `cssclasses` 属性**应用** CSS 类到笔记视图容器（`grep cssclass` 仅类型归类不应用，主题定向单笔记靠它）+ File properties 右侧栏（Hidden 模式下编辑入口，`RightPanelKind` 无 fileproperties）+ 键盘导航（Tab 跨行 / ↑↓ 切属性 / Cmd+Backspace 删属性）+ tags chip 点击搜索（`PropertiesPanel.tsx:265` 无 onClick）+ Date 值链接到对应日记。 |
+| **㊽ 文件浏览器 + vault 管理增强** | **部分**（Explorer 右键仅 4 项，排序硬编码）| 排序下拉（`vault.ts:135` 单一策略）+ 右键菜单完整化（新标签/右侧打开·制作副本·移动到·Finder 显示·书签）+ **Reveal in Finder / 默认程序打开**（需 Rust shell 命令，**无新 crate**）+ detect-all-extensions 开关 + **excluded files 排除列表**（搜索/图谱/补全统一过滤 + 文件树变暗）+ 非 md 文件独立查看视图（`viewType` 仅 markdown/graph）+ **全局新文件位置**（Files&Links，`app:new-note` 硬编码 vault root `App.tsx:148`——与下方设置纠误相关）。 |
+| **㊾ 命令面板 / 快捷键面板增强** | **缺/部分**| 命令面板最近用命令置顶（`CommandPalette.tsx:33` 空查询无排序）+ pinned commands（固定常用置顶 + 设置区）+ 快捷键面板过滤已分配（`SettingsModal HotkeysSection` 仅文本过滤）+ **一命令多键**（`types.ts:194 hotkey?:string` 单值贯穿全栈）。纯前端/设置层。 |
+| **㊿ 标签页右键菜单 + 侧栏面板拖拽/堆叠** | **缺**| 标签页右键上下文菜单（`App.tsx` 零 `onContextMenu`——Split right/down·Pin·Close·Close others·Close to right·Move to new window 整套标签操作主入口）+ 侧栏面板拖拽重排 / 多面板堆叠分组（`LeftPanelKind/RightPanelKind` 单值非栈，每侧栏同屏仅 1 面板）。右键菜单依赖 compat `file-menu`/`editor-menu` 钩子同根（见 OBSIDIAN-COMPAT）。 |
+
+> **第六梯队取用顺序建议**：高 ROI 先取 **㊵ 图谱设置**（用户可见度高）、**㊺ 外观补全**（强调色/系统主题日常高频）、**㊸ 搜索 UI**、**㊿ 标签页右键菜单**（交互主入口）。**㊶ 含 strict line breaks 动 markdown.ts → data-safety + 字节级套件**；㊼ cssclasses 纯读 / ㊽ 新文件位置纯前端、Reveal-in-Finder 加 Rust 只读命令——多为只读/前端。**远期 / 需用户拍板（不在本表）**：导入器 Importer（Evernote/Notion/Roam，大工程）· 社区主题应用内浏览器 · Web viewer / Audio recorder / Bases（新能力，硬边界 #5）。
+> **⚠️ 设置「重复」纠误（用户提问）**：Templates`{文件夹,日期格式,时间格式}` / Daily`{新文件位置,日期格式,模板位置}` / Unique`{新文件位置,前缀格式,模板位置}` 三区字段看似重复——**code-verify（`SettingsModal.tsx:481/531/581`）确认忠实于 Obsidian**（三个独立核心插件各一套设置）。语义不同：各「位置」指向不同用途文件夹；Templates 的「日期格式」管 `{{date}}` **变量**、Daily 的管文件**名**。**不应合并**（合并即偏离 Obsidian）。真实缺口是 Geode 这些 setting-item **缺 `setting-desc` 说明文字**（Obsidian 每项有澄清描述）→ 看似重复；**补描述即可**（归入 ㊶ 设置面板补全的顺手项）。另：Obsidian 有**全局**「新文件位置」（Files&Links），与各插件位置是**分层**关系（全局默认 + 插件覆盖）而非冗余——Geode 缺此全局项（见 ㊽）。
 
 ## 已知技术债
 

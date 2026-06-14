@@ -143,6 +143,15 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 | `Plugin.registerHoverLinkSource` / `hoverPopover`·`HoverParent` | **R25：`registerHoverLinkSource` 升真实无操作登记**（记录 source id 返回——Geode 全局悬停预览已覆盖插件渲染的 `a.internal-link`，无需插件参与）；插件自渲染预览 `hoverPopover`/`HoverParent` **仍为缺口**（插件被 Geode 全局 hover 被动覆盖，但其自挂 popover 不生效） |
 | `app.internalPlugins`（书签 instance API） | **R27：书签数据文件 `.obsidian/bookmarks.json` 双向保真**（Geode 原生书签读写同一文件，未知键/类型 round-trip——见 ARCHITECTURE R27），但 `app.internalPlugins.getPluginById("bookmarks").instance`（`getBookmarks()`/`addItem()`/`removeItem()` 等程序化 API）**仍为缺口**（插件无法经 API 操作书签，只能间接经文件） |
+| **R60 新登记 ↓（商业主轴 = 插件迁移，2026-06-14 全景调研 II code-verify）** | |
+| `workspace.on('file-menu'/'editor-menu'/'files-menu')` 右键菜单钩子 | **缺**：Menu/MenuItem 基础设施已就绪（`compat/obsidian/ui.ts:506/583`），但宿主侧无 trigger（文件树/编辑器右键不发 `file-menu`/`editor-menu` 事件）。**生态高频**（无数插件靠它加右键项）；与原生 ㊿ 标签/文件右键菜单同根，宜一并接 |
+| `Plugin.registerMarkdownPostProcessor` / `registerMarkdownCodeBlockProcessor` | **缺**：**生态影响最大单项**（Dataview / Tasks 等明星插件依赖）。需阅读侧 `core/markdown.ts` + 编辑侧 `liveBlockWidget`/`livePreview` 双线接 processor 管线，**工程大** |
+| `Plugin.registerEditorExtension` | **缺**：可做——`cmExtensions.ts` 增设 compat compartment，`registerEditorExtension` reconfigure 追加插件的 CM6 扩展 |
+| `app.commands`（executeCommandById / listCommands / commands） | **缺**：compat `App`（`plugin.ts:295-349`）仅 getter，无 `commands` 对象；跨插件触发/复用命令的事实标准，可在 core `commands` 上包一层 |
+| `vault.readBinary` / `createBinary` / `modifyBinary` | **缺**：`compat/obsidian/vault.ts:223-310` 仅字符串 IO；Geode core 已有原生二进制读写（R11/R17 摄入），**导出即可**。图片/PDF/Excalidraw 类插件普遍用 |
+| `MarkdownView.getMode/getViewData/setViewData/setMode` + `workspace.activeEditor` | **缺**：`compat/obsidian/workspace.ts:30-42` MarkdownView 无 mode/data 访问器；`activeEditor`（MarkdownFileInfo）零命中。模式探测/全文读写类插件用，新插件首选 `activeEditor` |
+| `MetadataCache.getTags()` + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + `fileManager.generateMarkdownLink` | **缺/部分**：getTags（Geode 有 `getTagMap`，未导出 `Record<string,number>` 形态）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ generateMarkdownLink（高影响低成本，复用 linkRewrite + `metadata.fileToLinktext`） |
+| `app.loadLocalStorage/saveLocalStorage/isDarkMode` + `MenuItem.setSubmenu` + `Editor` 完整版方法 | **缺/部分**：loadLocalStorage（per-vault UI 状态）/ isDarkMode；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；Editor 余项（listSelections/setSelections/setLine/transaction/exec/wordAt/scrollTo/undo/redo——可直接映射 CM6，T1.5 子集扩展） |
 
 ## 验收方式（可度量，防自嗨）
 
@@ -171,6 +180,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
   `markdown().support` 内——**实际测试胜过静态扫描的样例**。
 - **套件矩阵不回退**：本轮零代码、compat 调用面零改动，r31/r30/…/r24 全套不动；缺口表
   （插件 API 面）无变化。本调研针对的是**原生功能差距**（另一根轴），落 ROADMAP R32+ 候选池。
+
+### 原生功能差距全景调研 II（2026-06-14，R60 · Workflow 14 域 fan-out + 147 项 code-verify · 零代码调研轮）
+
+用户「再挖一轮 Geode vs Obsidian 差距，按文档格式补充」。本轮用 **Workflow 编排 14 个域 explorer** 全量盘点 Obsidian 功能面，**每条「缺口」断言再交对抗核查 agent 在 `src/` grep 证伪**（防 stale gap）。规模：**152 去重候选 → 147 code-verify → 131 确认真缺口（89 NEW）+ 3 项证伪**。完整执行队列见 **ROADMAP「第六梯队」㊵–㊿**；本节只记**写给后续轮的结论**（免重复发现）：
+
+- **方法论价值 = 对抗核查抓住 stale gap**：本轮 3 项「缺口」经 code-verify **实为已完成**——㉖ 粘贴 URL 变链接（lang-markdown 内置 `pasteURLAsLink`，`cmExtensions.ts:400-408`）、㉚ Callout 未知类型 fallback（`markdown.ts:902-944` `data-callout`+类型名标题）、标签面板过滤（部分）。**连同历轮（Setext 样式/Setext-dim/`%%`），这是第三、第四次「候选池缺口实为已完成」**。教训坐实：**ROADMAP/候选池的「缺口」描述滞后于代码，动手前必 grep 现状**（写进了 CLAUDE.md/HANDOFF，本轮 Workflow 把它制度化成「survey→对抗 verify」两段）。
+- **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
+- **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
+- **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
 ### R57 套件回归（2026-06-14，macOS release 二进制 v0.57.0 实测 `r57-probe-vault`）
 
