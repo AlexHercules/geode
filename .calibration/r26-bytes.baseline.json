@@ -100,6 +100,26 @@
     "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"caption\"></p>\n"
   },
   {
+    "name": "image-embed-size-bad",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"200x\"></p>\n"
+  },
+  {
+    "name": "image-embed-size-textdim",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"wide\"></p>\n"
+  },
+  {
+    "name": "image-embed-size-huge",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"999999\"></p>\n"
+  },
+  {
+    "name": "image-embed-size-w",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"img.png\" width=\"200\"></p>\n"
+  },
+  {
+    "name": "image-embed-size-wh",
+    "html": "<p><img class=\"geode-embed\" data-embed-path=\"img.png\" alt=\"img.png\" width=\"200\" height=\"100\"></p>\n"
+  },
+  {
     "name": "note-embed",
     "html": "<p><span class=\"geode-embed-note\" data-embed-note=\"Note A.md\" data-embed-subpath=\"\" data-embed-display=\"Note A\"></span></p>\n"
   },
@@ -129,18 +149,18 @@
   },
   {
     "name": "embed-audio",
-    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"audio.mp3\" href=\"#\">audio.mp3</a></p>\n"
+    "html": "<p><span class=\"geode-embed-file\" data-embed-path=\"audio.mp3\" data-embed-ext=\"mp3\" data-embed-display=\"audio.mp3\"></span></p>\n"
   },
   {
     "name": "embed-video",
-    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"video.mp4\" href=\"#\">video.mp4</a></p>\n"
+    "html": "<p><span class=\"geode-embed-file\" data-embed-path=\"video.mp4\" data-embed-ext=\"mp4\" data-embed-display=\"video.mp4\"></span></p>\n"
   },
   {
     "name": "embed-pdf",
-    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"doc.pdf\" href=\"#\">doc.pdf</a></p>\n"
+    "html": "<p><span class=\"geode-embed-file\" data-embed-path=\"doc.pdf\" data-embed-ext=\"pdf\" data-embed-display=\"doc.pdf\"></span></p>\n"
   },
   {
     "name": "embed-pdf-page",
-    "html": "<p>!<a class=\"internal-link is-unresolved\" data-target=\"doc.pdf\" data-subpath=\"page=2\" href=\"#\">doc.pdf#page=2</a></p>\n"
+    "html": "<p><span class=\"geode-embed-file\" data-embed-path=\"doc.pdf\" data-embed-ext=\"pdf\" data-embed-subpath=\"page=2\" data-embed-display=\"doc.pdf#page=2\"></span></p>\n"
   }
 ]

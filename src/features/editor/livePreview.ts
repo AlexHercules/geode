@@ -49,7 +49,7 @@ import {
 import type { GeodeApp } from "@app/AppContext";
 import { hydrateEmbeds as coreHydrateEmbeds } from "@core/embeds";
 import { t } from "@core/i18n";
-import { IMAGE_EXTS, fileEmbedKind } from "@core/markdown";
+import { IMAGE_EXTS, fileEmbedKind, parseEmbedSize } from "@core/markdown";
 import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
@@ -274,16 +274,26 @@ class EmbedWidget extends WidgetType {
   constructor(
     readonly app: GeodeApp,
     readonly resolvedPath: string,
+    // R61: dimensions from a numeric alias (`![[img|200]]` / `|200x100`),
+    // mirroring the reading-view <img width/height>. undefined ⇒ intrinsic.
+    readonly width?: number,
+    readonly height?: number,
   ) {
     super();
   }
   override eq(other: EmbedWidget): boolean {
-    return other.resolvedPath === this.resolvedPath;
+    return (
+      other.resolvedPath === this.resolvedPath &&
+      other.width === this.width &&
+      other.height === this.height
+    );
   }
   override toDOM(): HTMLElement {
     const img = document.createElement("img");
     img.className = "cm-live-embed";
     img.alt = this.resolvedPath;
+    if (this.width !== undefined) img.width = this.width;
+    if (this.height !== undefined) img.height = this.height;
     // a blob URL revoked while loading surfaces as an error event
     img.addEventListener("error", () => img.classList.add("geode-embed-failed"), { once: true });
     getEmbedUrl(this.app, this.resolvedPath).then(
@@ -1050,10 +1060,16 @@ function computeDecorations(
         const resolved = app.metadata.resolveAttachment(target, getPath());
         const ext = resolved ? resolved.slice(resolved.lastIndexOf(".") + 1).toLowerCase() : "";
         if (resolved && IMAGE_EXTS.has(ext)) {
+          // R61: a numeric alias (`|200` / `|200x100`) sizes the image —
+          // parsed by the SAME helper the reading view uses (no drift).
+          const imgPipe = m[1].indexOf("|");
+          const imgSize = imgPipe >= 0 ? parseEmbedSize(m[1].slice(imgPipe + 1)) : null;
           replaces.push({
             from: embedFrom,
             to: end,
-            deco: Decoration.replace({ widget: new EmbedWidget(app, resolved) }),
+            deco: Decoration.replace({
+              widget: new EmbedWidget(app, resolved, imgSize?.width, imgSize?.height),
+            }),
           });
           continue;
         }

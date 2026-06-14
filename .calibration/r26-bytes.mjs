@@ -44,6 +44,16 @@ const CORPUS = [
   ["selflink", "jump to [[#Heading]]"],
   ["image-embed", "![[img.png]]"],
   ["image-embed-alias", "![[img.png|caption]]"],
+  // R61: malformed/non-dimension aliases stay alt text → MUST stay byte-identical
+  ["image-embed-size-bad", "![[img.png|200x]]"],
+  ["image-embed-size-textdim", "![[img.png|wide]]"],
+  // R61: 6+ digits exceed the 5-digit cap → alt text, not a size (kills the
+  // huge-number cross-path divergence) → MUST stay byte-identical to alias output
+  ["image-embed-size-huge", "![[img.png|999999]]"],
+  // R61: numeric aliases become width/height. Now LOCKED to the R61 baseline
+  // (non-media) so any future byte change to the sized output is a violation.
+  ["image-embed-size-w", "![[img.png|200]]"],
+  ["image-embed-size-wh", "![[img.png|200x100]]"],
   ["note-embed", "![[Note A]]"],
   ["note-embed-sub", "![[Note A#Heading]]"],
   ["mermaid", "```mermaid\ngraph TD; A-->B;\n```"],

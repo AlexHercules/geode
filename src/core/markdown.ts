@@ -25,6 +25,12 @@ interface WikiLinkInfo {
   display: string;
   /** set ⇒ render an image embed placeholder instead of an internal-link anchor */
   embedPath?: string;
+  /** R61: image-embed dimensions parsed from a numeric alias (`![[img|200]]`
+   *  → width 200; `![[img|200x100]]` → width 200, height 100). Rendered as
+   *  `width`/`height` attributes on the `<img>`; absent for non-numeric aliases
+   *  (which stay alt text, byte-identical to pre-R61). */
+  embedWidth?: number;
+  embedHeight?: number;
   /** R26: set ⇒ render a media file-embed placeholder (audio/video/pdf). The
    *  extension drives the element kind at hydration; `subpath` carries a PDF
    *  page anchor ("page=N"). */
@@ -54,6 +60,27 @@ export const IMAGE_EXTS: ReadonlySet<string> = new Set([
   "webp",
   "bmp",
 ]);
+
+/** R61: parse an image-embed alias as Obsidian dimensions (the part after `|`).
+ *  `"200"` → `{width:200}` (height auto, proportional); `"200x100"` →
+ *  `{width:200, height:100}` (lowercase `x` separator, per Obsidian). Any
+ *  non-dimension alias (`"caption"`, `"200x"`, `"-5"`, capital `X`) → `null`:
+ *  the alias is alt text, not a size, so the embed stays byte-identical to
+ *  pre-R61. Used by BOTH the reading-view placeholder and the live-preview
+ *  widget so the two render paths never diverge.
+ *
+ *  Each dimension is capped at 5 digits (≤99999px — past any real display).
+ *  This is a correctness bound, not cosmetics: an unbounded `Number(...)` makes
+ *  the three render paths diverge — reading/export emit the JS string form
+ *  (`"1e+21"` / `"Infinity"`, invalid HTML → intrinsic size) while live preview
+ *  does `img.width = N` whose `unsigned long` IDL setter applies ToUint32 (mod
+ *  2³²) → a clamped pixel width. Capping the digit count keeps every accepted
+ *  value a plain integer < 2³², so all paths stay byte/pixel-identical. */
+export function parseEmbedSize(alias: string): { width: number; height?: number } | null {
+  const m = /^(\d{1,5})(?:x(\d{1,5}))?$/.exec(alias.trim());
+  if (!m) return null;
+  return { width: Number(m[1]), height: m[2] !== undefined ? Number(m[2]) : undefined };
+}
 
 /** R26: audio extensions an `![[...]]` embed renders as a native <audio>. */
 export const AUDIO_EXTS: ReadonlySet<string> = new Set([
@@ -427,8 +454,17 @@ function replaceWikilinks(
             const resolved = resolveEmbed(target);
             const ext = resolved?.split(".").pop()?.toLowerCase() ?? "";
             if (resolved !== null && IMAGE_EXTS.has(ext)) {
-              // the whole `![[...]]` becomes the embed placeholder
-              links.push({ target, display, embedPath: resolved });
+              // the whole `![[...]]` becomes the embed placeholder. R61: a
+              // numeric alias is a size, not a caption → strip it from alt
+              // (which falls back to the filename, as Obsidian does).
+              const size = parseEmbedSize(alias);
+              links.push({
+                target,
+                display: size ? inner.split("|")[0].trim() : display,
+                embedPath: resolved,
+                embedWidth: size?.width,
+                embedHeight: size?.height,
+              });
               return `@@GEODELINK${links.length - 1}@@`;
             }
             // R26: audio/video/pdf attachment → file-embed placeholder (the
@@ -1106,9 +1142,13 @@ md.core.ruler.push("geode-wikilinks", (state) => {
           raw.level = child.level;
           next.push(raw);
         } else if (info.embedPath !== undefined) {
-          // image embed: src is hydrated asynchronously by the caller
+          // image embed: src is hydrated asynchronously by the caller. R61:
+          // a numeric alias adds width/height attrs (values are validated
+          // integers from parseEmbedSize → no escaping needed).
+          const w = info.embedWidth !== undefined ? ` width="${info.embedWidth}"` : "";
+          const h = info.embedHeight !== undefined ? ` height="${info.embedHeight}"` : "";
           const img = new state.Token("html_inline", "", 0);
-          img.content = `<img class="geode-embed" data-embed-path="${escapeHtml(info.embedPath)}" alt="${escapeHtml(info.display)}">`;
+          img.content = `<img class="geode-embed" data-embed-path="${escapeHtml(info.embedPath)}" alt="${escapeHtml(info.display)}"${w}${h}>`;
           img.level = child.level;
           next.push(img);
         } else if (info.fileEmbedPath !== undefined) {
