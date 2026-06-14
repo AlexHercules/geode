@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 66 additions — 状态栏增强：后链数 + 选中字数（候选池第五梯队 ㉙）【As-built v0.63】
+
+> **状态：As-built（v0.63 交付,2026-06-14）。** 第五梯队 ㉙。**分项 Gate 2**（官方 help 确认 Obsidian 核心状态栏显示「后链数 / 编辑器视图 / 字数」）：后链数 + 选中字数 = 核心 → 做；**光标行:列 = 非核心**（社区插件）→ **移除**（同 ㉔ smart typography 处理）。
+> **实现 = 两个纯 view 状态栏项（零核心 API 新增）**：① 新 `backlink-count` 插件——`metadata.getBacklinks(path)` 提及总数，update on active-file:changed + **`metadata.revision.subscribe`（后链随任一笔记的链接变化，跨文件）** + locale；镜像 word-count 生命周期。② word-count 加「N selected words」——读 `documents.getActiveView()` 选区（sync，无文件读），`document:selection-changed` 刷新。**纯前端、零依赖、无 Rust、不碰 vault/document**。
+> 验证：typecheck 0 · `r66-e2e.mjs` **8/8**（后链 1→2 跨文件编辑 / 0 后链 / 选中显示+撤选还原 / **打字覆盖选区清除残留**）· `r66-probe.mjs` **3/3**（真 fs/WKWebView：getBacklinks 提及总数 2、0）· 回归 r62/r24 绿。
+> **对抗评审（Workflow 3 lens + verify）抓到 1 major 性能回归 + 2 minor，全本轮引入 → 全修**。**MAJOR（2 lens 命中）= 编辑器最热路径回归**：`document:selection-changed` 在**每次光标移动**（含空选区）都触发 → update() 落到 doc-count 路径 → 整篇 `countWords` + `setStatusBarItem`（旧实现每次 new Map + Store 通知**即使文本未变** → App 根**每次光标移动重渲**）+ `plugins.ts` **每次调用 push 一个 disposer（无界增长）**。**修**：① word-count 仅在**选区状态跃迁**时 update（`showingSelection` 追踪，跳过 empty→empty 纯移动）；② **根因修 `plugins.ts setStatusBarItem`**：文本未变则跳过 Store 写（免重渲）+ 仅新增项时 push disposer（免增长）——惠及所有状态栏插件（含 backlink-count 每次 revision 的 disposer 增长）。**minor**：① 打字覆盖选区在**同一事务**塌缩选区（只发 `document:changed` 不发 `selection-changed`）→ 残留「N selected words」→ 加 `document:changed` 监听（`showingSelection` 守卫，不扰常态打字）；② `requestToken` 在选中分支 early-return **之后**才 bump → 慢 doc 读可能覆盖选中显示 → **token bump 移到 update() 顶部**（每个入口都失效在途读）。
+> **核心元教训**：**给一个高频事件（`selection-changed` 每次光标移动都发）挂 always-on 监听前，先问「空操作/无变化时它做了多少功」**——本轮无脑 `on(selection-changed, update)` 让每次方向键都整篇 countWords + 全 App 重渲。正确模式 = **状态跃迁门**（只在 empty↔nonEmpty 切换时动）+ **Store/setter 层去重**（值未变不通知）。对抗评审在「加一个状态栏项」这种小改动里抓到热路径 major，再次印证 diff 小不省评审 + 性能改动要想清触发频率 × 单次成本。
+
+### 契约（交付即实现，已纳评审修复）
+
+**core/plugins.ts** `ui.setStatusBarItem(id, text)`：文本未变 early-return（不写 Store）；仅当 item 新增时 push cleanup disposer（重复刷新不增长 `record.disposers`）。
+**plugins/backlink-count.ts**（新）：`getBacklinks(path).reduce((n,b)=>n+b.contexts.length,0)` → "N backlinks"；update on active-file:changed + `metadata.revision.subscribe` + `locale.subscribe`（手动 unsub in onunload；Store.subscribe 不立即触发 → 末尾 update() 一次）。注册进 `plugins/index.ts`。
+**plugins/word-count.ts**：update() 顶部 bump `requestToken`；选中分支（`getActiveView().path===active && !selection.main.empty` → "N selected words" + `showingSelection=true`）；`document:selection-changed` 仅在 `nonEmpty || showingSelection` 时 update（跳过 empty→empty）；`document:changed` 仅在 `showingSelection` 时 update（清残留）。
+**i18n**：`plugin.wordCount.selected` / `plugin.backlinkCount{,.name,.desc}`（en+zh）。
+
+### 已知偏差 / 待办（写给后续轮）
+- **光标行:列状态栏项未做**——非 Obsidian 核心（社区插件），按使命不做。
+- **后链数 = 提及总数**（sum of contexts，对齐 Backlinks 面板「Linked mentions」）——非「链接笔记数」；Obsidian 口径如此。
+- **backlink-count 每 metadata.revision 跑 getBacklinks（O(vault links)）**——与 BacklinksPanel 同（但面板仅挂载时跑，状态栏常驻）；per-save 频率（非 per-keystroke），评审认可可接受；无 snippet 重算。
+
 ## Round 65 additions — Footnotes 脚注面板（候选池第五梯队 ㉘）【As-built v0.62】
 
 > **状态：As-built（v0.62 交付,2026-06-14）。** 第五梯队 ㉘。**两道前置门**：① grep 确认脚注**解析存在**（markdown.ts R18 阅读视图渲染脚注）但**无 metadata 索引、无面板**（真缺口，同 ㉓）；② WebSearch 确认 **Obsidian 1.9 把 Footnotes view 做成核心插件**（核心非社区，做）。

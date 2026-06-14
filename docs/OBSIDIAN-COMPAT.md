@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R66 套件回归（2026-06-14，macOS release 二进制 v0.63.0 实测 `r66-probe-vault`）
+
+R66 = 状态栏增强：后链数 + 选中字数（候选池第五梯队 ㉙，原生功能非 compat shim）。对照 Obsidian 核心状态栏（官方 help：后链数/编辑器视图/字数）。
+新 `backlink-count` 插件（getBacklinks 提及总数，metadata.revision 跨文件更新）+ word-count 加「N selected words」（getActiveView 选区）。光标行:列移除（非核心）。**纯前端、零依赖、无 Rust、不碰 vault/document**。
+新增套件：`r66-e2e.mjs` **8/8**（后链 1→2 跨文件/0 后链/选中显示+撤选还原/打字覆盖清残留）+ `r66-probe.mjs` **3/3**（真 fs/WKWebView：getBacklinks 提及总数）。
+**对抗评审（Workflow 3 lens + verify）抓到 1 major 性能回归 + 2 minor（全本轮引入）→ 全修**：MAJOR=selection-changed 每次光标移动整篇 countWords + App 根重渲 + plugins.ts disposer 无界增长 → 修=word-count 状态跃迁门 + 根因修 plugins.ts setStatusBarItem（值未变跳过 + 仅新增 push disposer）。minor=document:changed 清残留 + token bump 移顶部。
+- **套件矩阵不回退**：本轮零 compat 调用面改动（compat addStatusBarItem 是 element-based 独立路径，不受 setStatusBarItem 去重影响），r31/…/r57 全 compat 套件不动；原生回归 r62/r24 绿。**OBSIDIAN-COMPAT 缺口表无变化**（R66 原生功能）。
+
 ### R65 套件回归（2026-06-14，macOS release 二进制 v0.62.0 实测 `r65-probe-vault`）
 
 R65 = Footnotes 脚注面板（候选池第五梯队 ㉘，原生功能非 compat shim）。对照 Obsidian 1.9 核心 Footnotes view 插件（WebSearch 确认核心非社区）。

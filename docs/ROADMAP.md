@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R66 — v0.63（2026-06-14）状态栏增强：后链数 + 选中字数（第五梯队 ㉙ → 出队，核心项）
+分项 Gate 2（官方 help 确认 Obsidian 核心状态栏 = 后链数/编辑器视图/字数）：后链数+选中字数=核心 → 做；光标行:列=非核心（社区插件）→ **移除**（同 ㉔）。
+实现 = 两个纯 view 状态栏项（零核心 API 新增）：① 新 `backlink-count` 插件（getBacklinks 提及总数，metadata.revision 跨文件更新）；② word-count 加「N selected words」（getActiveView 选区，selection-changed）。
+验证：typecheck 0 · `r66-e2e` **8/8** · `r66-probe` **3/3**（真 fs）· 回归绿。
+**对抗评审（Workflow 3 lens）抓到 1 major 性能回归 + 2 minor，全本轮引入 → 全修**。MAJOR（2 lens）：`selection-changed` 每次光标移动（含空选区）都触发 → 整篇 countWords + setStatusBarItem（旧实现 Store 即使文本未变也通知 → App 根每次光标移动重渲）+ plugins.ts 每次 push disposer 无界增长。修：① word-count 仅在选区状态跃迁时 update（跳过 empty→empty）；② **根因修 plugins.ts setStatusBarItem**（文本未变跳过 Store 写 + 仅新增项 push disposer，惠及所有状态栏插件）。minor：打字覆盖选区同事务塌缩（只发 document:changed）→ 加 document:changed 监听清残留；requestToken bump 移到 update() 顶部（防慢读覆盖选中显示）。**元教训**：给高频事件（selection-changed 每次光标移动都发）挂 always-on 监听前，先问「空操作/无变化时做了多少功」——正确模式=状态跃迁门 + Store/setter 层去重（值未变不通知）。
+
 ### R65 — v0.62（2026-06-14）Footnotes 脚注面板（第五梯队 ㉘ → 出队）
 两道前置门：grep 确认脚注解析存在（R18 阅读视图渲染）但无 metadata 索引/无面板（真缺口）+ WebSearch 确认 Obsidian 1.9 把 Footnotes view 做成**核心插件**（核心非社区 → 做）。
 实现 = metadata 索引（镜像 headings：`FOOTNOTE_DEF_RE` 行扫描 on masked 排围栏，content 取原文，`getFootnotes`）+ 新右栏 tab `features/footnotes/`（列 id+content，点击 jumpTo 定义复用 `geode:scroll-to-heading`）。纯前端零依赖不碰 vault。
@@ -1218,7 +1224,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |
 | ~~**㉗ Outline 内搜索过滤**~~ | ✅ **R64 完成**（v0.61）| 大纲顶部过滤输入框（大小写不敏感 substring）；显示匹配标题 + 祖先（淡显，保留层级上下文）不含后代（对齐 Obsidian 核心 Outline 过滤）；无匹配空态；切文件清空。纯前端 `OutlinePanel.tsx` filterRows。**Gate 2 确认**：Obsidian 核心 Outline 确有过滤框（WebSearch），非社区插件。 |
 | ~~**㉘ Footnotes view 脚注面板**~~ | ✅ **R65 完成**（v0.62）| 独立右栏 tab `features/footnotes/`（镜像 OutlinePanel）：metadata 新增脚注索引（`getFootnotes`，行扫描 `[^id]:` on masked 排除围栏，content 取原文）；列 id+content，点击 jumpTo 定义（复用 `geode:scroll-to-heading`）。**Gate 2 确认**：Obsidian 1.9 核心 Footnotes view 插件（WebSearch），非社区。纯 view 零依赖。 |
-| **㉙ 状态栏增强** | **部分**（word-count 插件在状态栏，缺光标行列/后链数）| 状态栏加：光标行:列、选中字数、当前笔记后链数。复用 backlinks 索引 + CM selection。逐块加，零依赖。 |
+| ~~**㉙ 状态栏增强**~~ | ✅ **R66 完成**（v0.63，核心项）| 新 `backlink-count` 插件（"N backlinks"=后链总提及，metadata.revision 跨文件更新）+ word-count 加「N selected words」（`getActiveView` 选区，`document:selection-changed`）。**Gate 2**：后链数/选中词=Obsidian 核心状态栏项（官方 help 确认）；**光标行:列 移除=非核心**（社区插件，同 ㉔/Smart typography 处理）。 |
 | ~~**㉚ Callout 自定义类型 fallback**~~ | **R60 出队 = 实为已完成**（code-verify：`markdown.ts:902-944`）| 任意 `[!foo]` → `class="callout" data-callout="foo"`（主题可 `[data-callout=foo]` 上色）+ 无标题时类型名首字母大写作 fallback 标题（`[!tldr]`→"Tldr"）。**第四次「缺口」实为已完成**（HANDOFF 教训再验证）。 |
 | **㉛ 拖拽文件入编辑器生成链接/嵌入** | **缺/待核**（R28 有文件树拖拽移动，编辑器拖入待核）| 拖文件到编辑器 → 插入 `[[link]]`（md）或 `![[embed]]`（图片/附件）。CM drop handler + 路径解析。 |
 
