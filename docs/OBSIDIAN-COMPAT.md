@@ -190,6 +190,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R63 套件回归（2026-06-14，macOS release 二进制 v0.60.0 实测 `r63-probe-vault`）
+
+R63 = 多光标/多选 foundation（候选池第五梯队 ㉕，原生编辑器功能非 compat shim）+ ㉔ Smart typography 移除（非核心）。
+㉔ **faithfulness 纠正**：WebSearch 证实弯引号/em-dash/省略号自动转换是 Obsidian **社区插件**（mgmeyers/obsidian-smart-typography），非核心 → 出队不做（与 `{{date+3d}}` 社区 Templater 同类）。
+㉕ = buildEditorExtensions 加 4 个标准 CM6 扩展（`allowMultipleSelections`+`drawSelection`+`rectangularSelection`+`crosshairCursor`）解锁已有 keymap（Mod-Alt-↑/↓ 加光标、Esc 收起、Alt-drag 列选）。**零新依赖、无 Rust、纯 view/selection 配置**。Cmd+D 保留 daily-note（select-next 也是社区插件非核心）。
+新增套件：`r63-e2e.mjs` **8/8**（drawSelection 渲染 3 光标 / addCursorBelow+Above / 多点同编 / Esc 收起）+ `r63-probe.mjs` **4/4**（真 WKWebView：allowMultipleSelections 持 2-range=2，control 无 facet=1）。
+**对抗评审（Workflow 3 lens + verify）抓到 1 真数据安全回归→已修**：fmField Backspace 守卫只查 `selection.main`，多光标副光标可停在被保护首行正文起点删掉 frontmatter 闭合换行（INT-3 回归，本轮 foundation 引入）→ 改查所有 range（`ranges.some`）+ r63-e2e 锁。余 nit/behavioral（format/wrap 命令多光标下仅作用主选区=预存）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r35[brackets]25/25 + r51[line-motion]10/10 + r34[find]15/15 + r55[live-tables]15/15（编辑器栈 + 块装饰 atomicRanges 全绿）。**OBSIDIAN-COMPAT 缺口表无变化**（R63 原生功能，不动插件 API 面）。
+
 ### R62 套件回归（2026-06-14，macOS release 二进制 v0.59.0 实测 `r62-probe-vault`）
 
 R62 = 专用 Outgoing Links 出链面板（候选池第五梯队 ㉓，原生功能非 compat shim）。对照 Obsidian「Outgoing Links」核心插件（独立侧栏面板，与 Backlinks 分开）。

@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 63 additions — 多光标 / 多选 foundation（候选池第五梯队 ㉕；㉔ 出队=非核心）【As-built v0.60】
+
+> **状态：As-built（v0.60 交付,2026-06-14）。** 本轮含一个**faithfulness 纠正**和一个**功能**：
+> **㉔ Smart typography 出队 = 非 Obsidian 核心**：WebSearch + 官方确认弯引号/em-dash/省略号自动转换是社区插件（mgmeyers/obsidian-smart-typography），**非核心**——与 `{{date+3d}}`（社区 Templater）同类，按「复刻 Obsidian 核心」使命**不做**。**这是「先验证是不是核心功能」的 faithfulness 门**（继 Step 0 grep「是否已实现」之后的第二道前置核查；R60 候选池误登记把社区功能当核心，本轮第二例）。
+> **㉕ 多光标 = 2 行 foundation 解锁**：grep + derisk 确认 **真实缺口 = Geode 根本无法持有/渲染 >1 光标**（无 `allowMultipleSelections`、无 `drawSelection`）。命令早已全在 keymap：defaultKeymap `Mod-Alt-↑/↓` addCursorAbove/Below + `Escape` simplifySelection；searchKeymap `Mod-d` selectNextOccurrence + `Mod-Shift-l` selectSelectionMatches——皆因缺 foundation 而**静默 no-op**（R51「框架早给了，价值在解锁」同源）。**修 = buildEditorExtensions 加 4 个标准 CM6 扩展**：`EditorState.allowMultipleSelections.of(true)`（state 持多 range）+ `drawSelection()`（渲染每个 caret，原生只画一个）+ `rectangularSelection()`+`crosshairCursor()`（Alt-drag 列选）。**零新依赖、无 Rust、纯 view/selection 配置不碰写路径**。
+> **Cmd+D 冲突的正确裁决**：`Mod+D` 被 `daily-note.ts` 占用（R33 拦截器先到）。一度以为要为 selectNextOccurrence 让位，**但 WebSearch 证实 select-next 是 Obsidian 社区插件非核心** → **保留 daily-note Mod+D 不动**（无 faithfulness 压力、避免跨 feature churn，R53）。selectNextOccurrence 按设计保持 shadowed。
+> 验证：typecheck 0 · `r63-e2e.mjs` **8/8**（drawSelection 渲染 3 光标 / addCursorBelow+Above / 多点同时编辑 / Escape clean-path 收起到 1）· `r63-probe.mjs` **4/4**（真 WKWebView：allowMultipleSelections 持 2-range=2，control 无 facet=1）· cargo release 真重建 · 回归 r35 25/r51 10/r34 15/r55 15 全绿（编辑器栈 + 块装饰 atomicRanges 不回退）。
+> **对抗评审（Workflow 3 lens + verify）抓到 1 个真实数据安全回归 → 已修**：interaction lens 确认 **fmField 的 Backspace 守卫只查 `selection.main`，而多光标可把一个 SECONDARY 空光标停在被保护的首行正文起点（blockTo+1）；`deleteCharBackward` 对每个 range 生效 → 副光标删掉 frontmatter 闭合 `---` 后的换行 → INT-3 frontmatter 损坏**。**这是本轮 foundation 引入的真回归**（R63 前无 allowMultipleSelections → 只有单 range → `.main` 即完整）。**修 = 守卫改查所有 range**（`selection.ranges.some(r => r.empty && r.head === end+1)`，单光标行为逐字等价）+ r63-e2e 加多光标 frontmatter 守卫用例锁死。其余 finding 非数据安全（markdown emphasis wrap + format/template 命令多光标下仅作用 `selection.main`——文本不丢、仅光标收起，预存行为，属未来「命令多光标化」polish）。**核心元教训**：**「无害的 foundation」会重新激活一个假设单光标的旧守卫**——凡开启 `allowMultipleSelections`，要 grep 所有读 `selection.main` 的**写/删路径守卫**（非纯读展示），逐个问「副光标停在这会绕过它吗」。对抗评审对「11 行启用标准扩展」这种看似 trivial 的改动**仍抓到真数据安全回归**，印证评审不可因 diff 小而省。**附（候选池失准）**：R60 把社区插件功能误登记为核心（㉔ smart typography、㉕ 的「Cmd+D select-next」）——「先 grep 是否已实现」之外还需「先核是不是 Obsidian 核心」（WebSearch/官方），两道前置门一起挡住「做 Obsidian 根本没有的东西」。
+
+### 契约（交付即实现）
+
+**features/editor/cmExtensions.ts** `buildEditorExtensions()`：在 `editorTheme` 后、`closeBracketsKeymap` 前插入 4 个扩展（`EditorState.allowMultipleSelections.of(true)` / `drawSelection()` / `rectangularSelection()` / `crosshairCursor()`）+ 从 `@codemirror/view` import `drawSelection, rectangularSelection, crosshairCursor`。无新命令（keymap 已全有）。
+**features/editor/livePreview.ts**（评审修）：fmField 的 Prec.high Backspace 守卫（~L1358）从读 `selection.main` 改为 `selection.ranges.some(r => r.empty && r.head === end+1)`（+ `if (end < 0) return false` 早退）——多光标下任一空光标停在被保护位即吞掉整个 Backspace（保守、与 atomicRanges/changeByRange 的「全 range」语义一致）。单光标逐字等价。
+**main.tsx** `__geodeMultiSel.held(allow:boolean):number` 探针——`EditorState.create` 带 2-range 选区，`allow` 决定是否挂 `allowMultipleSelections`，返回 `selection.ranges.length`（true→2 / false→1，control 对）。import 加 `EditorSelection`。
+
+### 已知偏差 / 待办（写给后续轮）
+- **格式化/模板/附件命令在多光标下仅作用于主选区**（formatCommands 等读 `selection.main`）——预存行为，未本轮多光标化（Obsidian 会对所有选区生效）；属未来「编辑命令多光标感知」项，非本轮 scope。
+- **selectNextOccurrence（Mod-d）被 daily-note 命令 shadow**——按设计（select-next 非 Obsidian 核心；daily-note 是既有 Geode 绑定）。若未来要 select-next，需重绑 daily-note（用户/未来轮决策）。
+- **鼠标加光标（Cmd/Alt+click）未配 clickAddsSelectionRange**——Obsidian 核心多光标偏鼠标；Geode 走键盘优先（Mod-Alt-↑/↓）。鼠标点击加光标 + 与 Mod+click wikilink 导航协调属未来 polish。Alt-drag 列选已可用。
+
 ## Round 62 additions — 专用「Outgoing Links 出链」侧栏面板（候选池第五梯队 ㉓）【As-built v0.59】
 
 > **状态：As-built（v0.59 交付,2026-06-14）。** 第五梯队 ㉓。**先 grep 现状（铁律）**：出链**数据 + 显示早已存在**——`metadata.getOutgoingLinks()` + `BacklinksPanel` 内嵌「出链」分区（R24 起）。真实缺口 = Obsidian 把 **Outgoing Links 作为独立核心插件面板**（与 Backlinks 分开、可独立打开/切换），Geode 只把它折叠进组合反链面板。**第 5 次「候选池缺口」实为「部分已实现」**（Setext R54 / Setext-dim R55 / `%%` R58 / 粘贴URL·callout R60 / ㉓ 出链 R62）。

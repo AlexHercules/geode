@@ -637,6 +637,12 @@ release probe **r26-probe 5/5**（`__geodeRenderMarkdown` 真实 fs）。
 文件体积）；PDF 渲染失败 iframe 无 error 事件（原生查看器口径）；两处遗留 MIME 表
 （compat util / hover）未来整合候选。
 
+### R63 — v0.60（2026-06-14）多光标 / 多选 foundation（第五梯队 ㉕ → 出队；㉔ 移除=非核心）
+**两道前置门**：① **faithfulness 门**——㉔ Smart typography（弯引号/em-dash/省略号）WebSearch 证实是社区插件（mgmeyers）**非 Obsidian 核心** → 与 `{{date+3d}}` 同类**出队不做**（R60 候选池又一次把社区功能误登记为核心）。② **grep/derisk 门**——㉕ 真实缺口 = Geode 根本无法持有/渲染 >1 光标（无 allowMultipleSelections/drawSelection）；命令早全在 keymap（Mod-Alt-↑/↓ addCursor、Esc simplify）只是静默 no-op（R51 同源）。
+**修 = 2 行 foundation**：buildEditorExtensions 加 `allowMultipleSelections.of(true)` + `drawSelection()` + `rectangularSelection()`+`crosshairCursor()`（列选）。零依赖、无 Rust、纯 view。Cmd+D 冲突裁决：保留 daily-note Mod+D（select-next 也是社区插件非核心，无让位压力，避免跨 feature churn）。
+验证：typecheck 0 · `r63-e2e` **8/8**（渲染 3 光标/addCursorBelow+Above/多点同编/Esc 收起）· `r63-probe` **4/4**（真 WKWebView 持 2-range，control 1）· 回归 r35/r51/r34/r55 全绿。
+**对抗评审（Workflow 3 lens）抓到 1 真数据安全回归→已修**：fmField Backspace 守卫只查 `selection.main`，多光标副光标可停在被保护的首行正文起点删掉 frontmatter 闭合换行（INT-3 回归，本轮 foundation 引入）→ **改查所有 range**（`ranges.some`）+ e2e 锁。其余非数据安全（format/wrap 命令多光标下仅作用主选区=预存）。**元教训**：① 开 `allowMultipleSelections` 必 grep 所有读 `selection.main` 的写/删守卫（副光标会绕过单光标假设）；评审对「11 行启用标准扩展」仍抓到真回归，diff 小不可省评审。② 「先 grep 是否已实现」外加「**先核是不是 Obsidian 核心**」（WebSearch）——R60 把社区插件（㉔ smart typography、㉕ 的 Cmd+D select-next）当核心。
+
 ### R62 — v0.59（2026-06-14）专用 Outgoing Links 出链面板（第五梯队 ㉓ → 出队）
 **Step 0 grep 现状救场**：出链数据(`getOutgoingLinks`)+显示(`BacklinksPanel` 出链分区,R24 起)早已存在 → **㉓ 第 5 次「缺口」实为部分已实现**（Setext R54/Setext-dim R55/`%%` R58/粘贴URL·callout R60）。真缺口 = Obsidian 把 Outgoing Links 作独立核心插件面板,Geode 只折叠进组合反链面板 → 本轮抽**独立右栏 tab**（镜像 OutlinePanel,复用 getOutgoingLinks,拆 Links/Unresolved 两分区 + 命令 `app:show-outgoing-links`）。刻意不动组合 BacklinksPanel（出链同显两处 = 评审证伪为可接受 deliberate scoping）。纯只读 view,唯一写=点未解析 createAndOpen（与反链同款,数据安全证伪）。
 验证：typecheck 0 · `r62-e2e` **14/14** · `r62-probe` **5/5**（真 WKWebView setRightPanel 持久化 + 真 fs metadata）· 回归 r30/r41 面板切换不回退。
@@ -1195,8 +1201,8 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 |---|---|---|
 | ~~**㉒ 图片嵌入尺寸** `![[img.png\|200]]` / `\|200x100`~~ | ✅ **R61 完成**（v0.58）| 共享 `parseEmbedSize`（reading+live 单一解析器）→ `<img width height>`，导出零改动继承；非数字别名仍当 alt（字节级不变）；评审修巨数三端漂移=正则封 5 位。 |
 | ~~**㉓ Outgoing links 出链面板**~~ | ✅ **R62 完成**（v0.59）| 独立右栏 tab `features/outgoinglinks/`（镜像 OutlinePanel，复用 `getOutgoingLinks`，拆 Links/Unresolved 两分区 + `app:show-outgoing-links` 命令）。组合 BacklinksPanel 出链分区刻意保留（deliberate）。**Step 0 grep 现状救场**：出链数据/显示早已存在，真缺口仅是「独立面板」。 |
-| **㉔ Smart typography 智能排版** | **缺** | 编辑器输入变换：弯引号 `"`/`'`、`--`→—、`---`→—、`...`→…；设置开关（默认可 OFF）。CM `EditorState.transactionFilter` 或 inputHandler。注意代码块/数学内不变换 + IME 守卫（R33 先例）。 |
-| **㉕ 多光标 / 多选命令** | **缺/细化**（R60 code-verify：`searchKeymap` 已挂 `Mod-d` 但因缺 `EditorState.allowMultipleSelections`+`drawSelection` → 当前 no-op）| Obsidian: `Cmd+D` 选下一个相同词、`Cmd+Alt+↑/↓` 上/下加光标、`Esc` 收起。**补 `allowMultipleSelections`+`drawSelection`+列选** 即解锁（比「零实现」更省）；接命令 + 键（镜像 R51 editorMotionCommands 范式）。 |
+| ~~**㉔ Smart typography 智能排版**~~ | ❌ **R63 移除：非 Obsidian 核心**（社区插件 mgmeyers/obsidian-smart-typography）| WebSearch + 官方确认：弯引号/em-dash/省略号自动转换是**社区插件**，**非 Obsidian 核心功能**。与 `{{date+3d}}`（社区 Templater）同类 → 按「复刻 Obsidian **核心**」使命**不做**。出队。 |
+| ~~**㉕ 多光标 / 多选命令**~~ | ✅ **R63 完成**（v0.60）| 2 行 foundation（`allowMultipleSelections`+`drawSelection`+`rectangularSelection`+`crosshairCursor`）解锁已有 keymap：Mod-Alt-↑/↓ 加光标、Esc 收起、Alt-drag 列选。**纠误**：R60 说的「Cmd+D 选下一个相同词」是社区插件非核心 → 保留 daily-note Mod+D。鼠标点击加光标属未来 polish。 |
 | ~~**㉖ 粘贴 URL 到选区变链接 + 自动转 URL**~~ | **R60 出队 = 实为已完成**（code-verify：lang-markdown 内置 `pasteURLAsLink` 一直在扩展栈 `cmExtensions.ts:400-408` + `@lezer/markdown` 处理器 `:458-491`）| 选区非空 + 剪贴板 URL（https/mailto/www）→ `[选区](url)` **今天就能用**。仅「空选区自动转裸 URL」可能差异（按需小补）。**第三次同类：候选池「缺口」实为已实现**。 |
 | **㉗ Outline 内搜索过滤** | **缺**（OutlinePanel 无过滤框）| 大纲面板顶部加过滤输入框，实时过滤标题（fuzzy 或 substring）。纯前端，改 `features/outline/OutlinePanel.tsx`。 |
 | **㉘ Footnotes view 脚注面板** | **缺**（#㉑ 列项之一）| 新右栏面板，列当前笔记的脚注定义 + 点击跳转。复用 metadata/markdown 脚注解析（阅读视图已渲染脚注）。零依赖。 |
