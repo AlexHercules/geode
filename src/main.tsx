@@ -270,6 +270,7 @@ async function bootstrap() {
       {
         noteEmbeds: true,
         resolveEmbed: (tg) => metadata.resolveAttachment(tg, sourcePath),
+        resolveMdLink: (href) => metadata.resolveMarkdownLink(href, sourcePath),
       },
     );
 

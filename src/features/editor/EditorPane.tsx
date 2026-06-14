@@ -486,6 +486,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       {
         resolveEmbed: (target) => app.metadata.resolveAttachment(target, handle.path),
         noteEmbeds: true,
+        resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, handle.path),
       },
     );
     // metaRevision/previewBump are render triggers, not direct inputs

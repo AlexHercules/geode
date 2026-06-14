@@ -88,6 +88,13 @@ function extractTrigger(el: Element, sourcePath: string | null): { trigger: Trig
   if (live) {
     return triggerFrom(live, "data-link-target", "data-link-subpath", true, sourcePath);
   }
+  // R71: internal md links in live mode (resolved to a note) carry the same
+  // data-link-target — preview them like wikilinks. Gated on the attribute so
+  // external / attachment / unresolved md links (no target) raise no card.
+  const liveMd = el.closest<HTMLElement>(".cm-live-mdlink[data-link-target]");
+  if (liveMd) {
+    return triggerFrom(liveMd, "data-link-target", "data-link-subpath", true, sourcePath);
+  }
   const source = el.closest<HTMLElement>("[data-hover-path]");
   if (source) {
     return triggerFrom(source, "data-hover-path", "data-hover-subpath", source.closest(".cm-content") !== null, sourcePath);

@@ -37,6 +37,14 @@ const CORPUS = [
   ["table", "| a | b |\n|---|---|\n| 1 | 2 |"],
   ["hr", "above\n\n---\n\nbelow"],
   ["md-link", "[label](https://example.com)"],
+  // R71: md links resolving to a NOTE become internal-link anchors (EXPECTED to
+  // change once R71 lands → flagged). External / attachment / unresolved md
+  // links MUST stay byte-identical (no flag).
+  ["md-link-internal", "[label](Note%20A.md)", true],
+  ["md-link-internal-sub", "[label](Note%20A.md#Heading)", true],
+  ["md-link-attachment", "see [pic](img.png) link"],
+  ["md-link-unresolved-note", "[label](ghost9999.md)"],
+  ["md-link-mailto", "[mail](mailto:a@b.com)"],
   ["wikilink", "see [[Note A]] here"],
   ["wikilink-sub", "see [[Note A#Heading]] here"],
   ["wikilink-alias", "see [[Note A|Alias]] here"],

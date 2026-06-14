@@ -72,6 +72,26 @@
     "html": "<p><a href=\"https://example.com\" target=\"_blank\" rel=\"noopener\" class=\"external-link\">label</a></p>\n"
   },
   {
+    "name": "md-link-internal",
+    "html": "<p><a href=\"#\" class=\"internal-link\" data-target=\"Note A.md\">label</a></p>\n"
+  },
+  {
+    "name": "md-link-internal-sub",
+    "html": "<p><a href=\"#\" class=\"internal-link\" data-target=\"Note A.md\" data-subpath=\"Heading\">label</a></p>\n"
+  },
+  {
+    "name": "md-link-attachment",
+    "html": "<p>see <a href=\"img.png\">pic</a> link</p>\n"
+  },
+  {
+    "name": "md-link-unresolved-note",
+    "html": "<p><a href=\"ghost9999.md\">label</a></p>\n"
+  },
+  {
+    "name": "md-link-mailto",
+    "html": "<p><a href=\"mailto:a@b.com\">mail</a></p>\n"
+  },
+  {
     "name": "wikilink",
     "html": "<p>see <a class=\"internal-link\" data-target=\"Note A\" href=\"#\">Note A</a> here</p>\n"
   },

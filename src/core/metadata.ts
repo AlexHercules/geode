@@ -597,6 +597,16 @@ export class MetadataIndex {
   resolveMarkdownLink(href: string, fromPath: string): string | null {
     const p = this.normalizeMdHref(href, fromPath);
     if (p === null) return null;
+    // A POSITION-bearing href — root-absolute `/x` or explicit-relative `./`/`../`
+    // — encodes an exact vault location, so it must resolve by EXACT path, never
+    // basename-fuzz to a same-named note in another folder (review R71 major:
+    // `/Z.md` from a subfolder was resolving to `subfolder/Z.md`). A bare
+    // basename keeps resolveLink's shortest-path/basename behavior.
+    const stripped = href.trim().split("#")[0].split("?")[0];
+    if (stripped.startsWith("/") || stripped.startsWith("./") || stripped.startsWith("../")) {
+      const exactMd = this.lowerPathToPath.get((p.replace(/\.md$/i, "") + ".md").toLowerCase());
+      return exactMd ?? this.resolveAttachment(p, fromPath);
+    }
     return this.resolveLink(p, fromPath) ?? this.resolveAttachment(p, fromPath);
   }
 

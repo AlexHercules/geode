@@ -187,7 +187,10 @@ export function HoverPreview(): React.ReactElement | null {
       const html = renderMarkdownToHtml(
         content,
         (tg) => app.metadata.resolveLink(tg, current.path),
-        { noteEmbeds: true },
+        {
+          noteEmbeds: true,
+          resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, current.path),
+        },
       );
       if (cancelled || hoverStore.get() !== current) return;
       body.innerHTML = html;

@@ -176,6 +176,16 @@ export interface RenderMarkdownOptions {
    * (unresolved target keeps the literal "!" + internal-link placeholder).
    */
   noteEmbeds?: boolean;
+  /**
+   * R71: present ⇒ a standard markdown link `[text](href)` whose href resolves
+   * (via this fn) to a `.md` NOTE renders as `<a class="internal-link"
+   * data-target="<resolved path>" [data-subpath]="<anchor>" href="#">` — reusing
+   * the wikilink anchor + click machinery (openWikilink re-resolves the full
+   * path → navigates, never the create-note branch). External / attachment /
+   * unresolved md links keep the legacy `<a href>` rendering (byte-identical).
+   * Bound by each call site to `metadata.resolveMarkdownLink(href, sourcePath)`.
+   */
+  resolveMdLink?: (href: string) => string | null;
 }
 
 const WIKILINK_RE = /(!?)\[\[([^\[\]]+?)\]\]/g;
@@ -210,6 +220,10 @@ interface PreviewEnv {
   geodeLinks?: WikiLinkInfo[];
   geodeResolve?: (target: string) => string | null;
   geodeFootnotes?: FootnoteState;
+  /** R71: resolve a standard markdown-link href to a vault path (decode/anchor/
+   *  relative), so `[text](note.md)` that points at a note renders as an
+   *  internal-link anchor instead of a plain external `<a href>`. */
+  geodeResolveMdLink?: (href: string) => string | null;
 }
 
 function footnoteState(env: PreviewEnv): FootnoteState {
@@ -515,7 +529,7 @@ const md = new MarkdownIt({ html: false, linkify: true });
 
 // open external links in a new context; degrade placeholder destinations
 // (e.g. [text]([[x]])) to "#" so no placeholder ever survives into an attribute
-md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
   const token = tokens[idx];
   let href = token.attrGet("href") ?? "";
   if (PLACEHOLDER_TEST.test(href)) {
@@ -526,6 +540,29 @@ md.renderer.rules.link_open = (tokens, idx, options, _env, self) => {
     token.attrSet("target", "_blank");
     token.attrSet("rel", "noopener");
     token.attrJoin("class", "external-link");
+  } else if (href !== "#") {
+    // R71: a non-external href resolving to a NOTE → internal-link anchor that
+    // reuses the wikilink data-target + click path (openWikilink re-resolves the
+    // full vault path → opens it, never the create-note branch). Only `.md`
+    // notes: attachment md links would hit openWikilink's note-only resolver and
+    // wrongly create a note, so they keep the legacy `<a href>` (byte-identical).
+    const resolveMd = (env as PreviewEnv).geodeResolveMdLink;
+    const resolved = resolveMd ? resolveMd(href) : null;
+    if (resolved !== null && /\.md$/i.test(resolved)) {
+      token.attrSet("href", "#");
+      token.attrSet("class", "internal-link");
+      token.attrSet("data-target", resolved);
+      const hashAt = href.indexOf("#");
+      if (hashAt !== -1) {
+        let anchor = href.slice(hashAt + 1);
+        try {
+          anchor = decodeURIComponent(anchor);
+        } catch {
+          /* malformed %xx — keep raw */
+        }
+        if (anchor) token.attrSet("data-subpath", anchor);
+      }
+    }
   }
   return self.renderToken(tokens, idx, options);
 };
@@ -1201,6 +1238,10 @@ export function renderMarkdownToHtml(
 ): string {
   const links: WikiLinkInfo[] = [];
   const pre = replaceWikilinks(source, links, resolve, opts);
-  const env: PreviewEnv = { geodeLinks: links, geodeResolve: resolve };
+  const env: PreviewEnv = {
+    geodeLinks: links,
+    geodeResolve: resolve,
+    geodeResolveMdLink: opts?.resolveMdLink,
+  };
   return md.render(pre, env);
 }

@@ -785,13 +785,33 @@ function computeDecorations(
             const textFrom = marks[0].to;
             const textTo = marks[1].from;
             if (textFrom < textTo) {
+              // R71: an href resolving to a NOTE carries the resolved path so a
+              // plain left-click navigates internally (reuses openWikilink, like
+              // wikilinks); external / attachment / unresolved hrefs keep only
+              // data-url + Ctrl/Cmd-click → window.open. CommonMark `<url>` angle-
+              // bracket form: strip the wrapping `<>` so resolution + data-url
+              // match the reading-view (markdown-it already strips them) (review R71).
+              const href = url.startsWith("<") && url.endsWith(">") ? url.slice(1, -1) : url;
+              const mdResolved = app.metadata.resolveMarkdownLink(href, getPath());
+              const internal = mdResolved !== null && /\.md$/i.test(mdResolved);
+              const attrs: Record<string, string> = { "data-url": href, title: href };
+              if (internal) {
+                attrs["data-link-target"] = mdResolved;
+                const hashAt = href.indexOf("#");
+                if (hashAt !== -1) {
+                  let anchor = href.slice(hashAt + 1);
+                  try {
+                    anchor = decodeURIComponent(anchor);
+                  } catch {
+                    /* malformed %xx — keep raw */
+                  }
+                  if (anchor) attrs["data-link-subpath"] = anchor;
+                }
+              }
               others.push({
                 from: textFrom,
                 to: textTo,
-                deco: Decoration.mark({
-                  class: "cm-live-mdlink",
-                  attributes: { "data-url": url, title: url },
-                }),
+                deco: Decoration.mark({ class: "cm-live-mdlink", attributes: attrs }),
               });
             }
             break;
@@ -1301,9 +1321,21 @@ function liveClickHandler(app: GeodeApp, getPath: () => string): Extension {
       if (!el) return false;
 
       const md = el.closest(".cm-live-mdlink");
-      if (md && (event.ctrlKey || event.metaKey)) {
+      if (md) {
+        // R71: internal md link (resolved to a note) navigates like a wikilink,
+        // regardless of modifier — Ctrl/Cmd must NEVER route an internal link to
+        // window.open (review R71). data-link-target is a resolved existing .md
+        // path → openWikilink re-resolves it, never the create-note branch.
+        const mdTarget = md.getAttribute("data-link-target");
+        if (mdTarget) {
+          event.preventDefault();
+          void openWikilink(app, mdTarget, getPath(), md.getAttribute("data-link-subpath") ?? undefined);
+          return true;
+        }
+        // external / attachment / unresolved (no data-link-target) → Ctrl/Cmd
+        // opens the URL externally
         const url = md.getAttribute("data-url");
-        if (url) {
+        if (url && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();
           // in Tauri the opener routes this to the OS browser
           window.open(url, "_blank", "noopener");

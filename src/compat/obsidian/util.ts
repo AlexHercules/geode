@@ -440,7 +440,10 @@ export class MarkdownRenderer {
       (target) => (handle ? handle.metadata.resolveLink(target, sourcePath) : null),
       {
         ...(handle
-          ? { resolveEmbed: (target: string) => handle.metadata.resolveAttachment(target, sourcePath) }
+          ? {
+              resolveEmbed: (target: string) => handle.metadata.resolveAttachment(target, sourcePath),
+              resolveMdLink: (href: string) => handle.metadata.resolveMarkdownLink(href, sourcePath),
+            }
           : {}),
         noteEmbeds: true,
       },

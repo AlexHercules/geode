@@ -312,6 +312,7 @@ async function hydrateNote(
     const html = renderMarkdownToHtml(slice, (target) => ctx.metadata.resolveLink(target, path), {
       resolveEmbed: (target) => ctx.metadata.resolveAttachment(target, path),
       noteEmbeds: true,
+      resolveMdLink: (href) => ctx.metadata.resolveMarkdownLink(href, path),
     });
 
     span.textContent = "";
