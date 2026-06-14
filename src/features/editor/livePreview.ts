@@ -53,6 +53,7 @@ import { IMAGE_EXTS, fileEmbedKind } from "@core/markdown";
 import { loadKatex } from "@core/math";
 import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
+import { liveMath } from "./liveMath";
 import { liveMermaid } from "./liveMermaid";
 import { liveTables } from "./liveTables";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
@@ -1359,6 +1360,9 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
     // R56 — render ```mermaid fences as diagrams in live preview (same block-widget
     // machinery; renderMarkdownToHtml placeholder + hydrateEmbeds async SVG).
     liveMermaid(app, getPath),
+    // R57 — render $$…$$ display-math blocks as KaTeX in live preview (same machinery;
+    // scan-based ranges confirmed by the renderer + hydrateEmbeds math pass).
+    liveMath(app, getPath),
     liveTheme,
   ];
 }

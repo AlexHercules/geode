@@ -651,6 +651,13 @@ iframe.geode-embed-pdf.cm-live-embed {
   cursor: text;
 }
 
+/* R57 — live-preview rendered $$ display math (liveMath.ts block widget); click to
+   edit. The inner .geode-math-block keeps its R18 reading-view KaTeX styling. */
+.cm-live-math {
+  margin: 0.3em 0;
+  cursor: text;
+}
+
 .preview-content img {
   max-width: 100%;
 }

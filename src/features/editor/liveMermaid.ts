@@ -10,11 +10,10 @@
  */
 import { syntaxTree } from "@codemirror/language";
 import { type EditorState, type Extension } from "@codemirror/state";
-import { EditorView, WidgetType } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { renderMarkdownToHtml } from "@core/markdown";
-import { hydrateEmbeds } from "./embeds";
 import { liveBlockWidgets } from "./liveBlockWidget";
+import { HydratedBlockWidget } from "./liveHydratedWidget";
 
 /** Mermaid fence ranges in `state` (pure — also drives the desktop probe). A fence is
  *  mermaid iff its info string's first whitespace word is exactly "mermaid"
@@ -37,48 +36,12 @@ export function findMermaidRanges(state: EditorState): Array<{ from: number; to:
   return out;
 }
 
-class MermaidWidget extends WidgetType {
-  constructor(
-    readonly source: string,
-    readonly html: string,
-    readonly from: number,
-    readonly app: GeodeApp,
-    readonly getPath: () => string,
-  ) {
-    super();
-  }
-
-  // source identity is enough — the placeholder html is deterministic from source, and
-  // the rendered SVG lives in the reused DOM (eq=true keeps it, no re-hydrate flicker).
-  eq(other: MermaidWidget): boolean {
-    return other.source === this.source && other.from === this.from;
-  }
-
-  toDOM(view: EditorView): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "cm-live-mermaid";
-    wrap.setAttribute("contenteditable", "false");
-    wrap.setAttribute("data-testid", "cm-live-mermaid");
-    wrap.innerHTML = this.html; // .geode-mermaid placeholder (source) — SVG swaps in async
-    void hydrateEmbeds(wrap, this.app, this.getPath()); // R19 async render (theme-aware)
-    wrap.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      view.dispatch({ selection: { anchor: this.from } });
-      view.focus();
-    });
-    return wrap;
-  }
-
-  ignoreEvent(): boolean {
-    return false;
-  }
-}
-
 /** The live-mermaid extension. `getPath` = the current note (hydrate context). */
 export function liveMermaid(app: GeodeApp, getPath: () => string): Extension {
   const resolve = (target: string) => app.metadata.resolveLink(target, getPath());
   return liveBlockWidgets({
     ranges: findMermaidRanges,
-    widget: (source, from) => new MermaidWidget(source, renderMarkdownToHtml(source, resolve), from, app, getPath),
+    widget: (source, from) =>
+      new HydratedBlockWidget("cm-live-mermaid", source, renderMarkdownToHtml(source, resolve), from, app, getPath),
   });
 }

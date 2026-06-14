@@ -68,6 +68,7 @@ import { handleObsidianUri } from "@features/editor/obsidianUriHandler";
 import { markdownFoldRange } from "@features/editor/folding";
 import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
+import { findMathBlockRanges } from "@features/editor/liveMath";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -655,6 +656,25 @@ async function bootstrap() {
       return findMermaidRanges(state);
     },
     placeholder: (fenceSrc: string) => renderMarkdownToHtml(fenceSrc, () => null).includes('class="geode-mermaid"'),
+  };
+
+  // always-on live-math probe (R57): the scan-based `$$…$$` block detection
+  // (findMathBlockRanges, renderer-confirmed) + the reused math placeholder
+  // (renderMarkdownToHtml → .geode-math-block). The live block widget + async KaTeX
+  // hydration is a view behavior exercised by the browser E2E.
+  const mathHost = globalThis as typeof globalThis & {
+    __geodeMath?: {
+      ranges: (doc: string) => Array<{ from: number; to: number }>;
+      placeholder: (mathSrc: string) => boolean;
+    };
+  };
+  mathHost.__geodeMath = {
+    ranges: (doc: string) => {
+      const state = EditorState.create({ doc, extensions: [markdown({ base: markdownLanguage })] });
+      ensureSyntaxTree(state, doc.length, 2000);
+      return findMathBlockRanges(state);
+    },
+    placeholder: (mathSrc: string) => renderMarkdownToHtml(mathSrc, () => null).includes("geode-math-block"),
   };
 
   // always-on note-composer probe (R44): pure extract helpers (name/content/link).
