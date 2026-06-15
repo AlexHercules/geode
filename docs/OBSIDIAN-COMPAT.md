@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R76 套件回归（2026-06-15，macOS release 二进制 v0.73.0 实测 `r76-probe-vault`）
+
+R76 = 任务自定义状态渲染（候选池第五梯队【中】㊳，原生 + 主题特性）。对照 Obsidian：阅读视图把非标准复选框态 `[/]`(进行中)/`[-]`(取消)/`[>]`(推迟)/`[<]`(计划) 渲染为带 `data-task="<char>"` 的 checkbox，主题用 `li[data-task="/"]` 选择器画自定义标记。**字节敏感**（动 markdown.ts task rule → §C r26-bytes 守卫）。**v1 阅读视图专属**（live 的 lezer `TaskList` 硬编码 `[ xX]` + Obsidian 自身 live 也不渲染自定义态）。
+
+新增套件：`r76-e2e.mjs` **17/17**（自定义态 data-task+checkbox+非 done + 标准态字节稳定 + 负样本 multi-char/empty/非列表/无空格 + 阅读点击 toggle 自定义态→done + 标准态不变）+ `r76-probe.mjs` **8/8**（真 WKWebView，`__geodeRenderMarkdown` 渲染自定义态）。
+
+- **套件矩阵不回退**：本轮零 compat 调用面改动（task 渲染加 `<li data-task>` 属性、`<input class="task-checkbox">` 串不变 → compat/util.ts 可点性 + export.ts class 替换不受影响）；markdown.ts task rule **字节保守**（data-task 仅非标准态 emit + is-checked 标准态结果不变）→ **r26-bytes 标准 `list-task` 0 violations**（48 cases，仅新增 flagged `list-task-custom`）；原生回归 r26[embeds]12/12 + r35[brackets]25/25 + r68[search task:]40/40 全绿（搜索侧 task 收敛已 R68、本轮渲染侧对齐到同 `[^\]]`）。**对抗评审 1 MAJOR（阅读点击 toggle 第 5 处 task 消费者收敛）**。**OBSIDIAN-COMPAT 缺口表**：㊳ 阅读视图自定义态交付（v1 已知延期：live preview 自定义态渲染——lezer 限制 + Obsidian 自身限制）。
+
 ### R75 套件回归（2026-06-15，macOS release 二进制 v0.72.0 实测 `r75-probe-vault`）
 
 R75 = `query` 搜索结果嵌入代码块（候选池第五梯队【中】㊲，原生功能）。对照 Obsidian 核心：` ```query ` 代码块 = 搜索语法 → 渲染为分组结果列表（reading + live preview），点击导航。复用 `core/search.ts`（parseSearchQuery/evaluateSearch，R21/R68 已支持 file/path/content/tag/line/task/[prop]）。**字节敏感**（动 markdown.ts fence renderer → §C r26-bytes 守卫）。

@@ -71,6 +71,32 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 76 additions — 任务自定义状态渲染（候选池第五梯队【中】㊳）【As-built v0.73】
+
+> **状态：As-built（v0.73 交付，2026-06-15）。** ㊳ = 阅读视图把 `- [/]`（进行中）`- [-]`（取消）`- [>]`（推迟）`- [<]`（计划）等**非标准复选框态**渲染为带 `data-task` 的 checkbox 并区分样式（Obsidian + 主题约定）。**字节敏感**（动 `core/markdown.ts` 阅读侧 task rule）→ §C：改前已 `r26-bytes --baseline` 重捕（47 cases）。两道前置门：① grep 揭露 task 定义 4 处（渲染 `TASK_RE` 唯一仍窄 `( |x|X)`、toggle/search 已 R40/R68 收敛到 `[^\]]`、**live 走 lezer 硬编码 `[ xX]`**）；② WebSearch 确认 Obsidian `data-task` 约定（放 `<li class="task-list-item" data-task="<char>">`，主题用 `li[data-task="/"]` 选择器画）+ **「自定义复选框态在 live preview 不生效」= Obsidian 本身的限制**（这是阅读视图 + 主题特性）。
+
+**v1 范围决策 = 阅读视图（reading）专属，live 延期**：理由 ① live 的 lezer `TaskList` parser 硬编码 `/^\[[ xX]\][ \t]/`（`@lezer/markdown`），`- [/]` **根本不产 Task 节点** → 支持需自写 lezer 扩展或并行行扫描，高成本高风险；② **Obsidian 自身 live preview 也不渲染自定义态**（WebSearch 证实）——阅读视图才是该特性的主场。故 v1 只做阅读侧，最贴近 Obsidian 行为。
+
+**字节保守设计（关键）**：
+- **`core/markdown.ts:195` `TASK_RE` 收敛**：`/^\[( |x|X)\]\s+/` → `/^\[([^\]])\]\s+/`（单个非 `]` 字符 + 空白；闭合 R68/R40 警告的「task 定义漂移」，4 处定义至此全 `[^\]]`）。
+- **`is-checked` 判据修正**：`checked = m[1] !== " "` → `checked = m[1] === "x" || m[1] === "X"`（**仅 x/X 算 done**——否则收敛后 `[/]` 被误判 checked 而划删除线）。**对标准态 `[ ]`/`[x]`/`[X]` 字节零变**（`[ ]` 仍 not-checked、`[x]`/`[X]` 仍 checked）。
+- **`data-task` 仅对非标准态 emit**：`mark` ∉ {space, x, X} 时 `tokens[i-2].attrSet("data-task", mark)`（markdown-it renderAttrs 自动 escapeHtml 值，`[<]`→`data-task="&lt;"` 安全）。**标准态不加 data-task → `[ ]`/`[x]` 阅读字节逐字节不变**（r26-bytes `list-task` 不变 0 violations）；`[/]` 等是新渲染（无 baseline，加 flagged 语料）。
+- **不动 `<input class="task-checkbox">` 字节**（仅给 `<li>` 追加 data-task）→ `export.ts:33` 的 class 串替换、`compat/obsidian/util.ts:466`、`EditorPane.tsx:640` 点击委托全不受影响。
+
+**CSS（区分样式，颜色走变量）**：
+- `features/editor/editor.css` 阅读段：`li.task-list-item[data-task]` 通用（checkbox accent 边框=非标准态可见区分）+ `[data-task="-"]`（取消=muted + 文本 line-through）+ `/ > <` 等核心态。
+- `features/export/export.css`：镜像同款（导出一致）。
+
+**文件所有权（单 owner，字节敏感串行）**：先 `core/markdown.ts`（改后立即 `r26-bytes` 验标准态字节不变）→ editor.css/export.css → r26-bytes 语料 + e2e/probe。**复用既有 `__geodeRenderMarkdown` 探针**（渲染任意 md → HTML 串）测 data-task/is-checked，**无需新探针**。`core/format.ts`/`search.ts` 不动（已收敛）。
+
+**⚠️ 已知延期（非缺陷，记 ㊳ 续）**：① **live preview 自定义态不渲染**（lezer 硬编码 + Obsidian 自身限制；live `[/]` 仍显文本）；② `data-task` 仅非标准态（标准态靠既有 `is-checked` 类，为字节稳定刻意如此——主题对自定义态用 `li[data-task]` 仍命中）；③ v1 CSS 只画核心态 `/ - > <` 的基础区分，富图标留主题/续轮；④ toggle 命令（R40 `[xX]→" "`、其它→`x`）不动。
+
+**对抗评审（reviewer 7 lens 各独立 + skeptic-verify）→ 1 确认 MAJOR + 证伪 6：**
+- **CONFIRMED MAJOR（R70 元教训复发）= 渲染侧收敛后漏了第 5 处 task 定义消费者「点击 toggle」。** 渲染 `TASK_RE` 放宽到 `[^\]]` 让 `[/]` 成为**可点击 checkbox**，但阅读视图点击 toggle 路径 `features/editor/preview.ts:17 toggleTaskOnLine` 仍用窄正则 `( |x|X)` → 点自定义态 checkbox **返回 null 静默死键**（R76 引入「看着能点、点了没反应」的坏交互）。**契约「task 定义 4 处」漏算这第 5 处**（markdown 渲染 + format toggle 命令 + search + live lezer + **阅读点击 toggle**）。**修 = `toggleTaskOnLine` 正则放宽 `( |x|X)`→`[^\]]` + flip 镜像 `format.ts toggleTaskStatus`（`x/X`→空、其余→`x`）**——**标准态 `[ ]`↔`[x]`/`[X]`→`[ ]` 行为逐字节不变**，自定义态 `[/]`→`[x]`（新）。补阅读视图点击 toggle e2e（点 `[/]`→源变 `[x]` + 点 `[x]`→`[ ]` 不回退）锁死。**教训：放宽一个「判定某行是不是 X」的正则 = 给该 X 的所有消费者喂新输入，渲染/toggle/search/导出逐个审，尤其「渲染让它可交互」会顺带激活交互消费者（点击 toggle）。**
+- **证伪 6**：标准态字节隔离（r26-bytes `list-task` 0 violations，`[ ]`/`[x]`/`[X]` 渲染 + is-checked 逐字节不变）；data-task 值 escapeHtml 正确（`[<]`→`&lt;`/`[>]`→`&gt;`/`["]`→`&quot;`，无属性注入）；4 处正则（现 5 处）对齐 `[^\]]`；自定义态不 is-checked/不误划删除线（`[-]` 按设计 line-through）；下游 export.ts/compat/data-line 不破（仅给 `<li>` 追加属性、`<input>` class 串不变）；live 延期纯视图差异无数据风险。
+
+**验证（As-built）**：typecheck 0 · `r26-bytes` **标准 `list-task` 0 violations**（48 cases，仅新增 flagged `list-task-custom`，证标准态字节零变）· `r76-e2e` **17/17**（自定义态 data-task+checkbox+非 done + 标准态字节稳定 + 负样本 multi-char/empty/非列表/无空格 + **阅读点击 toggle 自定义态→done + 标准态不变**）· `r76-probe` **8/8** 真 WKWebView · 回归 r26(embeds)12/12 + r35(brackets)25/25 + r68(search task)40/40 绿 · cargo build 绿 · 简化门 **clean**（editor.css↔export.css 自定义态块作用域/变量不同=两渲染面有意各一份不合并）。
+
 ## Round 75 additions — `query` 搜索结果嵌入代码块（候选池第五梯队【中】㊲）【As-built v0.72】
 
 > **状态：As-built（v0.72 交付，2026-06-15）。** ㊲ = ` ```query ` 代码块 → 渲染为实时搜索结果列表（复用 `core/search.ts` 解析+执行），reading + live 双态。**字节敏感**（动 `core/markdown.ts` fence renderer）→ data-safety §C：改前已 `r26-bytes --baseline` 重捕（46 cases），改后仅 query fence 字节变、其余 fence 逐字节不变。两道前置门：① grep 确认零实现 + 摸清 search.ts API / markdown.ts fence 分派 / R55 liveBlockWidget 范式；② WebSearch 确认 Obsidian 核心 ` ```query ` = 搜索语法渲染成可折叠分组结果列表。**v1 范围**：分组到文件的可点击结果（`a.internal-link`）+ 总数 + 每文件匹配数；**行内匹配片段（snippet）延期**（见已知延期）。
