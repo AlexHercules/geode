@@ -287,6 +287,27 @@
   transform: rotate(-45deg) translate(5%, -10%);
 }
 
+/* R76: custom task states in exports (mirrors editor.css reading-view) */
+.geode-export li.task-list-item[data-task] > input.task-checkbox {
+  border-color: var(--export-accent);
+}
+.geode-export li.task-list-item[data-task] > input.task-checkbox::after {
+  color: var(--export-accent);
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+}
+.geode-export li.task-list-item[data-task="/"] > input.task-checkbox::after { content: "╱"; }
+.geode-export li.task-list-item[data-task=">"] > input.task-checkbox::after { content: "›"; }
+.geode-export li.task-list-item[data-task="<"] > input.task-checkbox::after { content: "‹"; }
+.geode-export li.task-list-item[data-task="?"] > input.task-checkbox::after { content: "?"; }
+.geode-export li.task-list-item[data-task="!"] > input.task-checkbox::after { content: "!"; }
+.geode-export li.task-list-item[data-task="-"] > input.task-checkbox::after { content: "–"; }
+.geode-export li.task-list-item[data-task="-"] {
+  color: var(--export-text-muted);
+  text-decoration: line-through;
+}
+
 /* --- R18: callout palette (frozen rgb triplets, ARCHITECTURE.md R18) +
        highlight + error — local variables, self-contained (no app.css) --- */
 

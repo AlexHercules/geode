@@ -24,6 +24,10 @@
     "html": "<ul>\n<li class=\"task-list-item\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"0\">todo</li>\n<li class=\"task-list-item is-checked\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"1\" checked>done</li>\n</ul>\n"
   },
   {
+    "name": "list-task-custom",
+    "html": "<ul>\n<li class=\"task-list-item\" data-task=\"/\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"0\">doing</li>\n<li class=\"task-list-item\" data-task=\"-\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"1\">cancelled</li>\n<li class=\"task-list-item\" data-task=\"&gt;\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"2\">later</li>\n<li class=\"task-list-item\" data-task=\"&lt;\"><input type=\"checkbox\" class=\"task-checkbox\" data-line=\"3\">planned</li>\n</ul>\n"
+  },
+  {
     "name": "blockquote",
     "html": "<blockquote>\n<p>quote line\nsecond line</p>\n</blockquote>\n"
   },

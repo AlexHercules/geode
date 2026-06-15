@@ -192,7 +192,10 @@ const WIKILINK_RE = /(!?)\[\[([^\[\]]+?)\]\]/g;
 const PLACEHOLDER_RE = /@@GEODELINK(\d+)@@/g;
 const PLACEHOLDER_TEST = /@@GEODELINK\d+@@/;
 const TAG_RE = /(^|[\s(])#([A-Za-z0-9_\/\-一-鿿]+)/g;
-const TASK_RE = /^\[( |x|X)\]\s+/;
+// R76: any single non-`]` char is a task marker (converges the last narrow
+// task-definition with format.ts/search.ts at `[^\]]`, R40/R68). Only `x`/`X`
+// count as done; other markers (`/ - > <` …) render as custom states.
+const TASK_RE = /^\[([^\]])\]\s+/;
 /** Trailing `^block-id` marker at a line end (R13, frozen contract regex). */
 const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
 
@@ -1096,7 +1099,8 @@ md.core.ruler.push("geode-task-lists", (state) => {
     if (!first || first.type !== "text") continue;
     const m = first.content.match(TASK_RE);
     if (!m) continue;
-    const checked = m[1] !== " ";
+    const mark = m[1];
+    const checked = mark === "x" || mark === "X";
     const line = tokens[i - 2].map ? tokens[i - 2].map![0] : -1;
     first.content = first.content.slice(m[0].length);
     const checkbox = new state.Token("html_inline", "", 0);
@@ -1107,6 +1111,9 @@ md.core.ruler.push("geode-task-lists", (state) => {
     inline.children!.unshift(checkbox);
     tokens[i - 2].attrJoin("class", "task-list-item");
     if (checked) tokens[i - 2].attrJoin("class", "is-checked");
+    // R76: custom states (anything but space/x/X) carry their marker char for
+    // theme/CSS targeting; standard states stay byte-identical (no data-task).
+    else if (mark !== " ") tokens[i - 2].attrSet("data-task", mark);
   }
 });
 

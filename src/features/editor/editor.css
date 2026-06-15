@@ -844,6 +844,36 @@ iframe.geode-embed-pdf {
   transform: rotate(-45deg) translate(5%, -10%);
 }
 
+/* R76: custom task states — `data-task="<char>"` on the <li> (non-standard
+   markers like / - > <). The checkbox shows the marker char; themes/snippets
+   can target li[data-task="…"] for richer rendering. */
+.preview-content li.task-list-item[data-task] > input.task-checkbox {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+.preview-content li.task-list-item[data-task] > input.task-checkbox::after {
+  color: var(--accent);
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1;
+}
+.preview-content li.task-list-item[data-task="/"] > input.task-checkbox::after { content: "╱"; }
+.preview-content li.task-list-item[data-task=">"] > input.task-checkbox::after { content: "›"; }
+.preview-content li.task-list-item[data-task="<"] > input.task-checkbox::after { content: "‹"; }
+.preview-content li.task-list-item[data-task="?"] > input.task-checkbox::after { content: "?"; }
+.preview-content li.task-list-item[data-task="!"] > input.task-checkbox::after { content: "!"; }
+.preview-content li.task-list-item[data-task="-"] > input.task-checkbox::after { content: "–"; }
+/* cancelled (-) reads like done but muted */
+.preview-content li.task-list-item[data-task="-"] {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.preview-content li.task-list-item[data-task="-"] > input.task-checkbox,
+.preview-content li.task-list-item[data-task="-"] > input.task-checkbox::after {
+  border-color: var(--text-faint);
+  color: var(--text-faint);
+}
+
 /* ============ callouts (R18) ============ */
 
 /* Container — unscoped (like .geode-embed-note) so callouts inside hydrated

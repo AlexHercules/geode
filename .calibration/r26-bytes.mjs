@@ -25,6 +25,10 @@ const CORPUS = [
   ["list-ul", "- alpha\n- beta\n  - nested"],
   ["list-ol", "1. one\n2. two\n3. three"],
   ["list-task", "- [ ] todo\n- [x] done"],
+  // R76: custom task states render as checkboxes carrying data-task — NEW bytes
+  // this round (flagged). The `list-task` (standard [ ]/[x]) entry above must
+  // stay byte-identical, proving the TASK_RE convergence touches only non-standard.
+  ["list-task-custom", "- [/] doing\n- [-] cancelled\n- [>] later\n- [<] planned", true],
   ["blockquote", "> quote line\n> second line"],
   ["callout", "> [!note] Title\n> callout body"],
   ["callout-fold", "> [!warning]- Collapsed\n> hidden body"],
