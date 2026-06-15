@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R73 套件回归（2026-06-15，macOS release 二进制 v0.70.0 实测 `r73-probe-vault`）
+
+R73 = `cssclasses` frontmatter 应用到笔记视图容器（候选池第六梯队 ㊼ slice，原生功能；㉟ Properties 类型化编辑经前置门判 R22 已实现而出队）。对照 Obsidian 核心：笔记 `cssclasses`（+遗留 `cssclass`）作为 CSS 类加到 reading view `.markdown-preview-view` / editor `.markdown-source-view`，供主题/CSS 片段定向单笔记样式（迁移叙事：Obsidian 主题对 cssclasses 的 DOM 假设在 Geode 成立）。
+
+新增套件：`r73-e2e.mjs` **23/23**（list/空格串/逗号串/inline list/遗留 cssclass/去重/无 cssclasses 仅 base/preview+live 双容器/preview+live 双态响应性 stale 移除）+ `r73-probe.mjs` **8/8**（真 WKWebView + 真 fs，token 提取 6 形态经 `__geodeCssClasses` sync 探针；DOM 应用 browser-E2E only，§D 纪律）。
+
+- **套件矩阵不回退**：本轮零 compat 调用面改动（cssclasses 应用是 EditorPane 容器 className 加性、不动插件 API 面、不动 markdown.ts），r31/…/r57 全 compat 套件不动；原生回归 r30[allproperties]25/25 + r26[embeds]12/12 + **r26-bytes 0 violations**（容器 className 不入 `previewHtml` 字节流，阅读视图渲染字节零回退）全绿。**OBSIDIAN-COMPAT 缺口表**：㊼ Properties 增强的「cssclasses 应用」子项交付（其余 ㊼ 子项——File properties 右侧栏/键盘导航/tags chip 搜索/date 链日记/hover+embeds 容器——续缺）。
+
 ### R72 套件回归（2026-06-15，macOS release 二进制 v0.69.0 实测 `r72-probe-vault`）
 
 R72 = 新链接格式设置（候选池第五梯队【中】㉞-c，原生功能；㉞ 整项完成）。对照 Obsidian 核心：设置「新链接格式」（wikilink↔markdown）+「新链接路径」（最短/相对/绝对），影响全部新建链接构造点。

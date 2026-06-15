@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 73 additions — `cssclasses` frontmatter 应用到笔记视图容器（候选池第六梯队 ㊼ slice；㉟ 经前置门判 R22 已实现而出队）【As-built v0.70】
+
+> **状态：As-built（v0.70 交付，2026-06-15）。** 两道前置门把 **㉟ Properties 类型化编辑** 判为 **R22 已实现**（PropertiesPanel 已按 `effectivePropertyType` 分派 number/checkbox/date/datetime/chips 控件 + 类型菜单 `propertyTypes.assign` + `.obsidian/types.json` 注册表 + buildSetProperty 写回；ROADMAP L1246「缺类型化编辑」描述失准）→ **出队**。本轮转做 ㊼「Properties 增强（细化 ㉟）」首条真缺口：**`cssclasses` 应用**——Obsidian 核心行为，把笔记 frontmatter 的 `cssclasses`（list/空格串/逗号串）作为 CSS 类加到笔记视图容器，供主题/CSS 片段（`compat/obsidian/themes.ts` 既有 CSS 注入）定向单笔记样式。**纯读 additive**：不写 `.md`、不动 markdown.ts（容器 className 不在 `previewHtml` 字节流内 → 无 r18-diff/r26-bytes 风险）、复用既有 frontmatter 解析。
+
+**`core/metadata.ts` 新增导出（read-only helper）：**
+- `getCssClasses(content: string): string[]` — `parseFrontmatter(content)` → 读 `cssclasses` 与遗留单数 `cssclass`（`fmField` 大小写不敏感）→ 各经 `asList`（标量逗号切）→ 每项再按空白 `\s+` 切（CSS 类 token 不含空白；支持「空格分隔串」形）→ 去空、去重、保序。无 frontmatter / 无该键 → `[]`。零写入、不进索引（仅供视图层即时读 live 文本）。
+
+**`features/editor/EditorPane.tsx` 接线（2 处 className）：**
+- `const cssClasses = useMemo(() => (handle ? getCssClasses(handle.getText()) : []), [handle, docRevision])` — `docRevision`（handle.revision 镜像，line 167–176）既在 live 也在 preview 随文本变更 bump → 编辑 frontmatter `cssclasses` 后容器类**即时更新**（无需保存/reindex；与 previewHtml 同源 getText()）。`cssSuffix = cssClasses.length ? " " + cssClasses.join(" ") : ""`。
+- **应用容器（镜像 Obsidian DOM）**：① live/source = `.editor-cm-host.markdown-source-view.mod-cm6`（line 736，CM host div；CM 只管其 `.cm-editor` 子树，host 自身 className 由 React 安全 patch 不被 CM 覆写）；② preview = `.preview-content.markdown-preview-view.markdown-rendered`（line 776）。两者各 `className={基础串 + cssSuffix}`。主题写 `.markdown-preview-view.<class>` / `.markdown-source-view.<class>` 选择器即命中（迁移叙事：Obsidian 主题对 cssclasses 的 DOM 假设成立）。
+- **不动**：`previewHtml`（dangerouslySetInnerHTML 内层，markdown.ts 产物）字节不变；outer `.editor-pane.workspace-leaf` 不加（Obsidian 加在 view 容器非 leaf）。
+
+**⚠️ 已知延期（非缺陷，记 ㊼ 续）**：① **hover 预览 / embeds** 容器不应用 cssclasses（本轮限主 EditorPane 两模式，HoverPreview/embeds.ts 是独立渲染面，留 ㊼ 续）；② **导出**（若有）不应用；③ token **不做 CSS 标识符转义/校验**（Obsidian 同口径，原样 className；转义是消费 CSS 侧职责）。
+
+**文件所有权（单 agent，无并行）**：`core/metadata.ts`（+1 导出函数）· `features/editor/EditorPane.tsx`（+useMemo +2 className）· `.calibration/r73-e2e.mjs` + probe（新）。无跨区签名冲突。
+
+**桌面 probe（§D 纪律）**：首版 probe 用 `document.querySelector` 读容器 className → WKWebView App-Nap 下全 null（DOM 读不可靠，§D 明令查 Store/sync 逻辑而非 DOM，r71-probe 同口径「click 仅 browser-E2E」）→ 改为 always-on sync 探针 `__geodeCssClasses(path)=>getCssClasses(await vault.read(path))`（main.tsx，镜像 `__geodeRenderMarkdown`）：probe 读真 fs 文件 → token，证「real-fs frontmatter → tokens」路径；**DOM 应用（className 落容器）= 仅 browser-E2E**（平台无关 React，浏览器端已证）。
+
+**对抗评审（reviewer 6 lens 各独立 + 逐条 skeptic-verify，含 reviewer 自写 CM keystroke 复核）→ 0 确认缺陷。** 关键证伪：① CM 不覆写 host className（host 在 JSX 无 children → React 只 patch className 属性，CM 只建 `.cm-editor` 子节点 → 零冲突，实测 keystroke 后 token 更新且 `.cm-editor` 子树存活）；② 纯读零写（不进 `previewHtml` 字节流 → r26-bytes 0 violations 证隔离）；③ className token 经 React `className` prop 赋值非 innerHTML → 无 XSS；④ docRevision 在 local 编辑/external reload 均 bump → live+preview 双态响应。**采纳 1 nit**：补 r73-e2e live 态容器响应性断言（原仅 preview 态 external-modify，现加 live cm-host 即时更新 + stale 移除，锁 headline 契约）。
+
+**验证（As-built）**：typecheck 0 · `r73-e2e` **23/23**（list/空格串/逗号串/inline list/遗留 cssclass/去重/无 cssclasses 仅 base/preview+live 双容器/preview+live 双态响应性 stale 移除）· `r73-probe` **8/8** 真 WKWebView+真 fs（token 提取 6 形态）· 回归 r30(25 properties)/r26(12 reading-view)/r26-bytes(**0 violations**) 绿 · cargo build 绿 · 简化门 **clean**（diff ~46 行/3 文件：getCssClasses 已复用 parseFrontmatter/asList/fmField=减法形态；cssSuffix 2 真实调用点；6 个 `__geode*` 探针刻意各自独立=不去重）。
+
 ## Round 72 additions — 新链接格式设置 wikilink↔markdown × 最短/相对/绝对（候选池第五梯队【中】㉞-c；㉞ 整项完成）【As-built v0.69】
 
 > **状态：As-built（v0.69 交付,2026-06-15）。** ㉞-c = 让用户选择**新建链接**的形态：链接类型（wikilink `[[..]]` vs markdown `[..](..)`）+ 路径形式（最短 / 相对 / 绝对）。**纯前端 additive**——只改链接**创建**，**不动**改写引擎（linkRewrite.ts）/渲染管线（markdown.ts），故无字节级 r18-diff/r26-bytes 风险（未碰 markdown.ts）。本轮上承前一会话已落地的 `linkFormat.ts` + 5 消费点接线，本会话补 unlinkedMentions 接线 + 对抗评审修 2 根因。
