@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 85 additions — 字体三族：界面/正文/等宽字体设置（候选池第六梯队 ㊺ 续 v1）【As-built v0.82】
+
+> **状态：As-built（v0.82 交付，2026-06-15）。** 镜像 R79 accent 手法，加 3 个用户字体覆盖（运行时 CSS 变量 + localStorage 持久化）：**Interface**（菜单/侧栏/树）、**Text**（笔记正文，未设时继承界面）、**Monospace**（代码）。纯前端 view-only（不写 .md、不动 markdown.ts 渲染管线，改的是 `font-family` CSS 非 HTML 字节）。
+
+**契约（冻结接口）**：
+- `core/appearance.ts`：`sanitizeFontFamily(raw): string` 纯函数（CSS 注入防护 + 控制字符清洗：strip `["'\\;{}()<>]` + 控制符 `\x00-\x08\x0b\x0c\x0e-\x1f\x7f`[**不含 \t\n\r**] + `\s+`→单空格 + trim；"" = 无覆盖）；`interfaceFont`/`textFont`/`monospaceFont` 三 Store + `setInterfaceFont`/`setTextFont`/`setMonospaceFont`（set Store + persistString(**sanitized**) + applyFont）。`applyFont(prop,raw,stack)` = `setProperty(prop, \`"<sanitized>", <stack>\`)` 或空→`removeProperty`（回 CSS fallback）。boot `applyAppearanceSettings()` 应用 3 字体。
+- CSS 变量（默认 stack 与 `appearance.ts` 的 `STACK_INTERFACE`/`STACK_MONOSPACE` **逐字节一致**）：app.css body→`var(--font-interface, <stack>)`；editor.css `.cm-editor` + `.markdown-reading-view`→`var(--font-text, var(--font-interface, <stack>))`（**正文未设→继承界面**=Obsidian 语义）；6 editor + 2 settings mono 点→`var(--font-monospace, <mono-stack>)`。
+- SettingsModal 加 3 text input（`data-testid="settings-font-{interface,text,monospace}"`，复用既有 `.settings-text-input`）；probe `__geodeFontSanitize` + `__geodeAppearance.setFont/fontVar`。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify + 实证 CSS 注入）→ 0 confirmed critical/major + 2 minor（同根因，已修）+ 余证伪：**
+- **CSS 注入证伪（核心）**：用户内容恒被包在引号 string token 内（`"<sanitized>", <stack>`），sanitize 已 strip `"` 和 `\` → 无法闭合引号/起转义 → 无法越出 token 成新声明；且 `var()` 代入非法值只触发 IACVT（回退继承/初始值），规范不允许越出外层声明。实证 `url()`/`@import`/`!important`/`/* */`/`}body{` 全被锁为引号内字面名→CSS 当「找不到该字体」回退 stack。
+- **[minor F1 已修] text 「已设但缺失」回退不尊重界面覆盖**：`setTextFont` 原 fallback 写死 `STACK_INTERFACE`，当用户同时覆盖界面+正文且正文字体缺失时回退到默认 stack 而非用户界面字体（与 CSS `var(--font-text, var(--font-interface, …))` 语义分叉）→ **修=fallback 传 `var(--font-interface, ${STACK_INTERFACE})`**。
+- **[minor F2 已修] 控制字符未 strip 致声明静默失效**：原 strip 集不含控制符，粘贴含 NUL/C0/DEL 的字体名→引号内非法 string→`font-family` 声明非法→覆盖静默丢失（非安全问题，仍锁引号内）→ **修=strip 集加 `\x00-\x08\x0b\x0c\x0e-\x1f\x7f`（保留 \t\n\r 交 `\s+` 归一）**。
+- **证伪其余**：settings mono fallback 由历史不一致的 `Consolas,...` **故意统一**为 editor 全栈（字节对齐 STACK_MONOSPACE，macOS 上 ui-monospace 更贴原生=改进非缺陷）；所有 stack 字节核对一致；`.markdown-reading-view` 新规则是外层 wrapper、内层 `.preview-content code`（mono）特异性更高正确覆盖、reading 代码不被正文字体污染；持久化 sanitized vs Store raw 的「刷新后输入框由 raw 变 sanitized」= 与 R79 accent 同款可接受 UX；分层合规（core 无 React）；R20 fontSize/R50 readable/R79 accent 未波及。
+
+**验证（As-built）**：typecheck 0 · `r85-e2e` **21/21**（sanitizeFontFamily 7 真值表[含注入/控制符/折叠/空] + 3 setter 应用 CSS 变量+持久化+清除 + 注入实测无 `;{}` + 3 设置 input 应用+持久+清除）· `r85-probe` **6/6** 真 WKWebView · 回归 r79(21)/r50(15) · 不碰 markdown.ts（r26-bytes 0）· 简化门 clean。
+
+**v1 已知延期**：系统已装字体的自动补全建议（Obsidian 给系统字体下拉）· font 设置生效的「字体已识别 ✓」标记 · CJK 字体回退栈细化。
+
 ## Round 84 additions — 图谱过滤：孤立笔记 + 仅现有文件 toggle（候选池第六梯队 ㊵ 续 v1）【As-built v0.81】
 
 > **状态：As-built（v0.81 交付，2026-06-15）。** 给 R78 图谱设置面板加 Obsidian「Filters」组的两个核心 toggle：**Orphans**（显示无连接笔记）+ **Existing files only**（仅显示已存在文件、隐藏 unresolved 链接目标）。**纯客户端过滤**——`GraphNode` 已带 `resolved`（types.ts）+ getGraph 预算 `degree`，零改 getGraph 共享索引、零写盘。

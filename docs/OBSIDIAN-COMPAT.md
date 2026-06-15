@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R85 套件回归（2026-06-15，macOS release 二进制 v0.82.0 实测 `r85-probe-vault`）
+
+R85 = 字体三族：界面/正文/等宽字体设置（候选池第六梯队 ㊺ 续 v1，原生功能）。对照 Obsidian Appearance → Fonts：Interface（菜单/树）/ Text（正文，未设继承界面）/ Monospace（代码）。**纯前端**（appearance.ts + CSS 变量 + 设置 UI），不写 .md、不动 markdown.ts。
+
+新增套件：`r85-e2e.mjs` **21/21**（sanitizeFontFamily 7 真值表[注入/控制符/折叠/空] + 3 setter 应用 `--font-*` 变量+持久化+清除 + 注入实测无 `;{}()<>"'` + 3 设置 input）+ `r85-probe.mjs` **6/6**（真 WKWebView，`__geodeFontSanitize`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（字体覆盖纯前端 CSS 变量）；不碰 markdown.ts → **r26-bytes 0**（改 font-family CSS 非 HTML 字节）；appearance.ts 加性扩展 → **r79(accent/系统主题)21/21 + r50(readable/spellcheck)15/15 回归绿**。**对抗评审 6 维 + 实证 CSS 注入 → 0 confirmed critical/major + 2 minor（已修：text 缺失回退尊重界面覆盖；控制字符 strip）**。CSS 注入挡死（用户内容恒锁引号 string token + IACVT 兜底）。**OBSIDIAN-COMPAT 缺口表**：㊺ Interface/Text/Monospace 字体交付（续缺口：系统字体自动补全 / 字体识别 ✓ 标记）。
+
 ### R84 套件回归（2026-06-15，macOS release 二进制 v0.81.0 实测 `r84-probe-vault`）
 
 R84 = 图谱过滤：孤立笔记 + 仅现有文件 toggle（候选池第六梯队 ㊵ 续 v1，原生功能）。对照 Obsidian Graph Filters 组：Orphans + Existing files only（Tags/Attachments/Search 延期）。**纯客户端过滤**（GraphView + graphPrefs.ts），零改 getGraph、不写 .md、不动 markdown.ts。
