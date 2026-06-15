@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 78 additions — 图谱设置完整化 v1：显示 + 力 持久化设置面板（候选池第六梯队 ㊵）【As-built v0.75】
+
+> **状态：As-built（v0.75 交付，2026-06-15）。** ㊵ v1 = 把 `GraphView` 当前硬编码的 4 力 + 显示参数抽成齿轮设置面板（滑块）+ localStorage 持久化（沿用既有 `GraphPrefs` blob 扩字段，向后兼容旧 blob）。**纯前端、不写 .md、不动 markdown.ts/vault/editor → data-safety 轻**（GraphPrefs 是 localStorage，损坏自动回默认无丢失）。两道前置门：① grep 揭露 `features/graph/` 仅 GraphView.tsx(887)+graph.css、d3-force 模拟、硬编码点（力 :573-585 / lineWidth :304 / 无箭头 / LABEL_ZOOM :76 / nodeRadius :85）+ `GraphPrefs{mode,depth,showAll}` localStorage blob；② WebSearch 确认 Obsidian 图谱设置：**力**（center/repel/linkForce/linkDistance）+ **显示**（arrows/text-fade/node-size/link-thickness）。
+
+**v1 范围（ROADMAP 建议「显示+力持久化面板 ROI 最高」）**：力 4 滑块 + 显示 4 项（节点大小/连线粗细/文本淡出阈值/箭头开关）。**过滤（标签/附件/孤立节点，动 getGraph）+ 分组着色 = 不在 v1，记延期**。
+
+**关键设计：**
+- **`features/graph/graphPrefs.ts`（新，抽出可测纯逻辑）**：`GraphPrefs` 扩 `forces:{center,repel,linkForce,linkDistance}` + `display:{nodeSize,linkThickness,labelThreshold,arrows}`；`DEFAULT_PREFS`（current 值：center 0.06 / repel 200[正幅值,应用取负] / linkForce 0.5 / linkDistance 70 / nodeSize 1 / linkThickness 1 / labelThreshold 0.8 / arrows false）；`parseGraphPrefs(raw: string|null): GraphPrefs`（逐字段校验 + **clamp 到滑块区间** + 缺字段/坏 blob 回默认=**向后兼容旧 `{mode,depth,showAll}` blob**）；`loadPrefs()`（localStorage→parse）/`savePrefs()`。GraphView 从此 import。
+- **`features/graph/GraphView.tsx`**：① prefs 镜像进 `stateRef.current.prefs`（render 体赋值，draw 闭包读最新，**不进 draw deps**——空 deps useCallback 稳定性）；② 力构建（rebuild :573-585）从 `stateRef.prefs.forces` 读（非闭包字面值，避 stale）；charge `.strength(-repel)`、center `.strength(center)`、link `.distance(linkDistance).strength(linkForce)`；③ **力滑块 onChange = `applyForces(sim, forces)` 直接 poke 运行中 sim + `alpha(0.3).restart()`**（不重建，布局连续，对齐拖拽 reheats 先例 :677；`applyForces` 用 `sim.force("link"/"charge"/"center")` cast 到 ForceLink/ForceManyBody/ForceCenter）；④ 显示滑块 onChange = setPrefs + `requestDraw()`（draw 读 `s.prefs.display`：lineWidth base=linkThickness、LABEL_ZOOM→labelThreshold、nodeRadius×nodeSize、arrows→画三角箭头）；⑤ `nodeRadius(n, scale=1)` 加 scale 形参（draw+collide 传 nodeSize）。
+- **设置面板 UI**：`.graph-toolbar` 加齿轮按钮（`Icon name`）→ toggle `settingsOpen` → `.graph-settings-panel`（Display + Forces 两组滑块行 + arrows checkbox + Reset 按钮）。**滑块 graph 内联**（分层：graph **绝不 import settings feature** 的 `.settings-slider`，自建 `.graph-slider`）。
+- **`features/graph/graph.css`**：齿轮 + 浮层（绝对定位贴 toolbar）+ 滑块行样式（颜色走 CSS 变量）。
+- **`core/i18n/dict.views.ts`**：`graph.settings`/`graph.forces`/`graph.display`/`graph.forceCenter`/`graph.forceRepel`/`graph.forceLink`/`graph.linkDistance`/`graph.nodeSize`/`graph.linkThickness`/`graph.textFade`/`graph.arrows`/`graph.resetSettings` 双语。
+- **`main.tsx`**：always-on sync 探针 `__geodeGraphPrefs(raw?) => raw!==undefined ? parseGraphPrefs(raw) : loadPrefs()`（§D：验证逻辑可测，面板 DOM/canvas browser-E2E only）。
+
+**testid 面**：`graph-settings-toggle`/`graph-settings`/`graph-force-center`/`graph-force-repel`/`graph-force-link`/`graph-link-distance`/`graph-node-size`/`graph-link-thickness`/`graph-text-fade`/`graph-arrows`/`graph-settings-reset`。
+
+**⚠️ 已知延期（非缺陷，记 ㊵ 续）**：① 过滤组（标签/附件作节点、孤立笔记、仅现有文件——动 `metadata.getGraph()`）；② 分组着色（按查询）；③ 局部图谱深度>2 + in/out 方向 + 保存为默认；④ force/display 全局共用一份（Obsidian local/global 各存一份，v1 不拆）。
+
+**对抗评审（reviewer 7 lens 各独立 + skeptic-verify）→ 0 确认缺陷 + 3 nit：**
+- **证伪 7**：① prefs 镜像（render 体 `s.prefs=prefs` + setForce/setDisplay/reset 手动同步镜像）无 stale/打架（React18 同事件同步执行 + 后续 re-render 值相同）；② 力 live-poke 力名一致（link/charge/center）、charge 用 `-repel`、sim null 守卫、不触发 rebuild；③ clamp/校验对 NaN/Infinity/字符串/负/超界/旧 blob/null/坏 JSON 全回安全值（`num()` `Number.isFinite`+clamp）；④ draw 箭头几何+nodeRadius 全 9 调用点一致传 nodeSize（点击/碰撞/视觉不错位）；⑤ 分层（graph 不 import settings feature，滑块自建）+ 复用旧 key 向后兼容 + savePrefs try/catch；⑥ onChange 函数式 setPrefs 不丢并发；⑦ 测试充分（canvas/物理 §D 留口非假绿）。
+- **采纳 1 nit（已修）**：`DEFAULT_PREFS` 被 parse/reset 按引用返回——`Object.freeze`（含 nested forces/display）加固，防未来就地 mutate 污染默认。
+- **nit（记 ㊵ 续，不返工）**：① nodeSize 增大时 collide 半径到下次 rebuild 才更新（契约「display=no physics, requestDraw only」取舍，Obsidian 同）；② 拖滑块每 onChange 一次 savePrefs（blob 微小无 jank）。
+
+**验证（As-built）**：typecheck 0 · `r78-e2e` **16/16**（parseGraphPrefs clamp/向后兼容/corrupt + 齿轮开合 + 4 力滑块+3 显示滑块+arrows 持久化 localStorage + reset 回默认 + sim-null 安全）· `r78-probe` **6/6** 真 WKWebView（`__geodeGraphPrefs` 校验）· `r26-bytes` 0（未碰渲染管线）· cargo build 绿 · 简化门 **clean**（slider 7 调用点 / applyForces 2 调用点 / GRAPH_RANGES 单一真值 / LABEL_ZOOM 死常量已删）。
+
 ## Round 77 additions — 块 ID 自动铸造 `^id`（候选池第五梯队【中】㊴）【As-built v0.74】
 
 > **状态：As-built（v0.74 交付，2026-06-15）。** ㊴ = 给段落块创建引用时自动铸 `^id`：v1 = 「复制块引用」/「复制块嵌入」命令——对活动编辑器**光标所在段落块**，若无 `^id` 则铸一个 append 到块末行行尾，并复制 `[[Note#^id]]`/`![[Note#^id]]` 到剪贴板。**写 .md → data-safety 触发**（但走活动编辑器 `view.dispatch` = R40/R33 既有 B-class autosave 路径，非新写路径）。两道前置门：① grep 揭露 R13 已有 `BLOCK_MARKER_RE`/`blocks: BlockRef[]` 索引/`resolveSubpath`（全复用、冻结不动）+ 无「复制块引用」命令/无 `[[#^` 补全；② WebSearch 确认 Obsidian「Copy link to block」= 无块 id 时对光标段落自动铸短随机 id + 复制链接。
