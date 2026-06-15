@@ -80,6 +80,7 @@ import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
+import { sortResults } from "@features/search/SearchPanel";
 import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme } from "@core/workspace";
 import type { ThemeKind } from "@core/types";
@@ -339,6 +340,17 @@ async function bootstrap() {
   };
   graphPrefsHost.__geodeGraphPrefs = (raw) =>
     raw !== undefined ? parseGraphPrefs(raw) : loadGraphPrefs();
+
+  // always-on search-sort probe (R80, ㊸): runs the pure sortResults over minimal
+  // result items and returns the sorted basenames. The toolbar DOM is browser-E2E
+  // only (§D); this proves the sort logic in the real build.
+  const searchSortHost = globalThis as unknown as {
+    __geodeSearchSort?: (
+      items: { basename: string; nameMatch: boolean; total: number }[],
+      key: "relevance" | "name-asc" | "name-desc" | "count-desc" | "count-asc",
+    ) => string[];
+  };
+  searchSortHost.__geodeSearchSort = (items, key) => sortResults(items, key).map((r) => r.basename);
 
   // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
   // real-fs vault and returns the structured result (total + matched paths). The

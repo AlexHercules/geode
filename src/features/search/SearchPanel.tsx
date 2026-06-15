@@ -14,6 +14,38 @@ interface LineHit {
   text: string;
   /** highlight ranges, offsets into `text` */
   marks: SearchMatchRange[];
+  /** R80: the full (untrimmed-window) line + its marks, for "more context" */
+  fullText: string;
+  fullMarks: SearchMatchRange[];
+}
+
+/** R80: result sort orders. "relevance" is the prior default (name match → count
+ *  → name), preserved for zero regression. */
+type SortKey = "relevance" | "name-asc" | "name-desc" | "count-desc" | "count-asc";
+
+/** Sort matched files by the chosen order. Pure — exported for the probe. */
+export function sortResults<T extends { basename: string; nameMatch: boolean; total: number }>(
+  results: readonly T[],
+  key: SortKey,
+): T[] {
+  const out = [...results];
+  switch (key) {
+    case "name-asc":
+      return out.sort((a, b) => a.basename.localeCompare(b.basename));
+    case "name-desc":
+      return out.sort((a, b) => b.basename.localeCompare(a.basename));
+    case "count-desc":
+      return out.sort((a, b) => b.total - a.total || a.basename.localeCompare(b.basename));
+    case "count-asc":
+      return out.sort((a, b) => a.total - b.total || a.basename.localeCompare(b.basename));
+    default: // "relevance"
+      return out.sort(
+        (a, b) =>
+          Number(b.nameMatch) - Number(a.nameMatch) ||
+          b.total - a.total ||
+          a.basename.localeCompare(b.basename),
+      );
+  }
 }
 
 interface FileResult {
@@ -25,6 +57,22 @@ interface FileResult {
   /** ranges.length + (nameMatch ? 1 : 0) — frozen R21 counting */
   total: number;
   lines: LineHit[];
+}
+
+/** R80: read/persist a small search toolbar pref (localStorage, single key). */
+function readSearchPref(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function persistSearchPref(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage unavailable — session-only */
+  }
 }
 
 const MAX_LINES_PER_FILE = 5;
@@ -56,7 +104,7 @@ function perfMark(key: string, value: number): void {
 function sliceLine(
   raw: string,
   ranges: SearchMatchRange[],
-): { text: string; marks: SearchMatchRange[] } {
+): { text: string; marks: SearchMatchRange[]; fullText: string; fullMarks: SearchMatchRange[] } {
   const leading = raw.length - raw.trimStart().length;
   const trimmed = raw.trim();
   const local = ranges
@@ -65,9 +113,11 @@ function sliceLine(
       to: Math.max(0, Math.min(r.to - leading, trimmed.length)),
     }))
     .filter((r) => r.to > r.from);
-  if (trimmed.length <= 110) return { text: trimmed, marks: local };
+  // R80: full form = the whole trimmed line; the windowed `text` is the default
+  // compact view, `fullText` is shown when "more context" is on.
+  if (trimmed.length <= 110) return { text: trimmed, marks: local, fullText: trimmed, fullMarks: local };
   const first = local[0];
-  if (!first) return { text: trimmed.slice(0, 110) + "…", marks: [] };
+  if (!first) return { text: trimmed.slice(0, 110) + "…", marks: [], fullText: trimmed, fullMarks: local };
   const start = Math.max(0, first.from - CONTEXT_RADIUS);
   const end = Math.min(trimmed.length, first.to + CONTEXT_RADIUS * 2);
   const prefix = start > 0 ? "…" : "";
@@ -78,7 +128,7 @@ function sliceLine(
     const to = Math.min(r.to, end);
     if (to > from) marks.push({ from: from - start + prefix.length, to: to - start + prefix.length });
   }
-  return { text, marks };
+  return { text, marks, fullText: trimmed, fullMarks: local };
 }
 
 /**
@@ -107,8 +157,8 @@ function deriveLineHits(content: string, ranges: readonly SearchMatchRange[]): L
         });
         ri++;
       }
-      const { text, marks } = sliceLine(lines[i], local);
-      out.push({ lineNo: i + 1, text, marks });
+      const { text, marks, fullText, fullMarks } = sliceLine(lines[i], local);
+      out.push({ lineNo: i + 1, text, marks, fullText, fullMarks });
       if (out.length >= MAX_LINES_PER_FILE) break;
     }
     lineStart = lineEnd + 1;
@@ -137,13 +187,15 @@ export function SearchPanel() {
   const rev = useStore(app.metadata.revision);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
-  const [results, setResults] = useState<FileResult[]>([]);
-  /** files matched beyond MAX_FILE_RESULTS (scanned + counted, not rendered) */
-  const [hiddenFiles, setHiddenFiles] = useState(0);
-  /** total match count across ALL files (rendered + hidden) */
-  const [grandTotal, setGrandTotal] = useState(0);
+  /** every matched file (unsorted, untruncated) — `results` is derived from it */
+  const [allResults, setAllResults] = useState<FileResult[]>([]);
   const [searching, setSearching] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // R80: toolbar prefs — sort + more-context persisted; collapse is per-session
+  const [sortKey, setSortKey] = useState<SortKey>(() => readSearchPref("geode.searchSort", "relevance") as SortKey);
+  const [moreContext, setMoreContext] = useState(() => readSearchPref("geode.searchContext", "") === "1");
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false); // transient "copied" feedback on the copy button
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebounced(query), 250);
@@ -185,9 +237,7 @@ export function SearchPanel() {
   useEffect(() => {
     const expr = parsed && !parsed.error ? parsed.expr : null;
     if (!expr) {
-      setResults([]);
-      setHiddenFiles(0);
-      setGrandTotal(0);
+      setAllResults([]);
       setSearching(false);
       return;
     }
@@ -229,17 +279,11 @@ export function SearchPanel() {
           lines: deriveLineHits(content, outcome.ranges),
         });
       }
-      out.sort(
-        (a, b) =>
-          Number(b.nameMatch) - Number(a.nameMatch) ||
-          b.total - a.total ||
-          a.basename.localeCompare(b.basename),
-      );
       if (!cancelled) {
         perfMark("searchScanMs", performance.now() - t0);
-        setGrandTotal(out.reduce((n, r) => n + r.total, 0));
-        setHiddenFiles(Math.max(0, out.length - MAX_FILE_RESULTS));
-        setResults(out.length > MAX_FILE_RESULTS ? out.slice(0, MAX_FILE_RESULTS) : out);
+        // R80: store the full matched set; sort + truncate happen in the memo
+        // below so changing the sort order never re-scans the vault.
+        setAllResults(out);
         setSearching(false);
       }
     })();
@@ -248,8 +292,14 @@ export function SearchPanel() {
     };
   }, [app.vault, app.metadata, parsed, rev]);
 
-  const totalMatches = grandTotal;
-  const totalFiles = results.length + hiddenFiles;
+  // R80: sort + truncate derived from allResults (re-sort never re-scans).
+  const results = useMemo(
+    () => sortResults(allResults, sortKey).slice(0, MAX_FILE_RESULTS),
+    [allResults, sortKey],
+  );
+  const totalMatches = useMemo(() => allResults.reduce((n, r) => n + r.total, 0), [allResults]);
+  const totalFiles = allResults.length;
+  const hiddenFiles = Math.max(0, allResults.length - results.length);
 
   const clear = () => {
     setQuery("");
@@ -258,6 +308,43 @@ export function SearchPanel() {
   };
 
   const openFile = (path: string) => app.workspace.openFile(path);
+
+  /* ---------- R80: toolbar handlers ---------- */
+  const changeSort = (key: SortKey) => {
+    setSortKey(key);
+    persistSearchPref("geode.searchSort", key);
+  };
+  const toggleMoreContext = () => {
+    setMoreContext((v) => {
+      persistSearchPref("geode.searchContext", v ? "0" : "1");
+      return !v;
+    });
+  };
+  const toggleFileCollapsed = (path: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  /** collapse all when any file is expanded, otherwise expand all */
+  const toggleCollapseAll = () =>
+    setCollapsed((prev) =>
+      results.some((r) => !prev.has(r.path)) ? new Set(results.map((r) => r.path)) : new Set(),
+    );
+  const copyResults = () => {
+    // full path (sans .md) keeps the link portable when pasted elsewhere — a bare
+    // basename resolves to the wrong file when two notes share it (R77 lesson).
+    const text = results.map((r) => `- [[${r.path.replace(/\.md$/, "")}]]`).join("\n");
+    try {
+      void navigator.clipboard.writeText(text).catch(() => {});
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable (insecure context) — no feedback */
+    }
+  };
+  const allCollapsed = results.length > 0 && results.every((r) => collapsed.has(r.path));
 
   /* ---------- render ---------- */
 
@@ -353,28 +440,42 @@ export function SearchPanel() {
           })}
           {hiddenFiles > 0 && ` · ${t("search.showingTop", { count: results.length })}`}
         </div>
-        {results.map((r) => (
-          <div className="search-file" key={r.path} data-testid="search-result">
-            <div
-              className="search-file-header"
-              onClick={() => openFile(r.path)}
-              title={r.path}
-            >
-              <span className="search-file-name">{highlightRanges(r.basename, r.nameMarks)}</span>
-              {r.total > 0 && <span className="search-tag-count">{r.total}</span>}
-            </div>
-            {r.lines.map((line) => (
-              <div
-                key={line.lineNo}
-                className="search-line"
-                onClick={() => openFile(r.path)}
-                title={t("search.lineTooltip", { line: line.lineNo })}
-              >
-                {highlightRanges(line.text, line.marks)}
+        {results.map((r) => {
+          const isCollapsed = collapsed.has(r.path);
+          return (
+            <div className="search-file" key={r.path} data-testid="search-result">
+              <div className="search-file-header" title={r.path}>
+                <button
+                  className="search-file-chevron"
+                  data-testid="search-file-chevron"
+                  onClick={() => toggleFileCollapsed(r.path)}
+                  aria-expanded={!isCollapsed}
+                  aria-label={t(isCollapsed ? "search.expandAll" : "search.collapseAll")}
+                >
+                  <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={13} />
+                </button>
+                <span className="search-file-name" onClick={() => openFile(r.path)}>
+                  {highlightRanges(r.basename, r.nameMarks)}
+                </span>
+                {r.total > 0 && <span className="search-tag-count">{r.total}</span>}
               </div>
-            ))}
-          </div>
-        ))}
+              {!isCollapsed &&
+                r.lines.map((line) => (
+                  <div
+                    key={line.lineNo}
+                    className="search-line"
+                    onClick={() => openFile(r.path)}
+                    title={t("search.lineTooltip", { line: line.lineNo })}
+                  >
+                    {highlightRanges(
+                      moreContext ? line.fullText : line.text,
+                      moreContext ? line.fullMarks : line.marks,
+                    )}
+                  </div>
+                ))}
+            </div>
+          );
+        })}
       </>
     );
   }
@@ -404,6 +505,51 @@ export function SearchPanel() {
           </button>
         )}
       </div>
+      {allResults.length > 0 && (
+        <div className="search-toolbar" data-testid="search-toolbar">
+          <select
+            className="search-sort"
+            data-testid="search-sort"
+            value={sortKey}
+            aria-label={t("search.sortBy")}
+            onChange={(e) => changeSort(e.target.value as SortKey)}
+          >
+            <option value="relevance">{t("search.sortRelevance")}</option>
+            <option value="name-asc">{t("search.sortNameAsc")}</option>
+            <option value="name-desc">{t("search.sortNameDesc")}</option>
+            <option value="count-desc">{t("search.sortCountDesc")}</option>
+            <option value="count-asc">{t("search.sortCountAsc")}</option>
+          </select>
+          <button
+            className={"search-tool-btn" + (allCollapsed ? " is-active" : "")}
+            data-testid="search-collapse-toggle"
+            onClick={toggleCollapseAll}
+            aria-label={t(allCollapsed ? "search.expandAll" : "search.collapseAll")}
+            title={t(allCollapsed ? "search.expandAll" : "search.collapseAll")}
+          >
+            <Icon name={allCollapsed ? "chevron-right" : "chevron-down"} size={14} />
+          </button>
+          <button
+            className={"search-tool-btn" + (moreContext ? " is-active" : "")}
+            data-testid="search-context-toggle"
+            onClick={toggleMoreContext}
+            aria-pressed={moreContext}
+            aria-label={t("search.moreContext")}
+            title={t("search.moreContext")}
+          >
+            <Icon name="list" size={14} />
+          </button>
+          <button
+            className={"search-tool-btn" + (copied ? " is-active" : "")}
+            data-testid="search-copy"
+            onClick={copyResults}
+            aria-label={t("search.copyResults")}
+            title={copied ? t("search.copied") : t("search.copyResults")}
+          >
+            <Icon name={copied ? "check" : "copy"} size={14} />
+          </button>
+        </div>
+      )}
       <div className="search-results">{body}</div>
     </div>
   );

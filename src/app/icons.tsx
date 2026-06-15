@@ -104,6 +104,8 @@ const PATHS: Record<string, string[]> = {
     "M15 3v18",
   ],
   list: ["M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"],
+  copy: ["M9 9h10v10H9z", "M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"],
+  check: ["M20 6L9 17l-5-5"],
   "more-vertical": [
     "M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
     "M12 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
