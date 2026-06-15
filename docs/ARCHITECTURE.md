@@ -71,6 +71,33 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 77 additions — 块 ID 自动铸造 `^id`（候选池第五梯队【中】㊴）【As-built v0.74】
+
+> **状态：As-built（v0.74 交付，2026-06-15）。** ㊴ = 给段落块创建引用时自动铸 `^id`：v1 = 「复制块引用」/「复制块嵌入」命令——对活动编辑器**光标所在段落块**，若无 `^id` 则铸一个 append 到块末行行尾，并复制 `[[Note#^id]]`/`![[Note#^id]]` 到剪贴板。**写 .md → data-safety 触发**（但走活动编辑器 `view.dispatch` = R40/R33 既有 B-class autosave 路径，非新写路径）。两道前置门：① grep 揭露 R13 已有 `BLOCK_MARKER_RE`/`blocks: BlockRef[]` 索引/`resolveSubpath`（全复用、冻结不动）+ 无「复制块引用」命令/无 `[[#^` 补全；② WebSearch 确认 Obsidian「Copy link to block」= 无块 id 时对光标段落自动铸短随机 id + 复制链接。
+
+**不碰渲染/字节**：`^id` 已在 `markdown.ts:438` strip（阅读视图本就隐藏）→ append `^id` 后渲染 HTML 与无 id 段落**字节相同** → **r26-bytes/markdown.ts 不受影响**（本轮零改 markdown.ts）。
+
+**关键设计（复用 R13 + 既有写路径，零新写机制）：**
+- **`core/blockId.ts`（新，纯逻辑）**：
+  - `blockRefAt(text, cursorOffset): { id, edit: {from,to,insert} | null } | null` — 定位光标所在块（段落近似：连续非空行向上下扩到空行/代码围栏边界），**复用 R13 frozen `BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/`** 判末行是否已有 id（有→reuse，edit=null）；否则铸 id（collision-scan 全文 ids + retry）append ` ^id` 到末行行尾。**返 null（不可铸）**：空行 / 代码围栏内（standalone `^id` 行 Geode metadata 不索引=不可解析，故跳过）/ frontmatter 内（`parseFrontmatter().to` 守卫）。
+  - `mintBlockId(existing): string` — `(Math.random().toString(36)+Math.random().toString(36)).replace(/[^a-z0-9]/g,"").slice(0,6)`（6 位 base36，repo 既有 `Math.random().toString(36)` 惯用法 workspace.ts:44，零新依赖；碰撞 retry）。
+- **`features/editor/blockRefCommands.ts`（新）**：`copyBlockRef(app, view, embed)` — `blockRefAt(view.state.doc, cursor)` → null 则 notice「无可引用的块」；有 edit 则 `view.dispatch({changes: edit, userEvent:"input.blockid"})`（CM 事务→脏→autosave，**继承 R33/R40 B-class 写守卫 + getView 仅活动文件 DS-1**）；**链接经 `formatLink(metadata, path, path, {embed, subpath:"^"+id})`（评审 MAJOR 修，见下）→ null 则 notice「无安全链接」**（id 仍已铸入）→ `navigator.clipboard.writeText` + 自包含 notice。`registerBlockRefCommands(app, getView)` 注册 2 命令 `editor:copy-block-link`/`editor:copy-block-embed`（无默认热键，对齐 Obsidian）。
+- **`core/linkFormat.ts formatLink` 加 `opts.subpath`（R77 additive，R72 契约扩展）**：subpath（如 `^id`/heading）在 resolve-back 验证 + unsafe-char 守卫后的路径文本之后以 `#` 注入（wikilink `[[inner#sub]]` / markdown `[d](href#sub)`）；默认 undefined→空，**R72 既有行为零变**（r72-e2e 26/26 绿）。
+- **`core/i18n/dict.blockref.ts`（新）** + i18n.ts 接线：`cmd.copyBlockLink`/`cmd.copyBlockEmbed`/`blockRef.copied`/`blockRef.noBlock` 双语。
+- **`app/App.tsx`**：`registerBlockRefCommands(app, () => getActiveFileEditorView(app)?.view ?? null)`（同 formatCommands 接线）。
+- **`main.tsx`**：always-on sync 探针 `__geodeBlockRef(text, offset)` → blockRefAt（§D：DOM/剪贴板 browser-E2E only）。
+
+**文件所有权（单 owner）**：先 `core/blockId.ts` → `blockRefCommands.ts` → dict + i18n + App.tsx 接线 → editor.css notice + main.tsx 探针 + e2e/probe。**冻结不动**：markdown.ts `BLOCK_MARKER_RE`/strip、metadata.ts blocks 扫描/resolveSubpath、types.ts BlockRef。
+
+**⚠️ 已知延期（非缺陷，记 ㊴ 续）**：① **代码块/表格/列表项的块 id 不做**（代码块 standalone `^id` Geode metadata 不索引；段落近似对 list/table 是粗近似）；② 无 `[[#^` 补全里铸 id（v1 仅命令触发）；③ switcher 选块仍只列已有 id 的块（不铸）；④ embed `![[note#^id]]` 渲染由既有 R13 embeds 处理，本轮只产链接文本。
+
+**对抗评审（reviewer 7 lens 各独立 + skeptic-verify + 运行实例实测复现）→ 1 确认 MAJOR + 2 minor + 证伪 7：**
+- **CONFIRMED MAJOR = 块链接硬编码 basename `[[${name}#^${id}]]` 绕过 R72 `formatLink` 单一真值** → 三症状一根因（reviewer 在运行实例复现）：① **重复 basename**（`A/dup` + `B/dup`）→ 粘到别处解析到错笔记（块引用的根本用途是粘贴别处）；② **文件名含 `WIKILINK_UNSAFE=/[[\]#|^]/` 元字符**（macOS 合法 `Meeting [2024]`/`Q&A #notes`）→ 直接产损坏链接 `[[note]bracket#^id]]`/`[[meet #1#^id]]`；③ 忽略 R72 link-format 设置。**修 = 走 `formatLink(metadata, path, path, {embed, subpath:"^"+id})`**（resolve-back 验证 + unsafe 守卫 + 设置遵循；null→notice「无安全链接」，**`^id` 仍正确铸入活动文件**——铸入无缺陷，只是复制的链接文本要修）。**教训：任何「文件→链接」构造点必走 `formatLink` 单一真值（R72 注释明令），手拼 `[[basename]]` 必踩重复名/元字符/设置三坑**——这是 R72 单一真值契约的第 6 个构造点，新增即接。补 e2e：unsafe 文件名→不复制坏链（id 仍铸）+ unique→shortest。
+- **minor ×2（已修）**：① `mintBlockId` 短随机非恒 6 位（`Math.random().toString(36)` 偶得 `"0.i"`）→ 改 `randomId` 循环累积到 ≥6 字符再 slice；② collision-scan 大小写敏感（与 R13 metadata `toLowerCase()` 不一致）→ `used.add(m[1].toLowerCase())`。
+- **证伪 7**（data-safety 重点）：写回走 `view.dispatch`→`documents.ts` `local=true`→scheduleSave 置脏 + 关窗 flush 覆盖（铸了不丢）；getView 仅活动文件（DS-1，不写背景文件）；CRLF 经 `vault.normalizeContent` 统一 LF（append offset 无 `\r` 错位）；剪贴板失败 try/catch 吞掉、id 已先铸；frontmatter/fence 守卫正确；分层合规；探针唯一。
+
+**验证（As-built）**：typecheck 0 · `r77-e2e` **14/14**（blockRefAt 段落铸/reuse/空行/围栏/frontmatter null + 命令铸 id 写 doc + 剪贴板链接 + 幂等 + embed + **unsafe 文件名不复制坏链 + unique shortest**）· `r77-probe` **6/6** 真 WKWebView+真 fs · `r72-e2e` **26/26**（formatLink subpath additive 不回退）· `r26-bytes` 0 violations（未碰渲染）· cargo build 绿 · 简化门 **clean**（showBlockNotice↔showExportNotice 跨 feature 不可抽取）。
+
 ## Round 76 additions — 任务自定义状态渲染（候选池第五梯队【中】㊳）【As-built v0.73】
 
 > **状态：As-built（v0.73 交付，2026-06-15）。** ㊳ = 阅读视图把 `- [/]`（进行中）`- [-]`（取消）`- [>]`（推迟）`- [<]`（计划）等**非标准复选框态**渲染为带 `data-task` 的 checkbox 并区分样式（Obsidian + 主题约定）。**字节敏感**（动 `core/markdown.ts` 阅读侧 task rule）→ §C：改前已 `r26-bytes --baseline` 重捕（47 cases）。两道前置门：① grep 揭露 task 定义 4 处（渲染 `TASK_RE` 唯一仍窄 `( |x|X)`、toggle/search 已 R40/R68 收敛到 `[^\]]`、**live 走 lezer 硬编码 `[ xX]`**）；② WebSearch 确认 Obsidian `data-task` 约定（放 `<li class="task-list-item" data-task="<char>">`，主题用 `li[data-task="/"]` 选择器画）+ **「自定义复选框态在 live preview 不生效」= Obsidian 本身的限制**（这是阅读视图 + 主题特性）。

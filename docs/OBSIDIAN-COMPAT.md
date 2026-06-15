@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R77 套件回归（2026-06-15，macOS release 二进制 v0.74.0 实测 `r77-probe-vault`）
+
+R77 = 块 ID 自动铸造 `^id`（候选池第五梯队【中】㊴，原生功能；第五梯队【小】+【中】至此全清）。对照 Obsidian「Copy link to block」：对光标段落块无 `^id` 时自动铸短随机 id + 复制 `[[Note#^id]]`/`![[Note#^id]]`。**写 .md**（走活动编辑器 view.dispatch = R33/R40 既有 B-class autosave，非新写路径）。复用 R13 frozen block 基建（不动 markdown.ts）。
+
+新增套件：`r77-e2e.mjs` **14/14**（blockRefAt 段落铸/reuse/空行/围栏/frontmatter null + 命令铸 id 写 doc + 剪贴板链接 + 幂等 + embed + unsafe 文件名不复制坏链 + unique shortest）+ `r77-probe.mjs` **6/6**（真 WKWebView，`__geodeBlockRef` 真 fs）。
+
+- **套件矩阵不回退**：本轮零 compat 调用面改动（block 命令 + core 逻辑，不动插件 API 面）；不碰 markdown.ts（`^id` R13 已 strip）→ **r26-bytes 0 violations**；`core/linkFormat.ts formatLink` 加 `subpath` 形参为 **additive**（R72 默认零变）→ **r72-e2e 26/26 回归绿**。**对抗评审 1 MAJOR（块链接绕过 formatLink 单一真值 → 改走 formatLink+subpath）+ 2 minor**。**OBSIDIAN-COMPAT 缺口表**：㊴ 块引用自动铸交付（v1 已知延期：代码块/表格块 id / `[[#^` 补全铸 / switcher 选块铸）。
+
 ### R76 套件回归（2026-06-15，macOS release 二进制 v0.73.0 实测 `r76-probe-vault`）
 
 R76 = 任务自定义状态渲染（候选池第五梯队【中】㊳，原生 + 主题特性）。对照 Obsidian：阅读视图把非标准复选框态 `[/]`(进行中)/`[-]`(取消)/`[>]`(推迟)/`[<]`(计划) 渲染为带 `data-task="<char>"` 的 checkbox，主题用 `li[data-task="/"]` 选择器画自定义标记。**字节敏感**（动 markdown.ts task rule → §C r26-bytes 守卫）。**v1 阅读视图专属**（live 的 lezer `TaskList` 硬编码 `[ xX]` + Obsidian 自身 live 也不渲染自定义态）。
