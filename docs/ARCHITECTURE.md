@@ -71,6 +71,30 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 79 additions — 外观补全 v1：强调色取色器 + 系统主题三态（候选池第六梯队 ㊺）【As-built v0.76】
+
+> **状态：As-built（v0.76 交付，2026-06-15）。** ㊺ v1 = ① **强调色 Accent color 取色器**（`<input type="color">` → 运行时覆盖 `--accent`/`--accent-hover`/`--accent-muted` + localStorage 持久化）；② **系统主题三态**（`ThemeKind += "system"`，Adapt to system，随 `prefers-color-scheme` 实时）。**纯前端、不写 .md → data-safety 轻**（但改 `workspace.ts` 持久化树 → r45/r50 回归必跑）。两道前置门：① grep 揭露 R50 appearance.ts localStorage 单键 Store+setter 范式可复用 + theme 在 workspace 持久化树二态（`ThemeKind="dark"|"light"`，setTheme 写 `dataset.theme`）+ accent 变量在 app.css；② WebSearch 确认 Obsidian Appearance：accent color + base color scheme「Adapt to system」默认跟随 OS。**字体三族 / inline title / ribbon 显隐 = 延期**（字体需先引入 CSS 字体变量基建，更大）。
+
+**关键设计（theme:changed 载具不变 = 解析后具体值）：**
+- **`core/types.ts`**：`ThemeKind = "dark" | "light" | "system"`。**`events.ts` `theme:changed: {theme:"dark"|"light"}` 不变**——事件载 **resolved 具体值**（实际写 dataset 的），`WorkspaceState.theme` 才载 kind（可 "system"）。消费者（compat/themes.ts syncBodyClass、embeds mermaid、graph palette）读 resolved 不破。
+- **`core/workspace.ts`**：① **`resolveTheme(kind, systemPrefersDark): "dark"|"light"`（导出纯函数，probe 可测）**：`system`→`systemPrefersDark?"dark":"light"`，否则 kind。② `systemPrefersDark()`（matchMedia try/catch，非浏览器回 true）。③ `setTheme(kind)`：存 kind，`const r=resolveTheme(kind,sys()); dataset.theme=r; emit("theme:changed",{theme:r})`。④ `applyDocumentEffects`：`dataset.theme=resolveTheme(s.theme,sys())`。⑤ `toggleTheme`：`setTheme(resolveTheme(cur,sys())==="dark"?"light":"dark")`（从 system toggle 退到具体反色）。⑥ **`watchSystemTheme()`**（main.tsx boot 调）：matchMedia change 监听，kind==="system" 时重算 dataset + emit resolved。⑦ `sanitizeState:1240` `theme: s.theme==="light"||s.theme==="system" ? s.theme : "dark"`（**向后兼容**：旧 "dark"/"light" 不变，未知回 dark）。`captureLayout`/`applyLayout`（delete/preserve theme 字段）对 "system" 天然正确，零改（R45 全局态契约保持）。
+- **`compat/obsidian/themes.ts:225`**：`syncBodyClass` 初始化从 `state.theme`（kind）改读 **`document.documentElement.dataset.theme`**（resolved，applyDocumentEffects 已先写）——否则 "system" 被当 dark 误判。1 行。
+- **`core/appearance.ts`**：`accentColor: Store<string>`（默认 ""=无覆盖=主题默认）+ `setAccentColor(c)` + `applyAccentColor(c)`（`/^#[0-9a-fA-F]{6}$/` 校验：合法 hex→`setProperty("--accent",c)` + `--accent-hover`=`color-mix(in srgb, c, white 14%)` + `--accent-muted`=`color-mix(in srgb, c 18%, transparent)`；空/非法→`removeProperty` 三者回 :root 默认）+ localStorage `geode.accentColor` 单键（readString/persistString）。`applyAppearanceSettings()` boot 也 apply accent。
+- **`features/settings/SettingsModal.tsx`**：theme segmented 加第 3 按钮 `settings-theme-system`（Icon monitor/laptop）；新 setting-item「强调色」= `<input type="color" data-testid="settings-accent-color">` + Reset 按钮（`settings-accent-reset`→`setAccentColor("")`）。
+- **`core/i18n/dict.views.ts`**：`settings.themeSystem`/`settings.accentColor`/`settings.accentColorDesc`/`settings.accentReset` 中英。
+- **`main.tsx`**：boot 加 `workspace.watchSystemTheme()`（applyDocumentEffects 后）；`__geodeAppearance` 探针扩 `setAccent(c)`/`accentVar()`/`resolveTheme(kind,sysDark)`（§D：纯逻辑真值表 sync 探针）。
+
+**testid 面**：`settings-theme-system`/`settings-accent-color`/`settings-accent-reset`。
+
+**⚠️ 已知延期（非缺陷，记 ㊺ 续）**：① **字体三族**（界面/正文/等宽——需先在 app.css 引入 `--font-interface/text/monospace` 变量并改 body font-family 读变量）；② Show inline title（文件名作可编辑 H1，碰编辑器）；③ ribbon 显隐；④ App.tsx:687 ribbon 主题图标对 "system" 态不解析具体值（显 moon，cosmetic，segmented 才是主控）；⑤ accent 只覆盖 3 变量（`--selection`/`--link-unresolved` 等含 accent 色调的 rgba 字面量不动）。
+
+**对抗评审（reviewer 7 lens 各独立 + skeptic-verify）→ 0 确认缺陷 + 2 nit（均采纳）：**
+- **证伪 7**：① 持久化向后兼容（旧 `"dark"/"light"` blob 无损、未知回 dark、captureLayout 删 theme / applyLayout 保 current 对 "system" 仍 R45 全局态正确）；② `theme:changed` 恒 emit resolved `"dark"|"light"`（events.ts 类型不破、compat/mermaid/graph 消费者拿 resolved）；③ watchSystemTheme 仅 kind==="system" 动作 + matchMedia try/catch + 单例生命周期；④ accent 校验 `<input color>` 恒产合法 hex、脏值 removeProperty 回 :root 默认、color-mix WKWebView 支持、boot 顺序无耦合；⑤ toggleTheme 从 system 退具体反色；⑥ 分层（compat 改读 dataset 不反向依赖、时序 initObsidianCss 远晚于 applyDocumentEffects）；⑦ 测试充分（emulateMedia 真驱动非假绿）。
+- **采纳 nit 1**：SettingsModal accent picker 无 override 时 swatch 原硬编码 `#8b7cf6`（违「颜色走 CSS 变量」铁律字面 + light 主题显错色）→ 改 `readCssAccent()` 读 computed `--accent`（`<input color>` 必须 hex 字面，故读实际主题 accent，`#8b7cf6` 仅末路 fallback）。
+- **采纳 nit 2**：补 r79-e2e **R45×system 不变式断言**（captureLayout 在 kind=system 仍删 theme + applyLayout 保 current 不取 snapshot）锁工作区持久化向后兼容。
+
+**验证（As-built）**：typecheck 0 · `r79-e2e` **21/21**（resolveTheme 真值表 + accent 覆盖/persist/invalid-drop/reset-clear + 系统三态 emulateMedia 实时跟随 + 显式 dark/light 覆盖 system + segmented 三按钮 + **R45×system 不变式**）· `r79-probe` **7/7** 真 WKWebView（resolveTheme + accent apply sync）· 回归 r45(workspace)10/10 + r50(appearance)15/15 + `r26-bytes` 0（未碰渲染）· cargo build 绿 · 简化门 **clean**（resolveTheme 4 调用点 / readString·persistString 镜像既有 readBool·persistBool / theme:changed emit resolved 是契约不可简化回 kind）。
+
 ## Round 78 additions — 图谱设置完整化 v1：显示 + 力 持久化设置面板（候选池第六梯队 ㊵）【As-built v0.75】
 
 > **状态：As-built（v0.75 交付，2026-06-15）。** ㊵ v1 = 把 `GraphView` 当前硬编码的 4 力 + 显示参数抽成齿轮设置面板（滑块）+ localStorage 持久化（沿用既有 `GraphPrefs` blob 扩字段，向后兼容旧 blob）。**纯前端、不写 .md、不动 markdown.ts/vault/editor → data-safety 轻**（GraphPrefs 是 localStorage，损坏自动回默认无丢失）。两道前置门：① grep 揭露 `features/graph/` 仅 GraphView.tsx(887)+graph.css、d3-force 模拟、硬编码点（力 :573-585 / lineWidth :304 / 无箭头 / LABEL_ZOOM :76 / nodeRadius :85）+ `GraphPrefs{mode,depth,showAll}` localStorage blob；② WebSearch 确认 Obsidian 图谱设置：**力**（center/repel/linkForce/linkDistance）+ **显示**（arrows/text-fade/node-size/link-thickness）。

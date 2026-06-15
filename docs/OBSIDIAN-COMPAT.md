@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R79 套件回归（2026-06-15，macOS release 二进制 v0.76.0 实测 `r79-probe-vault`）
+
+R79 = 外观补全 v1：强调色取色器 + 系统主题三态（候选池第六梯队 ㊺，原生功能）。对照 Obsidian Appearance：accent color override + base color scheme「Adapt to system」（随 OS）。**纯前端**（localStorage + CSS 变量 + matchMedia），不写 .md、不动 markdown.ts。
+
+新增套件：`r79-e2e.mjs` **21/21**（resolveTheme 真值表 + accent 覆盖/persist/invalid-drop/reset + 系统三态 emulateMedia 实时跟随 + 显式 dark/light 覆盖 system + segmented 三按钮 + R45×system 不变式）+ `r79-probe.mjs` **7/7**（真 WKWebView，resolveTheme + accent apply sync）。
+
+- **套件矩阵不回退**：本轮 compat 调用面仅 `compat/themes.ts:225` syncBodyClass 改读 resolved `dataset.theme`（更准，"system" 不再误判 dark）；`theme:changed` 事件载具不变（恒 resolved `"dark"|"light"`）→ compat/mermaid/graph 消费者不破；不碰 markdown.ts → **r26-bytes 0**；workspace 持久化树扩 "system" 向后兼容（旧 blob 无损）→ **r45(workspace)10/10 + r50(appearance)15/15 回归绿**。**对抗评审 7 lens → 0 确认缺陷**+ 2 nit（accent swatch 读 computed --accent / 补 R45×system 断言）。**OBSIDIAN-COMPAT 缺口表**：㊺ 强调色+系统主题交付（续缺口：字体三族 / inline title / ribbon 显隐）。
+
 ### R78 套件回归（2026-06-15，macOS release 二进制 v0.75.0 实测 `r78-probe-vault`）
 
 R78 = 图谱设置完整化 v1：显示+力 持久化设置面板（候选池第六梯队 ㊵，原生功能；第六梯队起步）。对照 Obsidian 图谱设置：**力**（center/repel/linkForce/linkDistance）+ **显示**（arrows/text-fade/node-size/link-thickness）齿轮浮层滑块。**纯前端**（localStorage 持久化 + canvas/d3-force），不写 .md、不动 markdown.ts。
