@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R83 套件回归（2026-06-15，macOS release 二进制 v0.80.0 实测 `r83-probe-vault`）
+
+R83 = Properties 增强：tags chip 点击搜索 + 属性行键盘导航（候选池第六梯队 ㊼ v1，原生功能）。对照 Obsidian Properties：点 tag 值 → 搜索 + Property Editor 键盘可用（↑↓ 切行、Enter 编辑、Escape 退出字段）。**改 PropertiesPanel.tsx（编辑器属性面板）**，不写 .md（除既有 commit 路径）、不动 markdown.ts。
+
+新增套件：`r83-e2e.mjs` **15/15**（tags chip 渲染/点击 seed `#alpha`·`#beta`/非 tags 不可点 + ↑/↓/Enter 行导航 + 字段内 ↑↓ 不串行 + **Escape discards 不写 frontmatter** data-safety）+ `r83-probe.mjs` **3/3**（真 WKWebView，`requestSearch` 同步 seed + 切 leftPanel）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（属性面板交互纯前端）；不碰 markdown.ts → **r26-bytes 0**；**对抗评审 1 确认 CRITICAL（data-safety 第一底线）**：键盘导航 Escape→程序化聚焦行触发字段 blur-commit stale draft 误写 frontmatter → 修=结构性移除 Escape→行（字段 Escape 交回自身 discard）+ 补 data-safety e2e → **r30(properties)25/25 + r24(autosave/flush)12/12 + r23(22) 回归绿**。**OBSIDIAN-COMPAT 缺口表**：㊼ tags chip 点击搜索 + 键盘导航交付（续缺口：File properties 右侧栏 / date 链日记 / hover+embeds cssclasses / Cmd+Backspace 删属性）。
+
 ### R82 套件回归（2026-06-15，macOS release 二进制 v0.79.0 实测 `r82-probe-vault`）
 
 R82 = 反链 / 出链面板增强（候选池第六梯队 ㊷ v1，原生功能）。对照 Obsidian backlinks/outgoing pane：sort order + collapse results + show search filter（show more context 延期）。**纯前端 view-only**（BacklinksPanel/OutgoingLinksPanel + core/linkPanel.ts），不写 .md、不动 markdown.ts。

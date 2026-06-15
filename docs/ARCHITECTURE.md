@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 83 additions — Properties 增强：tags chip 点击搜索 + 属性行键盘导航（候选池第六梯队 ㊼ v1）【As-built v0.80】
+
+> **状态：As-built（v0.80 交付，2026-06-15）。** 给 R22 PropertiesPanel 加两项 Obsidian 风格交互：① tags 类型的 chip 点击 → 在搜索面板查 `#tag`；② 属性行键盘导航（↑/↓ 切行、Enter 进 value 编辑器）。改动单文件 `features/editor/PropertiesPanel.tsx` + i18n + CSS。
+
+**契约（冻结接口）**：
+- `ChipsValue` 加可选 `searchTag?: (tag: string) => void`——仅 `ValueEditor` 在 `effType==="tags"` 时透传（aliases/multitext 不传 → chip 仍是不可点 `<span>`）。tag chip 文本变 `<button class="property-chip-text property-chip-search" data-testid="property-chip-search-<key>-<i>">`，点击 `searchTag(item)` → 面板内 `searchTag = (tag) => app.workspace.requestSearch(\`#${tag}\`)`（**复用 R41 TagsPanel/workspace.ts:331 既有机制**：`searchRequest.set` + `setLeftPanel("search")`，SearchPanel 一次性消费进 `search-input`）。chips 存不带 `#`，拼回 `#`。
+- 属性行键盘导航：`.property-row`（非 opaque）加 `tabIndex={0}` + `data-prop-row` + `onRowKeyDown`。handler **仅当行壳自身聚焦（`e.target === e.currentTarget`）才动作**：↑/↓ 走 `focusSiblingRow`（`rootRef` 内 `[data-prop-row]` 列表索引 ± 1，越界 `?.focus()` 安全 no-op）、Enter 聚焦 `.property-value` 内首个 `input/select`（回退 button）。**绝不处理从内部字段冒泡的键**。
+
+**对抗评审（reviewer 5 维各独立 + skeptic verify）→ 1 确认 CRITICAL（data-safety 第一底线，已修）+ 2 minor（已知延期）+ 余证伪：**
+- **[CRITICAL] Escape 导航把「丢弃编辑」反转成「写入 frontmatter」**：初版 `onRowKeyDown` 的 Escape 分支对**字段内**按键 `e.currentTarget.focus()`（焦点移到行壳）→ 同步触发当前 input 的原生 blur → 各字段 `onBlur` 提交。而字段 Escape 的 onKeyDown 是 `setDraft(stored/"")`（丢弃语义）但 `setDraft` 异步未 flush → blur 闭包读到**用户编辑后的 stale draft** → ScalarInput/Date `commit(stale)` / NameInput `rename(stale)` / ChipsValue `add(stale)` 全部**误写 frontmatter + 反转 Escape 撤销契约**（React 18 冒泡序 target→currentTarget、三处 Escape 均未 stopPropagation）。**修 = 结构性移除 Escape→行的程序化聚焦**（不在写路径塞 setTimeout 时序 hack）：`.property-row` 改 `tabIndex={0}`（Tab 可达=键盘进入行导航的入口），onRowKeyDown 只在行壳聚焦时处理 ↑/↓/Enter，**字段 Escape 完全交回字段自身既有的 discard-且保持焦点**（零改动、零 blur-commit）；字段→行用 Shift+Tab。**补 data-safety e2e**：编辑 count value→39 → Escape → 断言 input 回退 "3" **且 live doc 仍 `count: 3` 不含 `39`**。
+- **[minor 已知延期]** opaque 行（无 `data-prop-row`）+ add-property 行不参与 ↑/↓ 导航（前者无可编辑内容合理，后者与 Obsidian 含 add 行略异）。
+- **证伪**：`#`-拼接正确（chips strip `#`、searchTag 拼回，同 TagsPanel）；type-menu 开时 Escape/↑↓ 已 stopPropagation 不与 row 打架；`focusSiblingRow` 限定 `rootRef` 不跨面板；越界 `?.focus()` 安全；button `type="button"` 防表单提交；分层合规（features 不互 import、core 无 React）；UI 串全 `t()`、颜色全 CSS 变量；R22/R30 类型编辑/datalist/rename 行为未破。
+
+**验证（As-built）**：typecheck 0 · `r83-e2e` **15/15**（tags chip 渲染/点击 seed `#alpha`·`#beta`/aliases 不可点 + ↑/↓/Enter 导航 + 字段内 ↑↓ 不串行 + **Escape discards 不写 frontmatter** data-safety）· `r83-probe` **3/3** 真 WKWebView（`requestSearch` 同步 seed store + 切 leftPanel）· 回归 r30(properties)25/25 + r24(autosave/flush)12/12 + r23(22) · 不碰 markdown.ts（r26-bytes 0）· 简化门 clean。
+
+**v1 已知延期**：File properties 右侧栏（`RightPanelKind` 无 fileproperties）· Date 值链接对应日记 · hover/embeds 容器应用 cssclasses（R73 限主 EditorPane）· Escape→行的平滑回退（结构安全前提下未做，用 Shift+Tab 替代）· opaque/add 行入导航。
+
 ## Round 82 additions — 反链 / 出链面板增强（候选池第六梯队 ㊷ v1）【As-built v0.79】
 
 > **状态：As-built（v0.79 交付，2026-06-15）。** 给 Backlinks 面板的「链接提及」段 + 独立 Outgoing Links 面板加 Obsidian 风格工具栏（排序 + 文本过滤 + backlinks 折叠）。纯前端 view-only（不写 .md、不动 markdown.ts → data-safety 不触发；唯一写=既有 outgoing create-on-click 未动）。
