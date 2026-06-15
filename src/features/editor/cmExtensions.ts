@@ -46,6 +46,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
+import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
 import { foldPersistence } from "./foldPersistence";
@@ -329,10 +330,14 @@ function wikilinkCompletionSource(app: GeodeApp) {
       const key = f.basename.toLowerCase();
       dupCount.set(key, (dupCount.get(key) ?? 0) + 1);
     }
+    // R72 (㉞-c): the user typed `[[` so the link type is wikilink; only the path
+    // format applies. "absolute" → always the vault-root path; "shortest"/
+    // "relative" (relative degrades for wikilinks) → basename unless ambiguous.
+    const absolute = linkPathFormat.get() === "absolute";
     const options: Completion[] = files.map((f) => {
       const folder = f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
       const ambiguous = (dupCount.get(f.basename.toLowerCase()) ?? 0) > 1;
-      const linkText = ambiguous ? f.path.replace(/\.md$/i, "") : f.basename;
+      const linkText = absolute || ambiguous ? f.path.replace(/\.md$/i, "") : f.basename;
       return {
         label: f.basename,
         detail: folder || undefined,

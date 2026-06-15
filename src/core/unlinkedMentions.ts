@@ -22,6 +22,7 @@
  */
 import type { NoteMetadata } from "./types";
 import type { Vault } from "./vault";
+import { formatLink, linkUseMarkdown } from "./linkFormat";
 import { maskCodeRegions, parseNote, type MetadataIndex } from "./metadata";
 import type { DocumentManager } from "./documents";
 
@@ -240,7 +241,11 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /**
- * Insert text for a mention (frozen): surfaceText = the matched content slice.
+ * Insert text for a mention: surfaceText = the matched content slice.
+ * R72 (㉞-c): when "use Markdown links" is on, build `[surfaceText](href)` via
+ * formatLink (path-format applied + resolve-back verified); null → throw (skip +
+ * report), same contract as the wikilink branch. The wikilink branch is the
+ * frozen default, byte-unchanged:
  * If `resolveLink(surfaceText, sourcePath) === activePath` → `[[surfaceText]]`
  * (the surface already resolves — alias / any casing, Obsidian's rule).
  * Otherwise try the disambiguating full path `[[fullPathNoExt|surfaceText]]`
@@ -253,6 +258,15 @@ function buildLinkInsert(
   activePath: string,
   sourcePath: string,
 ): string {
+  if (linkUseMarkdown.get()) {
+    const md = formatLink(metadata, activePath, sourcePath, { alias: surfaceText });
+    if (md === null) {
+      throw new Error(
+        `no resolvable markdown link form for mention "${surfaceText}" -> ${activePath}`,
+      );
+    }
+    return md;
+  }
   if (metadata.resolveLink(surfaceText, sourcePath) === activePath) {
     return `[[${surfaceText}]]`;
   }
@@ -361,14 +375,17 @@ async function doLink(
     // target "C") or junk — a silent WRONG/broken cross-file link. Any mismatch
     // throws → the per-file try/catch turns it into skip+report, never a blind
     // bad write (R24 review C2/C5). Such names are Obsidian-illegal anyway, so
-    // skipping them is the faithful outcome.
+    // skipping them is the faithful outcome. R72: resolve by the reparsed link's
+    // KIND (resolveByKind) — a markdown insert `[t](My%20Note.md)` carries a
+    // percent-encoded/relative href that the wikilink resolver can't decode;
+    // routing it through resolveMarkdownLink (as R70 does) avoids false skips.
     const reparsed = parseNote(sourcePath, rewritten);
     let delta = 0;
     for (const e of edits) {
       const at = e.from + delta;
       delta += e.insert.length - (e.to - e.from);
       const link = reparsed.links.find((l) => l.from === at);
-      if (!link || metadata.resolveLink(link.target, sourcePath) !== activePath) {
+      if (!link || metadata.resolveByKind(link, sourcePath) !== activePath) {
         throw new Error(
           `post-rewrite verification failed at ${at} for "${content.slice(e.from, e.to)}"`,
         );

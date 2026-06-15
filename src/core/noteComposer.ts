@@ -5,6 +5,8 @@
  * pure lets browser + desktop probes assert name/content/link deterministically.
  */
 
+import { encodeMdHref, linkUseMarkdown } from "./linkFormat";
+
 export type ExtractMode = "link" | "embed";
 
 // strip the chars that break a filename (/ \ : * ? " < >) OR a wikilink
@@ -65,7 +67,13 @@ export function extractedContent(selectedText: string): string {
   return selectedText.replace(/\s+$/, "") + "\n";
 }
 
-/** Text spliced in place of the selection in the SOURCE note. */
+/** Text spliced in place of the selection in the SOURCE note. R72 (㉞-c): a plain
+ *  link honors the wikilink/markdown setting; an embed is always wikilink
+ *  (markdown embeds don't render). The extracted note is created in the SAME
+ *  folder as the source note (noteComposerCommands: parentPath(activePath)), so
+ *  its bare basename always resolves back from the source (co-located) — the
+ *  path-format is moot here. */
 export function extractReplacement(noteName: string, mode: ExtractMode): string {
-  return mode === "embed" ? `![[${noteName}]]` : `[[${noteName}]]`;
+  if (mode === "embed") return `![[${noteName}]]`;
+  return linkUseMarkdown.get() ? `[${noteName}](${encodeMdHref(noteName + ".md")})` : `[[${noteName}]]`;
 }

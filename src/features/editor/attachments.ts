@@ -11,33 +11,19 @@ import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { importAttachment } from "@core/attachments";
 import { EXPLORER_MIME } from "@core/explorerMove";
+import { formatLink } from "@core/linkFormat";
 import { IMAGE_EXTS } from "@core/markdown";
 
-/** Chars that break a `[[wikilink]]` — the renderer's wikilinkTarget splits on
- *  `#` (subpath) and `|` (alias), and `[ ] ^` corrupt the span (ARCHITECTURE
- *  Round 17 wikilink limitation). A name containing any can't be a clean link. */
-const WIKILINK_UNSAFE = /[[\]#|^]/;
-
-/** R67 (㉛): a vault FILE dragged from the explorer becomes a wikilink (`.md` →
- *  `[[Name]]`) or an embed (anything else → `![[name.ext]]`) at the drop point.
- *  Returns null (no insertion) for folders / unknown paths. Uses the shortest
- *  form that RESOLVES BACK to this exact file (basename when unambiguous, else
- *  the full path) — the fileToLinktext rule shared by importAttachment /
- *  buildLinkInsert / the rename engine, so duplicate basenames don't silently
- *  link the wrong file. A name with wikilink-unsafe chars yields null (skip)
- *  rather than a silently-broken link. */
+/** R67 (㉛): a vault FILE dragged from the explorer becomes a link (`.md`) or an
+ *  embed (anything else) at the drop point. Returns null (no insertion) for
+ *  folders / unknown paths. R72 (㉞-c): delegates the form to `formatLink`, which
+ *  honors the link-format settings (wikilink/markdown × path format) while keeping
+ *  the fileToLinktext rule (resolve-back verified, wikilink-unsafe chars → null).
+ *  An attachment is always an embed (`embed: !isMd`) — embeds force wikilink. */
 function internalDropSnippet(app: GeodeApp, path: string, fromPath: string): string | null {
   if (!path || !app.vault.fileExists(path)) return null;
-  const base = path.slice(path.lastIndexOf("/") + 1);
-  const isMd = base.toLowerCase().endsWith(".md");
-  const resolve = (t: string): string | null =>
-    isMd ? app.metadata.resolveLink(t, fromPath) : app.metadata.resolveAttachment(t, fromPath);
-  const baseForm = isMd ? base.slice(0, -3) : base;
-  const fullForm = isMd ? path.replace(/\.md$/i, "") : path;
-  const form =
-    resolve(baseForm) === path ? baseForm : resolve(fullForm) === path ? fullForm : null;
-  if (form === null || WIKILINK_UNSAFE.test(form)) return null;
-  return isMd ? `[[${form}]]` : `![[${form}]]`;
+  const isMd = path.toLowerCase().endsWith(".md");
+  return formatLink(app.metadata, path, fromPath, { embed: !isMd });
 }
 
 /** MIME → extension map (frozen). */

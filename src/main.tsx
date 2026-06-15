@@ -24,6 +24,12 @@ import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
 import { renameTagAcrossVault, type TagRewriteResult } from "@core/tagRewrite";
+import {
+  formatLink,
+  setLinkPathFormat,
+  setLinkUseMarkdown,
+  type LinkPathFormat,
+} from "@core/linkFormat";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -198,6 +204,22 @@ async function bootstrap() {
   };
   probeHost.__geodeRename = (oldPath, newPath) =>
     renameWithLinkUpdate({ vault, metadata, documents }, oldPath, newPath);
+
+  // always-on link-format probe (R72, ㉞-c): set the link-format settings then
+  // build a link, so browser/desktop E2E can assert every wiki/markdown ×
+  // shortest/relative/absolute × embed combination deterministically.
+  const linkFmtHost = globalThis as unknown as {
+    __geodeFormatLink?: (
+      targetPath: string,
+      fromPath: string,
+      opts?: { useMarkdown?: boolean; pathFormat?: LinkPathFormat; embed?: boolean; alias?: string },
+    ) => string | null;
+  };
+  linkFmtHost.__geodeFormatLink = (targetPath, fromPath, opts) => {
+    if (opts?.useMarkdown !== undefined) setLinkUseMarkdown(opts.useMarkdown);
+    if (opts?.pathFormat !== undefined) setLinkPathFormat(opts.pathFormat);
+    return formatLink(metadata, targetPath, fromPath, { embed: opts?.embed, alias: opts?.alias });
+  };
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

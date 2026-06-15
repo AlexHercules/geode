@@ -59,6 +59,15 @@ export const en = {
   "settings.autoUpdateLinks": "Automatically update internal links",
   "settings.autoUpdateLinksDesc":
     "When a file is renamed or moved, automatically rewrite the links that point to it.",
+  "settings.linkUseMarkdown": "Use Markdown links",
+  "settings.linkUseMarkdownDesc":
+    "On: new links use Markdown [text](path). Off: new links use wikilinks [[text]]. (Embeds always use ![[ ]].)",
+  "settings.linkPathFormat": "New link format",
+  "settings.linkPathFormatDesc":
+    "Path used for new links. Relative applies to markdown links only; wikilinks always use the shortest path.",
+  "settings.linkPathShortest": "Shortest path when possible",
+  "settings.linkPathRelative": "Relative path to file",
+  "settings.linkPathAbsolute": "Absolute path in vault",
   "settings.attachmentFolder": "Default location for new attachments",
   "settings.attachmentFolderDesc":
     'Folder for pasted or dropped images. "/" = vault root, "./" = same folder as the note, "./name" = subfolder under the note\'s folder, "name" = fixed vault folder.',
@@ -280,6 +289,14 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.filesAndLinks": "文件与链接",
   "settings.autoUpdateLinks": "自动更新内部链接",
   "settings.autoUpdateLinksDesc": "重命名或移动文件时，自动改写指向它的链接。",
+  "settings.linkUseMarkdown": "使用 Markdown 链接",
+  "settings.linkUseMarkdownDesc":
+    "开：新链接用 Markdown [文本](路径)。关：新链接用 wikilink [[文本]]。（嵌入始终用 ![[ ]]。）",
+  "settings.linkPathFormat": "新链接格式",
+  "settings.linkPathFormatDesc": "新链接使用的路径形式。「相对」仅对 Markdown 链接生效；wikilink 始终用最短路径。",
+  "settings.linkPathShortest": "尽可能用最短路径",
+  "settings.linkPathRelative": "相对文件的路径",
+  "settings.linkPathAbsolute": "库内绝对路径",
   "settings.attachmentFolder": "新附件默认位置",
   "settings.attachmentFolderDesc":
     "粘贴/拖入图片的保存目录。「/」表示库根目录，「./」表示笔记所在目录，「./名称」表示笔记所在目录下的子文件夹，「名称」表示库内固定文件夹。",

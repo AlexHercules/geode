@@ -34,6 +34,12 @@ import {
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
 import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
 import {
+  linkPathFormat,
+  linkUseMarkdown,
+  setLinkPathFormat,
+  setLinkUseMarkdown,
+} from "@core/linkFormat";
+import {
   getPluginDescription,
   getPluginName,
   type PluginManager,
@@ -58,7 +64,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.68.0";
+const APP_VERSION = "0.69.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -157,6 +163,8 @@ function AppearanceSection() {
   const readable = useStore(readableLineLength);
   const spell = useStore(spellcheckEnabled);
   const autoUpdate = useStore(autoUpdateLinks);
+  const useMdLinks = useStore(linkUseMarkdown);
+  const linkPath = useStore(linkPathFormat);
   const attachFolder = useStore(attachmentFolder);
   /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
   const tplFolder = useStore(templateFolder);
@@ -459,6 +467,46 @@ function AppearanceSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+
+      {/* ---- R72 (㉞-c): new-link format ---- */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.linkUseMarkdown")}</div>
+          <div className="setting-desc">{t("settings.linkUseMarkdownDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${useMdLinks ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={useMdLinks}
+          aria-label={t("settings.linkUseMarkdown")}
+          data-testid="settings-link-use-markdown"
+          onClick={() => setLinkUseMarkdown(!useMdLinks)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.linkPathFormat")}</div>
+          <div className="setting-desc">{t("settings.linkPathFormatDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-link-path-format"
+          value={linkPath}
+          aria-label={t("settings.linkPathFormat")}
+          onChange={(e) =>
+            setLinkPathFormat(
+              e.target.value === "relative" ? "relative" : e.target.value === "absolute" ? "absolute" : "shortest",
+            )
+          }
+        >
+          <option value="shortest">{t("settings.linkPathShortest")}</option>
+          <option value="relative">{t("settings.linkPathRelative")}</option>
+          <option value="absolute">{t("settings.linkPathAbsolute")}</option>
+        </select>
       </div>
 
       <div className="setting-item">
