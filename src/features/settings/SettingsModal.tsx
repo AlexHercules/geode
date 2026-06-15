@@ -8,6 +8,10 @@ import {
   setSpellcheckEnabled,
   strictLineBreaks,
   setStrictLineBreaks,
+  showLineNumbers,
+  setShowLineNumbers,
+  defaultNewTabMode,
+  setDefaultNewTabMode,
   accentColor,
   setAccentColor,
   interfaceFont,
@@ -74,7 +78,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.84.0";
+const APP_VERSION = "0.85.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -184,6 +188,8 @@ function AppearanceSection() {
   const readable = useStore(readableLineLength);
   const spell = useStore(spellcheckEnabled);
   const strict = useStore(strictLineBreaks);
+  const lineNo = useStore(showLineNumbers);
+  const newTabMode = useStore(defaultNewTabMode);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -405,6 +411,57 @@ function AppearanceSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+
+      {/* R88: show line-number gutter in the editor (default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showLineNumbers")}</div>
+        </div>
+        <button
+          className={`settings-toggle${lineNo ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={lineNo}
+          aria-label={t("settings.showLineNumbers")}
+          data-testid="settings-line-numbers-toggle"
+          onClick={() => setShowLineNumbers(!lineNo)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R88: default mode a new markdown tab opens in (reading / live / source) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.defaultNewTabMode")}</div>
+          <div className="setting-desc">{t("settings.defaultNewTabModeDesc")}</div>
+        </div>
+        <div className="settings-segmented" role="group" aria-label={t("settings.defaultNewTabMode")}>
+          <button
+            className={newTabMode === "preview" ? "is-active" : ""}
+            aria-pressed={newTabMode === "preview"}
+            data-testid="settings-newtab-reading"
+            onClick={() => setDefaultNewTabMode("preview")}
+          >
+            {t("settings.modeReading")}
+          </button>
+          <button
+            className={newTabMode === "live" ? "is-active" : ""}
+            aria-pressed={newTabMode === "live"}
+            data-testid="settings-newtab-live"
+            onClick={() => setDefaultNewTabMode("live")}
+          >
+            {t("settings.modeLive")}
+          </button>
+          <button
+            className={newTabMode === "source" ? "is-active" : ""}
+            aria-pressed={newTabMode === "source"}
+            data-testid="settings-newtab-source"
+            onClick={() => setDefaultNewTabMode("source")}
+          >
+            {t("settings.modeSource")}
+          </button>
+        </div>
       </div>
 
       <div className="setting-item">

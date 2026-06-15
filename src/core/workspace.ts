@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import { EventBus } from "./events";
 import { Store } from "./store";
+import { defaultNewTabMode } from "./appearance";
 import { basename, stripExtension } from "./vault";
 
 const PERSIST_KEY = "geode.workspace.v1";
@@ -312,7 +313,9 @@ export class Workspace {
         id: newTabId(),
         viewType: "markdown",
         filePath: path,
-        mode: "live",
+        // R88: new tabs open in the user's default mode (Obsidian's "Default view
+        // for new tabs" + "Default editing mode"); default "live" = prior behaviour
+        mode: defaultNewTabMode.get(),
         title: stripExtension(basename(path)),
       };
       root = mapLeaf(root, target.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));

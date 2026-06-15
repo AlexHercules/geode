@@ -35,6 +35,7 @@ import {
   drawSelection,
   EditorView,
   keymap,
+  lineNumbers,
   MatchDecorator,
   placeholder,
   rectangularSelection,
@@ -46,6 +47,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
+import { showLineNumbers } from "@core/appearance";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
@@ -127,6 +129,11 @@ const editorTheme = EditorView.theme({
     caretColor: "var(--caret-color, var(--accent))",
   },
   ".cm-line": { padding: "0 32px" },
+  // R88: theme-aware line-number gutter — CM's base theme (the editor never
+  // declares a dark facet) would otherwise paint #6c6c6c numbers + a light-blue
+  // active-line gutter block, clashing with Geode's dark theme.
+  ".cm-lineNumbers .cm-gutterElement": { color: "var(--text-faint)" },
+  ".cm-activeLineGutter": { background: "transparent", color: "var(--text-muted)" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--caret-color, var(--accent))" },
   ".cm-content ::selection": { background: "var(--selection)" },
   "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground":
@@ -423,10 +430,12 @@ export function buildEditorExtensions(opts: {
   mode: "live" | "source";
   /** owned by EditorPane — live↔source reconfigures this slice in place */
   modeCompartment: Compartment;
+  /** R88: owned by EditorPane — showLineNumbers toggle reconfigures it in place */
+  lineNumberCompartment: Compartment;
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment } = opts;
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment } = opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
     // editor is focused, at the HIGHEST precedence so it runs BEFORE CM's own
@@ -443,6 +452,8 @@ export function buildEditorExtensions(opts: {
     ),
     propertiesHostFacet.of(opts.propertiesHost ?? null),
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
+    // R88: line-number gutter — empty when off; EditorPane reconfigures on toggle
+    lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : []),
     revealFlashField,
     markdownSansHeaderFold(),
     syntaxHighlighting(mdHighlight),

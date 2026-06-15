@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, lineNumbers } from "@codemirror/view";
 import { foldEffect } from "@codemirror/language";
-import { spellcheckEnabled, strictLineBreaks } from "@core/appearance";
+import { spellcheckEnabled, strictLineBreaks, showLineNumbers } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
@@ -131,6 +131,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const spell = useStore(spellcheckEnabled);
   /* R87: strict line breaks (reading view) — re-render preview reactively */
   const strict = useStore(strictLineBreaks);
+  /* R88: line-number gutter preference — reconfigure CM compartment reactively */
+  const showLineNo = useStore(showLineNumbers);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -147,6 +149,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const previewContentRef = useRef<HTMLDivElement | null>(null);
   /** compartment owned by the CURRENT view — live↔source reconfigures it */
   const modeCompartmentRef = useRef<Compartment | null>(null);
+  /** R88: compartment for the line-number gutter — showLineNumbers reconfigures it */
+  const lineNumberCompartmentRef = useRef<Compartment | null>(null);
   /** the editor mode the current view's compartment is configured with */
   const appliedModeRef = useRef<"live" | "source">("live");
   /** render-time mirror of tab.mode — the CM effect reads it without depending
@@ -283,6 +287,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     const mode = latestModeRef.current === "source" ? "source" : "live";
     const modeCompartment = new Compartment();
     modeCompartmentRef.current = modeCompartment;
+    const lineNumberCompartment = new Compartment();
+    lineNumberCompartmentRef.current = lineNumberCompartment;
     appliedModeRef.current = mode;
     const view = new EditorView({
       // per-view state seeded with the shared doc + the handle's sync glue;
@@ -294,6 +300,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           getPath: () => handle.path,
           mode,
           modeCompartment,
+          lineNumberCompartment,
           // R22: portal target for the live-mode PropertiesPanel
           propertiesHost: propertiesHostRef.current ?? undefined,
         }),
@@ -359,6 +366,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       detach();
       viewRef.current = null;
       modeCompartmentRef.current = null;
+      lineNumberCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
       // view (other panes / the manager's deferred-drop flush / flushAll)
@@ -387,6 +395,15 @@ export function EditorPane({ tab }: { tab: TabState }) {
   useEffect(() => {
     viewRef.current?.contentDOM.setAttribute("spellcheck", String(spell));
   }, [spell]);
+
+  /* ---------- line-number gutter preference → CM compartment (R88) ---------- */
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = lineNumberCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(showLineNo ? [lineNumbers()] : []) });
+  }, [showLineNo]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

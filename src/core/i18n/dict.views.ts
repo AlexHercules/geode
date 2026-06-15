@@ -37,6 +37,12 @@ export const en = {
   "settings.spellcheck": "Spellcheck",
   "settings.strictLineBreaks": "Strict line breaks",
   "settings.strictLineBreaksDesc": "When off, a single line break in your note shows as a line break in reading view. When on, you need two spaces or a blank line.",
+  "settings.showLineNumbers": "Show line numbers",
+  "settings.defaultNewTabMode": "Default view for new tabs",
+  "settings.defaultNewTabModeDesc": "The view a newly opened note starts in.",
+  "settings.modeReading": "Reading",
+  "settings.modeLive": "Live",
+  "settings.modeSource": "Source",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -299,6 +305,12 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.spellcheck": "拼写检查",
   "settings.strictLineBreaks": "严格换行",
   "settings.strictLineBreaksDesc": "关闭时，笔记中的单次换行在阅读视图中显示为换行；开启时，需两个空格或一个空行才换行。",
+  "settings.showLineNumbers": "显示行号",
+  "settings.defaultNewTabMode": "新标签默认视图",
+  "settings.defaultNewTabModeDesc": "新打开的笔记默认进入的视图。",
+  "settings.modeReading": "阅读",
+  "settings.modeLive": "实时",
+  "settings.modeSource": "源码",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",

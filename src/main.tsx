@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -359,6 +359,17 @@ async function bootstrap() {
   // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).
   const fontHost = globalThis as unknown as { __geodeFontSanitize?: (raw: string) => string };
   fontHost.__geodeFontSanitize = (raw) => sanitizeFontFamily(raw);
+
+  // always-on new-tab-mode probe (R88, ㊶ 续): proves workspace.openFile honours
+  // the defaultNewTabMode setting on the real build (a new tab opens in that mode).
+  const newTabModeHost = globalThis as unknown as {
+    __geodeNewTabMode?: (mode: "live" | "source" | "preview", path: string) => string | undefined;
+  };
+  newTabModeHost.__geodeNewTabMode = (mode, path) => {
+    setDefaultNewTabMode(mode);
+    app.workspace.openFile(path, { newTab: true });
+    return app.workspace.getActiveTab()?.mode;
+  };
 
   // always-on file-properties-remove probe (R86, ㊼): exercises the EXACT write
   // the right-side FilePropertiesPanel does (acquire shared handle + buildRemoveProperty

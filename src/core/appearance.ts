@@ -58,6 +58,39 @@ export function setSpellcheckEnabled(on: boolean): void {
   persistBool(SPELLCHECK_KEY, on);
 }
 
+/** R88 (㊶ 续): show line-number gutter in the editor (live + source). Default OFF
+ *  (Obsidian default, and zero-regression — Geode had no line numbers). Applied per
+ *  CM view via a Compartment reconfigured reactively in EditorPane. */
+const LINE_NUMBERS_KEY = "geode.showLineNumbers";
+export const showLineNumbers = new Store<boolean>(readBool(LINE_NUMBERS_KEY, false));
+
+export function setShowLineNumbers(on: boolean): void {
+  showLineNumbers.set(on);
+  persistBool(LINE_NUMBERS_KEY, on);
+}
+
+/** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
+ *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
+ *  (zero regression). Consumed by workspace.openFile. */
+export type NewTabMode = "live" | "source" | "preview";
+const DEFAULT_TAB_MODE_KEY = "geode.defaultNewTabMode";
+
+function readTabMode(): NewTabMode {
+  try {
+    const v = localStorage.getItem(DEFAULT_TAB_MODE_KEY);
+    return v === "source" || v === "preview" ? v : "live";
+  } catch {
+    return "live";
+  }
+}
+
+export const defaultNewTabMode = new Store<NewTabMode>(readTabMode());
+
+export function setDefaultNewTabMode(mode: NewTabMode): void {
+  defaultNewTabMode.set(mode);
+  persistString(DEFAULT_TAB_MODE_KEY, mode);
+}
+
 /** R87 (㊶): strict line breaks in the READING view. OFF (default) = a single
  *  newline renders as `<br>` (Obsidian's default reading behaviour); ON = strict
  *  CommonMark (single newline joins; needs two trailing spaces / a blank line).
