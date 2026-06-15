@@ -84,7 +84,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.86.0";
+const APP_VERSION = "0.87.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 

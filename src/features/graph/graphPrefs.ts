@@ -33,6 +33,13 @@ export interface GraphFilters {
    *  Obsidian default: OFF (non-existent linked notes are shown) */
   existingOnly: boolean;
 }
+/** R90 (㊵): a colour group — nodes matching `query` are filled with `color`.
+ *  `query` supports `path:<folder>` (folder prefix on the node path) or bare text
+ *  (case-insensitive substring on the node label). `color` is `#rrggbb`. */
+export interface GraphGroup {
+  query: string;
+  color: string;
+}
 export interface GraphPrefs {
   mode: "global" | "local";
   depth: 1 | 2;
@@ -40,6 +47,7 @@ export interface GraphPrefs {
   forces: GraphForces;
   display: GraphDisplay;
   filters: GraphFilters;
+  groups: GraphGroup[];
 }
 
 /** Slider ranges (also the clamp bounds for parseGraphPrefs). */
@@ -63,7 +71,11 @@ export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false }),
   // defaults = "show everything" (zero regression vs the pre-R84 unfiltered graph)
   filters: Object.freeze({ orphans: true, existingOnly: false }),
+  // no colour groups by default → every resolved node keeps the accent (zero regression)
+  groups: Object.freeze([]) as unknown as GraphGroup[],
 }) as GraphPrefs;
+
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 const PREFS_KEY = "geode.graphPrefs";
 
@@ -104,10 +116,47 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
         orphans: fl.orphans !== false,
         existingOnly: fl.existingOnly === true,
       },
+      // R90: keep only well-formed groups (string query + #rrggbb color); cap the
+      // count so a corrupt blob can't blow up the settings list / draw batching.
+      groups: Array.isArray(p.groups)
+        ? (p.groups as unknown[])
+            .filter(
+              (g): g is GraphGroup =>
+                !!g &&
+                typeof (g as GraphGroup).query === "string" &&
+                HEX_RE.test((g as GraphGroup).color),
+            )
+            .map((g) => ({ query: g.query, color: g.color }))
+            .slice(0, 24)
+        : [],
     };
   } catch {
     return DEFAULT_PREFS; // corrupt → defaults
   }
+}
+
+/**
+ * R90 (㊵): the colour a resolved node should be filled with — the first group
+ * whose query matches, else `defaultColor`. Pure (exported for the probe).
+ * `path:<folder>` matches the node path's folder prefix; bare text is a
+ * case-insensitive substring match on the node label (basename).
+ */
+export function nodeGroupColor(
+  node: { id: string; label: string },
+  groups: readonly GraphGroup[],
+  defaultColor: string,
+): string {
+  for (const g of groups) {
+    const q = g.query.trim();
+    if (!q) continue;
+    if (q.startsWith("path:")) {
+      const folder = q.slice(5).trim().replace(/^\/+|\/+$/g, "");
+      if (folder && node.id.startsWith(folder + "/")) return g.color;
+    } else if (node.label.toLowerCase().includes(q.toLowerCase())) {
+      return g.color;
+    }
+  }
+  return defaultColor;
 }
 
 /**

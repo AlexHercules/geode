@@ -238,3 +238,57 @@
   background: var(--bg-hover);
   color: var(--text-normal);
 }
+
+/* R90: graph colour groups — each row = colour swatch + query + remove */
+.graph-group-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.graph-group-color {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+.graph-group-query {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 11.5px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.graph-group-remove {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px;
+  color: var(--text-muted);
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.graph-group-remove:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
+.graph-group-add {
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.graph-group-add:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}

@@ -81,7 +81,7 @@ import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
-import { applyGraphFilters, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
+import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import { sortAndFilterLinks } from "@core/linkPanel";
 import { setNewNoteLocation, setNewNoteFolder, resolveNewNoteFolder, createNewNote } from "@core/newNote";
@@ -355,6 +355,18 @@ async function bootstrap() {
   };
   graphFilterHost.__geodeGraphFilter = (nodes, edges, filters) =>
     applyGraphFilters(nodes, edges, filters).nodes.map((n) => n.id);
+
+  // always-on graph-group-color probe (R90, ㊵): runs the pure nodeGroupColor over
+  // a {id,label} node + groups, returning the colour the node would be filled with.
+  const graphGroupHost = globalThis as unknown as {
+    __geodeGraphGroupColor?: (
+      node: { id: string; label: string },
+      groups: { query: string; color: string }[],
+      defaultColor: string,
+    ) => string;
+  };
+  graphGroupHost.__geodeGraphGroupColor = (node, groups, defaultColor) =>
+    nodeGroupColor(node, groups, defaultColor);
 
   // always-on font-sanitize probe (R85, ㊺): runs the pure CSS-injection guard
   // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).

@@ -22,8 +22,10 @@ import {
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
+  nodeGroupColor,
   savePrefs,
   type GraphForces,
+  type GraphGroup,
   type GraphPrefs,
 } from "./graphPrefs";
 import { createNewNote } from "@core/newNote";
@@ -324,9 +326,10 @@ export function GraphView() {
       }
     }
 
-    // nodes — bucketed by fill style (resolved/unresolved × normal/dim)
-    const fillNormal = new Path2D();
-    const fillDim = new Path2D();
+    // nodes — resolved bucketed by FILL COLOUR (R90 colour groups) × dim; unresolved
+    // hollow. groups empty ⇒ every resolved node = accent ⇒ one batch (zero regression).
+    const groups = s.prefs.groups;
+    const colorBatches = new Map<string, { normal: Path2D; dim: Path2D }>();
     const hollowNormal = new Path2D();
     const hollowDim = new Path2D();
     for (const n of s.nodes) {
@@ -336,15 +339,29 @@ export function GraphView() {
       if (hovered !== null && n.id === hovered.id) continue; // drawn individually below
       const r = nodeRadius(n, disp.nodeSize);
       const dim = isDim(n.id);
-      const path = n.resolved ? (dim ? fillDim : fillNormal) : (dim ? hollowDim : hollowNormal);
+      let path: Path2D;
+      if (n.resolved) {
+        const color = groups.length ? nodeGroupColor(n, groups, p.accent) : p.accent;
+        let b = colorBatches.get(color);
+        if (!b) {
+          b = { normal: new Path2D(), dim: new Path2D() };
+          colorBatches.set(color, b);
+        }
+        path = dim ? b.dim : b.normal;
+      } else {
+        path = dim ? hollowDim : hollowNormal;
+      }
       path.moveTo(x + r, y);
       path.arc(x, y, r, 0, Math.PI * 2);
     }
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = p.accent;
-    ctx.fill(fillNormal);
-    ctx.globalAlpha = 0.16;
-    ctx.fill(fillDim);
+    // resolved fills — one fill() per distinct group colour
+    for (const [color, b] of colorBatches) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 1;
+      ctx.fill(b.normal);
+      ctx.globalAlpha = 0.16;
+      ctx.fill(b.dim);
+    }
     // unresolved: hollow + dimmed ring
     ctx.lineWidth = 1.5 / t.k;
     ctx.strokeStyle = p.unresolved;
@@ -844,6 +861,14 @@ export function GraphView() {
   const setFilter = (key: keyof GraphPrefs["filters"], v: boolean) => {
     setPrefs((p) => ({ ...p, filters: { ...p.filters, [key]: v } }));
   };
+  // R90 (㊵): colour groups — only change node fill COLOUR (draw), not the node
+  // set, so mirror + redraw (like display) rather than rebuild.
+  const setGroups = (groups: GraphGroup[]) => {
+    setPrefs((p) => ({ ...p, groups }));
+    const s = stateRef.current;
+    s.prefs = { ...s.prefs, groups };
+    requestDraw();
+  };
   const resetSettings = () => {
     setPrefs((p) => ({ ...p, forces: DEFAULT_PREFS.forces, display: DEFAULT_PREFS.display }));
     const s = stateRef.current;
@@ -970,6 +995,50 @@ export function GraphView() {
             />
             <span>{t("graph.filterOrphans")}</span>
           </label>
+
+          {/* R90: colour groups — each = a query + a colour; matching nodes are filled */}
+          <div className="graph-settings-group">{t("graph.groups")}</div>
+          {prefs.groups.map((g, i) => (
+            <div className="graph-group-row" key={i} data-testid={`graph-group-${i}`}>
+              <input
+                type="color"
+                className="graph-group-color"
+                data-testid={`graph-group-color-${i}`}
+                value={g.color}
+                aria-label={t("graph.groupColor")}
+                onChange={(e) => setGroups(prefs.groups.map((x, j) => (j === i ? { ...x, color: e.target.value } : x)))}
+              />
+              <input
+                type="text"
+                className="graph-group-query"
+                data-testid={`graph-group-query-${i}`}
+                value={g.query}
+                placeholder={t("graph.groupQueryPlaceholder")}
+                aria-label={t("graph.groupQuery")}
+                spellCheck={false}
+                onChange={(e) => setGroups(prefs.groups.map((x, j) => (j === i ? { ...x, query: e.target.value } : x)))}
+              />
+              <button
+                type="button"
+                className="graph-group-remove"
+                data-testid={`graph-group-remove-${i}`}
+                aria-label={t("graph.groupRemove")}
+                title={t("graph.groupRemove")}
+                onClick={() => setGroups(prefs.groups.filter((_, j) => j !== i))}
+              >
+                <Icon name="x" size={13} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="graph-group-add"
+            data-testid="graph-group-add"
+            onClick={() => setGroups([...prefs.groups, { query: "", color: "#e5534b" }])}
+          >
+            {t("graph.groupAdd")}
+          </button>
+
           <button type="button" className="graph-settings-reset" data-testid="graph-settings-reset" onClick={resetSettings}>
             {t("graph.resetSettings")}
           </button>
