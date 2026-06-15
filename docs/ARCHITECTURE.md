@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 84 additions — 图谱过滤：孤立笔记 + 仅现有文件 toggle（候选池第六梯队 ㊵ 续 v1）【As-built v0.81】
+
+> **状态：As-built（v0.81 交付，2026-06-15）。** 给 R78 图谱设置面板加 Obsidian「Filters」组的两个核心 toggle：**Orphans**（显示无连接笔记）+ **Existing files only**（仅显示已存在文件、隐藏 unresolved 链接目标）。**纯客户端过滤**——`GraphNode` 已带 `resolved`（types.ts）+ getGraph 预算 `degree`，零改 getGraph 共享索引、零写盘。
+
+**契约（冻结接口）**：
+- `graphPrefs.ts`：`GraphPrefs.filters: GraphFilters = { orphans: boolean; existingOnly: boolean }`，`DEFAULT_PREFS.filters = Object.freeze({ orphans: true, existingOnly: false })`（= 「显示全部」**零回归**默认，对齐 Obsidian 默认）。`parseGraphPrefs` 加 filters 向后兼容：旧 blob 无 `filters` → `orphans: fl.orphans !== false`（默认 true）、`existingOnly: fl.existingOnly === true`（默认 false）。
+- 新纯函数 `applyGraphFilters<N extends {id,resolved}, E extends {source,target}>(nodes, edges, filters): { nodes, edges }`——**existingOnly 时先去 `!resolved` 节点 + 触及它们的边，再 `!orphans` 时按【过滤后边集】现算 degree 去 degree-0 节点**（顺序关键：只连到 unresolved 的笔记在 existingOnly 后变孤立，与 Obsidian 一致）。纯函数不 mutate 输入（`.filter` + 末尾 `[...n]/[...e]`）。probe 经 `__geodeGraphFilter` 验证。
+- `GraphView.tsx`：rebuild 顶 `applyGraphFilters(raw.nodes, raw.edges, prefs.filters)`（在 local-BFS + degree 采样**之前** → 两者都见过滤后集）；**rebuild useCallback deps 加 `prefs.filters.orphans/existingOnly`** → toggle 改 prefs → rebuild 重建 → `[rev, rebuild]` effect 重触发。`setFilter` 只 setPrefs（**不镜像 stateRef**——filters 仅 rebuild 消费、draw 闭包不读，已核 draw 不读 filters）。设置面板「Filters」组 2 toggle（复制 arrows toggle 模板，data-testid `graph-filter-orphans`/`graph-filter-existing`）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify）→ 0 confirmed critical/major + 2 minor（同根因，记为已知 UX 偏差）+ 余证伪：**
+- **证伪（核心）**：过滤顺序正确（existingOnly→现算 degree→去孤立，e2e `combined→[a,b]` 证实）；degree 用本地 Map 现算**未误用 stale `node.degree`**；自环/重复边只让 degree 偏大不影响 `>0` 判定；返回拷贝真不 mutate。**local×过滤**：过滤在 BFS 前，anchor 被过滤掉时走 `anchorId=null → localEmpty` 安全分支**不崩溃**。**闭包新鲜度**：rebuild deps 含两 filter 键、读 React `prefs.filters` 非 `s.prefs`；draw 闭包不读 filters 故 setFilter 不镜像无害。**向后兼容**：旧 blob 无 filters→show-all 零回归、DEFAULT freeze 不被 mutate。**分层/data-safety**：view-only、不动 metadata.getGraph、graph 不 import 别 feature。**回归**：r78(force/display/reset)16/16、r28 23/23。`resetSettings` 不重置 filters = **有意对齐 Obsidian**（reset 按钮属 Display/Forces 组、Filters 独立组不被重置）。
+- **[minor 已知 UX 偏差·同根因]** 空态文案未区分「无笔记」vs「被过滤清空」：local 模式锚点是孤立笔记 + orphans-off → 锚点被过滤 → 回退「打开笔记查看局部图谱」（但笔记已打开）；global 全被过滤 → 复用「还没有笔记」。根因 = 空态只分 mode 未分「空因」。无崩溃/无数据风险，记为延期（修法：加 `filtersActive` 判定切文案）。
+
+**验证（As-built）**：typecheck 0 · `r84-e2e` **17/17**（applyGraphFilters 4 真值表 + parseGraphPrefs filters 向后兼容 4 + 面板 2 toggle 持久化 + 改渲染节点集 delta）· `r84-probe` **8/8** 真 WKWebView · 回归 r78(16)/r28(23) · 不碰 markdown.ts（r26-bytes 0）· 简化门 clean。
+
+**v1 已知延期**：标签作节点 / 附件作节点（需扩 getGraph 共享索引=审所有消费者）· 分组着色 color groups（按查询/文件夹上色）· 搜索过滤框 · 空态文案分「空因」。
+
 ## Round 83 additions — Properties 增强：tags chip 点击搜索 + 属性行键盘导航（候选池第六梯队 ㊼ v1）【As-built v0.80】
 
 > **状态：As-built（v0.80 交付，2026-06-15）。** 给 R22 PropertiesPanel 加两项 Obsidian 风格交互：① tags 类型的 chip 点击 → 在搜索面板查 `#tag`；② 属性行键盘导航（↑/↓ 切行、Enter 进 value 编辑器）。改动单文件 `features/editor/PropertiesPanel.tsx` + i18n + CSS。
