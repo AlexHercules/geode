@@ -83,6 +83,11 @@ const CORPUS = [
   ["embed-video", "![[video.mp4]]", true],
   ["embed-pdf", "![[doc.pdf]]", true],
   ["embed-pdf-page", "![[doc.pdf#page=2]]", true],
+  // R87: single-newline-within-a-paragraph — the ONLY input class that
+  // distinguishes markdown-it breaks:false (join) ↔ true (<br>). Geode's default
+  // flips to breaks:true this round to match Obsidian's default reading view.
+  ["soft-break", "line one\nline two", true],
+  ["soft-break-multi", "alpha\nbeta\ngamma", true],
 ];
 
 const browser = await chromium.launch();

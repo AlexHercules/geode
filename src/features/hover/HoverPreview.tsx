@@ -23,6 +23,7 @@ import { useApp, type GeodeApp } from "@app/AppContext";
 import { hoverStore, type HoverTarget } from "@core/hover";
 import { hydrateEmbeds } from "@core/embeds";
 import { renderMarkdownToHtml } from "@core/markdown";
+import { strictLineBreaks } from "@core/appearance";
 import { useStore } from "@core/store";
 import { createHoverController } from "./hoverController";
 import "./hover.css";
@@ -190,6 +191,7 @@ export function HoverPreview(): React.ReactElement | null {
         {
           noteEmbeds: true,
           resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, current.path),
+          strictLineBreaks: strictLineBreaks.get(),
         },
       );
       if (cancelled || hoverStore.get() !== current) return;

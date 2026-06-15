@@ -58,6 +58,20 @@ export function setSpellcheckEnabled(on: boolean): void {
   persistBool(SPELLCHECK_KEY, on);
 }
 
+/** R87 (㊶): strict line breaks in the READING view. OFF (default) = a single
+ *  newline renders as `<br>` (Obsidian's default reading behaviour); ON = strict
+ *  CommonMark (single newline joins; needs two trailing spaces / a blank line).
+ *  Consumed at render time (markdown-it `breaks` = `!strictLineBreaks`); no DOM
+ *  side-effect, so no apply-on-boot. Live preview is unaffected (CM shows the
+ *  newline you typed regardless, matching Obsidian). */
+const STRICT_LINEBREAKS_KEY = "geode.strictLineBreaks";
+export const strictLineBreaks = new Store<boolean>(readBool(STRICT_LINEBREAKS_KEY, false));
+
+export function setStrictLineBreaks(on: boolean): void {
+  strictLineBreaks.set(on);
+  persistBool(STRICT_LINEBREAKS_KEY, on);
+}
+
 /* ---------------- R79: accent color ---------------- */
 
 function readString(key: string, fallback: string): string {

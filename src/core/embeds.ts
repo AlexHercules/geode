@@ -20,6 +20,7 @@
  */
 import { t } from "./i18n";
 import { fileEmbedKind, renderMarkdownToHtml } from "./markdown";
+import { strictLineBreaks } from "./appearance";
 import { loadKatex } from "./math";
 import { loadMermaid } from "./mermaid";
 import { renderQueryResult, runQueryBlock } from "./queryEmbed";
@@ -332,6 +333,7 @@ async function hydrateNote(
       resolveEmbed: (target) => ctx.metadata.resolveAttachment(target, path),
       noteEmbeds: true,
       resolveMdLink: (href) => ctx.metadata.resolveMarkdownLink(href, path),
+      strictLineBreaks: strictLineBreaks.get(),
     });
 
     span.textContent = "";

@@ -29,7 +29,7 @@
   },
   {
     "name": "blockquote",
-    "html": "<blockquote>\n<p>quote line\nsecond line</p>\n</blockquote>\n"
+    "html": "<blockquote>\n<p>quote line<br>\nsecond line</p>\n</blockquote>\n"
   },
   {
     "name": "callout",
@@ -190,5 +190,13 @@
   {
     "name": "embed-pdf-page",
     "html": "<p><span class=\"geode-embed-file\" data-embed-path=\"doc.pdf\" data-embed-ext=\"pdf\" data-embed-subpath=\"page=2\" data-embed-display=\"doc.pdf#page=2\"></span></p>\n"
+  },
+  {
+    "name": "soft-break",
+    "html": "<p>line one<br>\nline two</p>\n"
+  },
+  {
+    "name": "soft-break-multi",
+    "html": "<p>alpha<br>\nbeta<br>\ngamma</p>\n"
   }
 ]

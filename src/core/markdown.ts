@@ -186,6 +186,13 @@ export interface RenderMarkdownOptions {
    * Bound by each call site to `metadata.resolveMarkdownLink(href, sourcePath)`.
    */
   resolveMdLink?: (href: string) => string | null;
+  /**
+   * R87 (㊶): when true, a single newline within a paragraph stays a soft break
+   * (strict CommonMark — lines join). When false/absent (the default, matching
+   * Obsidian's default reading view) a single newline renders as `<br>`
+   * (markdown-it `breaks: true`). Set per-render on the shared md singleton.
+   */
+  strictLineBreaks?: boolean;
 }
 
 const WIKILINK_RE = /(!?)\[\[([^\[\]]+?)\]\]/g;
@@ -1258,5 +1265,9 @@ export function renderMarkdownToHtml(
     geodeResolve: resolve,
     geodeResolveMdLink: opts?.resolveMdLink,
   };
+  // R87 (㊶): set per-render on the shared singleton (render is synchronous, so
+  // there is no cross-call interleaving). Default (no opt) = breaks:true = a
+  // single newline → <br>, matching Obsidian's default reading view.
+  md.options.breaks = !opts?.strictLineBreaks;
   return md.render(pre, env);
 }

@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hydrateEmbeds } from "@core/embeds";
 import { useI18n } from "@core/i18n";
 import { mimeForPath, renderMarkdownToHtml } from "@core/markdown";
+import { strictLineBreaks } from "@core/appearance";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { splitSlides } from "./slides";
@@ -70,6 +71,7 @@ export function SlidesOverlay(): JSX.Element | null {
       resolveEmbed: (target) => app.metadata.resolveAttachment(target, path),
       noteEmbeds: true,
       resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, path),
+      strictLineBreaks: strictLineBreaks.get(),
     });
   }, [app, path, slides, clampedPage]);
 

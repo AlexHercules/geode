@@ -9,6 +9,7 @@
 import momentImpl from "moment/min/moment-with-locales";
 import { hydrateEmbeds } from "@core/embeds";
 import { renderMarkdownToHtml } from "@core/markdown";
+import { strictLineBreaks } from "@core/appearance";
 import type { MetadataIndex } from "@core/metadata";
 import { base64ToBytes, bytesToBase64, httpRequest } from "@core/net";
 import type { Vault as GeodeVault } from "@core/vault";
@@ -446,6 +447,7 @@ export class MarkdownRenderer {
             }
           : {}),
         noteEmbeds: true,
+        strictLineBreaks: strictLineBreaks.get(),
       },
     );
     // markdown-it runs html:false — no raw-HTML injection from plugin input

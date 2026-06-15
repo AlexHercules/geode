@@ -291,9 +291,9 @@ async function bootstrap() {
   // r18-diff equivalent — see .calibration/r26-bytes.mjs): snapshot a corpus,
   // change the pipeline, diff. sourcePath defaults to "" (vault root context).
   const renderHost = globalThis as unknown as {
-    __geodeRenderMarkdown?: (source: string, sourcePath?: string) => string;
+    __geodeRenderMarkdown?: (source: string, sourcePath?: string, strictLineBreaks?: boolean) => string;
   };
-  renderHost.__geodeRenderMarkdown = (source, sourcePath = "") =>
+  renderHost.__geodeRenderMarkdown = (source, sourcePath = "", strict = false) =>
     renderMarkdownToHtml(
       source,
       (tg) => metadata.resolveLink(tg, sourcePath),
@@ -301,6 +301,7 @@ async function bootstrap() {
         noteEmbeds: true,
         resolveEmbed: (tg) => metadata.resolveAttachment(tg, sourcePath),
         resolveMdLink: (href) => metadata.resolveMarkdownLink(href, sourcePath),
+        strictLineBreaks: strict,
       },
     );
 

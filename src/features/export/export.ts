@@ -12,6 +12,7 @@ import { hydrateEmbeds } from "@core/embeds";
 import { saveTextFile } from "@core/export";
 import { t } from "@core/i18n";
 import { mimeForPath, renderMarkdownToHtml } from "@core/markdown";
+import { strictLineBreaks } from "@core/appearance";
 import exportCss from "./export.css?raw";
 import "./notice.css";
 
@@ -135,6 +136,7 @@ async function renderActiveNote(
     {
       resolveEmbed: (target) => app.metadata.resolveAttachment(target, path),
       noteEmbeds: true,
+      strictLineBreaks: strictLineBreaks.get(),
     },
   );
   const bodyHtml = await inlineEmbeds(app, path, rendered);

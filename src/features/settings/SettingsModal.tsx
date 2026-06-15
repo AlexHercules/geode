@@ -6,6 +6,8 @@ import {
   setReadableLineLength,
   spellcheckEnabled,
   setSpellcheckEnabled,
+  strictLineBreaks,
+  setStrictLineBreaks,
   accentColor,
   setAccentColor,
   interfaceFont,
@@ -72,7 +74,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.83.0";
+const APP_VERSION = "0.84.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -181,6 +183,7 @@ function AppearanceSection() {
   /* R50: appearance toggles — readable line length + editor spellcheck */
   const readable = useStore(readableLineLength);
   const spell = useStore(spellcheckEnabled);
+  const strict = useStore(strictLineBreaks);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -381,6 +384,24 @@ function AppearanceSection() {
           aria-label={t("settings.spellcheck")}
           data-testid="settings-spellcheck-toggle"
           onClick={() => setSpellcheckEnabled(!spell)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R87: strict line breaks (reading view); OFF = single newline → <br> (Obsidian default) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.strictLineBreaks")}</div>
+          <div className="setting-desc">{t("settings.strictLineBreaksDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${strict ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={strict}
+          aria-label={t("settings.strictLineBreaks")}
+          data-testid="settings-strict-linebreaks-toggle"
+          onClick={() => setStrictLineBreaks(!strict)}
         >
           <span className="settings-toggle-thumb" />
         </button>

@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { foldEffect } from "@codemirror/language";
-import { spellcheckEnabled } from "@core/appearance";
+import { spellcheckEnabled, strictLineBreaks } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
@@ -129,6 +129,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const metaRevision = useStore(app.metadata.revision);
   /* R50: editor spellcheck preference — applied per-view reactively below */
   const spell = useStore(spellcheckEnabled);
+  /* R87: strict line breaks (reading view) — re-render preview reactively */
+  const strict = useStore(strictLineBreaks);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -498,11 +500,12 @@ export function EditorPane({ tab }: { tab: TabState }) {
         resolveEmbed: (target) => app.metadata.resolveAttachment(target, handle.path),
         noteEmbeds: true,
         resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, handle.path),
+        strictLineBreaks: strict,
       },
     );
     // metaRevision/previewBump are render triggers, not direct inputs
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app, tab.mode, handle, metaRevision, previewBump]);
+  }, [app, tab.mode, handle, metaRevision, previewBump, strict]);
 
   /* ---------- hydrate image + note embeds after each preview render ---------- */
 

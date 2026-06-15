@@ -35,6 +35,8 @@ export const en = {
   "settings.languageDesc": "Choose the interface language.",
   "settings.readableLineLength": "Readable line length",
   "settings.spellcheck": "Spellcheck",
+  "settings.strictLineBreaks": "Strict line breaks",
+  "settings.strictLineBreaksDesc": "When off, a single line break in your note shows as a line break in reading view. When on, you need two spaces or a blank line.",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -295,6 +297,8 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.languageDesc": "选择界面语言。",
   "settings.readableLineLength": "可读行宽",
   "settings.spellcheck": "拼写检查",
+  "settings.strictLineBreaks": "严格换行",
+  "settings.strictLineBreaksDesc": "关闭时，笔记中的单次换行在阅读视图中显示为换行；开启时，需两个空格或一个空行才换行。",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",
