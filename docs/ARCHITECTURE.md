@@ -71,6 +71,34 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 72 additions — 新链接格式设置 wikilink↔markdown × 最短/相对/绝对（候选池第五梯队【中】㉞-c；㉞ 整项完成）【As-built v0.69】
+
+> **状态：As-built（v0.69 交付,2026-06-15）。** ㉞-c = 让用户选择**新建链接**的形态：链接类型（wikilink `[[..]]` vs markdown `[..](..)`）+ 路径形式（最短 / 相对 / 绝对）。**纯前端 additive**——只改链接**创建**，**不动**改写引擎（linkRewrite.ts）/渲染管线（markdown.ts），故无字节级 r18-diff/r26-bytes 风险（未碰 markdown.ts）。本轮上承前一会话已落地的 `linkFormat.ts` + 5 消费点接线，本会话补 unlinkedMentions 接线 + 对抗评审修 2 根因。
+
+**`core/linkFormat.ts`（新）= 全部「文件→链接」构造的单一真值：**
+- `linkUseMarkdown: Store<boolean>`（默认 false=wikilink）/ `linkPathFormat: Store<"shortest"|"relative"|"absolute">`（默认 "shortest"）+ `setLinkUseMarkdown`/`setLinkPathFormat`，localStorage 持久化（`geode.linkUseMarkdown`/`geode.linkPathFormat`），镜像 autoUpdateLinks/appearance 的 Store+setter+try/catch 模式。
+- `formatLink(metadata, targetPath, fromPath, opts?: {embed?, alias?}): string | null` — 唯一构造入口。读两个 Store 现算。**契约**：无安全、resolve-back 验证过的形式 → 返回 `null`，调用方**必须跳过**（绝不插入坏链，镜像 internalDropSnippet）。
+- **两道硬降级守卫**（Geode resolver 限制强加）：**(a)** wikilink + 相对 → 退最短（resolveLink 不能解析 `../`）；**(b)** embed → 永远 wikilink `![[..]]`（markdown `![](path)` 笔记/图片嵌入在 R71 不渲染，会静默不显示）。
+- `wikilinkPath()`（内部，导出供潜在复用）：notes 用 resolveLink、附件用 resolveAttachment 验 resolve-back；最短=basename（解析回本文件）否则全路径；absolute=全路径；`WIKILINK_UNSAFE=/[[\]#|^]/` 命中→null。
+- `markdownHref()`（内部）：relative=`relativePath()`（始终 `./`/`../` 前缀，否则 resolveMarkdownLink 当 vault-root/basename）、absolute=全路径、shortest=basename（解析回）否则全路径；resolve-back 验证（resolveMarkdownLink）失败回退全路径否则 null；`encodeMdHref` 末步编码。
+- `encodeMdHref(path)`：`%` 先（避双编码）再 ` ()#?` → `%25 %20 %28 %29 %23 %3F`（沿用 R70 同集；`]` 不编码——href 组 `[^\s)]+` 容忍 `]`）。
+
+**5 个「文件→链接」构造点接线**（R71 教训：加多消费点产出必逐个接全）：
+1. `core/noteComposer.ts extractReplacement`：plain link 认 markdown 设置 `[name](name.md)`；embed 永远 `![[name]]`（守卫 b）。抽取笔记建在**源笔记同目录**（noteComposerCommands `parentPath(activePath)`）→ basename 必解析回（co-located），path-format moot。
+2. `features/editor/attachments.ts internalDropSnippet`（拖 vault 文件入编辑器）：委托 `formatLink`（附件 `embed:!isMd`→守卫 b）。
+3. `features/editor/cmExtensions.ts` `[[` 补全：用户已打 `[[` 故类型定死 wikilink，仅 path-format 生效（absolute→全路径，否则 basename 除非重名）。
+4. **`core/unlinkedMentions.ts buildLinkInsert`（本会话补）**：markdown 模式 → `formatLink(metadata, activePath, sourcePath, {alias: surfaceText})`=`[surface](href)`，null→throw→skip+report（同 wikilink 契约）；wikilink 分支**逐字节不变**（默认零回退，含 surface-resolves 特例）。
+5. `features/settings/SettingsModal.tsx`：toggle（`settings-link-use-markdown`）+ select（`settings-link-path-format`，最短/相对/绝对），CSS 变量 + `t()`。
+
+**⚠️ 已知延期（非缺陷）**：① `attachments.ts` 粘贴/拖入**新建附件**嵌入恒用最短 wikilink（守卫 b 已定 wikilink，path-format 延期=避免对刚建文件走 formatLink 的 resolve-timing 写路径风险）；② `compat/obsidian/metadata.ts fileToLinktext`（faithful Obsidian shim，仅返路径文本）/ `buildCache`（重建**既有**链接 original 文本，须镜像文档现状非新建偏好）——均非新建构造点，正确不改。
+
+**对抗评审（Workflow 9 agent / 4 lens：linkFormat 正确性 + 构造点完备 + 写路径数据安全 + 分层/UI/i18n；逐条 skeptic verify）→ 5 确认 0 证伪 → 去重 2 根因 + 1 注释：**
+- **根因 ① MAJOR（3 lens 命中同一处）= unlinkedMentions 改写后校验用错 resolver。** 我加的 markdown 分支让 buildLinkInsert 产 `kind:"markdown"` 链接（href 经 `encodeMdHref` 含 `%20` 或 `../`），但 post-rewrite 校验（unlinkedMentions.ts:385）仍调 `metadata.resolveLink(link.target, sourcePath)`——**wikilink resolver 不 decode `%xx`、不解析 `./../`** → 凡笔记名含空格（或 `()#?%`）/相对路径 → resolveLink 查 `my%20note` 找不到 → `!==activePath` → throw → 逐文件 skip → **mention 静默不链接（headline 功能对常见名失效）**。**这正是 R70 已记录的反模式**（resolveByKind JSDoc：md href 用 wikilink resolver 丢锚点/编码/相对）。**修=`metadata.resolveByKind(link, sourcePath)`**（wikilink→resolveLink 逐字节同款；markdown→resolveMarkdownLink decode+解析相对）。**评审揭露 r72-e2e 自身遮蔽**：原套件只测 `Note.md`（唯一未编码 basename）= 唯一意外通过的组合 → 补 spaced-name + 跨目录相对 ambiguous-basename 两 linkAll 用例锁定。
+- **根因 ② MAJOR = formatLink markdown 分支 display 无 `]` 守卫。** 目标 basename 或 alias 含 `]`（macOS/Linux/Obsidian 合法）→ `[a]b](a]b.md)` 经 MARKDOWN_LINK_RE 的 display 组 `[^\]]*` 在首个 `]` 截断 → **不可重解析 → formatLink 返回非 null 坏链，违反自身「null→跳过」契约**（resolve-back 通过因 `]` 是合法 fs 字符）。wikilink 分支对同输入安全（WIKILINK_UNSAFE 含 `]`→null）。**修=display 含 `]`→null**（对齐 WIKILINK_UNSAFE，href 组容忍 `]` 故只守 display）。可经 unlinkedMentions（alias=surfaceText）+ 拖文件触发。
+- **注释 ③ NIT**：noteComposer extractReplacement 注释误称抽取笔记建在 vault 根（实为源笔记同目录）；行为正确（co-located 解析回），仅注释纠错。
+
+**验证**：typecheck 0 · `r72-e2e` **26/26**（wiki/md × 最短/相对/绝对 × embed/alias + 编码 + 守卫 a/b + round-trip + unlinked mention 三态[Note/spaced/ambiguous] + extract 三态 + `]` 守卫三态 + 默认不变）· `r72-probe` **15/15** 真 WKWebView+真 fs（含 spaced-name resolveByKind 修复落盘）· 回归 r24(12)/r44(25)/r67(9)/r70(23)/r71(17) 绿 · cargo check/build 绿。**简化门 clean**（无 ≥8 行重复：wikilinkPath/markdownHref 在 resolver/扩展/编码/相对/unsafe 分歧，合并需加参数=STOP；无死代码；2 新 data-testid 合 57/57 设置控件 DOM 约定）。**顺手修**：本节所在文件 ARCHITECTURE.md 在 R70 文档轮被写入 1 个 NUL 字节（offset~16724，line 132 map-key 分隔符 `" "` 被 NUL 替换，致 grep/rg 视为二进制截断）→ `tr '\000' ' '` 复原。
+
 ## Round 71 additions — markdown 内部链接渲染 + 点击导航（候选池第五梯队【中】㉞-b）【As-built v0.68】
 
 > **状态：As-built（v0.68 交付,2026-06-15）。** ㉞-b = 让 R70 已索引/已改写的 markdown 链接 `[text](note.md)` 在阅读视图 + live preview **渲染为内部链接并可点击导航**（R70 前只索引/改写，渲染端当外链不导航）。**改 `core/markdown.ts` 阅读视图管线 = 字节契约敏感**：数据安全 §C 纪律——改前 `r26-bytes.mjs --baseline` 重捕，改后 diff 仅 `md-link-internal`/`-sub` 两例变（标记预期），其余 44 例（external/attachment/unresolved/mailto md 链接 + 全部既有 markdown）逐字节不变。
@@ -129,7 +157,7 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 - `normalizeMdHref(href, fromPath): string | null`（新，public）——decode `%xx` + 剥 `#anchor`/`?query` + external/`//`→null + 前导 `/`=vault 绝对 + `./`/`../` 基于 fromPath 目录归一化（`..` 越过根→null）→ 返回 vault 相对路径字符串（**不查索引**）。
 - `resolveMarkdownLink(href, fromPath): string | null`（新，public）——`const p = normalizeMdHref(...); return p===null ? null : (resolveLink(p,fromPath) ?? resolveAttachment(p,fromPath))`。
 **core/linkRewrite.ts**：
-- `CaptureEntry += kind: "wikilink" | "markdown"`；capture/rewrite 的 map key = `link.kind + " " + link.target.toLowerCase()`（避 wiki/md 同 target 串碰撞）。
+- `CaptureEntry += kind: "wikilink" | "markdown"`；capture/rewrite 的 map key = `link.kind + " " + link.target.toLowerCase()`（避 wiki/md 同 target 串碰撞）。
 - capture：md link 用 `resolveMarkdownLink` 命中 affectedMd/affectedAtt。
 - rewrite：md 分支 = `stillResolvesMd`（path-form 用 `normalizeMdHref` exact 比对 cap.newFile，basename 用 resolveMarkdownLink）跳过未坏 → splice 校验 `^\[…\]\(…\)$` 头尾 + 提取 text/url/title + url 去 anchor 后 `normalizeMdHref` 须 === cap.oldFile → 重组 `[${text}](${encode(newRelPath)}${anchor}${title})` → 同一 post-rewrite 复解析断言（`resolveMarkdownLink(now.target)===expect`）。
 - 冻结签名 `renameWithLinkUpdate`/`rewriteLinksForMerge`/`PlannedEdit` 不变；`__geodeRename` 钩子自动覆盖 md 链接（无需新钩子）。

@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R72 套件回归（2026-06-15，macOS release 二进制 v0.69.0 实测 `r72-probe-vault`）
+
+R72 = 新链接格式设置（候选池第五梯队【中】㉞-c，原生功能；㉞ 整项完成）。对照 Obsidian 核心：设置「新链接格式」（wikilink↔markdown）+「新链接路径」（最短/相对/绝对），影响全部新建链接构造点。
+新 `core/linkFormat.ts`（`linkUseMarkdown`/`linkPathFormat` Store+setter，localStorage）= `formatLink()` 单一真值（wiki↔md × 最短/相对/绝对 × embed/alias，resolve-back 验证，无安全形→null=跳过），两道硬守卫：(a) wiki+相对→最短、(b) embed→恒 wikilink。接 5 构造点（noteComposer/attachments/cmExtensions/**unlinkedMentions**/SettingsModal）。**纯前端 additive——不写既有 .md、不动改写引擎/渲染（未碰 markdown.ts，无字节套件风险）。零依赖、无 Rust。**
+新增套件：`r72-e2e.mjs` **26/26**（全组合 + 守卫 + round-trip + unlinked mention 三态 + extract 三态 + `]` 守卫）+ `r72-probe.mjs` **15/15**（真 WKWebView + 真 fs，含 spaced-name 落盘）。
+**对抗评审（Workflow 9 agent / 4 lens + 逐条 skeptic verify）5 确认 0 证伪 → 2 根因 + 1 注释**：① **unlinkedMentions 改写后校验用 wikilink resolver 验 markdown 链接 → 空格名 `%20` href 静默跳过 → `resolveByKind`（对齐 R70）**；② **formatLink markdown 分支 display 含 `]` 产不可重解析坏链违反 null 契约 → display 含 `]`→null（对齐 WIKILINK_UNSAFE）**；③ extract 注释纠错。**插件 API**：linkFormat 是 features/core 内部链接构造，compat 调用面**零改动**（fileToLinktext shim 不变）。**已知偏差**：粘贴新建附件嵌入恒最短 wikilink（守卫 b）；compat fileToLinktext path-format 未接（faithful shim）。
+- **套件矩阵不回退**：本轮零 compat 调用面改动，r31/…/r57 全 compat 套件不动；原生回归 r24[unlinked mentions]12 + r44[extract]25 + r67[drag-link]9 + r70[md rename]23 + r71[md render]17 全绿（链接构造/改写/渲染栈不破）。**OBSIDIAN-COMPAT 缺口表无变化**（R72 原生功能）。
+
 ### R71 套件回归（2026-06-15，macOS release 二进制 v0.68.0 实测 `r71-probe-vault`）
 
 R71 = markdown 内部链接渲染 + 点击导航（候选池第五梯队【中】㉞-b，原生功能）。对照 Obsidian 核心：解析为 vault 路径的 md 链接渲染为内部可点击链接、点击导航（阅读视图 + live + hover 预览）。
