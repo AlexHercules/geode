@@ -81,7 +81,7 @@ import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
-import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
+import { applyGraphFilters, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import { sortAndFilterLinks } from "@core/linkPanel";
 import type { ThemeKind } from "@core/types";
@@ -341,6 +341,18 @@ async function bootstrap() {
   };
   graphPrefsHost.__geodeGraphPrefs = (raw) =>
     raw !== undefined ? parseGraphPrefs(raw) : loadGraphPrefs();
+
+  // always-on graph-filter probe (R84, ㊵): runs the pure applyGraphFilters over
+  // minimal {id,resolved} nodes + {source,target} edges, returns the kept node ids.
+  const graphFilterHost = globalThis as unknown as {
+    __geodeGraphFilter?: (
+      nodes: { id: string; resolved: boolean }[],
+      edges: { source: string; target: string }[],
+      filters: { orphans: boolean; existingOnly: boolean },
+    ) => string[];
+  };
+  graphFilterHost.__geodeGraphFilter = (nodes, edges, filters) =>
+    applyGraphFilters(nodes, edges, filters).nodes.map((n) => n.id);
 
   // always-on search-sort probe (R80, ㊸): runs the pure sortResults over minimal
   // result items and returns the sorted basenames. The toolbar DOM is browser-E2E

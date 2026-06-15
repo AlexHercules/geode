@@ -18,6 +18,7 @@ import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import type { GraphEdge, GraphNode } from "@core/types";
 import {
+  applyGraphFilters,
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
@@ -529,7 +530,10 @@ export function GraphView() {
 
   const rebuild = useCallback(() => {
     const s = stateRef.current;
-    const data = app.metadata.getGraph();
+    // R84 (㊵): client-side filters (orphans / existing-files-only) applied to the
+    // full graph BEFORE local-BFS + degree sampling, so both see the filtered set.
+    const raw = app.metadata.getGraph();
+    const data = applyGraphFilters(raw.nodes, raw.edges, prefs.filters);
     const buildStart = performance.now();
 
     // pick the rendered node set: local BFS subgraph, then degree sampling
@@ -630,7 +634,17 @@ export function GraphView() {
       fitToView();
     }
     requestDraw();
-  }, [app, requestDraw, fitToView, prefs.mode, prefs.depth, prefs.showAll, anchor]);
+  }, [
+    app,
+    requestDraw,
+    fitToView,
+    prefs.mode,
+    prefs.depth,
+    prefs.showAll,
+    prefs.filters.orphans,
+    prefs.filters.existingOnly,
+    anchor,
+  ]);
 
   useEffect(() => {
     const delay = firstBuild.current ? 0 : 250; // debounce bursts of edits / anchor hops
@@ -825,6 +839,11 @@ export function GraphView() {
     s.prefs = { ...s.prefs, display: { ...s.prefs.display, [key]: v } };
     requestDraw();
   };
+  // R84 (㊵): filter change — alters the rendered node/edge SET, so it must
+  // rebuild (prefs.filters.* is in rebuild's deps → the rebuild effect re-fires).
+  const setFilter = (key: keyof GraphPrefs["filters"], v: boolean) => {
+    setPrefs((p) => ({ ...p, filters: { ...p.filters, [key]: v } }));
+  };
   const resetSettings = () => {
     setPrefs((p) => ({ ...p, forces: DEFAULT_PREFS.forces, display: DEFAULT_PREFS.display }));
     const s = stateRef.current;
@@ -931,6 +950,25 @@ export function GraphView() {
               onChange={(e) => setDisplay("arrows", e.target.checked)}
             />
             <span>{t("graph.arrows")}</span>
+          </label>
+          <div className="graph-settings-group">{t("graph.filters")}</div>
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              data-testid="graph-filter-existing"
+              checked={prefs.filters.existingOnly}
+              onChange={(e) => setFilter("existingOnly", e.target.checked)}
+            />
+            <span>{t("graph.filterExisting")}</span>
+          </label>
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              data-testid="graph-filter-orphans"
+              checked={prefs.filters.orphans}
+              onChange={(e) => setFilter("orphans", e.target.checked)}
+            />
+            <span>{t("graph.filterOrphans")}</span>
           </label>
           <button type="button" className="graph-settings-reset" data-testid="graph-settings-reset" onClick={resetSettings}>
             {t("graph.resetSettings")}
