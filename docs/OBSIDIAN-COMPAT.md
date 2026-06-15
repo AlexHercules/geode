@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R90 套件回归（2026-06-16，macOS release 二进制 v0.87.0 实测 `r90-probe-vault`）
+
+R90 = 图谱分组着色 color groups（候选池第六梯队 ㊵ 续续 v1，原生功能）。对照 Obsidian 图谱 Groups（每组=查询+颜色，匹配节点染色）。**纯客户端着色**（GraphView draw + graphPrefs.ts），零改 getGraph、不写 .md、不动 markdown.ts。
+
+新增套件：`r90-e2e.mjs` **17/17**（nodeGroupColor 7 真值表[path:/text/first-match/空/非误匹配] + parseGraphPrefs groups 向后兼容 4 + 设置 Groups 列表 add/edit/remove+持久化）+ `r90-probe.mjs` **8/8**（真 WKWebView，`__geodeGraphGroupColor`+`__geodeGraphPrefs`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（分组着色纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；draw 重构（按 color 分批）groups=[] 逐像素等价旧单批次 + 零改 getGraph → **r78(graph 设置)16/16 + r84(graph 过滤)17/17 回归绿**。**对抗评审 6 维深挖 draw 像素等价 + React key=index → 0 confirmed critical/major/minor/nit**（2 已知非缺陷取舍：hover/anchor 保留 accent；多 group 重叠+dim 亚像素 z-order，collide 保证不可见）。坏 hex 经 HEX_RE 在 parse 挡 localStorage 注入。**OBSIDIAN-COMPAT 缺口表**：㊵ 分组着色交付（续缺口：标签/附件作节点 / unresolved+连线着色 / tag:复杂查询）。
+
 ### R89 套件回归（2026-06-16，macOS release 二进制 v0.86.0 实测 `r89-probe-vault`）
 
 R89 = 新文件默认位置设置（候选池第六梯队 ㊽ slice，原生功能）。对照 Obsidian Files & Links「Default location for new notes」三态：vault 根 / 与当前文件同文件夹 / 指定文件夹。新 `core/newNote.ts` + 5 建笔记调用点收敛。写 .md 经既有 vetted create 路径。

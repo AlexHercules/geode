@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 90 additions — 图谱分组着色（color groups）（候选池第六梯队 ㊵ 续续 v1）【As-built v0.87】
+
+> **状态：As-built（v0.87 交付，2026-06-16）。** Obsidian 图谱 Groups：每组 = 一个查询 + 一个颜色，匹配的节点染该色。纯客户端着色（不动 getGraph 数据形状/不写盘/不动 markdown.ts）。默认无组 → 每个 resolved 节点保持 accent = 零回归。
+
+**契约（冻结接口）**：
+- `graphPrefs.ts`：`GraphGroup = { query: string; color: string }`；`GraphPrefs.groups: GraphGroup[]`，`DEFAULT_PREFS.groups = Object.freeze([])`（零回归）。`parseGraphPrefs` 加 groups 校验：过滤非法项（query 须 string + color 须 `/^#[0-9a-fA-F]{6}$/`）+ cap 24（防 corrupt blob 炸 UI/draw）。新纯函数 `nodeGroupColor(node{id,label}, groups, defaultColor): string`——**first-match**：`path:<folder>` 匹配 `node.id.startsWith(folder+"/")`（尾斜杠 strip、空 folder 跳过）/ 裸文本 case-insensitive 子串匹配 `node.label`（basename）/ 空 query 跳过 / 无匹配→defaultColor。`includes`/`startsWith` 纯字符串（query 含正则元字符当字面）。probe `__geodeGraphGroupColor`。
+- `GraphView.tsx` draw：resolved 节点从单批次（全 accent）改成**按 color 分批**（`Map<color,{normal,dim}>`，每节点 `groups.length ? nodeGroupColor(n,groups,p.accent) : p.accent`，每 color 一个 `fill(normal)@α1 + fill(dim)@0.16`）。**groups=[] 时单 color batch=accent → 与旧 fillNormal/fillDim 逐像素等价**。unresolved 仍 hollow（v1 不上色）。`setGroups`（整数组替换 + 镜像 `s.prefs.groups` + requestDraw——只改色不改节点集，**不 rebuild**，对比 setFilter 需 rebuild）。设置面板「Groups」section：map groups 渲染 `<input type=color>` + query input + remove，+ add 按钮（受控 value，key=index 删中间项不错位因受控）。
+- graph.css `.graph-group-*`（color 走 CSS 变量，hex 用户值进 canvas fillStyle 非 CSS 选择器无注入面）；i18n graph.groups/group*。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，深挖 draw 像素等价 + React key=index）→ 0 confirmed critical/major/minor/nit：**
+- **draw 像素等价证伪（核心）**：groups=[] 时 `nodeGroupColor` 短路不调（`groups.length`），单 color=accent batch，normal@α1 + dim@0.16 + fillStyle=accent 与旧三要素逐一致 → **逐像素等价零回归**；简化门合并 moveTo/arc（`let path` 提升、resolved 进 colorBatch / unresolved 进 hollow 分流正确）无 bug。
+- **匹配/镜像/key 证伪**：path: 不误匹配 `ProjectsX`（startsWith folder+"/"）；node.id=resolved 完整路径（nodeGroupColor 仅对 resolved 调）；first-match=数组序；setGroups 镜像 `s.prefs.groups`（draw 空 deps 闭包读最新）+ requestDraw 不 rebuild 正确；settings input **受控**（value=state）→ key=index 删中间项不 stale；坏 hex 经 HEX_RE 在 parse 挡 localStorage 注入、`<input type=color>` 只产合法 hex → fillStyle 恒合法；纯前端 view-only；r78/r84 回归绿。
+- **已知非缺陷取舍（留痕）**：① hovered/anchor 节点保留 accent/accentHover 不取 group 色（hover 高亮优先，对齐 Obsidian）；② 多 group 重叠 + dim(hover 瞬态) 时亚像素 z-order 差异（collide force radius+5 保证静止不重叠不可见）。
+
+**验证（As-built）**：typecheck 0 · `r90-e2e` **17/17**（nodeGroupColor 7 真值表[path:/text/first-match/空/非误匹配] + parseGraphPrefs groups 向后兼容 4[旧 blob []/有效保留/非法丢弃/corrupt] + 设置 Groups 列表 add/edit-query/remove+持久化）· `r90-probe` **8/8** 真 WKWebView · 回归 r78(16)/r84(17) · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 1 处合并（merge 重复 moveTo/arc）。
+
+**v1 已知延期**：unresolved 节点上色 · 连线着色 · `tag:`/复杂 search 查询匹配（需 GraphNode 带 tags + search.ts 解析器，v1 仅 path:/裸文本）· 局部图谱组继承全局。
+
 ## Round 89 additions — 新文件默认位置设置（候选池第六梯队 ㊽ v1）【As-built v0.86】
 
 > **状态：As-built（v0.86 交付，2026-06-16）。** Obsidian「Default location for new notes」三态：vault 根 / 与当前文件同文件夹 / 指定文件夹。默认 root = 既有 `uniquePath("",…)` 行为 → 零回归。写 .md 经既有 vetted create 路径（assertSafeRelPath + Rust safe_join）。
