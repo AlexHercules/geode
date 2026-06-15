@@ -88,7 +88,8 @@ body,
 }
 
 body {
-  font-family: "Segoe UI", -apple-system, system-ui, sans-serif;
+  /* R85 (㊺): interface font override; fallback = the default UI stack */
+  font-family: var(--font-interface, "Segoe UI", -apple-system, system-ui, sans-serif);
   font-size: 14px;
   color: var(--text-normal);
   background: var(--bg-app);

@@ -105,8 +105,81 @@ export function setAccentColor(color: string): void {
   applyAccentColor(color);
 }
 
+/* ---------------- R85 (㊺): font families ---------------- */
+
+const INTERFACE_FONT_KEY = "geode.interfaceFont";
+const TEXT_FONT_KEY = "geode.textFont";
+const MONOSPACE_FONT_KEY = "geode.monospaceFont";
+
+// default stacks — kept byte-identical to the CSS `var(--font-*, <stack>)`
+// fallbacks so an unset font and a removed override render the same.
+const STACK_INTERFACE = '"Segoe UI", -apple-system, system-ui, sans-serif';
+const STACK_MONOSPACE = 'ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace';
+
+/**
+ * Clean a user-typed font family NAME into a single safe token (no CSS injection):
+ * a custom-property value substituted via `var()` cannot break out of a rule per
+ * spec, but we still strip quotes/`;{}()<>`/backslashes/newlines so the value is a
+ * plain family name we then quote ourselves. "" = no override. Exported for the probe.
+ */
+export function sanitizeFontFamily(raw: string): string {
+  // strip the breakout chars (quotes/backslash/`;{}()<>`) + control chars (which
+  // would otherwise make the quoted value an invalid declaration and silently drop
+  // the override) — but NOT \t\n\r, so `\s+` can normalise those to single spaces.
+  return raw
+    .replace(/["'\\;{}()<>\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Build the CSS value for a font override: the quoted user family + the default
+ *  stack as fallback, or "" when there is no (valid) override. */
+function fontValue(raw: string, stack: string): string {
+  const name = sanitizeFontFamily(raw);
+  return name ? `"${name}", ${stack}` : "";
+}
+
+function applyFont(prop: string, raw: string, stack: string): void {
+  try {
+    const el = document.documentElement;
+    const value = fontValue(raw, stack);
+    if (value) el.style.setProperty(prop, value);
+    else el.style.removeProperty(prop); // → CSS var() fallback stack
+  } catch {
+    /* no DOM (non-browser test context) */
+  }
+}
+
+/** Interface font: app chrome (menus, sidebars, tree). "" = theme default. */
+export const interfaceFont = new Store<string>(readString(INTERFACE_FONT_KEY, ""));
+/** Text font: note prose (editor + reading view). Inherits interface when unset. */
+export const textFont = new Store<string>(readString(TEXT_FONT_KEY, ""));
+/** Monospace font: code spans / blocks. "" = default mono stack. */
+export const monospaceFont = new Store<string>(readString(MONOSPACE_FONT_KEY, ""));
+
+export function setInterfaceFont(raw: string): void {
+  interfaceFont.set(raw);
+  persistString(INTERFACE_FONT_KEY, sanitizeFontFamily(raw));
+  applyFont("--font-interface", raw, STACK_INTERFACE);
+}
+export function setTextFont(raw: string): void {
+  textFont.set(raw);
+  persistString(TEXT_FONT_KEY, sanitizeFontFamily(raw));
+  // when the text font is set-but-missing, fall back to the user's interface
+  // override (then its default stack) — mirrors the CSS var(--font-text, var(--font-interface, …)).
+  applyFont("--font-text", raw, `var(--font-interface, ${STACK_INTERFACE})`);
+}
+export function setMonospaceFont(raw: string): void {
+  monospaceFont.set(raw);
+  persistString(MONOSPACE_FONT_KEY, sanitizeFontFamily(raw));
+  applyFont("--font-monospace", raw, STACK_MONOSPACE);
+}
+
 /** Apply DOM-affecting appearance settings on boot (call once the document exists). */
 export function applyAppearanceSettings(): void {
   applyReadableLineLength(readableLineLength.get());
   applyAccentColor(accentColor.get());
+  applyFont("--font-interface", interfaceFont.get(), STACK_INTERFACE);
+  applyFont("--font-text", textFont.get(), STACK_INTERFACE);
+  applyFont("--font-monospace", monospaceFont.get(), STACK_MONOSPACE);
 }

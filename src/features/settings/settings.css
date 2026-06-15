@@ -98,7 +98,7 @@
 }
 
 .settings-note code {
-  font-family: Consolas, "Cascadia Code", monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 12px;
   background: var(--code-bg);
   padding: 1px 5px;
@@ -568,7 +568,7 @@
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--code-bg);
-  font-family: Consolas, "Cascadia Code", monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;

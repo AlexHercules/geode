@@ -140,6 +140,13 @@
 
 .editor-cm-host .cm-editor {
   height: 100%;
+  /* R85 (㊺): text font for note prose; unset → inherit the interface font */
+  font-family: var(--font-text, var(--font-interface, "Segoe UI", -apple-system, system-ui, sans-serif));
+}
+
+/* R85 (㊺): reading-view prose shares the text font */
+.markdown-reading-view {
+  font-family: var(--font-text, var(--font-interface, "Segoe UI", -apple-system, system-ui, sans-serif));
 }
 
 /* --- markdown live-preview styling (classes from HighlightStyle) --- */
@@ -184,7 +191,7 @@
   background: var(--code-bg);
   border-radius: 3px;
   padding: 0.05em 0.25em;
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 0.9em;
 }
 
@@ -585,7 +592,7 @@ iframe.geode-embed-pdf.cm-live-embed {
   background: var(--code-bg);
   border-radius: 3px;
   padding: 0.1em 0.3em;
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 0.875em;
 }
 
@@ -1305,7 +1312,7 @@ mark {
 /* cross-line $$ block lines: monospace + faint, no widget (CM forbids
    cross-line replaces from view plugins — recorded deviation) */
 .cm-line.cm-live-math-line {
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   color: var(--text-faint);
 }
 
@@ -1330,7 +1337,7 @@ mark {
 
 /* un-hydrated / load-failed fallback keeps the fence source readable */
 .editor-preview .geode-mermaid-source {
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   color: var(--text-faint);
 }
 
@@ -1372,7 +1379,7 @@ mark {
 }
 .geode-query-source {
   /* placeholder source shown only until hydrate swaps in results */
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   color: var(--text-faint);
   margin: 0;
 }
@@ -1697,7 +1704,7 @@ mark {
 }
 
 .property-opaque-raw {
-  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;

@@ -8,6 +8,12 @@ import {
   setSpellcheckEnabled,
   accentColor,
   setAccentColor,
+  interfaceFont,
+  setInterfaceFont,
+  textFont,
+  setTextFont,
+  monospaceFont,
+  setMonospaceFont,
 } from "@core/appearance";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import {
@@ -66,7 +72,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.81.0";
+const APP_VERSION = "0.82.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -179,6 +185,10 @@ function AppearanceSection() {
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
   const accentSwatch = accent || readCssAccent();
+  /* R85: font families (interface / text / monospace) — "" = theme default */
+  const iFont = useStore(interfaceFont);
+  const tFont = useStore(textFont);
+  const mFont = useStore(monospaceFont);
   const autoUpdate = useStore(autoUpdateLinks);
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
@@ -270,6 +280,54 @@ function AppearanceSection() {
             {t("settings.accentReset")}
           </button>
         </div>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.interfaceFont")}</div>
+          <div className="setting-desc">{t("settings.interfaceFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={iFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.interfaceFont")}
+          data-testid="settings-font-interface"
+          onChange={(e) => setInterfaceFont(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.textFont")}</div>
+          <div className="setting-desc">{t("settings.textFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={tFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.textFont")}
+          data-testid="settings-font-text"
+          onChange={(e) => setTextFont(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.monospaceFont")}</div>
+          <div className="setting-desc">{t("settings.monospaceFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={mFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.monospaceFont")}
+          data-testid="settings-font-monospace"
+          onChange={(e) => setMonospaceFont(e.target.value)}
+        />
       </div>
 
       <div className="setting-item">

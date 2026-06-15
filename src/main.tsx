@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -353,6 +353,11 @@ async function bootstrap() {
   };
   graphFilterHost.__geodeGraphFilter = (nodes, edges, filters) =>
     applyGraphFilters(nodes, edges, filters).nodes.map((n) => n.id);
+
+  // always-on font-sanitize probe (R85, ㊺): runs the pure CSS-injection guard
+  // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).
+  const fontHost = globalThis as unknown as { __geodeFontSanitize?: (raw: string) => string };
+  fontHost.__geodeFontSanitize = (raw) => sanitizeFontFamily(raw);
 
   // always-on search-sort probe (R80, ㊸): runs the pure sortResults over minimal
   // result items and returns the sorted basenames. The toolbar DOM is browser-E2E
@@ -940,6 +945,9 @@ async function bootstrap() {
       setAccent: (color: string) => void;
       accentVar: () => string;
       resolveTheme: (kind: ThemeKind, systemPrefersDark: boolean) => "dark" | "light";
+      // R85
+      setFont: (which: "interface" | "text" | "monospace", raw: string) => void;
+      fontVar: (prop: string) => string;
     };
   };
   apprHost.__geodeAppearance = {
@@ -949,6 +957,9 @@ async function bootstrap() {
     setAccent: (color) => setAccentColor(color),
     accentVar: () => document.documentElement.style.getPropertyValue("--accent") || "(default)",
     resolveTheme: (kind, systemPrefersDark) => resolveTheme(kind, systemPrefersDark),
+    setFont: (which, raw) =>
+      which === "interface" ? setInterfaceFont(raw) : which === "text" ? setTextFont(raw) : setMonospaceFont(raw),
+    fontVar: (prop) => document.documentElement.style.getPropertyValue(prop) || "(default)",
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll
