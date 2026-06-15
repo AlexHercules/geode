@@ -104,6 +104,11 @@ export const en = {
   "outgoinglinks.filterPlaceholder": "Filter links…",
   "outgoinglinks.noMatch": "No links match the filter",
 
+  // ---- file properties (R86, ㊼ — dedicated right pane) ----
+  "fileproperties.title": "Properties",
+  "fileproperties.empty": "Open a note to edit its properties",
+  "fileproperties.loading": "Loading…",
+
   // ---- footnotes (R65, ㉘ — dedicated pane) ----
   "footnotes.title": "Footnotes",
   "footnotes.empty": "Open a note to see its footnotes",
@@ -251,6 +256,11 @@ export const zh: Record<keyof typeof en, string> = {
   "outgoinglinks.sortNameDesc": "名称 (Z→A)",
   "outgoinglinks.filterPlaceholder": "过滤链接…",
   "outgoinglinks.noMatch": "没有匹配过滤条件的链接。",
+
+  // ---- file properties (R86, ㊼ — dedicated right pane) ----
+  "fileproperties.title": "属性",
+  "fileproperties.empty": "打开笔记以编辑其属性。",
+  "fileproperties.loading": "加载中…",
 
   // ---- footnotes (R65, ㉘ — dedicated pane) ----
   "footnotes.title": "脚注",

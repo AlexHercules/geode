@@ -526,7 +526,7 @@ export function PropertiesPanel(props: {
     const rows = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-prop-row]") ?? []);
     rows[rows.indexOf(row) + delta]?.focus();
   };
-  const onRowKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+  const onRowKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>, key: string) => {
     if (e.target !== e.currentTarget) return; // ignore keys bubbling from inner fields
     if (e.key === "ArrowDown") { e.preventDefault(); focusSiblingRow(e.currentTarget, 1); }
     else if (e.key === "ArrowUp") { e.preventDefault(); focusSiblingRow(e.currentTarget, -1); }
@@ -534,6 +534,14 @@ export function PropertiesPanel(props: {
       e.preventDefault();
       const val = e.currentTarget.querySelector(".property-value");
       (val?.querySelector<HTMLElement>("input, select") ?? val?.querySelector<HTMLElement>("button"))?.focus();
+    } else if ((e.metaKey || e.ctrlKey) && e.key === "Backspace") {
+      // R86 (㊼): delete the focused property (same path as the row's delete button).
+      // Move focus off this row first — it unmounts on removal (next, else previous).
+      e.preventDefault();
+      const row = e.currentTarget;
+      focusSiblingRow(row, 1);
+      if (document.activeElement === row) focusSiblingRow(row, -1);
+      removeKey(key);
     }
   };
 
@@ -741,7 +749,7 @@ export function PropertiesPanel(props: {
             data-testid={`property-row-${entry.key}`}
             data-prop-row=""
             tabIndex={0}
-            onKeyDown={onRowKeyDown}
+            onKeyDown={(e) => onRowKeyDown(e, entry.key)}
             key={`k-${entry.key}`}
           >
             <div className="property-key">

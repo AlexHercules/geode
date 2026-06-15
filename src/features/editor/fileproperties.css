@@ -1,0 +1,14 @@
+/* R86 (㊼): File properties right-sidebar pane */
+.fileproperties-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.fp-empty {
+  padding: 16px 12px;
+  color: var(--text-faint);
+  font-size: 13px;
+  text-align: center;
+}

@@ -163,6 +163,7 @@ export type RightPanelKind =
   | "outgoinglinks"
   | "footnotes"
   | "allproperties"
+  | "fileproperties"
   | "tags"
   | "calendar"
   | (string & {});

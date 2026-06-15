@@ -15,6 +15,7 @@ import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
 import { OutlinePanel } from "@features/outline/OutlinePanel";
 import { OutgoingLinksPanel } from "@features/outgoinglinks";
 import { FootnotesPanel } from "@features/footnotes";
+import { FilePropertiesPanel } from "@features/editor/FilePropertiesPanel";
 import { TagsPanel } from "@features/tags";
 import { CalendarPanel } from "@features/calendar";
 import { CommandPalette } from "@features/palette/CommandPalette";
@@ -113,6 +114,8 @@ export function App() {
           ? "footnotes"
         : ws.rightPanel === "allproperties"
           ? "allproperties"
+          : ws.rightPanel === "fileproperties"
+            ? "fileproperties"
           : ws.rightPanel === "tags"
             ? "tags"
             : ws.rightPanel === "calendar"
@@ -779,6 +782,16 @@ export function App() {
               </button>
               <button
                 role="tab"
+                aria-selected={effectiveRight === "fileproperties"}
+                className={`right-tab${effectiveRight === "fileproperties" ? " is-active" : ""}`}
+                title={t("app.tabFileProperties")}
+                data-testid="right-tab-fileproperties"
+                onClick={() => app.workspace.setRightPanel("fileproperties")}
+              >
+                <Icon name="file-text" size={15} />
+              </button>
+              <button
+                role="tab"
                 aria-selected={effectiveRight === "tags"}
                 className={`right-tab${effectiveRight === "tags" ? " is-active" : ""}`}
                 title={t("app.tabTags")}
@@ -823,6 +836,8 @@ export function App() {
                 <FootnotesPanel />
               ) : ws.rightPanel === "allproperties" ? (
                 <AllPropertiesPanel />
+              ) : ws.rightPanel === "fileproperties" ? (
+                <FilePropertiesPanel />
               ) : ws.rightPanel === "tags" ? (
                 <TagsPanel />
               ) : ws.rightPanel === "calendar" ? (

@@ -43,7 +43,7 @@ import { MetadataIndex, getCssClasses } from "@core/metadata";
 import { runQueryBlock } from "@core/queryEmbed";
 import { parseSearchQuery, evaluateSearch, type SearchInput } from "@core/search";
 import { PluginManager } from "@core/plugins";
-import { propertyTypes } from "@core/properties";
+import { propertyTypes, buildRemoveProperty } from "@core/properties";
 import { bookmarks, type BookmarkItem } from "@core/bookmarks";
 import {
   initWorkspaces,
@@ -358,6 +358,24 @@ async function bootstrap() {
   // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).
   const fontHost = globalThis as unknown as { __geodeFontSanitize?: (raw: string) => string };
   fontHost.__geodeFontSanitize = (raw) => sanitizeFontFamily(raw);
+
+  // always-on file-properties-remove probe (R86, ㊼): exercises the EXACT write
+  // the right-side FilePropertiesPanel does (acquire shared handle + buildRemoveProperty
+  // → applyExternalEdits), proving the second-writer delete path on the real fs build.
+  const filePropsHost = globalThis as unknown as {
+    __geodeFilePropsRemove?: (path: string, key: string) => Promise<{ before: string; after: string }>;
+  };
+  filePropsHost.__geodeFilePropsRemove = async (path, key) => {
+    const handle = await app.documents.acquire(path);
+    try {
+      const before = handle.getText();
+      const edit = buildRemoveProperty(before, key);
+      if (edit) handle.applyExternalEdits([edit]);
+      return { before, after: handle.getText() };
+    } finally {
+      handle.release();
+    }
+  };
 
   // always-on search-sort probe (R80, ㊸): runs the pure sortResults over minimal
   // result items and returns the sorted basenames. The toolbar DOM is browser-E2E
