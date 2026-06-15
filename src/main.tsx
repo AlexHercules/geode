@@ -62,7 +62,7 @@ import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
-import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault } from "@core/vault";
+import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
@@ -372,6 +372,17 @@ async function bootstrap() {
   // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).
   const fontHost = globalThis as unknown as { __geodeFontSanitize?: (raw: string) => string };
   fontHost.__geodeFontSanitize = (raw) => sanitizeFontFamily(raw);
+
+  // always-on explorer-sort probe (R91, ㊽): runs the pure sortTreeNodes over a
+  // mixed {kind,name} list and returns the ordered names. The tree DOM is browser-E2E only.
+  const sortTreeHost = globalThis as unknown as {
+    __geodeSortTree?: (
+      nodes: { kind: "file" | "folder"; name: string }[],
+      sortKey: "name-asc" | "name-desc",
+    ) => string[];
+  };
+  sortTreeHost.__geodeSortTree = (nodes, sortKey) =>
+    sortTreeNodes(nodes, sortKey).map((n) => n.name);
 
   // always-on new-note-folder probe (R89, ㊽): runs the pure resolveNewNoteFolder
   // for each location setting (root / current / specified) against an active path.

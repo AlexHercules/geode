@@ -68,6 +68,8 @@ const PATHS: Record<string, string[]> = {
   "chevron-down": ["M6 9l6 6 6-6"],
   "arrow-left": ["m12 19-7-7 7-7", "M19 12H5"],
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  // R91: sort glyph (lucide arrow-down-up) for the explorer sort toggle
+  "arrow-down-up": ["m3 16 4 4 4-4", "M7 20V4", "m21 8-4-4-4 4", "M17 4v16"],
   pin: [
     "M12 17v5",
     "M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z",

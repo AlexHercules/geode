@@ -6,6 +6,7 @@
  * the existing 46em cap; spellcheck OFF).
  */
 import { Store } from "./store";
+import type { ExplorerSortKey } from "./vault";
 
 const READABLE_KEY = "geode.readableLineLength";
 const SPELLCHECK_KEY = "geode.spellcheck";
@@ -56,6 +57,25 @@ export const spellcheckEnabled = new Store<boolean>(readBool(SPELLCHECK_KEY, fal
 export function setSpellcheckEnabled(on: boolean): void {
   spellcheckEnabled.set(on);
   persistBool(SPELLCHECK_KEY, on);
+}
+
+/** R91 (㊽): explorer file-tree sort order. Default "name-asc" = the canonical
+ *  stored order (zero regression). Presentation-only (consumed at render time). */
+const EXPLORER_SORT_KEY = "geode.explorerSort";
+
+function readExplorerSort(): ExplorerSortKey {
+  try {
+    return localStorage.getItem(EXPLORER_SORT_KEY) === "name-desc" ? "name-desc" : "name-asc";
+  } catch {
+    return "name-asc";
+  }
+}
+
+export const explorerSort = new Store<ExplorerSortKey>(readExplorerSort());
+
+export function setExplorerSort(key: ExplorerSortKey): void {
+  explorerSort.set(key);
+  persistString(EXPLORER_SORT_KEY, key === "name-asc" ? "" : key);
 }
 
 /** R88 (㊶ 续): show line-number gutter in the editor (live + source). Default OFF

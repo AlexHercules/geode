@@ -140,6 +140,28 @@ function sortChildren(folder: FolderNode) {
   folder.children.forEach((c) => c.kind === "folder" && sortChildren(c));
 }
 
+/** R91 (㊽): order for the explorer file tree. "name-asc" = the canonical stored
+ *  order (folders first, then case-insensitive natural name); "name-desc" reverses
+ *  the name within each group (folders still first, matching Obsidian). */
+export type ExplorerSortKey = "name-asc" | "name-desc";
+
+/**
+ * R91 (㊽): one level of children sorted for DISPLAY by `sortKey` — folders always
+ * first, name compared case-insensitively + numerically, reversed for "name-desc".
+ * Pure (returns a new array); exported for the probe. The vault's stored order is
+ * untouched — this is a presentation-layer sort applied per render.
+ */
+export function sortTreeNodes<N extends { kind: "file" | "folder"; name: string }>(
+  nodes: readonly N[],
+  sortKey: ExplorerSortKey,
+): N[] {
+  const dir = sortKey === "name-desc" ? -1 : 1;
+  return [...nodes].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === "folder" ? -1 : 1;
+    return dir * a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
+  });
+}
+
 /* ---------------- Vault: the API features use ---------------- */
 
 /** Total characters the content cache may hold before evicting oldest entries. */

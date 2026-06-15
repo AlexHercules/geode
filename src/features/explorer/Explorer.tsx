@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
-import { isTauri, parentPath, basename } from "@core/vault";
+import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
 import { EXPLORER_MIME, findFolder, resolveDropTarget, wouldCollide } from "@core/explorerMove";
+import { explorerSort, setExplorerSort } from "@core/appearance";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
@@ -32,10 +33,11 @@ interface MenuState {
 
 /* ---------------- pure helpers ---------------- */
 
-function flattenVisible(root: FolderNode, expanded: Set<string>): Row[] {
+function flattenVisible(root: FolderNode, expanded: Set<string>, sortKey: ExplorerSortKey): Row[] {
   const rows: Row[] = [];
   const walk = (folder: FolderNode, depth: number) => {
-    for (const child of folder.children) {
+    // R91: sort each level for display only (vault's stored order is untouched)
+    for (const child of sortTreeNodes(folder.children, sortKey)) {
       rows.push({ node: child, depth });
       if (child.kind === "folder" && expanded.has(child.path)) walk(child, depth + 1);
     }
@@ -185,7 +187,11 @@ export function Explorer() {
   const treeRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const rows = useMemo(() => (tree ? flattenVisible(tree, expanded) : []), [tree, expanded]);
+  const sortKey = useStore(explorerSort);
+  const rows = useMemo(
+    () => (tree ? flattenVisible(tree, expanded, sortKey) : []),
+    [tree, expanded, sortKey],
+  );
   const allFolders = useMemo(() => (tree ? collectFolderPaths(tree) : []), [tree]);
   const anyExpanded = expanded.size > 0;
 
@@ -631,6 +637,14 @@ export function Explorer() {
             onClick={() => void newFolder()}
           >
             <Icon name="folder-plus" size={16} />
+          </button>
+          <button
+            title={sortKey === "name-asc" ? t("explorer.sortNameAsc") : t("explorer.sortNameDesc")}
+            aria-label={t("explorer.sortToggle")}
+            data-testid="explorer-sort-toggle"
+            onClick={() => setExplorerSort(sortKey === "name-asc" ? "name-desc" : "name-asc")}
+          >
+            <Icon name="arrow-down-up" size={16} />
           </button>
           <button
             title={anyExpanded ? t("explorer.collapseAll") : t("explorer.expandAll")}
