@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import type { LinkRef } from "@core/types";
 import { findActiveTab } from "@core/workspace";
+import { sortAndFilterLinks, type LinkSortKey } from "@core/linkPanel";
 import "./outgoinglinks.css";
 
 type OutEntry = { link: LinkRef; resolvedPath: string | null };
@@ -62,6 +63,18 @@ export function OutgoingLinksPanel() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
+  // R82 (㊷) toolbar: sort + name filter. "default" preserves document order.
+  const [sortKey, setSortKey] = useState<LinkSortKey>("default");
+  const [filter, setFilter] = useState("");
+  // Reset on file switch so a stale filter doesn't make another note's real
+  // outgoing links look empty (mirrors Obsidian's per-file panel state).
+  useEffect(() => {
+    setSortKey("default");
+    setFilter("");
+  }, [activePath]);
+  // label = alias || target (the displayed name), so sort/filter match what the user sees.
+  const outName = (e: OutEntry) => e.link.alias || e.link.target;
+
   const { resolved, unresolved } = useMemo(() => {
     void rev; // re-derive whenever the metadata index changes
     const resolved: OutEntry[] = [];
@@ -77,6 +90,15 @@ export function OutgoingLinksPanel() {
     }
     return { resolved, unresolved };
   }, [app, activePath, rev]);
+
+  const shownResolved = useMemo(
+    () => sortAndFilterLinks(resolved, outName, sortKey, filter),
+    [resolved, sortKey, filter],
+  );
+  const shownUnresolved = useMemo(
+    () => sortAndFilterLinks(unresolved, outName, sortKey, filter),
+    [unresolved, sortKey, filter],
+  );
 
   const createAndOpen = useCallback(
     (name: string) => {
@@ -118,31 +140,56 @@ export function OutgoingLinksPanel() {
         </div>
       ) : (
         <div className="ol-scroll">
+          <div className="ol-toolbar" data-testid="ol-toolbar">
+            <select
+              className="ol-sort"
+              data-testid="ol-sort"
+              value={sortKey}
+              aria-label={t("outgoinglinks.sortBy")}
+              onChange={(e) => setSortKey(e.target.value as LinkSortKey)}
+            >
+              <option value="default">{t("outgoinglinks.sortDefault")}</option>
+              <option value="name-asc">{t("outgoinglinks.sortNameAsc")}</option>
+              <option value="name-desc">{t("outgoinglinks.sortNameDesc")}</option>
+            </select>
+            <input
+              className="ol-filter"
+              data-testid="ol-filter"
+              value={filter}
+              placeholder={t("outgoinglinks.filterPlaceholder")}
+              aria-label={t("outgoinglinks.filterPlaceholder")}
+              onChange={(e) => setFilter(e.target.value)}
+            />
+          </div>
           <Section
             title={t("outgoinglinks.links")}
-            count={resolved.length}
+            count={shownResolved.length}
             collapsed={!!collapsed.links}
             onToggle={() => toggle("links")}
             testid="ol-section-links"
           >
             {resolved.length === 0 ? (
               <div className="ol-empty-sub">{t("outgoinglinks.noLinks")}</div>
+            ) : shownResolved.length === 0 ? (
+              <div className="ol-empty-sub">{t("outgoinglinks.noMatch")}</div>
             ) : (
-              <div className="ol-list">{resolved.map(renderRow)}</div>
+              <div className="ol-list">{shownResolved.map(renderRow)}</div>
             )}
           </Section>
 
           <Section
             title={t("outgoinglinks.unresolved")}
-            count={unresolved.length}
+            count={shownUnresolved.length}
             collapsed={!!collapsed.unresolved}
             onToggle={() => toggle("unresolved")}
             testid="ol-section-unresolved"
           >
             {unresolved.length === 0 ? (
               <div className="ol-empty-sub">{t("outgoinglinks.noUnresolved")}</div>
+            ) : shownUnresolved.length === 0 ? (
+              <div className="ol-empty-sub">{t("outgoinglinks.noMatch")}</div>
             ) : (
-              <div className="ol-list">{unresolved.map(renderRow)}</div>
+              <div className="ol-list">{shownUnresolved.map(renderRow)}</div>
             )}
           </Section>
         </div>

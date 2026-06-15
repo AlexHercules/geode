@@ -77,6 +77,15 @@ export const en = {
   "backlinks.scanning": "Searching…",
   "backlinks.linkMention": "Link",
   "backlinks.linkAll": "Link all",
+  // R82 (㊷) linked-mentions toolbar
+  "backlinks.sortBy": "Sort order",
+  "backlinks.sortDefault": "Default",
+  "backlinks.sortNameAsc": "File name (A→Z)",
+  "backlinks.sortNameDesc": "File name (Z→A)",
+  "backlinks.collapseAll": "Collapse all",
+  "backlinks.expandAll": "Expand all",
+  "backlinks.filterPlaceholder": "Filter mentions…",
+  "backlinks.noMatch": "No mentions match the filter",
 
   // ---- outgoing links (R62, ㉓ — dedicated pane) ----
   "outgoinglinks.title": "Outgoing links",
@@ -87,6 +96,13 @@ export const en = {
   "outgoinglinks.noUnresolved": "No unresolved links",
   "outgoinglinks.createTitle": 'Create "{name}"',
   "outgoinglinks.newBadge": "new",
+  // R82 (㊷) toolbar
+  "outgoinglinks.sortBy": "Sort order",
+  "outgoinglinks.sortDefault": "Default",
+  "outgoinglinks.sortNameAsc": "Name (A→Z)",
+  "outgoinglinks.sortNameDesc": "Name (Z→A)",
+  "outgoinglinks.filterPlaceholder": "Filter links…",
+  "outgoinglinks.noMatch": "No links match the filter",
 
   // ---- footnotes (R65, ㉘ — dedicated pane) ----
   "footnotes.title": "Footnotes",
@@ -209,6 +225,15 @@ export const zh: Record<keyof typeof en, string> = {
   "backlinks.scanning": "搜索中…",
   "backlinks.linkMention": "链接",
   "backlinks.linkAll": "全部链接",
+  // R82 (㊷) 链接提及工具栏
+  "backlinks.sortBy": "排序方式",
+  "backlinks.sortDefault": "默认",
+  "backlinks.sortNameAsc": "文件名 (A→Z)",
+  "backlinks.sortNameDesc": "文件名 (Z→A)",
+  "backlinks.collapseAll": "全部折叠",
+  "backlinks.expandAll": "全部展开",
+  "backlinks.filterPlaceholder": "过滤提及…",
+  "backlinks.noMatch": "没有匹配过滤条件的提及。",
 
   // ---- outgoing links (R62, ㉓ — dedicated pane) ----
   "outgoinglinks.title": "出链",
@@ -219,6 +244,13 @@ export const zh: Record<keyof typeof en, string> = {
   "outgoinglinks.noUnresolved": "暂无未解析链接。",
   "outgoinglinks.createTitle": "新建“{name}”",
   "outgoinglinks.newBadge": "未创建",
+  // R82 (㊷) 工具栏
+  "outgoinglinks.sortBy": "排序方式",
+  "outgoinglinks.sortDefault": "默认",
+  "outgoinglinks.sortNameAsc": "名称 (A→Z)",
+  "outgoinglinks.sortNameDesc": "名称 (Z→A)",
+  "outgoinglinks.filterPlaceholder": "过滤链接…",
+  "outgoinglinks.noMatch": "没有匹配过滤条件的链接。",
 
   // ---- footnotes (R65, ㉘ — dedicated pane) ----
   "footnotes.title": "脚注",

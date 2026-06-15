@@ -5,6 +5,7 @@ import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import type { BacklinkEntry, LinkRef } from "@core/types";
 import { findActiveTab } from "@core/workspace";
+import { sortAndFilterLinks, type LinkSortKey } from "@core/linkPanel";
 import {
   deriveMentionTerms,
   findUnlinkedMentions,
@@ -22,10 +23,9 @@ interface PanelData {
   backlinks: BacklinkEntry[];
   outgoing: OutgoingEntry[];
   tags: string[];
-  mentionCount: number;
 }
 
-const EMPTY_DATA: PanelData = { backlinks: [], outgoing: [], tags: [], mentionCount: 0 };
+const EMPTY_DATA: PanelData = { backlinks: [], outgoing: [], tags: [] };
 
 function fileTitle(path: string): string {
   return (path.split("/").pop() ?? path).replace(/\.md$/i, "");
@@ -147,6 +147,26 @@ export function BacklinksPanel() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ unlinked: true });
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
+  // R82 (㊷) linked-mentions toolbar: sort + filter + per-source collapse.
+  const [blSort, setBlSort] = useState<LinkSortKey>("default");
+  const [blFilter, setBlFilter] = useState("");
+  const [collapsedSources, setCollapsedSources] = useState<Set<string>>(new Set());
+  // Reset the toolbar when the active file changes — otherwise a stale filter
+  // makes a different note's real backlinks look empty (Obsidian clears its
+  // backlinks search box on file switch). Also drops the per-source collapse set.
+  useEffect(() => {
+    setBlSort("default");
+    setBlFilter("");
+    setCollapsedSources(new Set());
+  }, [activePath]);
+  const toggleSource = (path: string) =>
+    setCollapsedSources((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+
   const data = useMemo<PanelData>(() => {
     void rev; // re-derive whenever the metadata index changes
     if (!activePath) return EMPTY_DATA;
@@ -160,9 +180,27 @@ export function BacklinksPanel() {
       return true;
     });
     const tags = [...new Set((app.metadata.getMetadata(activePath)?.tags ?? []).map((t) => t.tag))];
-    const mentionCount = backlinks.reduce((n, b) => n + b.contexts.length, 0);
-    return { backlinks, outgoing, tags, mentionCount };
+    return { backlinks, outgoing, tags };
   }, [app, activePath, rev]);
+
+  // linked-mention sources after sort + name filter (㊷); "default" preserves
+  // getBacklinks' source-path order → zero regression on the default.
+  const shownBacklinks = useMemo(
+    () => sortAndFilterLinks(data.backlinks, (b) => fileTitle(b.sourcePath), blSort, blFilter),
+    [data.backlinks, blSort, blFilter],
+  );
+  const shownMentionCount = useMemo(
+    () => shownBacklinks.reduce((n, b) => n + b.contexts.length, 0),
+    [shownBacklinks],
+  );
+  const allSourcesCollapsed =
+    shownBacklinks.length > 0 && shownBacklinks.every((b) => collapsedSources.has(b.sourcePath));
+  const toggleCollapseAll = () =>
+    setCollapsedSources((prev) =>
+      shownBacklinks.some((b) => !prev.has(b.sourcePath))
+        ? new Set(shownBacklinks.map((b) => b.sourcePath))
+        : new Set(),
+    );
 
   /* ---------- unlinked mentions: async vault scan ---------- */
 
@@ -284,7 +322,7 @@ export function BacklinksPanel() {
         <div className="bl-scroll">
           <Section
             title={t("backlinks.linkedMentions")}
-            count={data.mentionCount}
+            count={shownMentionCount}
             collapsed={!!collapsed.mentions}
             onToggle={() => toggle("mentions")}
             testid="bl-section-mentions"
@@ -292,33 +330,88 @@ export function BacklinksPanel() {
             {data.backlinks.length === 0 ? (
               <div className="bl-empty-sub">{t("backlinks.noBacklinks")}</div>
             ) : (
-              data.backlinks.map((b) => (
-                <div className="bl-source" key={b.sourcePath}>
-                  <button
-                    className="bl-source-name"
-                    title={b.sourcePath}
-                    data-testid="bl-source"
-                    data-hover-path={b.sourcePath}
-                    onClick={() => app.workspace.openFile(b.sourcePath)}
+              <>
+                <div className="bl-toolbar" data-testid="bl-toolbar">
+                  <select
+                    className="bl-sort"
+                    data-testid="bl-sort"
+                    value={blSort}
+                    aria-label={t("backlinks.sortBy")}
+                    onChange={(e) => setBlSort(e.target.value as LinkSortKey)}
                   >
-                    <Icon name="file-text" size={13} />
-                    <span className="bl-ellipsis">{fileTitle(b.sourcePath)}</span>
-                    <span className="bl-count">{b.contexts.length}</span>
+                    <option value="default">{t("backlinks.sortDefault")}</option>
+                    <option value="name-asc">{t("backlinks.sortNameAsc")}</option>
+                    <option value="name-desc">{t("backlinks.sortNameDesc")}</option>
+                  </select>
+                  <button
+                    className={"bl-tool-btn" + (allSourcesCollapsed ? " is-active" : "")}
+                    data-testid="bl-collapse-toggle"
+                    onClick={toggleCollapseAll}
+                    aria-label={t(allSourcesCollapsed ? "backlinks.expandAll" : "backlinks.collapseAll")}
+                    title={t(allSourcesCollapsed ? "backlinks.expandAll" : "backlinks.collapseAll")}
+                  >
+                    <Icon name={allSourcesCollapsed ? "chevron-right" : "chevron-down"} size={14} />
                   </button>
-                  <div className="bl-contexts">
-                    {b.contexts.map((c, i) => (
-                      <button
-                        key={`${c.from}-${i}`}
-                        className="bl-snippet"
-                        data-testid="bl-snippet"
-                        onClick={() => app.workspace.openFile(b.sourcePath)}
-                      >
-                        {c.snippet}
-                      </button>
-                    ))}
-                  </div>
+                  <input
+                    className="bl-filter"
+                    data-testid="bl-filter"
+                    value={blFilter}
+                    placeholder={t("backlinks.filterPlaceholder")}
+                    aria-label={t("backlinks.filterPlaceholder")}
+                    onChange={(e) => setBlFilter(e.target.value)}
+                  />
                 </div>
-              ))
+                {shownBacklinks.length === 0 ? (
+                  <div className="bl-empty-sub">{t("backlinks.noMatch")}</div>
+                ) : (
+                  shownBacklinks.map((b) => {
+                    const srcCollapsed = collapsedSources.has(b.sourcePath);
+                    return (
+                      <div className="bl-source" key={b.sourcePath}>
+                        <div className="bl-source-head">
+                          <button
+                            className="bl-source-toggle"
+                            data-testid="bl-source-toggle"
+                            aria-expanded={!srcCollapsed}
+                            onClick={() => toggleSource(b.sourcePath)}
+                          >
+                            <Icon
+                              name={srcCollapsed ? "chevron-right" : "chevron-down"}
+                              size={13}
+                              className="bl-chevron"
+                            />
+                          </button>
+                          <button
+                            className="bl-source-name"
+                            title={b.sourcePath}
+                            data-testid="bl-source"
+                            data-hover-path={b.sourcePath}
+                            onClick={() => app.workspace.openFile(b.sourcePath)}
+                          >
+                            <Icon name="file-text" size={13} />
+                            <span className="bl-ellipsis">{fileTitle(b.sourcePath)}</span>
+                            <span className="bl-count">{b.contexts.length}</span>
+                          </button>
+                        </div>
+                        {!srcCollapsed && (
+                          <div className="bl-contexts">
+                            {b.contexts.map((c, i) => (
+                              <button
+                                key={`${c.from}-${i}`}
+                                className="bl-snippet"
+                                data-testid="bl-snippet"
+                                onClick={() => app.workspace.openFile(b.sourcePath)}
+                              >
+                                {c.snippet}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </>
             )}
           </Section>
 

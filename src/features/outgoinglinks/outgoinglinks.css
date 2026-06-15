@@ -106,3 +106,32 @@
   border-radius: 4px;
   padding: 0 4px;
 }
+
+/* ---- R82 (㊷) toolbar: sort + filter ---- */
+.ol-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px 6px;
+}
+.ol-sort {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ol-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}

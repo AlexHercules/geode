@@ -83,6 +83,7 @@ import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
+import { sortAndFilterLinks } from "@core/linkPanel";
 import type { ThemeKind } from "@core/types";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -363,6 +364,19 @@ async function bootstrap() {
     ) => string[];
   };
   tabCloseHost.__geodeTabsToClose = (tabs, targetId, mode) => tabIdsToClose(tabs, targetId, mode);
+
+  // always-on link-panel probe (R82, ㊷): runs the pure sortAndFilterLinks over
+  // minimal {name} rows and returns the kept names in order. The backlinks /
+  // outgoing toolbars are browser-E2E only (§D); this proves the logic in the build.
+  const linkPanelHost = globalThis as unknown as {
+    __geodeLinkSortFilter?: (
+      items: { name: string }[],
+      sortKey: "default" | "name-asc" | "name-desc",
+      filter: string,
+    ) => string[];
+  };
+  linkPanelHost.__geodeLinkSortFilter = (items, sortKey, filter) =>
+    sortAndFilterLinks(items, (x) => x.name, sortKey, filter).map((x) => x.name);
 
   // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
   // real-fs vault and returns the structured result (total + matched paths). The
