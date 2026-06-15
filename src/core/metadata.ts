@@ -150,6 +150,30 @@ export function fmField(
   return undefined;
 }
 
+/** R73: cssclasses/cssclass frontmatter → sanitized CSS class tokens to apply to
+ *  the note view container (Obsidian: per-note theme/snippet targeting). Reads
+ *  both the plural `cssclasses` and the legacy singular `cssclass` (case-
+ *  insensitive). Accepts a YAML list, a comma string, or a space-separated
+ *  string; each entry is further split on whitespace (a class token cannot
+ *  contain whitespace). Dedupes, drops empties, preserves order. Read-only — not
+ *  indexed; the view layer reads it live off the editor buffer. */
+export function getCssClasses(content: string): string[] {
+  const fields = parseFrontmatter(content)?.fields;
+  if (!fields) return [];
+  const raw = [...asList(fmField(fields, "cssclasses")), ...asList(fmField(fields, "cssclass"))];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of raw) {
+    for (const token of entry.split(/\s+/)) {
+      if (token && !seen.has(token)) {
+        seen.add(token);
+        out.push(token);
+      }
+    }
+  }
+  return out;
+}
+
 /** Parse one markdown document into metadata. Exported for tests/reuse. */
 export function parseNote(path: string, content: string): NoteMetadata {
   const frontmatter = parseFrontmatter(content) ?? undefined;

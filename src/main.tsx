@@ -39,7 +39,7 @@ import {
   type MentionLinkResult,
   type MentionSpan,
 } from "@core/unlinkedMentions";
-import { MetadataIndex } from "@core/metadata";
+import { MetadataIndex, getCssClasses } from "@core/metadata";
 import { parseSearchQuery, evaluateSearch, type SearchInput } from "@core/search";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
@@ -295,6 +295,16 @@ async function bootstrap() {
         resolveMdLink: (href) => metadata.resolveMarkdownLink(href, sourcePath),
       },
     );
+
+  // always-on cssclasses probe (R73, ㊼): reads a real-fs note and returns the
+  // CSS class tokens its frontmatter (cssclasses / legacy cssclass) contributes
+  // to the note view container. DOM application is browser-E2E only — App-Nap
+  // makes WKWebView DOM reads unreliable (§D); this proves the real-fs
+  // frontmatter → tokens path. Same pattern as __geodeRenderMarkdown.
+  const cssClassHost = globalThis as unknown as {
+    __geodeCssClasses?: (path: string) => Promise<string[]>;
+  };
+  cssClassHost.__geodeCssClasses = async (path) => getCssClasses(await vault.read(path));
 
   // always-on bookmarks probe (R27): drives the real-fs read/write path from
   // browser/desktop E2E (WKWebView has no CDP — same pattern as __geodeRename /

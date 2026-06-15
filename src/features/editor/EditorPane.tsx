@@ -6,6 +6,7 @@ import { foldEffect } from "@codemirror/language";
 import { spellcheckEnabled } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
+import { getCssClasses } from "@core/metadata";
 import type { PropertyEdit } from "@core/properties";
 import type { TabState, ViewMode } from "@core/types";
 import { useI18n } from "@core/i18n";
@@ -175,6 +176,16 @@ export function EditorPane({ tab }: { tab: TabState }) {
     setDocRevision(handle.revision.get());
     return handle.revision.subscribe(() => setDocRevision(handle.revision.get()));
   }, [handle]);
+
+  /** R73: cssclasses/cssclass frontmatter → CSS classes on the note view
+   *  container (Obsidian per-note theme/snippet targeting). Read live off the
+   *  buffer so editing the property updates the container immediately; docRevision
+   *  (handle.revision mirror) is the bump trigger in both live and preview. */
+  const cssClasses = useMemo(
+    () => (handle ? getCssClasses(handle.getText()) : []),
+    [handle, docRevision],
+  );
+  const cssSuffix = cssClasses.length ? " " + cssClasses.join(" ") : "";
 
   // display preference changed → the CM frontmatter field must recompute its
   // decoration (panel widget ↔ raw ↔ hidden). The store subscription above
@@ -733,7 +744,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     body = (
       <>
         <div
-          className="editor-cm-host markdown-source-view mod-cm6"
+          className={"editor-cm-host markdown-source-view mod-cm6" + cssSuffix}
           data-testid="cm-editor"
           ref={hostRef}
         />
@@ -773,7 +784,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           />
         )}
         <div
-          className="preview-content markdown-preview-view markdown-rendered"
+          className={"preview-content markdown-preview-view markdown-rendered" + cssSuffix}
           data-testid="preview"
           ref={previewContentRef}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
