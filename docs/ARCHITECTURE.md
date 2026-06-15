@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 81 additions — 标签页右键上下文菜单（候选池第六梯队 ㊿ v1）【As-built v0.78】
+
+> **状态：As-built（v0.78 交付，2026-06-15）。** ㊿ v1 = 标签页 `onContextMenu` → 弹菜单：Close / Close others / Close to the right / Close all / Pin·Unpin / Split right / Split down。**纯前端**——基础设施（Pin R39 / Split R37 / closeTab）几乎全有，**只补 3 个批量关闭方法**。两道前置门：① grep 揭露 TabBar 在 `App.tsx:1245`（每 pane 一个，tab DOM 含 onClick/onDoubleClick=pin/onAuxClick=中键关，**零 onContextMenu**）+ `closeTab`/`toggleTabPin`/`splitActivePane` 已有 + `closeOthers/closeRight/closeAll` 缺 + 无通用 ContextMenu 组件（TagsPanel 内联范式最干净）；② WebSearch 确认 Obsidian 标签右键：Close tab / Close others / Close tabs to the right / Close all / Pin / Split。**侧栏面板拖拽/堆叠延期**（LeftPanelKind/RightPanelKind 单值，面板栈是大工程）。
+
+**关键设计（复用既有 + 最小新增）：**
+- **`core/workspace.ts` 补 3 方法 + 1 纯函数**：
+  - `tabIdsToClose(tabs, targetId, mode: "others"|"right"|"all"): string[]`（**导出纯函数，probe 可测**）：遍历 pane tabs，**跳过 pinned**；`others`=除 target、`right`=index > target、`all`=全部（除 pinned）。
+  - `closeOtherTabs(id)`/`closeTabsToRight(id)`/`closeAllTabs(id)` → `findTabLeaf(root, id)` 定位 pane → `tabIdsToClose` → **逐个 `this.closeTab(tid)`**（**data-safety：复用 vetted closeTab 路径，prepending save 属 handle outlives tab，绝不绕过直接 splice**；R39 closeMissingFileTabs 批量先例但那是删文件无 flush 风险，本轮活文件用 per-tab closeTab）。计算 id 列表用快照、逐个 closeTab（id 稳定、findTabLeaf 每次重搜，正确）。
+- **`app/App.tsx` TabBar**：① 每 tab `onContextMenu={e => {e.preventDefault(); setMenu({x:e.clientX, y:e.clientY, tabId:tab.id})}}`（与 onClick/onDoubleClick/onAuxClick 不冲突，button 2）；② `menu` state + `menuRef` + close effect（capture `mousedown` 外 / Escape → setMenu(null)，TagsPanel 范式）；③ 菜单 `.tab-context-menu` 内联 div（`position:fixed` + `Math.min(x, innerWidth-W)` 钳制）含 7 项：Close→`closeTab` / Close others→`closeOtherTabs` / Close to the right→`closeTabsToRight` / Close all→`closeAllTabs` / Pin·Unpin→`toggleTabPin`（标签按 `tab.pinned`）/ Split right→`setActiveTab(id)+splitActivePane("row")` / Split down→`splitActivePane("column")`；每项 action 后 setMenu(null)。
+- **`core/i18n/dict.app.ts`**：`app.tabClose`(复用 app.closeTab?)/`app.tabCloseOthers`/`app.tabCloseRight`/`app.tabCloseAll`/`app.tabPin`/`app.tabUnpin`/`app.tabSplitRight`/`app.tabSplitDown` 中英。
+- **CSS**：`.tab-context-menu`（照搬 `.tag-menu`：fixed/z-index 200/bg-modal/border，全 CSS 变量）放 app 样式（App.tsx 用的 css）。
+
+**testid 面**：`tab-context-menu`/`tabctx-close`/`tabctx-close-others`/`tabctx-close-right`/`tabctx-close-all`/`tabctx-pin`/`tabctx-split-right`/`tabctx-split-down`。
+
+**⚠️ 已知延期（非缺陷，记 ㊿ 续）**：① **侧栏面板拖拽重排 + 多面板堆叠**（LeftPanelKind/RightPanelKind 单值 → 栈，大工程）；② Move to new window（需 pop-out，远期硬边界相关）；③ Close to the LEFT（Obsidian 也无，仅 right）。
+
+**对抗评审（reviewer 7 lens 各独立 + 6 lens data-safety 逐条 skeptic-verify）→ 0 确认缺陷 + 3 nit（采纳 2）：**
+- **data-safety 证伪（核心）**：批量关闭走 vetted `closeTab` 逐个，**脏状态属 refcounted `DocumentHandle`（outlives view）非 EditorPane**——切走脏 inactive tab 时 EditorPane 卸载已调度 deferred-drop flush（documents.ts）；多 pane 同文件 handle refcount，关其一不 drop/不早 flush，最后 release 才 flush；closeAll 含 active 脏 tab 也经卸载 flush。**绝不绕过 closeTab 直接 splice**。R24(autosave/flush 字节) 回归绿确认链未退化。
+- **证伪其余**：批量迭代（id 快照 + 逐个 closeTab，已关 id findTabLeaf null→no-op，closeAll 关空 pane normalize 折叠正确）；pinned 三 mode 恒跳（`if(pinned)continue` 在 mode 分支前）；菜单 onContextMenu preventDefault 不冲突 onClick/dblclick/aux、`menu&&menuTab` 守 tab 已关、capture mousedown 外关 + Esc；split `setActiveTab(id)`(同设 activePaneId=holder)+`splitActivePane` 对右键非活动 pane/tab 都对；分层（app import core 合法）。
+- **采纳 2 nit**：① 菜单定位加下界 `Math.max(0, Math.min(x, innerWidth-200))`（极小视口防负偏移）；② **graph tab 的 Split 项 `disabled`**（`splitActivePane` 对 graph 返 null=no-op，Obsidian 也禁用）+ CSS `:disabled` 态。**未采纳 nit**：clamp 常量 200/280 与 CSS min-width 魔法数字（可接受）。
+
+**验证（As-built）**：typecheck 0 · `r81-e2e` **14/14**（tabIdsToClose 4 真值表 + 右键弹菜单 + close-others 留 target + pin→close-all 留 pinned + split 增 pane + Esc 关）· `r81-probe` **5/5** 真 WKWebView（`tabIdsToClose`）· 回归 r36(tab)47/47 + r37(split)36/36 + r39(pin)17/17 + r24(flush)12/12 + `r26-bytes` 0 · cargo build 绿 · 简化门 **clean**（3 公共方法/closeTabBatch/runMenu/7 菜单项各异不可合并）。
+
 ## Round 80 additions — 搜索面板 UI 选项（候选池第六梯队 ㊸）【As-built v0.77】
 
 > **状态：As-built（v0.77 交付，2026-06-15）。** ㊸ v1 = 给 SearchPanel 加 Obsidian 风格结果工具栏：① **排序下拉**（相关性[默认,当前逻辑]/文件名 A-Z·Z-A/匹配数 多·少）；② **折叠全部 + 每文件折叠**；③ **更多上下文**（show-more-context，长行显全行）；④ **复制结果**（剪贴板 Markdown 链接列表）。**纯前端、单文件、不写 .md → data-safety 不触发**。两道前置门：① grep 揭露 SearchPanel.tsx 单文件、排序硬编码 `:232`、`CONTEXT_RADIUS=36` 模块 const、`FileResult`/`LineHit`、无折叠机制、**mtime 排序不可行**（FileNode/VaultAdapter 无 stat）；② WebSearch 确认 Obsidian 搜索：排序（文件名 A-Z 默认/Z-A/修改/创建）+ 折叠结果 + 更多上下文 + 复制结果（三点菜单）。**修改/创建时间排序延期**（需扩 adapter 加 stat=跨 Rust，超 v1 纯前端范围）。

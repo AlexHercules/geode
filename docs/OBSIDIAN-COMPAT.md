@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R81 套件回归（2026-06-15，macOS release 二进制 v0.78.0 实测 `r81-probe-vault`）
+
+R81 = 标签页右键上下文菜单（候选池第六梯队 ㊿ v1，原生功能）。对照 Obsidian 标签页右键：Close / Close others / Close to the right / Close all / Pin / Split right / Split down。**纯前端**（App.tsx 菜单 UI + core/workspace.ts 批量关闭方法），不写 .md、不动 markdown.ts。
+
+新增套件：`r81-e2e.mjs` **14/14**（`tabIdsToClose` 4 真值表[others/right/all × 恒跳 pinned] + 右键弹菜单 + close-others 留 target + pin→close-all 留 pinned + split 增 pane + Esc 关）+ `r81-probe.mjs` **5/5**（真 WKWebView，`__geodeTabsToClose`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（标签操作纯前端，不动插件 API 面）；不碰 markdown.ts → **r26-bytes 0**；批量关闭走 vetted `closeTab` 逐个（绝不直接 splice）→ 继承 R24 autosave/flush，**r36(tab)47/47 + r37(split)36/36 + r39(pin)17/17 + r24(flush)12/12 回归绿**（零回归）。**对抗评审 7 lens + 6 lens data-safety skeptic-verify → 0 确认缺陷 + 3 nit（采纳 2：菜单定位下界 clamp / graph tab 禁 Split + CSS :disabled）**。data-safety 核心证伪：脏状态属 refcounted `DocumentHandle`（outlives view）→ EditorPane 卸载已调度 deferred-drop flush → 批量关闭不丢脏。**OBSIDIAN-COMPAT 缺口表**：㊿ 标签页右键菜单交付（续缺口：Move to new window=pop-out 硬边界 / 标签拖拽重排 / 侧栏面板拖拽堆叠）。右键菜单 compat `file-menu`/`editor-menu` 钩子仍缺（见缺口表）。
+
 ### R80 套件回归（2026-06-15，macOS release 二进制 v0.77.0 实测 `r80-probe-vault`）
 
 R80 = 搜索面板 UI 选项（候选池第六梯队 ㊸，原生功能）。对照 Obsidian 搜索：排序（文件名 A-Z/Z-A、匹配数）+ 折叠结果 + 更多上下文 + 复制结果。**纯前端单文件**（SearchPanel.tsx），不写 .md、不动 markdown.ts。
