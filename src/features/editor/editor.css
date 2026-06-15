@@ -1453,6 +1453,12 @@ mark {
   background: var(--bg-hover);
 }
 
+/* R83 (㊼): keyboard-focused row (rows are a Tab stop; ↑/↓ move between them) */
+.property-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 /* key column: type icon + name input, fixed ~9em, muted */
 .property-key {
   display: flex;
@@ -1596,6 +1602,19 @@ mark {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* R83 (㊼): a tags-chip is a clickable button that runs `#tag` in search */
+.property-chip-search {
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+.property-chip-search:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .property-chip-remove {

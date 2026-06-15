@@ -1,4 +1,12 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import {
   buildRemoveProperty,
   buildRenameProperty,
@@ -244,7 +252,10 @@ function ChipsValue(props: {
   listId?: string;
   stripHash: boolean;
   commit: (items: string[]) => void;
+  /** R83 (㊼): when set (tags only), a chip click runs `#<tag>` in search */
+  searchTag?: (tag: string) => void;
 }) {
+  const t = useI18n();
   const { items } = props;
   const [draft, setDraft] = useState("");
   const add = (text: string) => {
@@ -262,7 +273,19 @@ function ChipsValue(props: {
           key={`${i}:${item}`}
           data-testid={`property-chip-${props.keyName}-${i}`}
         >
-          <span className="property-chip-text">{item}</span>
+          {props.searchTag ? (
+            <button
+              type="button"
+              className="property-chip-text property-chip-search"
+              data-testid={`property-chip-search-${props.keyName}-${i}`}
+              title={t("editor.propertyTagSearch", { tag: item })}
+              onClick={() => props.searchTag?.(item)}
+            >
+              {item}
+            </button>
+          ) : (
+            <span className="property-chip-text">{item}</span>
+          )}
           <button
             className="property-chip-remove"
             type="button"
@@ -373,6 +396,8 @@ function ValueEditor(props: {
   valueListId: string;
   /** returns false when the edit was rejected (builder null) */
   commitValue: (key: string, value: PropertyValue) => boolean;
+  /** R83 (㊼): run `#<tag>` in search when a tags-chip is clicked */
+  searchTag: (tag: string) => void;
 }) {
   const t = useI18n();
   const { entry, effType } = props;
@@ -433,6 +458,7 @@ function ValueEditor(props: {
           removeLabel={t("editor.deleteProperty")}
           listId={effType === "tags" ? props.tagListId : effType === "multitext" ? props.valueListId : undefined}
           stripHash={effType === "tags"}
+          searchTag={effType === "tags" ? props.searchTag : undefined}
           commit={(items) => commit(items)}
         />
       );
@@ -482,6 +508,34 @@ export function PropertiesPanel(props: {
   latest.current = props;
 
   const rerender = () => setBumpCount((n) => n + 1);
+
+  // R83 (㊼): clicking a tags-chip seeds the search pane with `#tag` (reuses the
+  // Tags-pane mechanism — workspace.requestSearch + setLeftPanel("search")).
+  const searchTag = (tag: string) => app.workspace.requestSearch(`#${tag}`);
+
+  // R83 (㊼): keyboard navigation between property rows. Rows are a Tab stop
+  // (tabIndex={0}); once a row shell is focused, ↑/↓ move between rows and Enter
+  // focuses the row's value editor. The handler only acts when the row SHELL
+  // itself is focused (e.target === e.currentTarget) — never on keys bubbling
+  // from an inner field. We deliberately do NOT implement "Escape backs out to
+  // the row" by programmatically focusing the row: that blur would fire the
+  // field's onBlur, which commits the still-unflushed draft and would invert the
+  // fields' frozen Escape=discard contract into a write (data-safety). Fields
+  // keep their own Escape=discard; use Shift+Tab to step back out to the row.
+  const focusSiblingRow = (row: HTMLElement, delta: number) => {
+    const rows = Array.from(rootRef.current?.querySelectorAll<HTMLElement>("[data-prop-row]") ?? []);
+    rows[rows.indexOf(row) + delta]?.focus();
+  };
+  const onRowKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget) return; // ignore keys bubbling from inner fields
+    if (e.key === "ArrowDown") { e.preventDefault(); focusSiblingRow(e.currentTarget, 1); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); focusSiblingRow(e.currentTarget, -1); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      const val = e.currentTarget.querySelector(".property-value");
+      (val?.querySelector<HTMLElement>("input, select") ?? val?.querySelector<HTMLElement>("button"))?.focus();
+    }
+  };
 
   const uid = useId();
   const nameListId = `${uid}-prop-names`;
@@ -682,7 +736,14 @@ export function PropertiesPanel(props: {
         return (
           // "k-" prefix: a property literally named "opaque-0" must not
           // collide with the opaque rows' "opaque-<idx>" React keys
-          <div className="property-row" data-testid={`property-row-${entry.key}`} key={`k-${entry.key}`}>
+          <div
+            className="property-row"
+            data-testid={`property-row-${entry.key}`}
+            data-prop-row=""
+            tabIndex={0}
+            onKeyDown={onRowKeyDown}
+            key={`k-${entry.key}`}
+          >
             <div className="property-key">
               <span
                 className="property-type-wrap"
@@ -775,6 +836,7 @@ export function PropertiesPanel(props: {
                 tagListId={tagListId}
                 valueListId={`${uid}-val-${idx}`}
                 commitValue={commitValue}
+                searchTag={searchTag}
               />
             </div>
             <button
