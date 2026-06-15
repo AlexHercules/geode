@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 82 additions — 反链 / 出链面板增强（候选池第六梯队 ㊷ v1）【As-built v0.79】
+
+> **状态：As-built（v0.79 交付，2026-06-15）。** 给 Backlinks 面板的「链接提及」段 + 独立 Outgoing Links 面板加 Obsidian 风格工具栏（排序 + 文本过滤 + backlinks 折叠）。纯前端 view-only（不写 .md、不动 markdown.ts → data-safety 不触发；唯一写=既有 outgoing create-on-click 未动）。
+
+**契约（冻结接口）**：
+- 新 `src/core/linkPanel.ts`（纯 TS、零 import）：
+  - `export type LinkSortKey = "default" | "name-asc" | "name-desc";`
+  - `export function sortAndFilterLinks<T>(items: readonly T[], getName: (item: T) => string, sortKey: LinkSortKey, filter: string): T[]` — 先按投影名 case-insensitive 子串过滤（trim；空=保留全部），再按 sortKey 排序；**`"default"` 不排序 = 保留源序（backlinks 按 source-path、outgoing 按文档序）= 零回归默认**，name-asc/desc 走 `localeCompare` opt-in。纯函数不 mutate `items`。被两面板复用（features 不互 import → 共享逻辑只能落 core），probe 经 `window.__geodeLinkSortFilter` 真值表验证。
+- `BacklinksPanel`（linked-mentions 段）：toolbar `data-testid="bl-toolbar"` = `bl-sort`（select）+ `bl-collapse-toggle`（折叠/展开全部）+ `bl-filter`（input）；每源加 `bl-source-toggle`（chevron，`collapsedSources: Set<sourcePath>`）。`shownBacklinks = useMemo(sortAndFilterLinks(data.backlinks, b=>fileTitle(b.sourcePath), blSort, blFilter))`，段头计数改 `shownMentionCount`（过滤随之变小）。
+- `OutgoingLinksPanel`：toolbar `data-testid="ol-toolbar"` = `ol-sort` + `ol-filter`，投影名 = `link.alias || link.target`；`shownResolved`/`shownUnresolved` 两 memo，段头计数随过滤变小。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify）→ 1 确认 MAJOR + 1 MINOR（同根因，已修）+ 余证伪：**
+- **[MAJOR] 工具栏状态跨 activePath 不重置 → 新笔记假空**：`blSort`/`blFilter`/`collapsedSources`（及 outgoing `sortKey`/`filter`）绑组件实例，面板常驻不卸载、活动文件由 `activeTab.filePath` 派生 → 二者生命周期解耦。设过滤后切到**确有反链**的新笔记，旧过滤串仍在 → 行数 0 + 显「No mentions match」**假空**（用户误判数据缺失），且与 Obsidian（切档清空搜索框）不符。**修 = 两面板各加 `useEffect(reset, [activePath])`**（sort→default / filter→"" / collapsedSources→new Set()）。**[MINOR] per-source 折叠态对「被过滤掉又回来的源」残留** = 同根因派生，一并消解。**测试遮蔽根因**：r82-e2e 初版全程单一活动文件（无切档复验）→ 23/23 假绿；**补 4 条跨笔记重置断言**（设过滤+排序→切到另一篇有反链的笔记→断言 filter 清空 + sort=default + 新笔记真反链可见）。
+- **证伪**：`sortAndFilterLinks` 纯函数（空/纯空格过滤、正则元字符走 includes 不当正则、CJK/Unicode localeCompare、无 mutation）符契约；memo deps 齐全无 stale；view-only（无写 .md，outgoing create-on-click 语义未动，unlinked 扫描 stale-guard 字节未改）；分层合规（core 纯 TS 零 React、features 不互 import）；UI 串全 `t()`、颜色全 CSS 变量；`mentionCount` 删除全仓零残留引用。
+
+**验证（As-built）**：typecheck 0 · `r82-e2e` **27/27**（sortAndFilterLinks 7 真值表 + backlinks sort/filter/collapse-all/per-source toggle + outgoing sort/filter + **跨笔记重置 4 条**）· `r82-probe` **6/6** 真 WKWebView · 回归 r62(outgoing)14/14 + r80(search)17/17 · 不碰 markdown.ts（r26-bytes 0，不涉及渲染）· cargo 无 Rust 改动 · 简化门：删本轮新增即死的 `PanelData.mentionCount` 字段（−3 行、零新符号）。
+
+**v1 已知延期**：show more context（需 `getBacklinks` 携带整段全文 = 改共享索引数据形状，每反链多带数据）· 修改/创建时间排序（需扩 adapter stat = 跨 Rust，同 R80 延期）· unlinked-mentions 段的 sort/filter（本轮仅作用 linked mentions = Obsidian backlinks pane 主体）。
+
 ## Round 81 additions — 标签页右键上下文菜单（候选池第六梯队 ㊿ v1）【As-built v0.78】
 
 > **状态：As-built（v0.78 交付，2026-06-15）。** ㊿ v1 = 标签页 `onContextMenu` → 弹菜单：Close / Close others / Close to the right / Close all / Pin·Unpin / Split right / Split down。**纯前端**——基础设施（Pin R39 / Split R37 / closeTab）几乎全有，**只补 3 个批量关闭方法**。两道前置门：① grep 揭露 TabBar 在 `App.tsx:1245`（每 pane 一个，tab DOM 含 onClick/onDoubleClick=pin/onAuxClick=中键关，**零 onContextMenu**）+ `closeTab`/`toggleTabPin`/`splitActivePane` 已有 + `closeOthers/closeRight/closeAll` 缺 + 无通用 ContextMenu 组件（TagsPanel 内联范式最干净）；② WebSearch 确认 Obsidian 标签右键：Close tab / Close others / Close tabs to the right / Close all / Pin / Split。**侧栏面板拖拽/堆叠延期**（LeftPanelKind/RightPanelKind 单值，面板栈是大工程）。

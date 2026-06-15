@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R82 套件回归（2026-06-15，macOS release 二进制 v0.79.0 实测 `r82-probe-vault`）
+
+R82 = 反链 / 出链面板增强（候选池第六梯队 ㊷ v1，原生功能）。对照 Obsidian backlinks/outgoing pane：sort order + collapse results + show search filter（show more context 延期）。**纯前端 view-only**（BacklinksPanel/OutgoingLinksPanel + core/linkPanel.ts），不写 .md、不动 markdown.ts。
+
+新增套件：`r82-e2e.mjs` **27/27**（`sortAndFilterLinks` 7 真值表[default 保序/name-asc/desc/大小写子串过滤/过滤+排序复合/空过滤/无匹配] + backlinks sort/filter/collapse-all/per-source toggle + outgoing sort/filter + 跨笔记重置 4 条）+ `r82-probe.mjs` **6/6**（真 WKWebView，`__geodeLinkSortFilter`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（面板工具栏纯前端，不动插件 API 面）；不碰 markdown.ts → **r26-bytes 0**（不涉及渲染）；view-only 无写 .md（outgoing create-on-click 语义未动）→ **r62(outgoing)14/14 + r80(search)17/17 回归绿**（零回归）。**对抗评审 6 维 → 1 确认 MAJOR + 1 MINOR（同根因：工具栏状态跨 activePath 不重置→新笔记假空，修=两面板 `useEffect(reset,[activePath])`+补跨笔记 e2e）**。**OBSIDIAN-COMPAT 缺口表**：㊷ 排序/过滤/折叠交付（续缺口：show more context 需改 getBacklinks 共享索引 / 笔记底部内嵌 backlinks / 修改·创建时间排序需 adapter stat）。
+
 ### R81 套件回归（2026-06-15，macOS release 二进制 v0.78.0 实测 `r81-probe-vault`）
 
 R81 = 标签页右键上下文菜单（候选池第六梯队 ㊿ v1，原生功能）。对照 Obsidian 标签页右键：Close / Close others / Close to the right / Close all / Pin / Split right / Split down。**纯前端**（App.tsx 菜单 UI + core/workspace.ts 批量关闭方法），不写 .md、不动 markdown.ts。
