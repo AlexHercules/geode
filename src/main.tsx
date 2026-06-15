@@ -77,6 +77,7 @@ import { markdownFoldRange } from "@features/editor/folding";
 import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
+import { splitSlides } from "@features/slides";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -305,6 +306,16 @@ async function bootstrap() {
     __geodeCssClasses?: (path: string) => Promise<string[]>;
   };
   cssClassHost.__geodeCssClasses = async (path) => getCssClasses(await vault.read(path));
+
+  // always-on slides probe (R74, ㊱): reads a real-fs note and returns the slide
+  // sources splitSlides produces (frontmatter stripped, fences respected). The
+  // overlay DOM (mount/nav/counter) is browser-E2E only — App-Nap makes WKWebView
+  // DOM reads unreliable (§D); this proves the real-fs split path. Same pattern
+  // as __geodeCssClasses.
+  const slidesHost = globalThis as unknown as {
+    __geodeSplitSlides?: (path: string) => Promise<string[]>;
+  };
+  slidesHost.__geodeSplitSlides = async (path) => splitSlides(await vault.read(path));
 
   // always-on bookmarks probe (R27): drives the real-fs read/write path from
   // browser/desktop E2E (WKWebView has no CDP — same pattern as __geodeRename /

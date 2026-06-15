@@ -1,0 +1,84 @@
+/* Slides presentation mode (R74) — full-screen read-only deck overlay. */
+
+.slides-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-app);
+  outline: none;
+}
+
+.slides-page {
+  flex: 1 1 auto;
+  width: min(900px, 90vw);
+  max-width: 90vw;
+  margin: 0 auto;
+  padding: 4vh 0;
+  overflow-y: auto;
+  align-self: center;
+  font-size: 1.3em;
+}
+
+/* center a sparse slide's content vertically without fighting overflow */
+.slides-page > :first-child {
+  margin-top: 0;
+}
+
+.slides-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  padding: 0.4rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.slides-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.slides-controls {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+  background: var(--bg-modal);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slides-nav {
+  display: flex;
+  padding: 0.25rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.slides-nav:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.slides-nav:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+.slides-counter {
+  min-width: 3.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}

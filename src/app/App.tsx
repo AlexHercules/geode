@@ -23,6 +23,7 @@ import { TemplateSelector } from "@features/palette/TemplateSelector";
 import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
 import { WorkspacesModal } from "@features/workspaces";
 import { RecoveryModal } from "@features/recovery";
+import { SlidesOverlay } from "@features/slides";
 import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
@@ -168,6 +169,12 @@ export function App() {
         name: () => t("cmd.toggleSource"),
         hotkey: "Mod+Shift+E",
         callback: () => workspace.toggleActiveSourceMode(),
+      }),
+      commands.register({
+        id: "slides:start",
+        name: () => t("cmd.startPresentation"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => workspace.openModal("slides"),
       }),
       commands.register({
         id: "app:reload-plugins",
@@ -850,6 +857,7 @@ export function App() {
       {ws.modal === "settings" && <SettingsModal />}
       {ws.modal === "workspaces" && <WorkspacesModal />}
       {ws.modal === "recovery" && <RecoveryModal />}
+      {ws.modal === "slides" && <SlidesOverlay />}
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />
