@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 88 additions — 行号 gutter + 新标签默认视图模式（候选池第六梯队 ㊶ 续 v1）【As-built v0.85】
+
+> **状态：As-built（v0.85 交付，2026-06-16）。** 两个 Obsidian Editor 设置：① **Show line numbers**（行号 gutter，默认 OFF=Obsidian 默认+零回归）；② **Default view for new tabs**（新标签默认 live/source/preview）。纯前端 view-only（不写 .md、不动 markdown.ts）。
+
+**契约（冻结接口）**：
+- `core/appearance.ts`：`showLineNumbers` Store（默认 false，镜像 spellcheck，localStorage）+ `setShowLineNumbers`；`defaultNewTabMode` Store（`NewTabMode = "live"|"source"|"preview"`，默认 "live"=零回归，`readTabMode` 校验 null/坏值→"live"）+ `setDefaultNewTabMode`。无 DOM 副作用 → 不入 applyAppearanceSettings boot（惰性消费）。
+- **行号 gutter**：`cmExtensions.ts` opts 加 `lineNumberCompartment: Compartment`，return 含 `lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : [])`（`lineNumbers` from `@codemirror/view`=既有依赖）。`EditorPane.tsx` 每 view 创建 lineNumberCompartment（镜像 modeCompartment：ref + 创建传入 + cleanup 置 null）+ `useStore(showLineNumbers)` + 反应式 effect `view.dispatch({effects: compartment.reconfigure(on ? [lineNumbers()] : [])})`（镜像 spellcheck 反应式 effect）。**gutter 顺序**：lineNumbers() 在扩展列表先于 markdownFolding()→foldGutter() → 行号最左、fold 在右（Obsidian 一致）；两者独立 `.cm-gutter` 互不污染。
+- **新标签默认模式**：`workspace.ts` openFile 新建分支 `mode: "live"` → `mode: defaultNewTabMode.get()`（唯一 markdown 新标签创建点；graph tab 硬编码 preview 不取 default、reopenClosedTab 恢复 entry.mode、split 继承源 mode、layout 恢复读持久化 mode——均不受影响）。`core/workspace` import `core/appearance` 合规（无环，appearance 只 import store）。
+- SettingsModal：行号 toggle（`settings-line-numbers-toggle`，镜像 spellcheck）+ 默认模式 segmented（`settings-newtab-reading/live/source`，镜像 theme 三态）+ i18n。probe `__geodeNewTabMode`。
+
+**对抗评审（reviewer 5 维各独立 + skeptic verify，深挖 gutter 共存 + 默认 mode 注入完整性）→ 0 confirmed critical/major + 2 minor（同根因，已修）+ 1 nit（已修）：**
+- **[minor 同根因 已修] 行号 gutter 沿用 CM 基础 light 主题硬编码色**：编辑器从未声明 `EditorView.darkTheme` facet → CM 按 light 处理 → 行号数字 `#6c6c6c` + active-line gutter 浅蓝块（`#e2f2ff`），与 Geode 暗色主题冲突、违反「颜色走 CSS 变量」铁律（此前 fold gutter 用自绘 chevron 无文字色故未暴露，本轮首个带文字+activeLine 背景的 gutter 才暴露）。**修=`editorTheme` 加 `.cm-lineNumbers .cm-gutterElement { color: var(--text-faint) }` + `.cm-activeLineGutter { background: transparent; color: var(--text-muted) }`**（一处修两条）。
+- **[nit 已修]** r88-e2e 补行号 gutter 与 fold gutter 共存 + 行号最左断言。
+- **证伪其余**：gutter 渲染顺序正确（行号左 fold 右）；live↔source 与行号双 compartment 独立不互扰；preview→editor 往返行号初值按 Store 重播种、effect 守 `!view||!compartment` 不崩；多 pane 各自 useStore+effect 独立响应；默认 mode 注入点完整（graph/reopen/split/layout 各保留自身 mode）；`mode:"preview"` 新标签正确进阅读视图；无循环依赖；readTabMode 坏值全归 live；lineNumbers 非新依赖；R50/R11/R17/R29 未波及。
+
+**验证（As-built）**：typecheck 0 · `r88-e2e` **13/13**（行号 gutter 反应式 toggle 出现/消失+持久化 + **与 fold gutter 共存+最左** + defaultNewTabMode 真值表[preview/source/live] + segmented UI + openFile newTab 用 default）· `r88-probe` **5/5** 真 WKWebView（`__geodeNewTabMode` openFile 用 default mode）· 回归 r50(15)/r79(21)/r29(folds 19) · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean。
+
+**v1 已知延期**：行号点击选行 · Tab 缩进宽度 / fold 分项开关 / 代码块复制按钮（㊶ 续续）。
+
 ## Round 87 additions — strict line breaks（严格换行渲染选项）（候选池第六梯队 ㊶ v1）【As-built v0.84】
 
 > **状态：As-built（v0.84 交付，2026-06-16）。字节敏感轮（动 markdown.ts 阅读管线）。** Obsidian「Strict line breaks」设置：OFF（默认）= 单换行渲染成 `<br>`（Obsidian 默认阅读视图）/ ON = 严格 CommonMark（单换行 join，需两空格或空行）。**关键=改了渲染默认**：旧 md 无 `breaks` 选项 = `breaks:false`（CommonMark）；本轮默认翻转为 `breaks:true` 匹配 Obsidian。纯前端 view-only（不写 .md），只影响 reading 视图（live preview 的 CM 软换行本就视觉换行=Obsidian 一致）。
