@@ -71,6 +71,33 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 80 additions — 搜索面板 UI 选项（候选池第六梯队 ㊸）【As-built v0.77】
+
+> **状态：As-built（v0.77 交付，2026-06-15）。** ㊸ v1 = 给 SearchPanel 加 Obsidian 风格结果工具栏：① **排序下拉**（相关性[默认,当前逻辑]/文件名 A-Z·Z-A/匹配数 多·少）；② **折叠全部 + 每文件折叠**；③ **更多上下文**（show-more-context，长行显全行）；④ **复制结果**（剪贴板 Markdown 链接列表）。**纯前端、单文件、不写 .md → data-safety 不触发**。两道前置门：① grep 揭露 SearchPanel.tsx 单文件、排序硬编码 `:232`、`CONTEXT_RADIUS=36` 模块 const、`FileResult`/`LineHit`、无折叠机制、**mtime 排序不可行**（FileNode/VaultAdapter 无 stat）；② WebSearch 确认 Obsidian 搜索：排序（文件名 A-Z 默认/Z-A/修改/创建）+ 折叠结果 + 更多上下文 + 复制结果（三点菜单）。**修改/创建时间排序延期**（需扩 adapter 加 stat=跨 Rust，超 v1 纯前端范围）。
+
+**关键设计（排序可调免重搜 + 上下文免重切）：**
+- **`sortResults<T extends {basename,nameMatch,total}>(results, key): T[]`（导出泛型纯函数，probe 可测）**：key ∈ `"relevance"|"name-asc"|"name-desc"|"count-desc"|"count-asc"`；`"relevance"`=当前逻辑（nameMatch → total 降 → basename A-Z，**默认=零回归**）。
+- **`allResults` state（全部匹配，不截断）**：搜索 effect 不再 sort/slice（移除 `:232-237` 内联排序）→ `setAllResults(out)`。`results = useMemo(() => sortResults(allResults, sortKey).slice(0, MAX_FILE_RESULTS), [allResults, sortKey])`（排序改变只重排不重搜）；`grandTotal`/`hiddenFiles` 由 `allResults` 派生 memo。
+- **`LineHit += fullText, fullMarks`**：`sliceLine` 返回 `{text, marks, fullText, fullMarks}`（full=trimmed 全行 + trimmed-相对 marks，无窗口；短行 text===fullText）→ deriveLineHits 存两形态。render `showMoreContext ? fullText/fullMarks : text/marks`（免重 derive、免重搜）。
+- **折叠**：`collapsed: Set<string>`（session，每文件路径）。「折叠/展开全部」按钮（有展开→全折/否则全展）+ 每文件 header chevron（`chevron-down/right`）切 membership；行列表仅 `!collapsed.has(path)` 渲染。**header 文本点开文件、chevron 点折叠**（拆分避冲突）。
+- **复制**：按钮 → `navigator.clipboard.writeText(results.map(r=>"- [["+r.basename+"]]").join("\n"))`（R77 blockRef try/catch 先例）+ notice。
+- **持久化**：`sortKey`（localStorage `geode.searchSort`）+ `showMoreContext`（`geode.searchContext`）（Obsidian 保留排序偏好）；`collapsed` 不持久（每搜会话）。
+
+**UI 挂点**：`.search-input-wrap` 后插 `.search-toolbar`（sort `<select>` + 折叠 toggle 按钮 + more-context toggle + copy 按钮）。**`core/i18n/dict.panels.ts`**（search.* 命名空间）：`search.sortBy`/`search.sortRelevance`/`search.sortNameAsc`/`search.sortNameDesc`/`search.sortCountDesc`/`search.sortCountAsc`/`search.collapseAll`/`search.expandAll`/`search.moreContext`/`search.copyResults`/`search.copied` 中英。**`app/icons.tsx`**：`copy` 新图标。**`main.tsx`**：`__geodeSearchSort(items, key)` sync 探针（返排序后 basename[]）。
+
+**testid 面**：`search-sort`/`search-collapse-toggle`/`search-context-toggle`/`search-copy`/`search-file-chevron`（每文件折叠）。
+
+**⚠️ 已知延期（非缺陷，记 ㊸ 续）**：① 修改/创建时间排序（需 adapter stat）；② 解释搜索词（explain，search.ts 有 AST）；③ 匹配大小写 UI toggle（R68 有 `case:` 运算符，UI 全局开关延期）；④ 复制格式仅文件链接列表（不含行命中缩进）。
+
+**对抗评审（reviewer 6 lens 各独立 + skeptic-verify + 运行实例复核）→ 0 critical/0 major/2 minor（均修）+ 3 nit：**
+- **证伪**：effect 重构等价（totalMatches/totalFiles/hiddenFiles 与原逐项等价、relevance 默认与原硬编码逐字节同序=零回归、cancelled 守卫保持、parsed memo 不 churn、tag-mode setAllResults([]) 隐藏工具栏）；more-context fullMarks 偏移对应 fullText 不越界；折叠 chevron/name onClick 拆分不冲突、collapsed 残留旧 path 无害；分层（main.tsx import feature sortResults 合法、CSS 全主题变量无硬编码色）。
+- **修 minor 1**：copyResults 静默无反馈（契约冻结 `search.copied` notice 我漏加）→ 加 `copied` 瞬态 state（复制后按钮 1.5s 显 check 图标 + title「Copied」）+ `search.copied` 键（避免再造第 3 个 toast helper=showBlockNotice 的重复，改按钮态反馈）。
+- **修 minor 2**：`navigator.clipboard.writeText` 仅 `.catch` 护 reject，不安全上下文 `navigator.clipboard` undefined 会同步抛 → 整体 `try/catch` 包（对齐 R77 blockRefCommands 先例）。
+- **顺带修 nit（R77 教训）**：copy 列表从 `[[basename]]` 改 **`[[path-sans-ext]]`**（重复 basename 粘别处解析错笔记——full path 可移植；e2e root 文件 path===basename 不变）。
+- **遗留 nit（记 ㊸ 续）**：① 非法持久化 sortKey（手改 localStorage）→ sortResults 兜 relevance 但 `<select>` 显空（需手动篡改，cosmetic）；② path 含 `]#|^` 元字符仍产坏 wikilink（剪贴板非 .md 写，Obsidian 同口径）。
+
+**验证（As-built）**：typecheck 0 · `r80-e2e` **17/17**（sortResults 5 key 真值表 + 排序下拉改序 + 持久化 + 折叠全部/每文件 + more-context 长行变长 + 复制剪贴板 + **复制按钮反馈**）· `r80-probe` **7/7** 真 WKWebView（`__geodeSearchSort`）· 回归 r68(search)40/40 + r34(find)15/15 + `r26-bytes` 0 · cargo build 绿 · 简化门 **clean**（删了 1 处重复 `.search-file-name` CSS；sortResults 5 case/readSearchPref 镜像 appearance/effect 重构契约决策不回退）。
+
 ## Round 79 additions — 外观补全 v1：强调色取色器 + 系统主题三态（候选池第六梯队 ㊺）【As-built v0.76】
 
 > **状态：As-built（v0.76 交付，2026-06-15）。** ㊺ v1 = ① **强调色 Accent color 取色器**（`<input type="color">` → 运行时覆盖 `--accent`/`--accent-hover`/`--accent-muted` + localStorage 持久化）；② **系统主题三态**（`ThemeKind += "system"`，Adapt to system，随 `prefers-color-scheme` 实时）。**纯前端、不写 .md → data-safety 轻**（但改 `workspace.ts` 持久化树 → r45/r50 回归必跑）。两道前置门：① grep 揭露 R50 appearance.ts localStorage 单键 Store+setter 范式可复用 + theme 在 workspace 持久化树二态（`ThemeKind="dark"|"light"`，setTheme 写 `dataset.theme`）+ accent 变量在 app.css；② WebSearch 确认 Obsidian Appearance：accent color + base color scheme「Adapt to system」默认跟随 OS。**字体三族 / inline title / ribbon 显隐 = 延期**（字体需先引入 CSS 字体变量基建，更大）。
