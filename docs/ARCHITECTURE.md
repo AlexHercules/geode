@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 91 additions — Explorer 文件树排序（候选池第六梯队 ㊽ 续 v1）【As-built v0.88】
+
+> **状态：As-built（v0.88 交付，2026-06-16）。** Obsidian Explorer「File name A→Z / Z→A」排序。**纯展示层**（只重排渲染顺序、不动 vault 存储序/不写盘）。默认 name-asc = vault.ts sortChildren 存储序 = 零回归。时间排序（mtime/ctime）延期（需 adapter stat=跨 Rust）。
+
+**契约（冻结接口）**：
+- `core/vault.ts`：`ExplorerSortKey = "name-asc" | "name-desc"` + 新纯函数 `sortTreeNodes<N extends {kind,name}>(nodes, sortKey): N[]`——**folders 永远在前**（kind 子句不受方向影响）；组内 `dir * name.localeCompare(b.name, undefined, {sensitivity:"base", numeric:true})`（dir=name-desc?−1:1）。**返回新数组 `[...nodes].sort`（不 mutate 输入）**——vault 存储序不被污染（flattenFiles/getMarkdownFiles/索引等消费者读到的仍是存储序）。name-asc 的 comparator 与既有 `sortChildren`（vault 存储序）**逐字符相同** → 默认显示序逐项等同存储序 = 零回归。probe `__geodeSortTree`。
+- `core/appearance.ts`：`explorerSort` Store（默认 "name-asc"，readExplorerSort 坏值/缺键→name-asc）+ `setExplorerSort`（localStorage，name-asc→removeItem）。`import type ExplorerSortKey from "./vault"`（编译期擦除、无运行时循环；vault 不 import appearance）。
+- `Explorer.tsx`：`flattenVisible(root, expanded, sortKey)` 每层 `sortTreeNodes(folder.children, sortKey)` 后遍历（**唯一显示路径**，collectFolderPaths/碰撞检测是顺序无关用途不过 sort）；rows memo `useStore(explorerSort)` + 入 deps（排序改即重排、不重建 tree）；toolbar sort toggle 按钮（`explorer-sort-toggle`，asc↔desc，icon arrow-down-up[新增 lucide 图标]）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，深挖 name-asc 等同存储序 + 是否 mutate folder.children）→ 0 confirmed critical/major/minor/nit：**
+- **零回归证伪（核心）**：sortTreeNodes(name-asc) 的 folders-first 子句 + name 子句与 sortChildren **逐字符相同**；输入 `folder.children` 已是 sortChildren 排过的存储序，`sensitivity:"base"` 相等元素 comparator 返 0 → 稳定排序保留输入序 = 存储序 → 默认 name-asc 显示序逐项等同存储序、零回归。
+- **不 mutate 证伪**：`[...nodes].sort` 浅拷贝再排拷贝，原 folder.children 不动；flattenVisible 渲染用返回值非原数组 → 其他消费者读存储序无污染。
+- **证伪其余**：desc 时 dir 只乘 name 子句、kind 子句不变 → folders 仍在前（对齐 Obsidian Z→A）；numeric 自然序（n2<n10）+ case-insensitive(base)+CJK 正确；虚拟化按 rows.length / 键盘按 rows 顺序 / expanded Set 按 path 不受 sort 影响，sort 改 rows 顺序长度不变、scrollTop 保留指向不同行（可接受 UX 不崩）；r28(拖拽/移动)回归绿；分层无环；纯前端不写 .md；arrow-down-up 4 段 path 合法 SVG。
+
+**验证（As-built）**：typecheck 0 · `r91-e2e` **10/10**（sortTreeNodes 4 真值表[asc folders-first/desc/numeric/case] + 工具栏 toggle 重排 tree DOM[asc默认/desc/复位] + 持久化双向）· `r91-probe` **5/5** 真 WKWebView · 回归 r28(23) · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（sortChildren/sortTreeNodes comparator 仅~2 行重叠、形态不同[mutate 递归固定 asc vs 纯单层带 dir]，统一=加抽象，不动）。
+
+**v1 已知延期**：修改/创建时间排序（需扩 adapter stat=跨 Rust，同 R80）· 自定义手动排序 · 右键排序菜单（v1 用 toolbar toggle）。
+
 ## Round 90 additions — 图谱分组着色（color groups）（候选池第六梯队 ㊵ 续续 v1）【As-built v0.87】
 
 > **状态：As-built（v0.87 交付，2026-06-16）。** Obsidian 图谱 Groups：每组 = 一个查询 + 一个颜色，匹配的节点染该色。纯客户端着色（不动 getGraph 数据形状/不写盘/不动 markdown.ts）。默认无组 → 每个 resolved 节点保持 accent = 零回归。

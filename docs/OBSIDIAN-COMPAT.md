@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R91 套件回归（2026-06-16，macOS release 二进制 v0.88.0 实测 `r91-probe-vault`）
+
+R91 = Explorer 文件树排序（候选池第六梯队 ㊽ slice，原生功能）。对照 Obsidian Explorer「File name A→Z / Z→A」。**纯展示层**（vault.ts sortTreeNodes + Explorer flattenVisible + toolbar toggle），不动 vault 存储序、不写 .md、不动 markdown.ts。
+
+新增套件：`r91-e2e.mjs` **10/10**（sortTreeNodes 4 真值表[asc folders-first/desc/numeric/case] + 工具栏 toggle 重排 tree DOM + 持久化）+ `r91-probe.mjs` **5/5**（真 WKWebView，`__geodeSortTree`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（排序纯前端展示层）；不碰 markdown.ts → **r26-bytes 不涉及**；sortTreeNodes 返回新数组不 mutate vault 存储序、name-asc comparator 逐字符等同 sortChildren → **r28(树拖拽/移动)23/23 回归绿**。**对抗评审 6 维深挖 name-asc 等同存储序 + 不 mutate folder.children → 0 confirmed critical/major/minor/nit**。**OBSIDIAN-COMPAT 缺口表**：㊽ 文件名排序交付（续缺口：mtime/ctime 排序需 adapter stat / 右键菜单完整化 / excluded files）。
+
 ### R90 套件回归（2026-06-16，macOS release 二进制 v0.87.0 实测 `r90-probe-vault`）
 
 R90 = 图谱分组着色 color groups（候选池第六梯队 ㊵ 续续 v1，原生功能）。对照 Obsidian 图谱 Groups（每组=查询+颜色，匹配节点染色）。**纯客户端着色**（GraphView draw + graphPrefs.ts），零改 getGraph、不写 .md、不动 markdown.ts。
