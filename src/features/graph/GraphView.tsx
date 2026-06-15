@@ -5,6 +5,9 @@ import {
   forceLink,
   forceManyBody,
   forceSimulation,
+  type ForceCenter,
+  type ForceLink,
+  type ForceManyBody,
   type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
@@ -14,7 +17,24 @@ import { Icon } from "@app/icons";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import type { GraphEdge, GraphNode } from "@core/types";
+import {
+  DEFAULT_PREFS,
+  GRAPH_RANGES,
+  loadPrefs,
+  savePrefs,
+  type GraphForces,
+  type GraphPrefs,
+} from "./graphPrefs";
 import "./graph.css";
+
+/** Apply the current force prefs to a (possibly running) simulation in place. */
+function applyForces(sim: Simulation<SimNode, SimLink>, f: GraphForces): void {
+  (sim.force("link") as ForceLink<SimNode, SimLink> | undefined)
+    ?.distance(f.linkDistance)
+    .strength(f.linkForce);
+  (sim.force("charge") as ForceManyBody<SimNode> | undefined)?.strength(-f.repel);
+  (sim.force("center") as ForceCenter<SimNode> | undefined)?.strength(f.center);
+}
 
 /* ---------------- types & helpers ---------------- */
 
@@ -63,6 +83,9 @@ interface GraphState {
   anchorNode: SimNode | null;
   drag: DragState;
   palette: Palette;
+  /** mirror of the React prefs so the (stable, empty-dep) draw/rebuild closures
+   *  read the latest display/force values without re-binding */
+  prefs: GraphPrefs;
   width: number;
   height: number;
   dpr: number;
@@ -73,7 +96,6 @@ const MIN_ZOOM = 0.15;
 const MAX_ZOOM = 6;
 const MAX_FIT_ZOOM = 1.5;
 const FIT_PADDING = 40;
-const LABEL_ZOOM = 0.8;
 const CLICK_SLOP = 4;
 /** culling margin (css px) around the viewport for nodes/labels */
 const CULL_MARGIN = 80;
@@ -82,48 +104,14 @@ const RENDER_CAP = 3000;
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
-function nodeRadius(n: SimNode): number {
-  return Math.min(14, 4 + Math.sqrt(n.degree) * 2);
+function nodeRadius(n: SimNode, scale = 1): number {
+  return (Math.min(14, 4 + Math.sqrt(n.degree) * 2)) * scale;
 }
 
 /** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
 function perfMark(key: string, value: number): void {
   const g = globalThis as unknown as { __geodePerf?: Record<string, number> };
   g.__geodePerf = { ...g.__geodePerf, [key]: Math.round(value * 100) / 100 };
-}
-
-/* ---------------- persisted toolbar prefs ---------------- */
-
-interface GraphPrefs {
-  mode: "global" | "local";
-  depth: 1 | 2;
-  showAll: boolean;
-}
-
-const PREFS_KEY = "geode.graphPrefs";
-const DEFAULT_PREFS: GraphPrefs = { mode: "global", depth: 1, showAll: false };
-
-function loadPrefs(): GraphPrefs {
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    const p = JSON.parse(raw) as Record<string, unknown>;
-    return {
-      mode: p.mode === "local" ? "local" : "global",
-      depth: p.depth === 2 ? 2 : 1,
-      showAll: p.showAll === true,
-    };
-  } catch {
-    return DEFAULT_PREFS; // corrupt/missing → defaults
-  }
-}
-
-function savePrefs(p: GraphPrefs): void {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-  } catch {
-    /* storage unavailable — fine */
-  }
 }
 
 function readPalette(el: HTMLElement): Palette {
@@ -149,7 +137,7 @@ function toGraph(t: Transform, sx: number, sy: number): [number, number] {
 function pickNode(s: GraphState, gx: number, gy: number): SimNode | null {
   for (let i = s.nodes.length - 1; i >= 0; i--) {
     const n = s.nodes[i];
-    const r = nodeRadius(n) + 3 / s.transform.k;
+    const r = nodeRadius(n, s.prefs.display.nodeSize) + 3 / s.transform.k;
     const dx = (n.x ?? 0) - gx;
     const dy = (n.y ?? 0) - gy;
     if (dx * dx + dy * dy <= r * r) return n;
@@ -213,6 +201,7 @@ export function GraphView() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [prefs, setPrefs] = useState<GraphPrefs>(loadPrefs);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [info, setInfo] = useState({
     nodes: 0,
     edges: 0,
@@ -246,11 +235,14 @@ export function GraphView() {
     anchorNode: null,
     drag: null,
     palette: FALLBACK_PALETTE,
+    prefs: DEFAULT_PREFS,
     width: 0,
     height: 0,
     dpr: 1,
     initialized: false,
   });
+  // keep the mirror current so the stable draw/rebuild closures read live prefs
+  stateRef.current.prefs = prefs;
 
   /* ---------- rendering (batched, viewport-culled) ---------- */
 
@@ -263,6 +255,7 @@ export function GraphView() {
     const t0 = performance.now();
 
     const { transform: t, palette: p } = s;
+    const disp = s.prefs.display; // R78: live display prefs (node size / link width / arrows / label threshold)
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
     ctx.clearRect(0, 0, s.width, s.height);
     ctx.translate(t.x, t.y);
@@ -301,11 +294,32 @@ export function GraphView() {
       const lit = hovered !== null && (a.id === hovered.id || b.id === hovered.id);
       ctx.strokeStyle = lit ? p.accent : p.borderStrong;
       ctx.globalAlpha = lit ? 0.8 : dimAlpha;
-      ctx.lineWidth = (lit ? 1.6 : 1) / t.k;
+      ctx.lineWidth = (lit ? disp.linkThickness * 1.6 : disp.linkThickness) / t.k;
       ctx.beginPath();
       ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
       ctx.stroke();
+      // R78: optional directional arrowhead, placed just outside the target node
+      if (disp.arrows) {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy);
+        if (len > 1) {
+          const ux = dx / len;
+          const uy = dy / len;
+          const tip = nodeRadius(b, disp.nodeSize) + 1.5 / t.k;
+          const hx = bx - ux * tip;
+          const hy = by - uy * tip;
+          const size = 5 / t.k;
+          ctx.beginPath();
+          ctx.moveTo(hx, hy);
+          ctx.lineTo(hx - ux * size - uy * size * 0.5, hy - uy * size + ux * size * 0.5);
+          ctx.lineTo(hx - ux * size + uy * size * 0.5, hy - uy * size - ux * size * 0.5);
+          ctx.closePath();
+          ctx.fillStyle = lit ? p.accent : p.borderStrong;
+          ctx.fill();
+        }
+      }
     }
 
     // nodes — bucketed by fill style (resolved/unresolved × normal/dim)
@@ -318,7 +332,7 @@ export function GraphView() {
       const y = n.y ?? 0;
       if (!inView(x, y)) continue;
       if (hovered !== null && n.id === hovered.id) continue; // drawn individually below
-      const r = nodeRadius(n);
+      const r = nodeRadius(n, disp.nodeSize);
       const dim = isDim(n.id);
       const path = n.resolved ? (dim ? fillDim : fillNormal) : (dim ? hollowDim : hollowNormal);
       path.moveTo(x + r, y);
@@ -342,7 +356,7 @@ export function GraphView() {
 
     // hovered node on top
     if (hovered) {
-      const r = nodeRadius(hovered);
+      const r = nodeRadius(hovered, disp.nodeSize);
       ctx.globalAlpha = 1;
       ctx.beginPath();
       ctx.arc(hovered.x ?? 0, hovered.y ?? 0, r, 0, Math.PI * 2);
@@ -362,7 +376,7 @@ export function GraphView() {
     if (anchorNode) {
       ctx.globalAlpha = 1;
       ctx.beginPath();
-      ctx.arc(anchorNode.x ?? 0, anchorNode.y ?? 0, nodeRadius(anchorNode) + 3.5 / t.k, 0, Math.PI * 2);
+      ctx.arc(anchorNode.x ?? 0, anchorNode.y ?? 0, nodeRadius(anchorNode, disp.nodeSize) + 3.5 / t.k, 0, Math.PI * 2);
       ctx.strokeStyle = p.accent;
       ctx.lineWidth = 2 / t.k;
       ctx.stroke();
@@ -373,10 +387,10 @@ export function GraphView() {
     // nodes the fillText pass throttles ticks ~10x (43s settle vs ~5s), and
     // labels on a moving layout carry no information anyway.
     const settling = s.sim !== null && s.sim.alpha() > 0.05;
-    const showAllLabels = t.k > LABEL_ZOOM && !settling;
+    const showAllLabels = t.k > disp.labelThreshold && !settling;
     if (showAllLabels || hovered !== null || anchorNode !== null) {
       const fontPx = 11 / t.k;
-      const fadeIn = Math.max(0, Math.min(1, (t.k - LABEL_ZOOM) / 0.3));
+      const fadeIn = Math.max(0, Math.min(1, (t.k - disp.labelThreshold) / 0.3));
       ctx.font = `${fontPx}px "Segoe UI", system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
@@ -391,7 +405,7 @@ export function GraphView() {
         if (!inView(x, y)) continue;
         ctx.globalAlpha = hl || isAnchor ? 1 : fadeIn * 0.9;
         ctx.fillStyle = hl || isAnchor ? p.text : p.textMuted;
-        ctx.fillText(n.label, x, y + nodeRadius(n) + 4 / t.k);
+        ctx.fillText(n.label, x, y + nodeRadius(n, disp.nodeSize) + 4 / t.k);
       }
     }
     ctx.globalAlpha = 1;
@@ -430,7 +444,7 @@ export function GraphView() {
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const n of s.nodes) {
-      const r = nodeRadius(n);
+      const r = nodeRadius(n, s.prefs.display.nodeSize);
       const x = n.x ?? 0;
       const y = n.y ?? 0;
       if (x - r < minX) minX = x - r;
@@ -569,18 +583,21 @@ export function GraphView() {
     s.sim?.stop();
     let sim: Simulation<SimNode, SimLink> | null = null;
     if (nodes.length > 0) {
+      // R78: forces read the live prefs (so a fresh build uses the latest slider
+      // values); applyForces() pokes the same three forces in place on change.
+      const f = s.prefs.forces;
       // simulation runs over the RENDERED subset only
       sim = forceSimulation<SimNode>(nodes)
         .force(
           "link",
           forceLink<SimNode, SimLink>(links)
             .id((d) => d.id)
-            .distance(70)
-            .strength(0.5),
+            .distance(f.linkDistance)
+            .strength(f.linkForce),
         )
-        .force("charge", forceManyBody<SimNode>().strength(-200).distanceMax(420))
-        .force("center", forceCenter(0, 0).strength(0.06))
-        .force("collide", forceCollide<SimNode>((d) => nodeRadius(d) + 5))
+        .force("charge", forceManyBody<SimNode>().strength(-f.repel).distanceMax(420))
+        .force("center", forceCenter(0, 0).strength(f.center))
+        .force("collide", forceCollide<SimNode>((d) => nodeRadius(d, s.prefs.display.nodeSize) + 5))
         .alpha(prev.size > 0 ? 0.45 : 1)
         .alphaDecay(0.03);
       sim.on("tick", requestDraw);
@@ -789,6 +806,57 @@ export function GraphView() {
   const setMode = (mode: "global" | "local") =>
     setPrefs((p) => (p.mode === mode ? p : { ...p, mode }));
 
+  /* ---------- R78: graph settings (forces + display) ---------- */
+  // force change: poke the running sim in place + a gentle reheat (no rebuild →
+  // layout stays continuous, Obsidian feel)
+  const setForce = (key: keyof GraphForces, v: number) => {
+    setPrefs((p) => ({ ...p, forces: { ...p.forces, [key]: v } }));
+    const s = stateRef.current;
+    s.prefs = { ...s.prefs, forces: { ...s.prefs.forces, [key]: v } };
+    if (s.sim) {
+      applyForces(s.sim, s.prefs.forces);
+      s.sim.alpha(0.3).restart();
+    }
+  };
+  // display change: no physics — just redraw with the new prefs
+  const setDisplay = (key: keyof GraphPrefs["display"], v: number | boolean) => {
+    setPrefs((p) => ({ ...p, display: { ...p.display, [key]: v } }));
+    const s = stateRef.current;
+    s.prefs = { ...s.prefs, display: { ...s.prefs.display, [key]: v } };
+    requestDraw();
+  };
+  const resetSettings = () => {
+    setPrefs((p) => ({ ...p, forces: DEFAULT_PREFS.forces, display: DEFAULT_PREFS.display }));
+    const s = stateRef.current;
+    s.prefs = { ...s.prefs, forces: DEFAULT_PREFS.forces, display: DEFAULT_PREFS.display };
+    if (s.sim) {
+      applyForces(s.sim, s.prefs.forces);
+      s.sim.alpha(0.3).restart();
+    }
+    requestDraw();
+  };
+
+  const slider = (
+    testid: string,
+    labelKey: Parameters<typeof t>[0],
+    range: { min: number; max: number; step: number },
+    value: number,
+    onChange: (v: number) => void,
+  ) => (
+    <label className="graph-slider">
+      <span className="graph-slider-label">{t(labelKey)}</span>
+      <input
+        type="range"
+        data-testid={testid}
+        min={range.min}
+        max={range.max}
+        step={range.step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+
   return (
     <div className="graph-view" data-testid="graph-view" ref={containerRef}>
       <canvas ref={canvasRef} className="graph-canvas" data-testid="graph-canvas" />
@@ -833,7 +901,42 @@ export function GraphView() {
         >
           {t("graph.fit")}
         </button>
+        <button
+          type="button"
+          className={"graph-settings-btn" + (settingsOpen ? " is-active" : "")}
+          data-testid="graph-settings-toggle"
+          onClick={() => setSettingsOpen((o) => !o)}
+          title={t("graph.settings")}
+          aria-pressed={settingsOpen}
+        >
+          <Icon name="settings" size={15} />
+        </button>
       </div>
+      {settingsOpen && (
+        <div className="graph-settings-panel" data-testid="graph-settings">
+          <div className="graph-settings-group">{t("graph.forces")}</div>
+          {slider("graph-force-center", "graph.forceCenter", GRAPH_RANGES.center, prefs.forces.center, (v) => setForce("center", v))}
+          {slider("graph-force-repel", "graph.forceRepel", GRAPH_RANGES.repel, prefs.forces.repel, (v) => setForce("repel", v))}
+          {slider("graph-force-link", "graph.forceLink", GRAPH_RANGES.linkForce, prefs.forces.linkForce, (v) => setForce("linkForce", v))}
+          {slider("graph-link-distance", "graph.linkDistance", GRAPH_RANGES.linkDistance, prefs.forces.linkDistance, (v) => setForce("linkDistance", v))}
+          <div className="graph-settings-group">{t("graph.display")}</div>
+          {slider("graph-node-size", "graph.nodeSize", GRAPH_RANGES.nodeSize, prefs.display.nodeSize, (v) => setDisplay("nodeSize", v))}
+          {slider("graph-link-thickness", "graph.linkThickness", GRAPH_RANGES.linkThickness, prefs.display.linkThickness, (v) => setDisplay("linkThickness", v))}
+          {slider("graph-text-fade", "graph.textFade", GRAPH_RANGES.labelThreshold, prefs.display.labelThreshold, (v) => setDisplay("labelThreshold", v))}
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              data-testid="graph-arrows"
+              checked={prefs.display.arrows}
+              onChange={(e) => setDisplay("arrows", e.target.checked)}
+            />
+            <span>{t("graph.arrows")}</span>
+          </label>
+          <button type="button" className="graph-settings-reset" data-testid="graph-settings-reset" onClick={resetSettings}>
+            {t("graph.resetSettings")}
+          </button>
+        </div>
+      )}
       {info.nodes > 0 && (
         <div className="graph-legend" data-testid="graph-legend">
           {info.capped ? (

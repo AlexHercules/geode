@@ -80,6 +80,7 @@ import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
+import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -327,6 +328,15 @@ async function bootstrap() {
     __geodeBlockRef?: (path: string, offset: number) => Promise<ReturnType<typeof blockRefAt>>;
   };
   blockRefHost.__geodeBlockRef = async (path, offset) => blockRefAt(await vault.read(path), offset);
+
+  // always-on graph-prefs probe (R78, ㊵): parse/clamp/backward-compat validation
+  // of a raw localStorage blob (or the live one). The settings-panel DOM + canvas
+  // are browser-E2E only (§D); this proves the prefs validation in the real build.
+  const graphPrefsHost = globalThis as unknown as {
+    __geodeGraphPrefs?: (raw?: string) => GraphPrefs;
+  };
+  graphPrefsHost.__geodeGraphPrefs = (raw) =>
+    raw !== undefined ? parseGraphPrefs(raw) : loadGraphPrefs();
 
   // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
   // real-fs vault and returns the structured result (total + matched paths). The
