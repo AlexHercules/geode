@@ -28,6 +28,7 @@ import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
+import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
@@ -442,6 +443,7 @@ export function App() {
     // a format command never mutates a background/non-active file.
     disposers.push(
       ...registerFormatCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+      ...registerBlockRefCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerComposerCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerEditorMotionCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerEditorEditCommands(app, () => getActiveFileEditorView(app)?.view ?? null),

@@ -874,6 +874,24 @@ iframe.geode-embed-pdf {
   color: var(--text-faint);
 }
 
+/* R77: block-reference copy toast (in-app feedback for copy-block-link) */
+.block-ref-notice {
+  position: fixed;
+  top: 44px;
+  right: 16px;
+  z-index: 1000;
+  max-width: 420px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-normal);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-modal);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ============ callouts (R18) ============ */
 
 /* Container — unscoped (like .geode-embed-note) so callouts inside hydrated

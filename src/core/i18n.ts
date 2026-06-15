@@ -1,6 +1,7 @@
 import { Store, useStore } from "./store";
 import * as dictAllProperties from "./i18n/dict.allproperties";
 import * as dictApp from "./i18n/dict.app";
+import * as dictBlockRef from "./i18n/dict.blockref";
 import * as dictBookmarks from "./i18n/dict.bookmarks";
 import * as dictPanels from "./i18n/dict.panels";
 import * as dictQuery from "./i18n/dict.query";
@@ -28,6 +29,7 @@ const en = {
   ...dictAllProperties.en,
   ...dictSlides.en,
   ...dictQuery.en,
+  ...dictBlockRef.en,
 };
 const zh: Record<string, string> = {
   ...dictApp.zh,
@@ -37,6 +39,7 @@ const zh: Record<string, string> = {
   ...dictAllProperties.zh,
   ...dictSlides.zh,
   ...dictQuery.zh,
+  ...dictBlockRef.zh,
 };
 
 export type I18nKey = keyof typeof en;

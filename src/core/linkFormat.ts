@@ -143,16 +143,21 @@ export function formatLink(
   metadata: MetadataIndex,
   targetPath: string,
   fromPath: string,
-  opts?: { embed?: boolean; alias?: string },
+  opts?: { embed?: boolean; alias?: string; subpath?: string },
 ): string | null {
   const embed = opts?.embed ?? false;
+  // R77: optional subpath (e.g. a block id `^id` or heading) appended after the
+  // resolved path with `#`. The path text is still resolve-back-verified +
+  // unsafe-char-guarded; the subpath rides after the `#` separator.
+  const sub = opts?.subpath ? `#${opts.subpath}` : "";
   // guard (b): embeds are always wikilink `![[..]]`
   const useMarkdown = !embed && linkUseMarkdown.get();
   if (!useMarkdown) {
     const inner = wikilinkPath(metadata, targetPath, fromPath);
     if (inner === null) return null;
     const alias = opts?.alias;
-    const body = alias !== undefined && alias !== inner ? `${inner}|${alias}` : inner;
+    const path = inner + sub;
+    const body = alias !== undefined && alias !== inner ? `${path}|${alias}` : path;
     return embed ? `![[${body}]]` : `[[${body}]]`;
   }
   const href = markdownHref(metadata, targetPath, fromPath);
@@ -164,5 +169,5 @@ export function formatLink(
   // WIKILINK_UNSAFE guard: no safe form → null → caller skips (never write a
   // silently-broken link). The href tolerates `]` (its group is `[^\s)]+`).
   if (display.includes("]")) return null;
-  return `[${display}](${href})`;
+  return `[${display}](${href}${sub})`;
 }

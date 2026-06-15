@@ -79,6 +79,7 @@ import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
+import { blockRefAt } from "@core/blockId";
 import { Workspace } from "@core/workspace";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -317,6 +318,15 @@ async function bootstrap() {
     __geodeSplitSlides?: (path: string) => Promise<string[]>;
   };
   slidesHost.__geodeSplitSlides = async (path) => splitSlides(await vault.read(path));
+
+  // always-on block-ref probe (R77, ㊴): runs blockRefAt over a note's real-fs
+  // text at a cursor offset and returns the minted/reused id + edit. The command
+  // (clipboard + CM dispatch) is browser-E2E only (§D); this proves the real-fs
+  // mint path. Same pattern as __geodeSplitSlides.
+  const blockRefHost = globalThis as unknown as {
+    __geodeBlockRef?: (path: string, offset: number) => Promise<ReturnType<typeof blockRefAt>>;
+  };
+  blockRefHost.__geodeBlockRef = async (path, offset) => blockRefAt(await vault.read(path), offset);
 
   // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
   // real-fs vault and returns the structured result (total + matched paths). The
