@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 87 additions — strict line breaks（严格换行渲染选项）（候选池第六梯队 ㊶ v1）【As-built v0.84】
+
+> **状态：As-built（v0.84 交付，2026-06-16）。字节敏感轮（动 markdown.ts 阅读管线）。** Obsidian「Strict line breaks」设置：OFF（默认）= 单换行渲染成 `<br>`（Obsidian 默认阅读视图）/ ON = 严格 CommonMark（单换行 join，需两空格或空行）。**关键=改了渲染默认**：旧 md 无 `breaks` 选项 = `breaks:false`（CommonMark）；本轮默认翻转为 `breaks:true` 匹配 Obsidian。纯前端 view-only（不写 .md），只影响 reading 视图（live preview 的 CM 软换行本就视觉换行=Obsidian 一致）。
+
+**契约（冻结接口）**：
+- `core/markdown.ts`：`RenderMarkdownOptions` 加 `strictLineBreaks?: boolean`；`renderMarkdownToHtml` 渲染前 `md.options.breaks = !opts?.strictLineBreaks`（**单例 md 每渲染前 set**——render 同步纯函数无交错，自定义 rules[fence/image/link_open]**无一回调 renderMarkdownToHtml**=无嵌套重入污染）。**默认（opts 无 strictLineBreaks）= breaks:true**。
+- `core/appearance.ts`：`strictLineBreaks` Store（默认 false）+ `setStrictLineBreaks`（localStorage，镜像 spellcheck，无 DOM 副作用 → 不入 applyAppearanceSettings boot）。
+- 注入链 7 处传 `strictLineBreaks`：**EditorPane**（`useStore(strictLineBreaks)` 反应式 + 入 previewHtml useMemo deps → 改设置即重渲染 reading）/ embeds.ts（transclusion，host 重渲染→重 hydrate→`.get()` 取新值）/ HoverPreview / SlidesOverlay / export.ts / compat/util.ts 各 `.get()` / main.tsx `__geodeRenderMarkdown` 加 3rd param（测两模式）。结构块 live widget（query/mermaid/math/tables）**故意不传**（无段内软换行）。SettingsModal toggle（`settings-strict-linebreaks-toggle`，镜像 spellcheck）+ i18n。
+- **r26-bytes 字节套件**：加 soft-break 语料（`line one\nline two` 等——单换行段内是唯一能区分 breaks false↔true 的输入类）+ 重捕 baseline 吸收默认翻转。
+
+**对抗评审（reviewer 5 维各独立 + skeptic verify，深挖单例 breaks 污染 + 默认翻转回归）→ 0 confirmed critical/major/minor + 2 nit（记已知偏差）：**
+- **单例 breaks 污染证伪（核心）**：`renderMarkdownToHtml` 全仓唯一 `md.render` 调用（:1271），自定义 rules **无一回调** renderMarkdownToHtml/md.render → 无 set-breaks 重入；set→render→return 同步单线程无交错；embeds 是渲染后独立 render 调用非内嵌；render 抛错 breaks 残留但下次必先 set 无害。
+- **默认翻转隔离证伪**：r26-bytes 重捕 baseline **仅 3 处变字节**（blockquote[含段内单换行] + 新增 soft-break×2），**18 个块级 case 字节不变**（callout/list/table/mixed 全隔离——它们语料段内无单换行，故无 `<br>` 可生）。**0 invariant violations**。实测 Obsidian 语义正确：默认单换行→`<br>`、strict ON→join、`  \n` 两空格硬换行两模式皆 `<br>`、空行分段两模式皆双 `<p>` 无 `<br>`。
+- **[nit 已知偏差]** ① SlidesOverlay useMemo `.get()` 但 strict 未入 deps → 放映中途切设置不重渲（瞬态模态、每次打开重建、与 export/hover 非反应式取值一致，可接受）；② `__geodeHover` 探针钩子（main.tsx:282）未传 strict（probe-only，用户真实悬停走 HoverPreview 已传）。
+
+**验证（As-built）**：typecheck 0 · `r87-e2e` **11/11**（breaks 真值表[默认<br>/strict join/硬换行/段落] + 设置 toggle 反应式重渲 reading + 持久化双向）· `r87-probe` **6/6** 真 WKWebView · `r26-bytes` **0 violations**（隔离，改前 `--baseline` 重捕 + 改后验证 + 重捕锁新字节）· 回归 r26(12)/r25(17)/r74(23) · 简化门 clean。
+
+**v1 已知延期**：SlidesOverlay/探针钩子反应式（nit）· strict line breaks 影响 live preview 的软换行装饰（Obsidian 也不在 live 改，故不做）。
+
 ## Round 86 additions — File properties 右侧栏 + Cmd+Backspace 删属性（候选池第六梯队 ㊼ 续 v1）【As-built v0.83】
 
 > **状态：As-built（v0.83 交付，2026-06-15）。** Obsidian「Properties view」核心插件 = 活动笔记属性的右侧栏面板。复用 R22 PropertiesPanel，但作为活动文档的**独立第二写者**——经共享 `DocumentHandle`（acquire/release + `applyExternalEdits`）而非裸 setText+modify。+ Cmd/Ctrl+Backspace 键盘删属性（接 R83 行键盘导航）。写 .md（删属性）→ data-safety 触发。

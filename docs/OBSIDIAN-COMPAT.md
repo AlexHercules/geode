@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R87 套件回归（2026-06-16，macOS release 二进制 v0.84.0 实测 `r87-probe-vault`）
+
+R87 = strict line breaks 严格换行渲染选项（候选池第六梯队 ㊶ slice，原生功能）。对照 Obsidian Editor 设置「Strict line breaks」：OFF（默认）= 单换行→`<br>` / ON = CommonMark。**字节敏感轮**（动 markdown.ts 阅读管线），纯前端 view-only（不写 .md）。
+
+新增套件：`r87-e2e.mjs` **11/11**（breaks 真值表[默认<br>/strict join/硬换行两空格/空行分段] + 设置 toggle 反应式重渲 reading + 持久化双向）+ `r87-probe.mjs` **6/6**（真 WKWebView，`__geodeRenderMarkdown` 两模式）。
+
+- **套件矩阵不回退**：本轮 compat 调用面：`compat/util.ts:450` registerMarkdownPostProcessor 渲染补传 `strictLineBreaks.get()`（与用户阅读设置一致，**功能增强非破坏**）；**改 markdown.ts → r26-bytes 字节套件**：改前 `--baseline` 重捕 + 加 soft-break 语料 + 改后**仅 3 处段内单换行 case 变字节**（blockquote + soft-break×2）、18 块级 case 字节不变 = **0 invariant violations**（隔离）+ 重捕锁新字节（默认翻转 breaks:true 匹配 Obsidian）→ **回归 r26(reading)12/12 + r25(hover)17/17 + r74(slides)23/23 绿**。**对抗评审 5 维深挖单例 breaks 污染 + 默认翻转回归 → 0 confirmed critical/major/minor + 2 nit**（SlidesOverlay/探针钩子非反应式，已知偏差）。**OBSIDIAN-COMPAT 缺口表**：㊶ Strict line breaks 交付（续缺口：行号 gutter / Tab 宽度 / fold 分项开关 / 代码块复制按钮）。
+
 ### R86 套件回归（2026-06-15，macOS release 二进制 v0.83.0 实测 `r86-probe-vault`）
 
 R86 = File properties 右侧栏 + Cmd+Backspace 删属性（候选池第六梯队 ㊼ 续 v1，原生功能）。对照 Obsidian「Properties view」核心插件（活动笔记属性右栏）+ 删属性快捷键（Obsidian 未实现的 feature-request，本轮顺带补）。**写 .md（删属性）→ data-safety 触发**；复用 R22 PropertiesPanel 作独立第二写者经 DocumentHandle.applyExternalEdits，不动 markdown.ts。
