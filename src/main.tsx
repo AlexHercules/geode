@@ -84,6 +84,7 @@ import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import { sortAndFilterLinks } from "@core/linkPanel";
+import { setNewNoteLocation, setNewNoteFolder, resolveNewNoteFolder, createNewNote } from "@core/newNote";
 import type { ThemeKind } from "@core/types";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -359,6 +360,24 @@ async function bootstrap() {
   // over a raw font name. The settings inputs + DOM are browser-E2E only (§D).
   const fontHost = globalThis as unknown as { __geodeFontSanitize?: (raw: string) => string };
   fontHost.__geodeFontSanitize = (raw) => sanitizeFontFamily(raw);
+
+  // always-on new-note-folder probe (R89, ㊽): runs the pure resolveNewNoteFolder
+  // for each location setting (root / current / specified) against an active path.
+  const newNoteHost = globalThis as unknown as {
+    __geodeNewNoteFolder?: (loc: "root" | "current" | "folder", folder: string, activePath: string | null) => string;
+  };
+  newNoteHost.__geodeNewNoteFolder = (loc, folder, activePath) => {
+    setNewNoteLocation(loc);
+    setNewNoteFolder(folder);
+    return resolveNewNoteFolder(activePath);
+  };
+  // end-to-end create probe: exercises createNewNote (folder-ensure + uniquePath +
+  // create) and returns the path it landed at.
+  const createNoteHost = globalThis as unknown as {
+    __geodeCreateNewNote?: (name: string) => Promise<string>;
+  };
+  createNoteHost.__geodeCreateNewNote = (name) =>
+    createNewNote(app.vault, name, app.workspace.getActiveFile());
 
   // always-on new-tab-mode probe (R88, ㊶ 续): proves workspace.openFile honours
   // the defaultNewTabMode setting on the real build (a new tab opens in that mode).

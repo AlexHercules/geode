@@ -26,6 +26,7 @@ import {
   type GraphForces,
   type GraphPrefs,
 } from "./graphPrefs";
+import { createNewNote } from "@core/newNote";
 import "./graph.css";
 
 /** Apply the current force prefs to a (possibly running) simulation in place. */
@@ -669,9 +670,8 @@ export function GraphView() {
         app.workspace.openFile(node.id);
         return;
       }
-      const path = app.vault.uniquePath("", node.label);
-      void app.vault.create(path).then(
-        () => app.workspace.openFile(path),
+      void createNewNote(app.vault, node.label, app.workspace.getActiveFile()).then(
+        (path) => app.workspace.openFile(path),
         (err) => console.error("[graph] failed to create note", err),
       );
     },

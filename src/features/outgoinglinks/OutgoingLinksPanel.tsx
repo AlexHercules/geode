@@ -6,6 +6,7 @@ import { useI18n } from "@core/i18n";
 import type { LinkRef } from "@core/types";
 import { findActiveTab } from "@core/workspace";
 import { sortAndFilterLinks, type LinkSortKey } from "@core/linkPanel";
+import { createNewNote } from "@core/newNote";
 import "./outgoinglinks.css";
 
 type OutEntry = { link: LinkRef; resolvedPath: string | null };
@@ -102,9 +103,8 @@ export function OutgoingLinksPanel() {
 
   const createAndOpen = useCallback(
     (name: string) => {
-      const path = app.vault.uniquePath("", name);
-      void app.vault.create(path).then(
-        () => app.workspace.openFile(path),
+      void createNewNote(app.vault, name, app.workspace.getActiveFile()).then(
+        (path) => app.workspace.openFile(path),
         (err) => console.error("[outgoinglinks] failed to create note", err),
       );
     },

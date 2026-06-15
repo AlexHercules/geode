@@ -1,6 +1,7 @@
 import type { GeodeApp } from "@app/AppContext";
 import { wikilinkTarget } from "@core/markdown";
 import { basename, stripExtension } from "@core/vault";
+import { createNewNote } from "@core/newNote";
 
 export { wikilinkTarget };
 
@@ -39,9 +40,10 @@ export async function openWikilink(
     return;
   }
   const name = stripExtension(basename(target.trim())).trim() || "Untitled";
-  const path = app.vault.uniquePath("", name);
   try {
-    await app.vault.create(path, `# ${name}\n`);
+    // "current folder" = the note that holds this link (fromPath), not whatever
+    // tab happens to be active (they differ for obsidian:// URI handling).
+    const path = await createNewNote(app.vault, name, fromPath, `# ${name}\n`);
     app.workspace.openFile(path);
   } catch (err) {
     console.error(`[editor] failed to create note for link "${target}"`, err);

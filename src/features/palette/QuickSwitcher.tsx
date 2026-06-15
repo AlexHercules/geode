@@ -6,6 +6,7 @@ import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import type { FileNode, HeadingRef, BlockRef } from "@core/types";
 import { allTabs } from "@core/workspace";
+import { createNewNote } from "@core/newNote";
 import { fuzzyMatch, toSegments } from "@core/fuzzy";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import { mergeTargetMode, mergeNotes } from "@core/noteMerge";
@@ -201,9 +202,11 @@ export function QuickSwitcher() {
       app.workspace.requestReveal(row.path, row.block.from, row.block.to);
       return;
     }
-    const path = app.vault.uniquePath("", row.name);
     app.workspace.closeModal();
-    void app.vault.create(path).then(() => app.workspace.openFile(path));
+    void createNewNote(app.vault, row.name, app.workspace.getActiveFile()).then(
+      (path) => app.workspace.openFile(path),
+      (err) => console.error("[switcher] failed to create note", err),
+    );
   };
 
   const onKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>) => {

@@ -23,6 +23,12 @@ import {
 } from "@core/appearance";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import {
+  newNoteLocation,
+  setNewNoteLocation,
+  newNoteFolder,
+  setNewNoteFolder,
+} from "@core/newNote";
+import {
   dailyNoteFolder,
   dailyNoteFormat,
   dailyNoteTemplate,
@@ -78,7 +84,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.85.0";
+const APP_VERSION = "0.86.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -202,6 +208,9 @@ function AppearanceSection() {
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
   const attachFolder = useStore(attachmentFolder);
+  /* R89: default location for new notes */
+  const newNoteLoc = useStore(newNoteLocation);
+  const newNoteFolderVal = useStore(newNoteFolder);
   /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
   const tplFolder = useStore(templateFolder);
   const tplDateFormat = useStore(templateDateFormat);
@@ -695,6 +704,57 @@ function AppearanceSection() {
           <option value="absolute">{t("settings.linkPathAbsolute")}</option>
         </select>
       </div>
+
+      {/* R89: default location for new notes (root / current folder / specified) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.newNoteLocation")}</div>
+          <div className="setting-desc">{t("settings.newNoteLocationDesc")}</div>
+        </div>
+        <div className="settings-segmented" role="group" aria-label={t("settings.newNoteLocation")}>
+          <button
+            className={newNoteLoc === "root" ? "is-active" : ""}
+            aria-pressed={newNoteLoc === "root"}
+            data-testid="settings-newnote-root"
+            onClick={() => setNewNoteLocation("root")}
+          >
+            {t("settings.newNoteLocationRoot")}
+          </button>
+          <button
+            className={newNoteLoc === "current" ? "is-active" : ""}
+            aria-pressed={newNoteLoc === "current"}
+            data-testid="settings-newnote-current"
+            onClick={() => setNewNoteLocation("current")}
+          >
+            {t("settings.newNoteLocationCurrent")}
+          </button>
+          <button
+            className={newNoteLoc === "folder" ? "is-active" : ""}
+            aria-pressed={newNoteLoc === "folder"}
+            data-testid="settings-newnote-folder"
+            onClick={() => setNewNoteLocation("folder")}
+          >
+            {t("settings.newNoteLocationFolder")}
+          </button>
+        </div>
+      </div>
+      {newNoteLoc === "folder" && (
+        <div className="setting-item">
+          <div className="setting-info">
+            <div className="setting-name">{t("settings.newNoteFolder")}</div>
+          </div>
+          <input
+            className="settings-text-input"
+            type="text"
+            value={newNoteFolderVal}
+            placeholder="Notes"
+            spellCheck={false}
+            aria-label={t("settings.newNoteFolder")}
+            data-testid="settings-newnote-folder-path"
+            onChange={(e) => setNewNoteFolder(e.target.value)}
+          />
+        </div>
+      )}
 
       <div className="setting-item">
         <div className="setting-info">
