@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R86 套件回归（2026-06-15，macOS release 二进制 v0.83.0 实测 `r86-probe-vault`）
+
+R86 = File properties 右侧栏 + Cmd+Backspace 删属性（候选池第六梯队 ㊼ 续 v1，原生功能）。对照 Obsidian「Properties view」核心插件（活动笔记属性右栏）+ 删属性快捷键（Obsidian 未实现的 feature-request，本轮顺带补）。**写 .md（删属性）→ data-safety 触发**；复用 R22 PropertiesPanel 作独立第二写者经 DocumentHandle.applyExternalEdits，不动 markdown.ts。
+
+新增套件：`r86-e2e.mjs` **11/11**（fileproperties tab + 复用 PropertiesPanel + **第二写者 edit 写活动 doc（live CM 共存无 mismatch crash）** + Cmd+Backspace 删属性保留其余 + plain Backspace 不删 + 切文件 re-target）+ `r86-probe.mjs` **6/6**（真 WKWebView + 真 fs，`__geodeFilePropsRemove` 删 status 留 author/count）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（右栏面板纯前端复用）；不碰 markdown.ts → **r26-bytes 0**；删属性走既有 buildRemoveProperty + applyExternalEdits（绝不手拼 YAML）→ **r83(键盘导航)15/15 + r30(properties)25/25 + r24(autosave/flush)12/12 回归绿**。**对抗评审 6 维深挖第二写者 + refcount → 0 confirmed critical/major/minor + 1 nit（已修）**：mismatch guard 不误 throw（CM updateListener 同步物化 this.text）/ acquire-release 配对不泄漏 / offset 三处同基准自洽。**OBSIDIAN-COMPAT 缺口表**：㊼ File properties 右栏 + 删属性交付（续缺口：Hidden 模式主编辑入口 / Date 值链日记 / 属性拖拽重排）。
+
 ### R85 套件回归（2026-06-15，macOS release 二进制 v0.82.0 实测 `r85-probe-vault`）
 
 R85 = 字体三族：界面/正文/等宽字体设置（候选池第六梯队 ㊺ 续 v1，原生功能）。对照 Obsidian Appearance → Fonts：Interface（菜单/树）/ Text（正文，未设继承界面）/ Monospace（代码）。**纯前端**（appearance.ts + CSS 变量 + 设置 UI），不写 .md、不动 markdown.ts。

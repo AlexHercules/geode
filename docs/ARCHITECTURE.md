@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 86 additions — File properties 右侧栏 + Cmd+Backspace 删属性（候选池第六梯队 ㊼ 续 v1）【As-built v0.83】
+
+> **状态：As-built（v0.83 交付，2026-06-15）。** Obsidian「Properties view」核心插件 = 活动笔记属性的右侧栏面板。复用 R22 PropertiesPanel，但作为活动文档的**独立第二写者**——经共享 `DocumentHandle`（acquire/release + `applyExternalEdits`）而非裸 setText+modify。+ Cmd/Ctrl+Backspace 键盘删属性（接 R83 行键盘导航）。写 .md（删属性）→ data-safety 触发。
+
+**契约（冻结接口）**：
+- `RightPanelKind` 加 `"fileproperties"`（types.ts；workspace sanitize 接受任意非空字符串=零改）。App.tsx 三处接线：effectiveRight 链 + tab 按钮（`right-tab-fileproperties`，icon file-text）+ 面板渲染链。
+- 新 `features/editor/FilePropertiesPanel.tsx`（**必须在 features/editor/ 内** = 同 feature 复用 PropertiesPanel，features 绝不互 import）：`findActiveTab(ws)` 取活动 markdown 文件 → `app.documents.acquire(activePath)` 拿共享 handle（refcount，cleanup release，镜像 EditorPane acquire 模式）→ docRevision 订 `handle.revision`（mirror 进 local state，每次编辑 bump）→ 渲染 `<PropertiesPanel getDoc={()=>handle.getText()} applyEdit={(e)=>handle.applyExternalEdits([e])} path={activePath} revision={docRevision}/>`。**关键写路径=`handle.applyExternalEdits([edit])`**（PropertyEdit `{from,to,insert}` 直接是其入参形状）：命中第一个 attached live CM view → `view.dispatch`（合并进 live buffer、保留用户脏编辑、走单一 dirty/save），无 view → splice + scheduleSave + bump revision。
+- `PropertiesPanel.tsx`：`onRowKeyDown(e, key)` 柯里化（row `onKeyDown={(e)=>onRowKeyDown(e, entry.key)}`），加 Cmd/Ctrl+Backspace 分支（在 `e.target===e.currentTarget` 行壳守卫**之后**）：`focusSiblingRow(row,1); if(activeElement===row) focusSiblingRow(row,-1); removeKey(key)`（删前移焦到兄弟行=删后焦点不落 body）。复用既有 `removeKey`（buildRemoveProperty + applyEdit），与每行 delete 按钮同一路径。probe `__geodeFilePropsRemove`（acquire + buildRemoveProperty + applyExternalEdits）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，深挖第二写者 + refcount）→ 0 confirmed critical/major/minor + 1 nit（已修）：**
+- **data-safety 第二写者证伪（核心）**：live CM 视图存在 + 用户有脏编辑时右栏并发删属性**不触发 mismatch guard throw**——`documents.ts` syncExtension updateListener 在每次本地编辑**同步**物化 `this.text = doc.toString()`（CM updateListener 在 dispatch 后同步、JS 单线程无交错）→ `applyExternalEdits` 的守卫 `view.state.doc.toString() !== this.text` 恒等 → 走 `view.dispatch` 把删属性合并进 live buffer、保留用户已打内容、单一 dirty/save 链正确。offset 自洽（getDoc/removeKey/applyExternalEdits 三处同一 `this.text` 基准）。buildRemoveProperty 按解析 entry from/to 精确删（绝不正则扫原文），CJK/元字符键安全，删唯一属性连 `---` 围栏一并删（对齐 Obsidian）。
+- **refcount 证伪**：acquire/release 配对（cleanup 先 cancelled 再 release，promise 未归时 .then 内 cancelled 分支自 release）；快速 A→B→A 靠 manager deferred-drop 微任务 + 同步 re-acquire retain 不误 drop；revision 订阅 cleanup 退订；rename 简化无害（FilePropertiesPanel 无自有 CM view，rename 时 activePath 变→短暂 loading→re-acquire retarget handle，无状态可丢）。
+- **[nit 已修]** loading 分支补 `data-testid="fp-loading"`（测试可观测性）。
+- **证伪其余**：Cmd+Backspace 字段内不误删（行壳守卫早退）、删最后/唯一/第一行焦点补位不崩、Mac/Win 双接；EditorPane 内嵌 PropertiesPanel 同获删能力=合理增强（同组件统一）、柯里化未破 R83 导航；分层合规；allproperties（vault 级 R30）vs fileproperties（文件级 R86）独立不混淆。
+
+**验证（As-built）**：typecheck 0 · `r86-e2e` **11/11**（fileproperties tab + 复用 PropertiesPanel + **第二写者 edit 写活动 doc（live CM 共存无 mismatch）** + Cmd+Backspace 删属性保留其余 + plain Backspace 不删 + 切文件 re-target）· `r86-probe` **6/6** 真 WKWebView + 真 fs（`__geodeFilePropsRemove` 删 status 留 author/count，no-view splice 分支）· 回归 r83(15)/r30(25)/r24(12) · 不碰 markdown.ts（r26-bytes 0）· 简化门 clean。
+
+**v1 已知延期**：Hidden 模式下 File properties 作主编辑入口的联动 · Date 值链接日记 · 属性拖拽重排 · 右栏与编辑器内嵌 panel 的滚动同步。
+
 ## Round 85 additions — 字体三族：界面/正文/等宽字体设置（候选池第六梯队 ㊺ 续 v1）【As-built v0.82】
 
 > **状态：As-built（v0.82 交付，2026-06-15）。** 镜像 R79 accent 手法，加 3 个用户字体覆盖（运行时 CSS 变量 + localStorage 持久化）：**Interface**（菜单/侧栏/树）、**Text**（笔记正文，未设时继承界面）、**Monospace**（代码）。纯前端 view-only（不写 .md、不动 markdown.ts 渲染管线，改的是 `font-family` CSS 非 HTML 字节）。
