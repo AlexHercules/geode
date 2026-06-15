@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 89 additions — 新文件默认位置设置（候选池第六梯队 ㊽ v1）【As-built v0.86】
+
+> **状态：As-built（v0.86 交付，2026-06-16）。** Obsidian「Default location for new notes」三态：vault 根 / 与当前文件同文件夹 / 指定文件夹。默认 root = 既有 `uniquePath("",…)` 行为 → 零回归。写 .md 经既有 vetted create 路径（assertSafeRelPath + Rust safe_join）。
+
+**契约（冻结接口）**：
+- 新 `core/newNote.ts`（core 仅 import store + vault，无环）：`newNoteLocation` Store（`NewNoteLocation = "root"|"current"|"folder"`，默认 "root"=零回归，readLocation 坏值→root）+ `newNoteFolder` Store + setter（localStorage，root→removeItem）。`resolveNewNoteFolder(activePath): string`（current→`parentPath(activePath)` 或 ""[无 active]，folder→`newNoteFolder` trim + strip 首尾斜杠，default→""）纯函数=probe 真值表。`createNewNote(vault, name, activePath, content=""): Promise<string>`——**slash-guard**：`name` 含 "/"（path-bearing，如 `[[area/Note]]`）视为 vault 相对、**不嵌套**配置文件夹（folder=""）；**folder-ensure**：非空 folder 先 `createFolder`（try/catch 已存在）；`uniquePath` 防撞名；`create`；返回 path。
+- **5 个建笔记调用点收敛到 createNewNote**（正向减重复，simplify 门确认）：QuickSwitcher（switcher 建笔记）/ wikilinks（点未解析 `[[link]]`，name 已 stripExtension(basename) 成裸名）/ BacklinksPanel·OutgoingLinksPanel（createAndOpen 未解析链接）/ GraphView（建未解析节点）——各 `createNewNote(app.vault, name, <active>).then(openFile, errLog)`。wikilinks 用 `fromPath`（含链接的源文件）而非 getActiveFile（obsidian:// URI 时更精确）。
+- SettingsModal segmented（root/current/folder，镜像 theme）+ 条件 folder input（仅 location="folder" 显示）+ i18n。probe `__geodeNewNoteFolder`/`__geodeCreateNewNote`。
+
+**对抗评审（reviewer 4 维各独立 + skeptic verify，深挖 data-safety 写路径 + path-bearing name 文件夹）→ 0 confirmed critical/major + 2 minor/nit（同根因，已修）：**
+- **data-safety 证伪（核心）**：① **path-bearing name 中间文件夹自动建**——slash-guard 跳过 folder-ensure 的 `sub/Note`，两端 createFile 都自动建父目录（Memory vault.ts:956-960 回溯注册 / Tauri Rust `vault_create` 内 `fs::create_dir_all(parent)`），e2e `Projects/Roadmap`（Projects/ 不存在）实落盘通过。② **非法 folder 设置防御到位**——`newNoteFolder="../evil"`：resolveNewNoteFolder 只剥首尾斜杠、内层 `..` 存活 → createNewNote 的 create 的 `assertSafeRelPath` 抛错冒泡到调用点 errLog（不写库外、不崩）+ Tauri `safe_join` 再兜一层。撞名 uniquePath 加序号正确。
+- **[minor 已修]** QuickSwitcher 建笔记缺 `.catch`——R89 把「folder 设非法→create throw」变成可达拒绝路径 → unhandled rejection（控制台噪声）→ 修=与其余 4 点对齐补 errLog。
+- **[nit 已修]** wikilinks「current 文件夹」用 getActiveFile 而非已在手的 `fromPath`（obsidian:// URI 时 active 可能 null/别的文件）→ 修=传 fromPath。
+- **证伪其余**：默认 root=零回归（5 点原本 root 行为字节一致）；持久化/strip 斜杠/坏值 fallback 正确；分层无环；时序未变（fire-and-forget `.then`）；r82/r84 回归绿确认 createAndOpen 改动没破面板。
+
+**验证（As-built）**：typecheck 0 · `r89-e2e` **16/16**（resolveNewNoteFolder 6 真值表[root/current±active/folder±斜杠] + createNewNote 端到端[指定文件夹落盘+folder 自建 + slash-guard 不嵌套 + root + 撞名序号] + 设置 segmented+条件 folder input+持久化）· `r89-probe` **8/8** 真 WKWebView + 真 fs（含嵌套文件夹真建盘）· 回归 r82(27)/r84(17)/r24(12) · 简化门 clean（5 调用点收敛=正向减重复）。
+
+**v1 已知延期**：TemplateSelector 建笔记接 location（其流程含 expanded 内容+README 拒绝逻辑，单列）· explorer 工具栏「新建笔记」无文件夹上下文时接 location · Reveal-in-Finder（需 Tauri opener 依赖=可能硬边界）。
+
 ## Round 88 additions — 行号 gutter + 新标签默认视图模式（候选池第六梯队 ㊶ 续 v1）【As-built v0.85】
 
 > **状态：As-built（v0.85 交付，2026-06-16）。** 两个 Obsidian Editor 设置：① **Show line numbers**（行号 gutter，默认 OFF=Obsidian 默认+零回归）；② **Default view for new tabs**（新标签默认 live/source/preview）。纯前端 view-only（不写 .md、不动 markdown.ts）。
