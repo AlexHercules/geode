@@ -36,6 +36,25 @@ function systemPrefersDark(): boolean {
   }
 }
 
+/** R81: which tab ids a "close others / right / all" action removes — pinned tabs
+ *  are always kept (Obsidian behaviour). Pure — exported for the desktop probe. */
+export function tabIdsToClose(
+  tabs: readonly { id: string; pinned?: boolean }[],
+  targetId: string,
+  mode: "others" | "right" | "all",
+): string[] {
+  const idx = tabs.findIndex((t) => t.id === targetId);
+  const out: string[] = [];
+  for (let i = 0; i < tabs.length; i++) {
+    const tab = tabs[i];
+    if (tab.pinned) continue;
+    if (mode === "all" || (mode === "others" && tab.id !== targetId) || (mode === "right" && idx >= 0 && i > idx)) {
+      out.push(tab.id);
+    }
+  }
+  return out;
+}
+
 /** R37: one entry in a tab's back/forward navigation history. */
 interface NavLocation {
   filePath: string;
@@ -371,6 +390,25 @@ export class Workspace {
     });
     this.emitActiveFile();
     this.tabHistory.delete(id);
+  }
+
+  /** R81: batch-close helpers for the tab context menu. Each closes via the vetted
+   *  `closeTab` path (preserves neighbor activation / recently-closed / flush), and
+   *  never touches pinned tabs. The id list is snapshotted first; closeTab re-finds
+   *  each (stable) id, so iterating it is safe as the tree shrinks. */
+  closeOtherTabs(id: string) {
+    this.closeTabBatch(id, "others");
+  }
+  closeTabsToRight(id: string) {
+    this.closeTabBatch(id, "right");
+  }
+  closeAllTabs(id: string) {
+    this.closeTabBatch(id, "all");
+  }
+  private closeTabBatch(id: string, mode: "others" | "right" | "all") {
+    const leaf = findTabLeaf(this.state.get().root, id);
+    if (!leaf) return;
+    for (const tid of tabIdsToClose(leaf.tabs, id, mode)) this.closeTab(tid);
   }
 
   /** Close every markdown tab whose filePath no longer exists. One batched state

@@ -729,3 +729,40 @@ textarea:focus {
   background: var(--bg-hover);
   color: var(--text-normal);
 }
+
+/* R81: tab right-click context menu (mirrors .tag-menu) */
+.tab-context-menu {
+  position: fixed;
+  z-index: 200;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--bg-modal);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+}
+.tab-context-menu button {
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 5px;
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.tab-context-menu button:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.tab-context-menu button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.tab-context-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}

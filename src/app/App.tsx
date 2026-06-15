@@ -1247,6 +1247,27 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const t = useI18n();
   const { setDraggingTabId } = useContext(TabDragContext);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  // R81: tab right-click context menu (TagsPanel inline pattern)
+  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    window.addEventListener("mousedown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+  const menuTab = menu ? leaf.tabs.find((tb) => tb.id === menu.tabId) ?? null : null;
+  const runMenu = (fn: () => void) => {
+    fn();
+    setMenu(null);
+  };
 
   /** Insert index from the pointer x relative to each tab's midpoint. */
   const indexFromEvent = (e: React.DragEvent<HTMLElement>): number => {
@@ -1329,6 +1350,10 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           onClick={() => app.workspace.setActiveTab(tab.id)}
           onDoubleClick={() => app.workspace.toggleTabPin(tab.id)}
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+          }}
           title={tab.filePath ?? title}
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
@@ -1359,6 +1384,51 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
       >
         <Icon name="plus" size={16} />
       </button>
+      {menu && menuTab && (
+        <div
+          ref={menuRef}
+          className="tab-context-menu"
+          data-testid="tab-context-menu"
+          role="menu"
+          style={{
+            left: Math.max(0, Math.min(menu.x, window.innerWidth - 200)),
+            top: Math.max(0, Math.min(menu.y, window.innerHeight - 280)),
+          }}
+        >
+          <button role="menuitem" data-testid="tabctx-close" onClick={() => runMenu(() => app.workspace.closeTab(menu.tabId))}>
+            {t("app.tabClose")}
+          </button>
+          <button role="menuitem" data-testid="tabctx-close-others" onClick={() => runMenu(() => app.workspace.closeOtherTabs(menu.tabId))}>
+            {t("app.tabCloseOthers")}
+          </button>
+          <button role="menuitem" data-testid="tabctx-close-right" onClick={() => runMenu(() => app.workspace.closeTabsToRight(menu.tabId))}>
+            {t("app.tabCloseRight")}
+          </button>
+          <button role="menuitem" data-testid="tabctx-close-all" onClick={() => runMenu(() => app.workspace.closeAllTabs(menu.tabId))}>
+            {t("app.tabCloseAll")}
+          </button>
+          <div className="tab-context-sep" />
+          <button role="menuitem" data-testid="tabctx-pin" onClick={() => runMenu(() => app.workspace.toggleTabPin(menu.tabId))}>
+            {t(menuTab.pinned ? "app.tabUnpin" : "app.tabPin")}
+          </button>
+          <button
+            role="menuitem"
+            data-testid="tabctx-split-right"
+            disabled={menuTab.viewType === "graph"}
+            onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("row"); })}
+          >
+            {t("app.tabSplitRight")}
+          </button>
+          <button
+            role="menuitem"
+            data-testid="tabctx-split-down"
+            disabled={menuTab.viewType === "graph"}
+            onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("column"); })}
+          >
+            {t("app.tabSplitDown")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

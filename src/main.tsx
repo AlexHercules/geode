@@ -82,7 +82,7 @@ import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
-import { Workspace, resolveTheme } from "@core/workspace";
+import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import type { ThemeKind } from "@core/types";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
@@ -351,6 +351,18 @@ async function bootstrap() {
     ) => string[];
   };
   searchSortHost.__geodeSearchSort = (items, key) => sortResults(items, key).map((r) => r.basename);
+
+  // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
+  // close-others/right/all action removes, skipping pinned). The menu DOM is
+  // browser-E2E only (§D); this proves the close-set logic in the real build.
+  const tabCloseHost = globalThis as unknown as {
+    __geodeTabsToClose?: (
+      tabs: { id: string; pinned?: boolean }[],
+      targetId: string,
+      mode: "others" | "right" | "all",
+    ) => string[];
+  };
+  tabCloseHost.__geodeTabsToClose = (tabs, targetId, mode) => tabIdsToClose(tabs, targetId, mode);
 
   // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
   // real-fs vault and returns the structured result (total + matched paths). The
