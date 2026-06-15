@@ -22,6 +22,7 @@ import { t } from "./i18n";
 import { fileEmbedKind, renderMarkdownToHtml } from "./markdown";
 import { loadKatex } from "./math";
 import { loadMermaid } from "./mermaid";
+import { renderQueryResult, runQueryBlock } from "./queryEmbed";
 import type { MetadataIndex } from "./metadata";
 import type { Vault } from "./vault";
 
@@ -211,6 +212,24 @@ function hydrateMermaid(els: HTMLElement[], ctx: HydrateContext): Promise<void> 
   return run;
 }
 
+/** R75: run each ```query placeholder's search and swap in the result list.
+ *  Never throws — a failed block keeps its source-code fallback. Stale (detached)
+ *  placeholders from a superseded render are skipped before writing. */
+async function hydrateQuery(els: HTMLElement[], ctx: HydrateContext): Promise<void> {
+  const trackConnectivity = els.some((el) => el.isConnected);
+  await Promise.all(
+    els.map(async (el) => {
+      try {
+        const result = await runQueryBlock(el.getAttribute("data-query") ?? "", ctx);
+        if (trackConnectivity && !el.isConnected) return; // superseded by a re-render
+        renderQueryResult(el, result);
+      } catch (err) {
+        console.warn("[embeds] query block failed", err);
+      }
+    }),
+  );
+}
+
 async function hydrateImage(img: HTMLImageElement, ctx: HydrateContext): Promise<void> {
   try {
     const path = img.getAttribute("data-embed-path") ?? "";
@@ -366,6 +385,10 @@ export async function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Pro
     const mermaidEls = Array.from(
       root.querySelectorAll<HTMLElement>(".geode-mermaid[data-mermaid]"),
     );
+    // R75: query pass — ```query placeholders run the search engine and render a
+    // result list. Nested transclusions are covered by the recursive hydrateNote
+    // → hydrateEmbeds call below, same as math/mermaid.
+    const queryEls = Array.from(root.querySelectorAll<HTMLElement>(".geode-query[data-query]"));
     const passes = [
       ...imgs.map((img) => hydrateImage(img, ctx)),
       ...spans.map((span) => hydrateNote(span, ctx, depth, ancestors)),
@@ -373,6 +396,7 @@ export async function hydrateEmbeds(root: HTMLElement, ctx: HydrateContext): Pro
     ];
     if (mathEls.length > 0) passes.push(hydrateMath(mathEls, ctx));
     if (mermaidEls.length > 0) passes.push(hydrateMermaid(mermaidEls, ctx));
+    if (queryEls.length > 0) passes.push(hydrateQuery(queryEls, ctx));
     await Promise.all(passes);
   } catch (err) {
     // defensive: per-element handlers already swallow their own failures

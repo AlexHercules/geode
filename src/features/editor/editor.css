@@ -1313,6 +1313,43 @@ mark {
   color: var(--accent) !important;
 }
 
+/* ============ query embed (R75, ```query → result list) ============ */
+/* Unscoped (.geode-query*) so it renders identically in reading view and the
+   .cm-live-query live-preview widget. */
+.geode-query {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 0.5em 0;
+}
+.geode-query-source {
+  /* placeholder source shown only until hydrate swaps in results */
+  font-family: ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  color: var(--text-faint);
+  margin: 0;
+}
+.geode-query-count {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.geode-query-file {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+.geode-query-filecount {
+  font-size: 0.8em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.geode-query-error {
+  color: var(--danger);
+  font-size: 0.9em;
+}
+
 /* ============ properties panel (R22, PropertiesPanel.tsx) ============ */
 
 /* Obsidian metadata-container density: 13px UI font, ~28px rows, muted key

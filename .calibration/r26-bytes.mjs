@@ -33,6 +33,10 @@ const CORPUS = [
   ["math-inline", "inline $x^2 + y^2$ done"],
   ["math-block", "$$\\int_0^1 x\\,dx$$"],
   ["code-fence", "```js\nconst a = 1;\nconsole.log(a);\n```"],
+  // R75: ```query fence emits a .geode-query placeholder (hydrated later) — its
+  // bytes CHANGED this round; flagged media so the diff is acknowledged, while
+  // code-fence (js) above must stay byte-identical (proves the dispatch is isolated).
+  ["code-fence-query", "```query\ntag:#todo\n```", true],
   ["code-inline", "use `npm run dev` here"],
   ["table", "| a | b |\n|---|---|\n| 1 | 2 |"],
   ["hr", "above\n\n---\n\nbelow"],

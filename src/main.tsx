@@ -40,6 +40,7 @@ import {
   type MentionSpan,
 } from "@core/unlinkedMentions";
 import { MetadataIndex, getCssClasses } from "@core/metadata";
+import { runQueryBlock } from "@core/queryEmbed";
 import { parseSearchQuery, evaluateSearch, type SearchInput } from "@core/search";
 import { PluginManager } from "@core/plugins";
 import { propertyTypes } from "@core/properties";
@@ -316,6 +317,18 @@ async function bootstrap() {
     __geodeSplitSlides?: (path: string) => Promise<string[]>;
   };
   slidesHost.__geodeSplitSlides = async (path) => splitSlides(await vault.read(path));
+
+  // always-on query-embed probe (R75, ㊲): runs a ```query block body against the
+  // real-fs vault and returns the structured result (total + matched paths). The
+  // result-list DOM render is browser-E2E only — App-Nap makes WKWebView DOM reads
+  // unreliable (§D); this proves the real-fs search path. Same pattern as above.
+  const queryHost = globalThis as unknown as {
+    __geodeQueryBlock?: (raw: string) => Promise<{ error?: string; total: number; paths: string[] }>;
+  };
+  queryHost.__geodeQueryBlock = async (raw) => {
+    const r = await runQueryBlock(raw, { vault, metadata });
+    return { error: r.error, total: r.total, paths: r.files.map((f) => f.path) };
+  };
 
   // always-on bookmarks probe (R27): drives the real-fs read/write path from
   // browser/desktop E2E (WKWebView has no CDP — same pattern as __geodeRename /

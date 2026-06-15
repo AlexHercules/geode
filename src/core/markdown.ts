@@ -593,6 +593,14 @@ md.renderer.rules.fence = (tokens, idx, options, env, self) => {
     const src = escapeHtml(token.content.trimEnd());
     return `<div class="geode-mermaid" data-mermaid="${src}"><pre class="geode-mermaid-source"><code>${src}</code></pre></div>\n`;
   }
+  // R75 (㊲): a ```query fence becomes a placeholder carrying its source; the
+  // escaped source stays visible (mermaid precedent) until core/embeds.ts runs
+  // the search and swaps in the result list. Same case-sensitive first-word
+  // dispatch — every other fence still falls through byte-identical.
+  if (lang === "query") {
+    const src = escapeHtml(token.content.trimEnd());
+    return `<div class="geode-query" data-query="${src}"><pre class="geode-query-source"><code>${src}</code></pre></div>\n`;
+  }
   if (defaultFenceRule) return defaultFenceRule(tokens, idx, options, env, self);
   return self.renderToken(tokens, idx, options);
 };

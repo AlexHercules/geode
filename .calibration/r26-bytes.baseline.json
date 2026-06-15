@@ -56,6 +56,10 @@
     "html": "<pre><code class=\"language-js\">const a = 1;\nconsole.log(a);\n</code></pre>\n"
   },
   {
+    "name": "code-fence-query",
+    "html": "<div class=\"geode-query\" data-query=\"tag:#todo\"><pre class=\"geode-query-source\"><code>tag:#todo</code></pre></div>\n"
+  },
+  {
     "name": "code-inline",
     "html": "<p>use <code>npm run dev</code> here</p>\n"
   },

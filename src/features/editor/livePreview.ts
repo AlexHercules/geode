@@ -55,6 +55,7 @@ import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
 import { liveMath } from "./liveMath";
 import { liveMermaid } from "./liveMermaid";
+import { liveQuery } from "./liveQuery";
 import { liveTables } from "./liveTables";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
 
@@ -1416,6 +1417,9 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
     // R57 — render $$…$$ display-math blocks as KaTeX in live preview (same machinery;
     // scan-based ranges confirmed by the renderer + hydrateEmbeds math pass).
     liveMath(app, getPath),
+    // R75 — render ```query fences as live search result lists (same machinery;
+    // renderMarkdownToHtml placeholder + hydrateEmbeds query pass).
+    liveQuery(app, getPath),
     liveTheme,
   ];
 }

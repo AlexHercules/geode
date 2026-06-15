@@ -3,6 +3,7 @@ import * as dictAllProperties from "./i18n/dict.allproperties";
 import * as dictApp from "./i18n/dict.app";
 import * as dictBookmarks from "./i18n/dict.bookmarks";
 import * as dictPanels from "./i18n/dict.panels";
+import * as dictQuery from "./i18n/dict.query";
 import * as dictSlides from "./i18n/dict.slides";
 import * as dictViews from "./i18n/dict.views";
 
@@ -26,6 +27,7 @@ const en = {
   ...dictBookmarks.en,
   ...dictAllProperties.en,
   ...dictSlides.en,
+  ...dictQuery.en,
 };
 const zh: Record<string, string> = {
   ...dictApp.zh,
@@ -34,6 +36,7 @@ const zh: Record<string, string> = {
   ...dictBookmarks.zh,
   ...dictAllProperties.zh,
   ...dictSlides.zh,
+  ...dictQuery.zh,
 };
 
 export type I18nKey = keyof typeof en;

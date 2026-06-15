@@ -10,6 +10,7 @@
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { hydrateEmbeds } from "./embeds";
+import { openWikilink } from "./wikilinks";
 
 export class HydratedBlockWidget extends WidgetType {
   constructor(
@@ -37,6 +38,18 @@ export class HydratedBlockWidget extends WidgetType {
     wrap.innerHTML = this.html; // .geode-mermaid / .geode-math placeholder — output swaps in async
     void hydrateEmbeds(wrap, this.app, this.getPath());
     wrap.addEventListener("mousedown", (e) => {
+      // R75: a click on a rendered internal link (e.g. a query result row, a
+      // mermaid node, a link in a live table) navigates instead of entering edit
+      // mode. data-target is a resolved path → openWikilink re-resolves it (never
+      // the create-note branch). preventDefault keeps the widget mounted so the
+      // link isn't torn out before navigation.
+      const link = (e.target as HTMLElement).closest("a.internal-link");
+      if (link) {
+        e.preventDefault();
+        const target = link.getAttribute("data-target");
+        if (target) void openWikilink(this.app, target, this.getPath());
+        return;
+      }
       e.preventDefault();
       view.dispatch({ selection: { anchor: this.from } });
       view.focus();
