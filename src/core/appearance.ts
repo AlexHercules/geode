@@ -9,6 +9,7 @@ import { Store } from "./store";
 
 const READABLE_KEY = "geode.readableLineLength";
 const SPELLCHECK_KEY = "geode.spellcheck";
+const ACCENT_KEY = "geode.accentColor";
 
 function readBool(key: string, fallback: boolean): boolean {
   try {
@@ -57,7 +58,55 @@ export function setSpellcheckEnabled(on: boolean): void {
   persistBool(SPELLCHECK_KEY, on);
 }
 
+/* ---------------- R79: accent color ---------------- */
+
+function readString(key: string, fallback: string): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function persistString(key: string, value: string): void {
+  try {
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
+  } catch {
+    /* storage unavailable — session-only */
+  }
+}
+
+/** User accent override (`#rrggbb`), or "" = no override (use the theme default).
+ *  Overrides `--accent` + derived `--accent-hover`/`--accent-muted`. */
+export const accentColor = new Store<string>(readString(ACCENT_KEY, ""));
+
+function applyAccentColor(color: string): void {
+  try {
+    const el = document.documentElement;
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+      // empty / invalid → drop the overrides, falling back to the :root defaults
+      el.style.removeProperty("--accent");
+      el.style.removeProperty("--accent-hover");
+      el.style.removeProperty("--accent-muted");
+      return;
+    }
+    el.style.setProperty("--accent", color);
+    el.style.setProperty("--accent-hover", `color-mix(in srgb, ${color}, white 14%)`);
+    el.style.setProperty("--accent-muted", `color-mix(in srgb, ${color} 18%, transparent)`);
+  } catch {
+    /* no DOM (non-browser test context) */
+  }
+}
+
+export function setAccentColor(color: string): void {
+  accentColor.set(color);
+  persistString(ACCENT_KEY, color);
+  applyAccentColor(color);
+}
+
 /** Apply DOM-affecting appearance settings on boot (call once the document exists). */
 export function applyAppearanceSettings(): void {
   applyReadableLineLength(readableLineLength.get());
+  applyAccentColor(accentColor.get());
 }

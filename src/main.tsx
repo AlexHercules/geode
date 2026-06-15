@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -81,7 +81,8 @@ import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { blockRefAt } from "@core/blockId";
 import { parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
-import { Workspace } from "@core/workspace";
+import { Workspace, resolveTheme } from "@core/workspace";
+import type { ThemeKind } from "@core/types";
 import { BUILTIN_PLUGINS } from "./plugins";
 import "./styles/app.css";
 
@@ -192,6 +193,7 @@ async function bootstrap() {
   };
 
   workspace.applyDocumentEffects();
+  workspace.watchSystemTheme(); // R79: re-resolve "system" theme on OS scheme flip
   // close-time flushing covers every open document (single source of dirty state)
   workspace.registerFlusher(() => documents.flushAll());
 
@@ -884,12 +886,19 @@ async function bootstrap() {
       setReadable: (on: boolean) => void;
       setSpellcheck: (on: boolean) => void;
       readableVar: () => string;
+      // R79
+      setAccent: (color: string) => void;
+      accentVar: () => string;
+      resolveTheme: (kind: ThemeKind, systemPrefersDark: boolean) => "dark" | "light";
     };
   };
   apprHost.__geodeAppearance = {
     setReadable: (on) => setReadableLineLength(on),
     setSpellcheck: (on) => setSpellcheckEnabled(on),
     readableVar: () => document.documentElement.style.getPropertyValue("--readable-line-width") || "(default)",
+    setAccent: (color) => setAccentColor(color),
+    accentVar: () => document.documentElement.style.getPropertyValue("--accent") || "(default)",
+    resolveTheme: (kind, systemPrefersDark) => resolveTheme(kind, systemPrefersDark),
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll

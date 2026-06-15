@@ -19,6 +19,23 @@ const PERSIST_KEY = "geode.workspace.v1";
 const RECENTLY_CLOSED_MAX = 20;
 const NAV_HISTORY_MAX = 50;
 
+/** R79: resolve a theme kind to the concrete value written to `dataset.theme`.
+ *  "system" follows the OS color scheme; "dark"/"light" map to themselves.
+ *  Pure — exported for the desktop probe truth-table. */
+export function resolveTheme(kind: ThemeKind, systemPrefersDark: boolean): "dark" | "light" {
+  if (kind === "system") return systemPrefersDark ? "dark" : "light";
+  return kind;
+}
+
+/** Current OS color-scheme preference; true (dark) where matchMedia is absent. */
+function systemPrefersDark(): boolean {
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    return true;
+  }
+}
+
 /** R37: one entry in a tab's back/forward navigation history. */
 interface NavLocation {
   filePath: string;
@@ -837,12 +854,32 @@ export class Workspace {
 
   setTheme(theme: ThemeKind) {
     this.update((s) => ({ ...s, theme }));
-    document.documentElement.dataset.theme = theme;
-    this.events.emit("theme:changed", { theme });
+    // R79: state.theme holds the kind (may be "system"); the event + dataset
+    // always carry the RESOLVED concrete theme so consumers stay dark/light.
+    const resolved = resolveTheme(theme, systemPrefersDark());
+    document.documentElement.dataset.theme = resolved;
+    this.events.emit("theme:changed", { theme: resolved });
   }
 
   toggleTheme() {
-    this.setTheme(this.state.get().theme === "dark" ? "light" : "dark");
+    const resolved = resolveTheme(this.state.get().theme, systemPrefersDark());
+    this.setTheme(resolved === "dark" ? "light" : "dark");
+  }
+
+  /** R79: re-resolve "system" theme when the OS color scheme flips. Call once at
+   *  boot. No-op where matchMedia is unavailable. */
+  watchSystemTheme() {
+    try {
+      const mq = window.matchMedia("(prefers-color-scheme: dark)");
+      mq.addEventListener("change", () => {
+        if (this.state.get().theme !== "system") return;
+        const resolved = resolveTheme("system", mq.matches);
+        document.documentElement.dataset.theme = resolved;
+        this.events.emit("theme:changed", { theme: resolved });
+      });
+    } catch {
+      /* no matchMedia (non-browser context) */
+    }
   }
 
   setFontSize(px: number) {
@@ -877,7 +914,7 @@ export class Workspace {
   /** apply theme/font side effects on startup */
   applyDocumentEffects() {
     const s = this.state.get();
-    document.documentElement.dataset.theme = s.theme;
+    document.documentElement.dataset.theme = resolveTheme(s.theme, systemPrefersDark());
     document.documentElement.style.setProperty("--editor-font-size", `${s.fontSize}px`);
   }
 
@@ -1237,7 +1274,9 @@ function sanitizeState(saved: unknown): WorkspaceState {
     leftWidth: width(s.leftWidth, base.leftWidth),
     rightWidth: width(s.rightWidth, base.rightWidth),
     modal: null,
-    theme: s.theme === "light" ? "light" : "dark",
+    // R79: accept the new "system" kind; legacy "dark"/"light" unchanged, any
+    // unknown value falls back to "dark".
+    theme: s.theme === "light" || s.theme === "system" ? s.theme : "dark",
     fontSize,
   };
 }

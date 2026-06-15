@@ -167,7 +167,7 @@ export type RightPanelKind =
   | "calendar"
   | (string & {});
 export type ModalKind = "palette" | "switcher" | "settings" | "templates" | "workspaces" | "recovery" | "slides" | null;
-export type ThemeKind = "dark" | "light";
+export type ThemeKind = "dark" | "light" | "system";
 
 /** Pane tree (split panes). "row" = children side by side, "column" = stacked. */
 export type SplitDirection = "row" | "column";

@@ -221,8 +221,10 @@ async function runInit(c: ObsidianCssContext): Promise<void> {
   (window as unknown as Record<string, unknown>).__geodeObsidianCssReinit = () =>
     initObsidianCss(c);
 
-  // body class sync — resident, follows the Geode theme regardless of switch
-  syncBodyClass(c.workspace.state.get().theme === "light" ? "light" : "dark");
+  // body class sync — resident, follows the Geode theme regardless of switch.
+  // R79: read the RESOLVED theme off the document (applyDocumentEffects already
+  // wrote it) — state.theme may be "system", which dataset never carries.
+  syncBodyClass(document.documentElement.dataset.theme === "light" ? "light" : "dark");
   if (subscribedEvents !== c.events) {
     for (const u of unsubs.splice(0)) u();
     subscribedEvents = c.events;

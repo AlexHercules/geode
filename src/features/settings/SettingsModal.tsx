@@ -6,6 +6,8 @@ import {
   setReadableLineLength,
   spellcheckEnabled,
   setSpellcheckEnabled,
+  accentColor,
+  setAccentColor,
 } from "@core/appearance";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import {
@@ -64,7 +66,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.75.0";
+const APP_VERSION = "0.76.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -154,6 +156,17 @@ export function SettingsModal() {
 
 /* ---------------- Appearance ---------------- */
 
+/** The theme's current `--accent` (a 6-digit hex) for the color picker's
+ *  no-override swatch. Falls back only if the var is unreadable/non-hex. */
+function readCssAccent(): string {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+    return /^#[0-9a-fA-F]{6}$/.test(v) ? v : "#8b7cf6";
+  } catch {
+    return "#8b7cf6";
+  }
+}
+
 function AppearanceSection() {
   const app = useApp();
   const t = useI18n();
@@ -162,6 +175,10 @@ function AppearanceSection() {
   /* R50: appearance toggles — readable line length + editor spellcheck */
   const readable = useStore(readableLineLength);
   const spell = useStore(spellcheckEnabled);
+  const accent = useStore(accentColor);
+  // the <input type=color> needs a literal hex; with no override, reflect the
+  // theme's actual --accent (read live) rather than hardcoding a color value.
+  const accentSwatch = accent || readCssAccent();
   const autoUpdate = useStore(autoUpdateLinks);
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
@@ -217,6 +234,40 @@ function AppearanceSection() {
           >
             <Icon name="sun" size={13} />
             {t("settings.themeLight")}
+          </button>
+          <button
+            className={ws.theme === "system" ? "is-active" : ""}
+            aria-pressed={ws.theme === "system"}
+            data-testid="settings-theme-system"
+            onClick={() => app.workspace.setTheme("system")}
+          >
+            <Icon name="monitor" size={13} />
+            {t("settings.themeSystem")}
+          </button>
+        </div>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.accentColor")}</div>
+          <div className="setting-desc">{t("settings.accentColorDesc")}</div>
+        </div>
+        <div className="settings-accent">
+          <input
+            type="color"
+            className="settings-accent-input"
+            value={accentSwatch}
+            aria-label={t("settings.accentColor")}
+            data-testid="settings-accent-color"
+            onChange={(e) => setAccentColor(e.target.value)}
+          />
+          <button
+            type="button"
+            className="settings-accent-reset"
+            data-testid="settings-accent-reset"
+            onClick={() => setAccentColor("")}
+          >
+            {t("settings.accentReset")}
           </button>
         </div>
       </div>

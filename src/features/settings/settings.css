@@ -809,3 +809,32 @@
   font-size: 12px;
   color: var(--text-faint);
 }
+
+/* R79: accent color picker + reset */
+.settings-accent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.settings-accent-input {
+  width: 36px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-input);
+  cursor: pointer;
+}
+.settings-accent-reset {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-accent-reset:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
