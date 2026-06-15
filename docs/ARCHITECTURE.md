@@ -71,6 +71,35 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 74 additions — Slides 演示模式（候选池第五梯队【中】㊱）【As-built v0.71】
+
+> **状态：As-built（v0.71 交付，2026-06-15）。** ㊱ = 把当前笔记按 `---` 水平分页 → 全屏 overlay 逐页静态渲染 + 键盘导航（←/→/Space/Esc）+ 页计数。**极简自实现，零新依赖**（非 reveal.js，避硬边界#5）。**v1 纯静态只读**：不嵌 live 编辑、**不写 .md**、**绝不改 `core/markdown.ts`**（消费冻结的 `renderMarkdownToHtml`/`parseFrontmatter().to`，不触字节级管线 → 无 r18-diff/r26-bytes 风险）。两道前置门：① grep 确认 `features/slides` 零实现；② WebSearch 确认 Obsidian 核心 Slides（`---` 独立成行=分页符；←/→/Space 前进、Esc 停；命令「Slides: Start presentation」触发）。
+
+**分层关键**：slides 属 `features/`，**绝不 import 别的 feature**（`features/editor/embeds.ts` 的 `hydrateEmbeds`/`getEmbedUrl` 不可用）→ 直接用 **`@core/markdown renderMarkdownToHtml`** + **`@core/embeds hydrateEmbeds`（core 版，吃 `HydrateContext`）** + 自建 `imageSrc`（`@core/markdown mimeForPath` + `vault.readBinary` + blob URL，slides 本地 cache，overlay 卸载时 `revokeObjectURL`——与 editor 的常驻 urlCache 生命周期不同，故不共享）。resolver 绑 metadata（`resolveLink`/`resolveAttachment`/`resolveMarkdownLink`，以活动笔记 path 为基），与 EditorPane preview 同款。
+
+**新 `features/slides/`（本轮单 owner）：**
+- `slides.ts`：`export function splitSlides(text: string): string[]` — 纯逻辑、零 React。**先 `parseFrontmatter(text).to` 剥 frontmatter**（否则 fm 围栏 `---` 被当分页符产幽灵页），再按**整行恰为 `---`**（`line.trim()==="---"`）切 body，**跳过代码围栏**（``` / `~~~` 内的 `---` 不分页）。恒返 ≥1 页（无分隔符=整篇一页）。v1 仅 `---` 分页（`***`/`___` thematic break 不分页，记已知偏差）。
+- `SlidesOverlay.tsx`：`export function SlidesOverlay(): JSX.Element | null` — 取活动文本 `documents.get(workspace.getActiveFile())?.getText()`（实时含未保存），`splitSlides` 后渲染当前页：`renderMarkdownToHtml(page, resolveLink, {resolveEmbed, noteEmbeds:true, resolveMdLink})` → `dangerouslySetInnerHTML` → `useEffect` 调 core `hydrateEmbeds(pageEl, ctx)`（ctx.ancestors=`Set([activePath])` 防自嵌入循环）。**window keydown**（不靠焦点，避「需先点击」bug）：←/PageUp→上一页、→/Space/PageDown→下一页（`preventDefault`），Esc 由 App 全局 handler 关 modal（不自接，避双触发）。页计数 `n / total` + 关闭 X + prev/next 箭头。仅 `ws.modal==="slides"` 时挂载；无活动文件 → null。
+- `slides.css`：全屏不透明 overlay（fixed + 高 z-index）+ 内容区复用 `.markdown-preview-view`/`.preview-content` 排版类，配色走 CSS 变量。
+- `index.ts`：导出 `SlidesOverlay` + `splitSlides`。
+- **testid 面（冻结）**：`slides-overlay`、`slides-page`、`slides-counter`、`slides-close`、`slides-prev`、`slides-next`。
+
+**新 `core/i18n/dict.slides.ts`**：`en`/`zh` 双语，键 `cmd.startPresentation` + `slides.close`/`slides.prev`/`slides.next`/`slides.counter`（As-built：契约初稿写的 `slides.empty` 未用——v1 恒 ≥1 页无空态文案；实际加了 prev/next 按钮 aria）；在 `core/i18n.ts` import + 两处 spread（en/zh）。
+
+**跨区接触点（先冻结再动）：**
+- `core/types.ts:169` `ModalKind` += `"slides"`（`openModal`/`closeModal` 已吃任意 ModalKind，零改 workspace.ts）。
+- `app/App.tsx`：① 命令注册段（~133）加 `commands.register({ id:"slides:start", name:()=>t("cmd.startPresentation"), available:()=>workspace.getActiveFile()!==null, callback:()=>workspace.openModal("slides") })`（无默认热键，对齐 Obsidian）；② modal 挂载段（~847）加 `{ws.modal==="slides" && <SlidesOverlay />}`。Esc 关闭白嫖既有全局 handler（App.tsx:591）。
+- 版本三处对齐（package.json / tauri.conf.json / SettingsModal `APP_VERSION`）。
+
+**⚠️ 已知延期（非缺陷，记 ㊱ 续）**：① 仅 `---` 分页（非 `***`/`___`）；② setext H2 下划线 `---`（紧贴文字行）按分页处理（v1 不区分，记偏差）；③ 无 fragment/incremental reveal、无垂直分页、无 speaker notes、无导出 PDF（社区 Advanced Slides 才有，非核心）；④ live 编辑/主题 reveal 样式不嵌。
+
+**对抗评审（reviewer 6 lens 各独立 + 逐条 skeptic-verify，含 reviewer 自写 11 形态 splitSlides 实测 + focus 实测）→ 1 确认 MAJOR（数据安全底线#1）+ 证伪 8 + nit 4：**
+- **CONFIRMED-1 MAJOR（数据安全）= overlay 不夺焦 → 演示时静默改写笔记。** 根因：`SlidesOverlay` 挂载时**从不把焦点移出底层 CodeMirror**——overlay 是叠加层（App.tsx 未隐藏 workspace，editor 仍挂载且持焦），slides 的 window-冒泡 keydown **只拦箭头/空格/翻页、不拦字符键**，且对箭头的 `preventDefault` 在冒泡顺序上发生在 CM contentDOM 监听器**之后** → 用户在不透明 overlay 后键入字符**静默插入当前笔记**（reviewer 实测 `"XYZ# Hello..."`）。可达路径：用户自绑 `slides:start` 热键从聚焦编辑器触发 / 直接 `openModal` / 命令面板后 Tab 走回仍挂载的编辑器。**修 = 挂载 `useEffect` 夺焦**（`(document.activeElement)?.blur()` + overlay 根 `tabIndex={-1}` `ref.focus()`）**+ keydown 拦 `Tab`**（`preventDefault` + 重夺焦，禁 Tab 走回编辑器）+ CSS `outline:none`。**套件假绿根因**：原 r74-e2e 走的正是「editor 持焦 + openModal」路径却从不断言文档未变 → 补**无变更不变式**（editor 聚焦→开 slides→`keyboard.type`→`documents.get().getText()` 必不变 + activeElement 非 cm-content）锁死。
+- **证伪 8**（已实测）：splitSlides 11 形态全对（fm 剥离无幽灵页/```` ``` ````+`~~~`内`---`不切/未闭合 fence 吞到 EOF/`----`不切/CRLF 安全/恒≥1 页）；blob-URL cleanup 覆盖 in-flight load；imageSrc useCallback 不重复 readBinary；keyboard 函数式 setPage 无 stale；裸箭头/空格不撞修饰键命令（commands 守 defaultPrevented + editable）；分层仅 import @core+@app 用 **core** hydrateEmbeds；纯只读无 .md 写 + 未碰 markdown.ts（r26-bytes 0）；Esc 走 App 全局 window handler 不依赖焦点。
+- **nit（记偏差，不阻塞）**：① hover 预览 z-index 60 < slides 200 → 演示中页内链接 hover 卡片被遮（read-only v1 可接受）；② 快速翻页时上一页 async hydrate 写脱离节点=无害浪费（被 GC）。
+
+**验证（As-built）**：typecheck 0 · `r74-e2e` **23/23**（splitSlides 5 形态 + overlay 挂载/计数/←→翻页/clamp/prev-next disabled/按钮导航/Esc+close 关 + **数据安全无变更不变式 2** + 图片 embed 真 hydrate blob src）· `r74-probe` **7/7** 真 WKWebView+真 fs（splitSlides sync 探针 6 形态）· 回归 r26(reading-view)12/12 + r30(properties/modal)25/25 + `r26-bytes` **0 violations**（证未碰 markdown.ts）· cargo build 绿 · 简化门 **clean**（新 feature 5 文件 + 接线，无重复/死代码/脚手架；imageSrc blob 创建跨 feature 不可 import 故有意复制非可消除重复；探针刻意独立）。
+
 ## Round 73 additions — `cssclasses` frontmatter 应用到笔记视图容器（候选池第六梯队 ㊼ slice；㉟ 经前置门判 R22 已实现而出队）【As-built v0.70】
 
 > **状态：As-built（v0.70 交付，2026-06-15）。** 两道前置门把 **㉟ Properties 类型化编辑** 判为 **R22 已实现**（PropertiesPanel 已按 `effectivePropertyType` 分派 number/checkbox/date/datetime/chips 控件 + 类型菜单 `propertyTypes.assign` + `.obsidian/types.json` 注册表 + buildSetProperty 写回；ROADMAP L1246「缺类型化编辑」描述失准）→ **出队**。本轮转做 ㊼「Properties 增强（细化 ㉟）」首条真缺口：**`cssclasses` 应用**——Obsidian 核心行为，把笔记 frontmatter 的 `cssclasses`（list/空格串/逗号串）作为 CSS 类加到笔记视图容器，供主题/CSS 片段（`compat/obsidian/themes.ts` 既有 CSS 注入）定向单笔记样式。**纯读 additive**：不写 `.md`、不动 markdown.ts（容器 className 不在 `previewHtml` 字节流内 → 无 r18-diff/r26-bytes 风险）、复用既有 frontmatter 解析。

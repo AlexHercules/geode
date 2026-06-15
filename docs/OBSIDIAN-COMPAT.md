@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R74 套件回归（2026-06-15，macOS release 二进制 v0.71.0 实测 `r74-probe-vault`）
+
+R74 = Slides 演示模式（候选池第五梯队【中】㊱，原生功能）。对照 Obsidian 核心 Slides：当前笔记按整行 `---` 水平分页 → 全屏演示 overlay 逐页渲染 + ←/→/Space 导航 + Esc 停 + 命令「Slides: Start presentation」。**零依赖极简自实现**（非 reveal.js）、v1 纯静态只读、复用 core 渲染管线、不写 .md、不动 markdown.ts。
+
+新增套件：`r74-e2e.mjs` **23/23**（splitSlides 5 形态 + overlay 挂载/计数/←→翻页/clamp/按钮导航/Esc+close 关 + **数据安全无变更不变式** + 图片 embed 真 hydrate）+ `r74-probe.mjs` **7/7**（真 WKWebView + 真 fs，splitSlides 6 形态经 `__geodeSplitSlides` sync 探针；overlay DOM browser-E2E only，§D 纪律）。
+
+- **套件矩阵不回退**：本轮零 compat 调用面改动（Slides 是新 feature overlay，不动插件 API 面、不动 markdown.ts），r31/…/r57 全 compat 套件不动；原生回归 r26[reading-view embeds]12/12 + r30[properties/modal]25/25 + **r26-bytes 0 violations**（证 Slides 复用 renderMarkdownToHtml 只读、阅读视图字节零回退）全绿。**对抗评审修 1 MAJOR 数据安全**（overlay 夺焦防底层笔记被静默改写）。**OBSIDIAN-COMPAT 缺口表**：㊱ Slides 演示模式交付（v1 已知延期：仅 `---` 分页 / 无 fragment·垂直分页·speaker notes·导出 PDF——社区 Advanced Slides 才有，非核心）。
+
 ### R73 套件回归（2026-06-15，macOS release 二进制 v0.70.0 实测 `r73-probe-vault`）
 
 R73 = `cssclasses` frontmatter 应用到笔记视图容器（候选池第六梯队 ㊼ slice，原生功能；㉟ Properties 类型化编辑经前置门判 R22 已实现而出队）。对照 Obsidian 核心：笔记 `cssclasses`（+遗留 `cssclass`）作为 CSS 类加到 reading view `.markdown-preview-view` / editor `.markdown-source-view`，供主题/CSS 片段定向单笔记样式（迁移叙事：Obsidian 主题对 cssclasses 的 DOM 假设在 Geode 成立）。
