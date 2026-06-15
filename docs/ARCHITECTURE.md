@@ -71,6 +71,32 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 75 additions — `query` 搜索结果嵌入代码块（候选池第五梯队【中】㊲）【As-built v0.72】
+
+> **状态：As-built（v0.72 交付，2026-06-15）。** ㊲ = ` ```query ` 代码块 → 渲染为实时搜索结果列表（复用 `core/search.ts` 解析+执行），reading + live 双态。**字节敏感**（动 `core/markdown.ts` fence renderer）→ data-safety §C：改前已 `r26-bytes --baseline` 重捕（46 cases），改后仅 query fence 字节变、其余 fence 逐字节不变。两道前置门：① grep 确认零实现 + 摸清 search.ts API / markdown.ts fence 分派 / R55 liveBlockWidget 范式；② WebSearch 确认 Obsidian 核心 ` ```query ` = 搜索语法渲染成可折叠分组结果列表。**v1 范围**：分组到文件的可点击结果（`a.internal-link`）+ 总数 + 每文件匹配数；**行内匹配片段（snippet）延期**（见已知延期）。
+
+**镜像 mermaid fence→占位→hydrate 范式（字节隔离）：**
+- **`core/markdown.ts` fence renderer（:588）**：加 `lang === "query"` 分支（首词、大小写敏感，同 mermaid 判据）→ 产 `<div class="geode-query" data-query="${escapeHtml(src)}"><pre class="geode-query-source"><code>${src}</code></pre></div>`（占位，保留源码可见直到 hydrate 换实）。**其它一切 fence 落 `defaultFenceRule` 字节不变**（baseline 守卫）。
+- **`core/queryEmbed.ts`（新）= 查询执行+渲染单一真值**：`runQueryBlock(raw, ctx: {vault, metadata}): Promise<QueryBlockResult>`（`parseSearchQuery` → error 短路；否则 `vault.getMarkdownFiles()` 逐个 `await vault.read` + `metadata.getMetadata` 组 `SearchInput`（tags 去 `#`、frontmatter.fields）→ `evaluateSearch` → 收集 matched 文件 + ranges.length 计数，按 path 排序）。`QueryBlockResult = { error?: string; total: number; files: { path; basename; count }[] }`。`renderQueryResult(el, result)`：清空 el（textContent 全程，杜绝 XSS）→ 错误 `.geode-query-error` / 否则 `.geode-query-count` 显计数（0 → t("query.empty") "No results"，**As-built：无单独 `.geode-query-empty` 类**）+ 有结果时 `.geode-query-results`（每文件 `.geode-query-file`>`a.internal-link[data-target=path]`+`.geode-query-filecount`）。**结果链接复用既有点击委托**（`a.internal-link[data-target=全路径]`，reading=EditorPane onPreviewClick / live=liveClickHandler，R71/mermaid 先例，**不扩 HydrateContext 签名**）。
+- **`core/embeds.ts` hydrateEmbeds（:349）**：加 `hydrateQuery` pass——选 `.geode-query[data-query]`，每个 `await runQueryBlock(data-query, ctx)` → `renderQueryResult(el, result)`；push 进 `Promise.all` passes（:369）。嵌套 transclusion 经既有递归 hydrate 自动覆盖。
+
+**live 预览（复用 R55/R57 机器，零新 widget 类）：**
+- **`features/editor/liveQuery.ts`（新）**：`findQueryRanges(state)`（镜像 `findMermaidRanges`，`CodeInfo` 首词 `=== "query"`）+ `liveQuery(app, getPath)` = `liveBlockWidgets({ ranges: findQueryRanges, widget: (source, from) => new HydratedBlockWidget("cm-live-query", source, renderMarkdownToHtml(source, resolve), from, app, getPath) })`。`livePreview.ts:1418` 后注册 `liveQuery(app, getPath)`。
+- **`features/editor/liveHydratedWidget.ts` 点击导航（共享 widget 小改）**：`toDOM` 的 mousedown 加 `a.internal-link` 分支——**As-built 订正（评审揭露冻结契约原方案不可实现）**：契约初稿写「`closest(".internal-link")` 后 `return`，交既有导航委托」，但 **live 全局点击委托 `liveClickHandler`（livePreview.ts:1318）只认 `.cm-live-mdlink`/`.cm-live-wikilink`，不认 `.internal-link`** → 只 return 会让 live 态 query 结果点击**无人接手成死链**。实现改为 widget 内**直接导航**：`const link = (e.target).closest("a.internal-link"); if (link) { e.preventDefault(); openWikilink(this.app, link.dataset.target, this.getPath()); return; }`（data-target=已解析全路径→openWikilink 必命中不误建笔记，R71 先例；`preventDefault` 保 widget 不被 reveal 撕掉）。**用 `a.internal-link`（锚点限定）比 `.internal-link` 更安全**：mermaid 的 `.internal-link` 是 SVG `<g>` 非 `<a>`（embeds.ts:200）→ 不误命中、mermaid live 行为零变。**普适正确**（任何 hydrated block 内的 anchor 链接点击都该导航非编辑），非链接点击仍进编辑；table 用独立 `TableWidget` 不受影响；r55/r56 回归绿。
+
+**`core/queryEmbed.css`（或并入既有）**：结果列表样式，配色走 CSS 变量。**`main.tsx`**：always-on sync 探针 `__geodeQueryBlock(raw) => runQueryBlock(raw, {vault, metadata})`（§D：返 {total, paths}，DOM 渲染 browser-E2E only）。
+
+**文件所有权（本轮单 owner，字节敏感顺序实现）**：先 markdown.ts（改后立即 `r26-bytes` 验隔离）→ queryEmbed.ts → embeds.ts → liveQuery.ts/livePreview.ts/liveHydratedWidget.ts → css/probe/calibration。
+
+**⚠️ 已知延期（非缺陷，记 ㊲ 续）**：① **行内匹配片段（snippet）延期**——v1 只显文件链接+计数，不显匹配行高亮（`deriveLineHits`/`sliceLine` 现为 SearchPanel 私有；做 snippet 需下沉到 core 复用，留续轮）；② Obsidian 嵌入查询的渲染选项（collapse/sort/hide title/context）不做；③ 每个 query 块全 vault 扫描（多块 = 多次扫，同 SearchPanel 口径，v1 可接受）；④ 点击只跳文件不跳具体行。
+
+**对抗评审（reviewer 7 lens 各独立 + 逐条 skeptic-verify）→ 0 critical / 0 major / 1 确认 minor（doc 一致性）+ 证伪 8 + nit 5：**
+- **确认 minor（doc）= 私改冻结契约 mousedown 方案未上报 → 本节 As-built 已订正**（见上 liveHydratedWidget 段：契约的 `.internal-link`+return 不可实现，实现改 `a.internal-link`+直接 openWikilink，更安全）。无运行时缺陷。
+- **证伪 8**：字节隔离（仅 `lang==="query"` 首词大小写敏感分叉，r26-bytes 0 violations，`Query`/`queryx`/`query extra` 不误判）；mermaid/math/table 零回归（table 用独立 TableWidget；mermaid `.internal-link` 是 SVG `<g>` 不匹配 `a.internal-link`）；无双重导航（reading 走 EditorPane 委托、live 走 widget 直接、全局委托不认 `.internal-link`）；SearchInput 构造与 SearchPanel 逐字段一致；XSS（全程 textContent/setAttribute + data-query escapeHtml 往返）；never-throws + trackConnectivity 脱离节点跳写；分层（queryEmbed 仅 import core、liveQuery 不 import 别 feature）；数据安全（零 .md 写、live widget contenteditable=false 纯视图）。
+- **nit（记 ㊲ 续）**：① self-match（含 query 块的笔记自身 content 命中自己，同 Obsidian 预期）；② 每块全 vault 扫描（同 SearchPanel 口径，live 因 widget `eq()` 复用 DOM 不逐键重扫）；③ 根级 basename 与子目录同名的 resolveLink 最短路径回退（同 R71/Obsidian，罕见）。
+
+**验证（As-built）**：typecheck 0 · `r26-bytes` **0 violations**（47 cases，仅新增 flagged `code-fence-query`，js fence 等逐字节不变=字节隔离）· `r75-e2e` **16/16**（runQueryBlock match/empty/error + reading 占位→结果 + reading 点击导航 + live widget→结果 + live 点击导航 passthrough + 错误 plate）· `r75-probe` **8/8** 真 WKWebView+真 fs（`__geodeQueryBlock` path/content/none/error/empty）· 回归 r34(search)15/15 + r55(live tables)15/15 + r56(live mermaid)13/13 + r26(embeds)12/12 绿 · cargo build 绿 · 简化门 **clean**（liveQuery↔liveMermaid 结构似但分派不同首词、合并需发明 lang 工厂泛型=STOP；queryEmbed↔SearchPanel 跨 core/feature 不可互 import；探针刻意独立）。
+
 ## Round 74 additions — Slides 演示模式（候选池第五梯队【中】㊱）【As-built v0.71】
 
 > **状态：As-built（v0.71 交付，2026-06-15）。** ㊱ = 把当前笔记按 `---` 水平分页 → 全屏 overlay 逐页静态渲染 + 键盘导航（←/→/Space/Esc）+ 页计数。**极简自实现，零新依赖**（非 reveal.js，避硬边界#5）。**v1 纯静态只读**：不嵌 live 编辑、**不写 .md**、**绝不改 `core/markdown.ts`**（消费冻结的 `renderMarkdownToHtml`/`parseFrontmatter().to`，不触字节级管线 → 无 r18-diff/r26-bytes 风险）。两道前置门：① grep 确认 `features/slides` 零实现；② WebSearch 确认 Obsidian 核心 Slides（`---` 独立成行=分页符；←/→/Space 前进、Esc 停；命令「Slides: Start presentation」触发）。

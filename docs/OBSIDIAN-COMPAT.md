@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R75 套件回归（2026-06-15，macOS release 二进制 v0.72.0 实测 `r75-probe-vault`）
+
+R75 = `query` 搜索结果嵌入代码块（候选池第五梯队【中】㊲，原生功能）。对照 Obsidian 核心：` ```query ` 代码块 = 搜索语法 → 渲染为分组结果列表（reading + live preview），点击导航。复用 `core/search.ts`（parseSearchQuery/evaluateSearch，R21/R68 已支持 file/path/content/tag/line/task/[prop]）。**字节敏感**（动 markdown.ts fence renderer → §C r26-bytes 守卫）。
+
+新增套件：`r75-e2e.mjs` **16/16**（runQueryBlock match/empty/error + reading 占位→结果列表 + reading 点击导航 + live widget→结果 + live 点击导航 passthrough + 错误 plate）+ `r75-probe.mjs` **8/8**（真 WKWebView + 真 fs，`__geodeQueryBlock` path/content/none/error/empty；result-list DOM browser-E2E only，§D 纪律）。
+
+- **套件矩阵不回退**：本轮零 compat 调用面改动（query 渲染走 core hydrate pass + live widget，不动插件 API 面）；markdown.ts fence renderer **仅在 `lang==="query"` 分叉**→ **r26-bytes 0 violations**（47 cases，仅新增 flagged `code-fence-query`，js fence 等逐字节不变=字节隔离证明）；原生回归 r34[search]15/15 + r55[live tables]15/15 + r56[live mermaid]13/13 + r26[embeds]12/12 全绿（共享 HydratedBlockWidget mousedown 加 internal-link 导航分支不破 mermaid/table/math）。**对抗评审 0 critical/0 major/1 minor（doc 一致性，已订正 As-built）**。**OBSIDIAN-COMPAT 缺口表**：㊲ 嵌入查询交付（v1 已知延期：行内 snippet / collapse-sort 渲染选项 / 点击跳行）。
+
 ### R74 套件回归（2026-06-15，macOS release 二进制 v0.71.0 实测 `r74-probe-vault`）
 
 R74 = Slides 演示模式（候选池第五梯队【中】㊱，原生功能）。对照 Obsidian 核心 Slides：当前笔记按整行 `---` 水平分页 → 全屏演示 overlay 逐页渲染 + ←/→/Space 导航 + Esc 停 + 命令「Slides: Start presentation」。**零依赖极简自实现**（非 reveal.js）、v1 纯静态只读、复用 core 渲染管线、不写 .md、不动 markdown.ts。
