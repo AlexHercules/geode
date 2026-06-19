@@ -1,7 +1,7 @@
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
-import { showRibbon } from "@core/appearance";
+import { showRibbon, showStatusBar, showTabTitleBar } from "@core/appearance";
 import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
@@ -90,6 +90,8 @@ export function App() {
   /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
      via Ctrl+, / the command palette) */
   const ribbonVisible = useStore(showRibbon);
+  /* R100: Obsidian "Show status bar" — hide the bottom status bar */
+  const statusBarVisible = useStore(showStatusBar);
 
   /* plugin-contributed sidebar panels (compat registerView custom views) */
   const leftPanels = sidebarPanels.filter((p) => p.side === "left");
@@ -856,7 +858,8 @@ export function App() {
         )}
       </div>
 
-      {/* status bar */}
+      {/* status bar (R100: hidden when showStatusBar is off) */}
+      {statusBarVisible && (
       <footer className="status-bar" data-testid="status-bar">
         <span className="status-item status-vault">{app.vault.vaultName}</span>
         <span className="status-spacer" />
@@ -872,6 +875,7 @@ export function App() {
           testid="plugin-status-bar-items"
         />
       </footer>
+      )}
 
       {/* modals */}
       {ws.modal === "palette" && <CommandPalette />}
@@ -1266,6 +1270,7 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
 function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
   const t = useI18n();
+  const tabBarVisible = useStore(showTabTitleBar); // R100: hide each pane's tab strip when off
   const { setDraggingTabId } = useContext(TabDragContext);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   // R81: tab right-click context menu (TagsPanel inline pattern)
@@ -1299,6 +1304,9 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
     }
     return tabEls.length;
   };
+
+  // R100: tabs stay reachable via Ctrl+Tab / the command palette when hidden
+  if (!tabBarVisible) return null;
 
   return (
     <div

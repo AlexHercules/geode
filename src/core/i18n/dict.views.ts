@@ -51,6 +51,10 @@ export const en = {
   "settings.showInlineTitleDesc": "Show the note's filename as a heading at the top of the note.",
   "settings.showRibbon": "Show ribbon",
   "settings.showRibbonDesc": "Show the left sidebar ribbon. When off, use Ctrl+, or the command palette.",
+  "settings.showTabTitleBar": "Show tab title bar",
+  "settings.showTabTitleBarDesc": "Show each pane's tab strip. When off, switch tabs with Ctrl+Tab or the command palette.",
+  "settings.showStatusBar": "Show status bar",
+  "settings.showStatusBarDesc": "Show the bottom status bar.",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -345,6 +349,10 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.showInlineTitleDesc": "在笔记顶部以标题形式显示文件名。",
   "settings.showRibbon": "显示功能区",
   "settings.showRibbonDesc": "显示左侧功能区。关闭后可用 Ctrl+, 或命令面板。",
+  "settings.showTabTitleBar": "显示标签栏",
+  "settings.showTabTitleBarDesc": "显示每个窗格的标签栏。关闭后可用 Ctrl+Tab 或命令面板切换标签。",
+  "settings.showStatusBar": "显示状态栏",
+  "settings.showStatusBarDesc": "显示底部状态栏。",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",

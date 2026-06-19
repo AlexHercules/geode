@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode, setTabIndentSize, setIndentUsingTabs, tabIndentSize, indentUsingTabs, setShowInlineTitle, setShowRibbon, showInlineTitle, showRibbon } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode, setTabIndentSize, setIndentUsingTabs, tabIndentSize, indentUsingTabs, setShowInlineTitle, setShowRibbon, showInlineTitle, showRibbon, setShowTabTitleBar, setShowStatusBar, showTabTitleBar, showStatusBar } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -1121,6 +1121,8 @@ async function bootstrap() {
       // R94: inline title + ribbon toggles (DOM is browser-E2E only, §D; this proves
       // the Store + localStorage round-trip on the real WKWebView build)
       setToggles: (inlineTitle: boolean, ribbon: boolean) => { inlineTitle: boolean; ribbon: boolean };
+      // R100: tab title bar + status bar toggles (same DOM-is-browser-E2E rationale)
+      setChrome: (tabTitleBar: boolean, statusBar: boolean) => { tabTitleBar: boolean; statusBar: boolean };
     };
   };
   apprHost.__geodeAppearance = {
@@ -1137,6 +1139,11 @@ async function bootstrap() {
       setShowInlineTitle(inlineTitle);
       setShowRibbon(ribbon);
       return { inlineTitle: showInlineTitle.get(), ribbon: showRibbon.get() };
+    },
+    setChrome: (tabTitleBar, statusBar) => {
+      setShowTabTitleBar(tabTitleBar);
+      setShowStatusBar(statusBar);
+      return { tabTitleBar: showTabTitleBar.get(), statusBar: showStatusBar.get() };
     },
   };
 

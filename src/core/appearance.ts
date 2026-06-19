@@ -172,6 +172,27 @@ export function setShowRibbon(on: boolean): void {
   persistBool(RIBBON_KEY, on);
 }
 
+/** R100 (㊺ 续续续): Obsidian "Show tab title bar" — show each pane's tab strip.
+ *  Default ON = current behaviour + Obsidian default. OFF hides every tab bar (tabs
+ *  stay switchable via Ctrl+Tab / the command palette). Consumed reactively by App. */
+const TAB_TITLE_BAR_KEY = "geode.showTabTitleBar";
+export const showTabTitleBar = new Store<boolean>(readBool(TAB_TITLE_BAR_KEY, true));
+
+export function setShowTabTitleBar(on: boolean): void {
+  showTabTitleBar.set(on);
+  persistBool(TAB_TITLE_BAR_KEY, on);
+}
+
+/** R100 (㊺ 续续续): show the bottom status bar. Default ON. OFF hides it (status-bar
+ *  plugin items like word count keep working — only the display is hidden). */
+const STATUS_BAR_KEY = "geode.showStatusBar";
+export const showStatusBar = new Store<boolean>(readBool(STATUS_BAR_KEY, true));
+
+export function setShowStatusBar(on: boolean): void {
+  showStatusBar.set(on);
+  persistBool(STATUS_BAR_KEY, on);
+}
+
 /** R87 (㊶): strict line breaks in the READING view. OFF (default) = a single
  *  newline renders as `<br>` (Obsidian's default reading behaviour); ON = strict
  *  CommonMark (single newline joins; needs two trailing spaces / a blank line).

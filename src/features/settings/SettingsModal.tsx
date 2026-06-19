@@ -20,6 +20,10 @@ import {
   setShowInlineTitle,
   showRibbon,
   setShowRibbon,
+  showTabTitleBar,
+  setShowTabTitleBar,
+  showStatusBar,
+  setShowStatusBar,
   accentColor,
   setAccentColor,
   interfaceFont,
@@ -93,7 +97,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.96.0";
+const APP_VERSION = "0.97.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -211,6 +215,9 @@ function AppearanceSection() {
   /* R94: interface — show inline title + show ribbon */
   const inlineTitle = useStore(showInlineTitle);
   const ribbon = useStore(showRibbon);
+  /* R100: interface — show tab title bar + show status bar */
+  const tabTitleBar = useStore(showTabTitleBar);
+  const statusBar = useStore(showStatusBar);
   /* R96: excluded files (search/graph/explorer filter) */
   const excluded = useStore(excludedRaw);
   const accent = useStore(accentColor);
@@ -470,6 +477,42 @@ function AppearanceSection() {
           aria-label={t("settings.showRibbon")}
           data-testid="settings-ribbon-toggle"
           onClick={() => setShowRibbon(!ribbon)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R100: show tab title bar (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showTabTitleBar")}</div>
+          <div className="setting-desc">{t("settings.showTabTitleBarDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${tabTitleBar ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={tabTitleBar}
+          aria-label={t("settings.showTabTitleBar")}
+          data-testid="settings-tab-title-bar-toggle"
+          onClick={() => setShowTabTitleBar(!tabTitleBar)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R100: show the bottom status bar (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showStatusBar")}</div>
+          <div className="setting-desc">{t("settings.showStatusBarDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${statusBar ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={statusBar}
+          aria-label={t("settings.showStatusBar")}
+          data-testid="settings-status-bar-toggle"
+          onClick={() => setShowStatusBar(!statusBar)}
         >
           <span className="settings-toggle-thumb" />
         </button>
