@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R106 套件回归（2026-06-20，macOS release 二进制 v0.103.0 实测 `r106-probe-vault`）
+
+R106 = frontmatter aliases 在 suggester 层 surface（候选池 ㉟ 续 slice，核心功能）。对照 Obsidian：QuickSwitcher 按 name 或 alias 开笔记 + `[[` 补全 suggest alias（插 `[[canonical|alias]]`）。**Gate 救场**：alias 解析早已实现（resolveLink/nameToPaths）→ 真缺口是两 suggester 不 surface。纯加性 `getAliasMap`，零改解析层。
+
+新增套件：`r106-e2e.mjs` **12/12**（getAliasMap probe·QuickSwitcher alias 开笔记+canonical hint·`[[` alias 补全插 `[[canonical|alias]]`·无-alias 零回归·bracket-alias skip 锁）+ `r106-probe.mjs` **4/4**（真 WKWebView，`__geodeAliasMap` 真 fs frontmatter 解析）。**套件矩阵不回退**：r31/r41 补全 + r47 switcher + r24/r70 链接全绿。
+
 ### R105 套件回归（2026-06-20，macOS release 二进制 v0.102.0 实测 `r105-probe-vault`）
 
 R105 = Unsupported file denylist 翻转（候选池第六梯队 ㊽ 续续续续续续续 slice，数据安全收尾）。对照 Obsidian「Accepted file formats」：只 markdown 是 note，其余视作 media-viewable 或 Unsupported（只读）。`isAttachmentPath` 翻 allowlist→denylist：md+已知文本/代码+无扩展名可编辑，其余（含未知扩展名）只读。堵 R102/R104 评审标记的「未知二进制仍可编辑→损坏」洞。

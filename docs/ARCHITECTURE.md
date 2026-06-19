@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 106 additions — frontmatter aliases 在 suggester 层 surface（候选池 ㉟ 续 v1）【As-built v0.103】
+
+> **状态：As-built（v0.103 交付，2026-06-20）。** Gate 救场（第三次，R93/R103 同型）：grep 发现 frontmatter aliases **早已 resolve**（rebuildNameMap 把 alias 加进 nameToPaths，resolveLink 消费——`[[alias]]` 已通），**真缺口是两个 SUGGESTER 不 surface aliases**。本轮让 `[[` 补全 + QuickSwitcher surface aliases。**纯 surface 层、零改 resolveLink/nameToPaths 解析层**。读写：仅读 + `[[` 插入用户键入片段，无 .md 写竞态。
+
+**契约（加性）**：
+- `core/metadata.ts`：新 `getAliasMap(): Map<path, string[]>`（只含有 aliases 的笔记，revision 缓存，镜像 getTagMap；**返回 `meta.aliases.slice()` 拷贝**不泄漏内部数组=评审 nit）。
+- `cmExtensions.ts` `[[` 补全：抽 `canonicalLink(f)`（path-format aware 链接文本）+ `applyLink(text)`（替换 `[[…]`+闭合 `]]`，光标 anchor）两 helper（**2 调用点减法去重**，basename+alias 共用）；basename 选项复用；新增 **alias 选项循环**（每 alias 一 completion，`label=alias`/`detail=↪basename`/apply 插 `[[canonical|alias]]`=Obsidian 规范链接+alias 显示）。**含 `[`/`]` 的 alias 跳过**（否则破坏 `[[…]]` 结构=评审 minor）。
+- `QuickSwitcher.tsx`：Row "file" 加可选 `alias`/`aliasIndices`；评分循环对每笔记 aliases 也 fuzzyMatch、取最高分、`aliasScore=score+200`（与 name 同级）；`showAlias=赢平手`；渲染 alias 赢时显 alias 高亮+`↪basename` hint。
+- `main.tsx` `__geodeAliasMap` probe。
+
+**对抗评审（reviewer 6 维，逐表达式核运算符优先级 + 三元退化）→ 1 minor（修+锁）+ 2 nit（其一修），无 critical/major、零回归 byte-equivalent：**
+- **零回归 byte-equivalent（headline）**：reviewer 重构表达式对照——`[[` basename 选项（canonicalLink/applyLink/detail/anchor 逐字节等价，`>`>`||`>`?:` 优先级分组一致）+ 无-alias QuickSwitcher（`aliasMap.get??[]`→`[]`→内层不执行→aliasHit=null→所有分支退化为原逻辑）均**逐字节等价**，alias 分支不污染 byName/byPath。
+- **#1 [minor] alias 含 `]`/`]]` → `[[canonical\|alias]]` 畸形插入**（`]]` 提前闭合，残留游离 `]`；无数据丢失，仅畸形 markdown）。**修**：alias 循环 `if (alias.includes("[")||alias.includes("]")) continue`（仍 resolve + 在 switcher，只是不进 `[[` 插入器）。锁测。
+- **nit 修**：getAliasMap `.slice()` 防内部数组泄漏。**nit 留**：`↪` glyph 两处内联（纯符号非 i18n 违规，跨模块抽常量不值）。
+- **证伪**：QuickSwitcher tie-break（alias/aliasIndices 永远成对、toSegments 对 alias 串高亮不串 basename）；activate/merge 全用 row.file.path 不受 alias 影响；缓存失效（revision bump 重建）；alias 经 asList trim/filter 恒非空串；分层/probe 签名稳。
+
+**套件**：typecheck 0 · r106-e2e 12/12（getAliasMap probe + QuickSwitcher alias 开笔记 + `[[` 插 `[[ZZAliased\|GreenTea]]` + 无-alias 零回归 + bracket-alias skip 锁）· r106-probe 4/4 真 WKWebView · 回归 r31/r41 补全 + r47 switcher + r24/r70 链接全绿 · build exit 0 · 简化门 clean。
+
 ## Round 105 additions — Unsupported file denylist 翻转（候选池第六梯队 ㊽ 续续续续续续续 v1）【As-built v0.102】
 
 > **状态：As-built（v0.102 交付，2026-06-20）。** `isAttachmentPath` 从 **allowlist** 翻成 **denylist**——堵 R102/R104 评审标记的最后一个数据安全洞：旧 allowlist 漏未知扩展名二进制仍可编辑→UTF-8 round-trip+autosave 损坏。**现在只有 markdown + 已知文本/代码/配置扩展名 + 无扩展名文件可编辑，其余一切（含未知扩展名）→ 只读 attachment viewer**（Obsidian「Unsupported file」语义）。纯 core 1 文件改动。
