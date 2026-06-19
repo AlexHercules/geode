@@ -28,7 +28,8 @@ interface Row {
 interface MenuState {
   x: number;
   y: number;
-  node: VaultNode;
+  /** R93: null = empty-area right-click → root New note / New folder menu */
+  node: VaultNode | null;
 }
 
 /* ---------------- pure helpers ---------------- */
@@ -371,6 +372,39 @@ export function Explorer() {
     if (selected === node.path) setSelected(null);
   };
 
+  /* ---------------- R93 context-menu open / copy ---------------- */
+
+  const openInNewTab = (node: VaultNode) => app.workspace.openFile(node.path, { newTab: true });
+
+  /** Open the file in a new split to the right (Obsidian "Open to the right"). Splits
+   *  the active pane — the new pane starts as a dup tab — then retargets it at `path`.
+   *  splitActivePane → null (no active pane / graph) falls back to a plain new tab. */
+  const openToRight = (node: VaultNode) => {
+    const paneId = app.workspace.splitActivePane("row");
+    app.workspace.openFile(node.path, paneId ? { paneId } : { newTab: true });
+  };
+
+  /** Duplicate a file (Obsidian "Make a copy" → "<name> 1.<ext>"). R42: flush pending
+   *  editor saves first so the copy captures the latest content, then copy BYTES via
+   *  readBinary → createBinary (works for markdown + attachments). The dest is derived
+   *  from the source path (parentPath + basename + extension) so it is inherently
+   *  in-vault; uniquePath avoids collisions; the source is never written. */
+  const makeCopy = async (node: VaultNode) => {
+    if (node.kind !== "file") return;
+    const dest = app.vault.uniquePath(parentPath(node.path), node.basename, node.extension);
+    try {
+      await app.workspace.flushAll();
+      const data = await app.vault.readBinary(node.path);
+      await app.vault.createBinary(dest, data);
+    } catch (err) {
+      console.error("[explorer] make copy failed", err);
+      return;
+    }
+    expandAncestors(dest);
+    setSelected(dest);
+    if (node.extension === "md") app.workspace.openFile(dest);
+  };
+
   const validateName = (node: VaultNode, value: string): boolean => {
     const name = value.trim();
     if (!name) return false;
@@ -577,6 +611,9 @@ export function Explorer() {
         }}
         onContextMenu={(e) => {
           e.preventDefault();
+          // R93: don't bubble to the tree-container handler (which opens the
+          // empty-area root menu) — a row click owns its own node menu
+          e.stopPropagation();
           setSelected(node.path);
           setMenu({ x: e.clientX, y: e.clientY, node });
         }}
@@ -663,6 +700,13 @@ export function Explorer() {
         tabIndex={0}
         role="tree"
         onKeyDown={onTreeKeyDown}
+        onContextMenu={(e) => {
+          // R93: right-click on empty tree area → root New note / New folder menu
+          // (rows stopPropagation, so this only fires for genuine empty-area clicks)
+          e.preventDefault();
+          setSelected(null);
+          setMenu({ x: e.clientX, y: e.clientY, node: null });
+        }}
         onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
         onDragOver={onTreeDragOver}
         onDrop={onTreeDrop}
@@ -717,52 +761,121 @@ export function Explorer() {
           className="explorer-menu"
           data-testid="explorer-menu"
           style={{
-            left: Math.min(menu.x, window.innerWidth - 190),
-            top: Math.min(menu.y, window.innerHeight - 170),
+            // R81 two-axis clamp — keep the menu fully on-screen
+            left: Math.max(0, Math.min(menu.x, window.innerWidth - 200)),
+            top: Math.max(0, Math.min(menu.y, window.innerHeight - 240)),
           }}
         >
-          {menu.node.kind === "folder" && (
+          {menu.node === null ? (
             <>
               <button
+                data-testid="explorerctx-new-note"
                 onClick={() => {
                   setMenu(null);
-                  void newNote(menu.node.path);
+                  void newNote("");
                 }}
               >
                 <Icon name="file-plus" size={14} />
-                {t("explorer.newNoteHere")}
+                {t("explorer.newNote")}
               </button>
               <button
+                data-testid="explorerctx-new-folder"
                 onClick={() => {
                   setMenu(null);
-                  void newFolder(menu.node.path);
+                  void newFolder("");
                 }}
               >
                 <Icon name="folder-plus" size={14} />
-                {t("explorer.newFolderHere")}
+                {t("explorer.newFolder")}
               </button>
-              <div className="explorer-menu-sep" />
             </>
+          ) : (
+            ((node: VaultNode) => (
+              <>
+                {node.kind === "folder" && (
+                  <>
+                    <button
+                      data-testid="explorerctx-new-note-here"
+                      onClick={() => {
+                        setMenu(null);
+                        void newNote(node.path);
+                      }}
+                    >
+                      <Icon name="file-plus" size={14} />
+                      {t("explorer.newNoteHere")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-new-folder-here"
+                      onClick={() => {
+                        setMenu(null);
+                        void newFolder(node.path);
+                      }}
+                    >
+                      <Icon name="folder-plus" size={14} />
+                      {t("explorer.newFolderHere")}
+                    </button>
+                    <div className="explorer-menu-sep" />
+                  </>
+                )}
+                {node.kind === "file" && (
+                  <>
+                    <button
+                      data-testid="explorerctx-open-new-tab"
+                      onClick={() => {
+                        setMenu(null);
+                        openInNewTab(node);
+                      }}
+                    >
+                      <Icon name="external-link" size={14} />
+                      {t("explorer.openInNewTab")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-open-right"
+                      onClick={() => {
+                        setMenu(null);
+                        openToRight(node);
+                      }}
+                    >
+                      <Icon name="panel-right" size={14} />
+                      {t("explorer.openToRight")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-make-copy"
+                      onClick={() => {
+                        setMenu(null);
+                        void makeCopy(node);
+                      }}
+                    >
+                      <Icon name="copy" size={14} />
+                      {t("explorer.makeCopy")}
+                    </button>
+                    <div className="explorer-menu-sep" />
+                  </>
+                )}
+                <button
+                  data-testid="explorerctx-rename"
+                  onClick={() => {
+                    setMenu(null);
+                    startRename(node);
+                  }}
+                >
+                  <Icon name="pencil" size={14} />
+                  {t("explorer.rename")}
+                </button>
+                <button
+                  className="is-danger"
+                  data-testid="explorerctx-delete"
+                  onClick={() => {
+                    setMenu(null);
+                    void deleteNode(node);
+                  }}
+                >
+                  <Icon name="x" size={14} />
+                  {t("explorer.delete")}
+                </button>
+              </>
+            ))(menu.node)
           )}
-          <button
-            onClick={() => {
-              setMenu(null);
-              startRename(menu.node);
-            }}
-          >
-            <Icon name="pencil" size={14} />
-            {t("explorer.rename")}
-          </button>
-          <button
-            className="is-danger"
-            onClick={() => {
-              setMenu(null);
-              void deleteNode(menu.node);
-            }}
-          >
-            <Icon name="x" size={14} />
-            {t("explorer.delete")}
-          </button>
         </div>
       )}
     </div>

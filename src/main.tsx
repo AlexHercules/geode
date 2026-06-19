@@ -465,6 +465,27 @@ async function bootstrap() {
     };
   };
 
+  // always-on explorer-copy probe (R93, ㊽ 续续): mirrors the Explorer "Make a copy"
+  // vault throat (uniquePath → readBinary → createBinary) on the REAL fs and asserts
+  // the copy is byte-identical to the source. The context-menu DOM is browser-E2E only
+  // (§D); this proves the duplicate write path lands a faithful copy on disk.
+  const copyHost = globalThis as unknown as {
+    __geodeExplorerCopy?: (path: string) => Promise<{ dest: string; sameBytes: boolean; len: number }>;
+  };
+  copyHost.__geodeExplorerCopy = async (path) => {
+    const slash = path.lastIndexOf("/");
+    const dot = path.lastIndexOf(".");
+    const folder = slash >= 0 ? path.slice(0, slash) : "";
+    const base = (slash >= 0 ? path.slice(slash + 1) : path).replace(/\.[^.]+$/, "");
+    const ext = dot > slash ? path.slice(dot + 1) : "";
+    const dest = vault.uniquePath(folder, base, ext);
+    const data = await vault.readBinary(path);
+    await vault.createBinary(dest, data);
+    const copy = await vault.readBinary(dest);
+    const sameBytes = data.length === copy.length && data.every((b, i) => b === copy[i]);
+    return { dest, sameBytes, len: data.length };
+  };
+
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is
   // browser-E2E only (§D); this proves the close-set logic in the real build.

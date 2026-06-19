@@ -506,10 +506,11 @@ export class Vault {
   /** Pick a unique path like "Untitled.md", "Untitled 1.md", ... in a folder. */
   uniquePath(folder: string, base: string, ext = "md"): string {
     const prefix = folder ? `${folder}/` : "";
-    let candidate = `${prefix}${base}.${ext}`;
+    const suffix = ext ? `.${ext}` : ""; // extensionless files (README, LICENSE) → no trailing dot
+    let candidate = `${prefix}${base}${suffix}`;
     let n = 1;
     while (this.fileExists(candidate)) {
-      candidate = `${prefix}${base} ${n}.${ext}`;
+      candidate = `${prefix}${base} ${n}${suffix}`;
       n++;
     }
     return candidate;
@@ -944,8 +945,13 @@ export class MemoryVaultAdapter implements VaultAdapter {
 
   async readFile(path: string): Promise<string> {
     const c = this.files.get(path);
-    if (c === undefined) throw new Error(`File not found: ${path}`);
-    return c;
+    if (c !== undefined) return c;
+    // symmetric with readBinary's text fallback: a file written as bytes (e.g.
+    // "Make a copy" via createBinary, or an attachment) is still text-readable —
+    // on the real fs a file is just bytes, so the Memory adapter must match.
+    const b = this.binaryFiles.get(path);
+    if (b !== undefined) return new TextDecoder().decode(b);
+    throw new Error(`File not found: ${path}`);
   }
 
   async readBinary(path: string): Promise<Uint8Array> {
@@ -970,10 +976,14 @@ export class MemoryVaultAdapter implements VaultAdapter {
 
   async writeFile(path: string, content: string): Promise<void> {
     this.files.set(path, content);
+    // one path = one representation (real-fs parity): writing text drops any binary
+    // twin so readBinary can't later return stale bytes (e.g. a "Make a copy" note
+    // written via createBinary, then edited + saved as text — R93 review).
+    this.binaryFiles.delete(path);
   }
 
   async createFile(path: string, content: string): Promise<void> {
-    if (this.files.has(path)) throw new Error(`File already exists: ${path}`);
+    if (this.files.has(path) || this.binaryFiles.has(path)) throw new Error(`File already exists: ${path}`);
     this.files.set(path, content);
     let parent = parentPath(path);
     while (parent) {
