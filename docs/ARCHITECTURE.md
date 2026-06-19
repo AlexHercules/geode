@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 120 additions — compat Vault.modifyBinary（二进制原子覆盖写 · 插件 API 商业主轴 · 收 R111 显式 gap）【As-built v0.117】
+
+> **状态：As-built（v0.117 交付，2026-06-20）。** Obsidian `Vault.modifyBinary(file, ArrayBuffer)`（覆盖已存在二进制）现真实现——**收掉 R111 显式留的 gap**。R111 做了 readBinary/createBinary（create-only），modifyBinary 当时缺一条**原子覆盖写**路径。本轮加新 Rust `vault_modify_binary`（**tmp + rename**，镜像既有 text `vault_write`）→ 既覆盖又无截断竞态（crash 中途只丢 throwaway tmp、原文件完好）。图片/PDF/Excalidraw 类插件可改写附件。**动 Rust + core/vault（data-safety 第一底线）。**
+
+**契约（加性；4 层 + Rust）**：
+- **`src-tauri/src/main.rs`**：`#[tauri::command(async)] vault_modify_binary(vault,path,data:base64)`——decode + dot-prefixed `.{name}.geode-tmp` 写 + `fs::rename(tmp,abs)` + 失败删 tmp。**镜像 `vault_write`（text 原子写）**，与 `vault_write_binary`（create-only via create_new）互补。
+- **`core/vault.ts`**：VaultAdapter 接口 `modifyBinary`；`Vault.modifyBinary`（`assertSafeRelPath` 守不可信 plugin path + `adapter.modifyBinary` + emit file:modified/vault:changed(modify)，**无 refreshTree**——覆盖不改树结构；无 echo 指纹 FNV text-scoped→watcher 报 external 一次冗余安全方向）；MemoryVaultAdapter.modifyBinary（overwrite set + drop text twin）；TauriVaultAdapter 抽 `toBase64`（writeBinary/modifyBinary 共用=2 调用点减法）+ modifyBinary。
+- **`compat/obsidian/vault.ts`**：`CompatVault.modifyBinary` 从抛 gap 改 `geode.modifyBinary(file.path, new Uint8Array(data))`。DataAdapter.writeBinary **保持 create-only**（覆盖经 Vault.modifyBinary；走 adapter 层 create-or-overwrite 要 check-then-act 竞态或 create-vs-overwrite 树刷新分支，out of scope）。
+
+**对抗评审（reviewer data-safety 优先全维 → Rust/core 实现 0 缺陷 + 1 major 流程项[probe]已补）：**
+- **数据安全证伪（最高优先）**：tmp+rename 真原子（rename 未发生→原文件不动、只丢 tmp；rename 原子替换）；**不同长度覆盖无残留**（tmp 是全新文件、写精确 new bytes、rename 替换→无旧字节残留）；两并发同 path last-writer-wins 无 corruption（同 vault_write）；dot-prefixed tmp 被 watcher noise filter + vault_list 忽略（不发事件、不当真实文件列）；**双层 path 守**（Rust safe_join + core assertSafeRelPath）；base64 chunked 全 0-255 字节 round-trip 精确；file:modified 消费者（R102 viewer）重读安全、无 refreshTree 正确、MemoryAdapter drop text twin 对称。
+- **reviewer 关键洞察（已据此补 probe）**：browser e2e 跑 Memory adapter（plain set()、无 tmp+rename）→「无残留」断言**在 Memory 上是 tautological**；真正的原子写/无残留只在 Rust `vault_modify_binary`、**唯桌面 probe 能验**。补 r120-probe：HOST **带外读真实落盘文件** = 精确 8 字节 + **无 `.geode-tmp` 残留**。
+
+**套件**：typecheck 0 · cargo check 0 · r120-e2e **8/8**（覆盖往返/SHRINK 10→3 无残留/GROW/不抛/createBinary 仍 create-only/读 buffer 拷贝/path guard）· r120-probe **8/8** 真 WKWebView 原生 fs（SHRINK/GROW 精确 + **HOST 带外读盘文件精确 + 无 tmp 残留** + path guard——验真原子写路径）· 回归 r111-e2e 12/12（gap 断言改 overwrite）·r111-probe 9/9·r42 17/17（createBinary intact）·r46 18/18·r23 22/22 · build exit 0 · 简化门 clean（toBase64 抽取=减法；Rust tmp+rename 有意镜像 vault_write 不抽=不碰 out-of-diff 关键写路径）。**后续缺口（compat 商业主轴）**：`DataAdapter.writeBinary` create-or-overwrite（需消解 check-then-act）· `CachedMetadata.sections/listItems`（大）· `MarkdownView.setViewData/setMode`（写=data-safety）· `app.commands.removeCommand` · `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 119 additions — compat CachedMetadata.embeds（getFileCache 形状补全 · 插件 API 商业主轴）【As-built v0.116】
 
 > **状态：As-built（v0.116 交付，2026-06-20）。** Obsidian `getFileCache(file).embeds: EmbedCache[]`（`![[..]]` wikilink 嵌入）现真实现，**与 `.links`（`[[..]]`）分开**（R119 前所有 link 含嵌入都进 .links=既有偏差）。Dataview/嵌入分析类插件读 cache.embeds。纯读解析、零改 core。
