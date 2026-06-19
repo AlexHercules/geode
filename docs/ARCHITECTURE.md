@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 97 additions — 右键「Move to…」文件夹选择器（候选池第六梯队 ㊽ 续续续续 v1）【As-built v0.94】
+
+> **状态：As-built（v0.94 交付，2026-06-19）。** 完成 R93 延期的 Explorer 右键「Move to…」：fuzzy 文件夹选择器选目标 → 文件/文件夹移过去。**复用既有 vetted 移动写路径**——R28/R93 的 `moveNode`（`resolveDropTarget` 四守卫 + `wouldCollide` + R16/R70 `renameWithLinkUpdate`），**本轮零新写机制**，picker 只选目标。
+
+**契约（无冻结接口改动）**：
+- `core/explorerMove.ts`：新纯函数 `moveTargets(tree, fromPath): string[]`——所有文件夹**减** self+descendants（移动文件夹时）**减** current-parent（no-op 移动）。前缀安全（`p.startsWith(fromPath + "/")` → "Foobar" 不被 "Foo" 误排）。深度优先全层级。root（""）由 picker 单列。2 调用点（Explorer 渲染 + probe）。
+- 新 `features/explorer/MoveToModal.tsx`：fuzzy 文件夹 picker，**镜像 QuickSwitcher** `.modal-overlay`/`.palette-*` chrome + `core/fuzzy`。props `{fromPath, folders, allowRoot, onSelect:(target:string|null)=>void, onClose}`——**自身不写**，`onSelect` 回调进 Explorer 的 moveNode。root 选项 = `value:null`（→ moveNode(null) = 移到 root），仅 `parentPath(fromPath) !== ""`（非已在 root）时提供。键盘 ↑/↓ 环绕 + Enter + Esc，overlay 外点关，item onMouseDown preventDefault。
+- `Explorer.tsx`：`movePath` state；右键菜单加「Move to…」项（文件+文件夹皆显，`explorerctx-move-to`）→ `setMovePath(node.path)`；渲染 `movePath !== null && tree && <MoveToModal folders={moveTargets(tree, movePath)} allowRoot={parentPath(movePath) !== ""} onSelect={(t) => { const from = movePath; setMovePath(null); void moveNode(from, t); }} .../>`（**先捕获 from 再清 state，无 read-after-null**）。
+- dict.panels.ts 5 键×en/zh。main.tsx `__geodeMoveFolders(fromPath)` probe。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 data-safety 写路径/moveTargets 正确性/picker 生命周期/模态 UX/fuzzy/分层）→ 0 critical/major + 1 minor（已修）：**
+- **minor（已修）= React key 冲突病态**：root 行 `key="__root__"` 与文件夹路径同命名空间——若 vault 有名为 `__root__` 的根级文件夹则 key 撞（React 重复 key 警告，移动仍正确因 data-target/onSelect 各携正确值）→ **修=root 键 `"root"` / 文件夹键 `"f:"+path`（不同前缀永不撞）**。
+- **PASS 维度**：data-safety——picker 纯选、写全走 vetted moveNode→resolveDropTarget 守卫→wouldCollide→renameWithLinkUpdate，无新字节写面；moveTargets 前缀安全 + 排除集正确（被排文件夹仍递归→其子文件夹仍可作目标）；生命周期——onSelect 先捕获 `from` 再 setMovePath(null) 无竞态、moveNode stale-guard 兜底外部删源；UX——`position:fixed` overlay 不被 `.sidebar overflow:hidden` 裁（无祖先设 transform/filter/contain）、`isEditableTarget`(commands.ts:320) 覆盖 input 故按键不漏进文档（R74 教训）；fuzzy——fuzzyMatch 用 indexOf 非 RegExp 故 CJK/`/`/元字符不崩、空查询短路、空列表显空态 + Enter 经 `rows.length===0` no-op；分层——MoveToModal 只 import @core/fuzzy/@core/i18n/@app/icons（`.palette-*` 仅类名复用、palette.css 经常驻 CommandPalette 入包）。
+
+**验证（As-built）**：typecheck 0 · `r97-e2e` **15/15**（moveTargets 枚举 + **真 picker 移动→Dest + 内容保留 + md 链接移动后仍解析到新位置[data-safety]** + fuzzy 过滤 + Esc 不移动关闭 + 移到 root）· `r97-probe` **6/6** 真 WKWebView+真 fs · 回归 r28(23)/r70(23)/r44(25)/r24(12)/r93(22)/r96(17) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（MoveToModal 镜像 QuickSwitcher 非可合并重复、moveTargets 2 调用点）。
+
+**data-safety 记录（非缺陷）**：裸 basename md 链接 `[x](src.md)` 移动后**仍按唯一 basename 解析到新位置**（R70/R71 设计）→ 链接不破、0 改写正确（position-bearing md 链接的移动改写是 R70 职责）。
+
+**v1 已知延期**：picker 滚动到选中项（短列表无碍）· 「新建文件夹后移入」（Obsidian 社区请求）· 最近用文件夹排序 · 拖拽到 picker。
+
 ## Round 96 additions — Excluded files 排除列表（候选池第六梯队 ㊽ 续续续 v1）【As-built v0.93】
 
 > **状态：As-built（v0.93 交付，2026-06-19）。** Obsidian Settings>Files&Links>「Excluded files」：一组路径模式，匹配的文件从**搜索结果 + 图谱**隐藏、在**文件树变暗**（仍可正常打开=软排除非删除）。**纯前端 read-only 过滤**（不写 .md、不动 markdown.ts、不动改写引擎）。v1 接 search/graph/explorer 三消费者；completion/quickswitcher/未链接提及延期。

@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R97 套件回归（2026-06-19，macOS release 二进制 v0.94.0 实测 `r97-probe-vault`）
+
+R97 = 右键「Move to…」文件夹选择器（候选池第六梯队 ㊽ 续续续续 slice，原生功能）。对照 Obsidian 文件浏览器右键「Move file to…」：fuzzy 文件夹建议器选目标移文件。**复用既有 vetted moveNode**（R28/R16/R70 renameWithLinkUpdate），本轮零新写机制；新 fuzzy picker（`MoveToModal.tsx` 镜像 QuickSwitcher）+ 纯函数 `moveTargets`。
+
+新增套件：`r97-e2e.mjs` **15/15**（moveTargets 枚举 + 真 picker 移动→Dest·内容保留·md 链接移后仍解析[data-safety] + fuzzy 过滤 + Esc 不移动关闭 + 移到 root）+ `r97-probe.mjs` **6/6**（真 WKWebView+真 fs，`__geodeMoveFolders` 候选枚举）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（移动走既有 renameWithLinkUpdate）；不碰 markdown.ts → **r26-bytes 不涉及**；移动写路径 = vetted moveNode（resolveDropTarget 四守卫 + wouldCollide + R16/R70 改写引擎）→ **r28(拖拽移动)23/23 + r70(md 链接改写)23/23 + r44(文件夹改名)25/25 + r24(autosave/flush)12/12 + r93(右键菜单)22/22 + r96(excluded)17/17 回归绿**。**对抗评审 6 维深挖 data-safety 写路径/moveTargets 正确性/picker 生命周期/模态焦点 → 0 critical/major + 1 minor（React key 冲突病态——root 行键与文件夹路径同命名空间，已修不同前缀）**。**OBSIDIAN-COMPAT 缺口表**：㊽ 右键菜单 Move to 交付（㊽ 续缺口仅剩：detect-all-extensions / 非 md 查看视图 / Reveal in Finder[硬边界]）。
+
 ### R96 套件回归（2026-06-19，macOS release 二进制 v0.93.0 实测 `r96-probe-vault`）
 
 R96 = Excluded files 排除列表（候选池第六梯队 ㊽ 续续续 slice，原生功能）。对照 Obsidian Settings>Files&Links>「Excluded files」：路径模式（glob `*` / `{regex}`）匹配的文件从搜索+图谱隐藏、文件树变暗（仍可打开）。**纯前端 read-only 过滤**（新 `core/excludedFiles.ts isExcluded` 单一谓词接 search/graph/explorer 三消费者），不写 .md、不动 markdown.ts。
