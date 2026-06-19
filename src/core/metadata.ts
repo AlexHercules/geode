@@ -336,6 +336,8 @@ export class MetadataIndex {
   private tagMapCache: { rev: number; map: Map<string, Set<string>> } | null = null;
   /** R101 (㊵ 续续续续): attachment path → set of notes referencing it (graph nodes) */
   private attachmentRefMapCache: { rev: number; map: Map<string, Set<string>> } | null = null;
+  /** R106 (㉟ 续): note path → its frontmatter aliases (only notes that have any) */
+  private aliasMapCache: { rev: number; map: Map<string, string[]> } | null = null;
 
   constructor(
     private vault: Vault,
@@ -742,6 +744,25 @@ export class MetadataIndex {
       }
     }
     this.tagMapCache = { rev, map };
+    return map;
+  }
+
+  /**
+   * R106 (㉟ 续): note path → its frontmatter `aliases` (only notes that have any).
+   * Aliases already resolve as link targets (rebuildNameMap adds them to nameToPaths);
+   * this powers the SUGGESTERS — `[[` autocomplete + QuickSwitcher surface aliases.
+   * Lazily computed, cached per index revision (mirrors getTagMap).
+   */
+  getAliasMap(): Map<string, string[]> {
+    const rev = this.revision.get();
+    if (this.aliasMapCache?.rev === rev) return this.aliasMapCache.map;
+    const map = new Map<string, string[]>();
+    for (const meta of this.byPath.values()) {
+      // copy: never hand out the index's internal array (a consumer that sorts/mutates it
+      // would corrupt the index + this cache). Cheap — only rebuilt when the revision changes.
+      if (meta.aliases.length > 0) map.set(meta.path, meta.aliases.slice());
+    }
+    this.aliasMapCache = { rev, map };
     return map;
   }
 

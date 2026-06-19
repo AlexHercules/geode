@@ -14,7 +14,9 @@ import "./palette.css";
 
 type Row =
   | { kind: "create"; name: string }
-  | { kind: "file"; file: FileNode; indices: number[] }
+  // R106: alias/aliasIndices set when the match was on a frontmatter alias (display the
+  // alias, highlighted, + the canonical basename as a hint) rather than the basename.
+  | { kind: "file"; file: FileNode; indices: number[]; alias?: string; aliasIndices?: number[] }
   | { kind: "heading"; path: string; heading: HeadingRef; indices: number[] }
   | { kind: "block"; path: string; block: BlockRef; indices: number[] };
 
@@ -119,27 +121,41 @@ export function QuickSwitcher() {
       return out;
     }
 
-    const matched: Array<{ file: FileNode; score: number; indices: number[] }> = [];
+    const matched: Array<{ file: FileNode; score: number; indices: number[]; alias?: string; aliasIndices?: number[] }> = [];
     let exact = false;
     const qLower = q.toLowerCase();
+    const aliasMap = app.metadata.getAliasMap(); // R106: open a note by its frontmatter alias
     for (const file of files) {
       const byName = fuzzyMatch(q, file.basename);
       const byPath = fuzzyMatch(q, file.path);
+      // R106: best-scoring alias match for this note (so `[[`-style aliases are searchable)
+      let aliasHit: { alias: string; indices: number[]; score: number } | null = null;
+      for (const a of aliasMap.get(file.path) ?? []) {
+        const m = fuzzyMatch(q, a);
+        if (m && (!aliasHit || m.score > aliasHit.score)) aliasHit = { alias: a, indices: m.indices, score: m.score };
+        if (m && a.toLowerCase() === qLower) exact = true;
+      }
       if (byName && file.basename.toLowerCase() === qLower) exact = true;
-      if (!byName && !byPath) continue;
-      // basename matches outrank path-only matches
+      if (!byName && !byPath && !aliasHit) continue;
+      // basename + alias matches outrank path-only matches
       const nameScore = byName ? byName.score + 200 : -Infinity;
       const pathScore = byPath ? byPath.score : -Infinity;
+      const aliasScore = aliasHit ? aliasHit.score + 200 : -Infinity;
+      const best = Math.max(nameScore, pathScore, aliasScore);
+      // show the alias only when it is the winning match (else the basename)
+      const showAlias = aliasHit !== null && aliasScore === best && aliasScore >= nameScore;
       matched.push({
         file,
-        score: Math.max(nameScore, pathScore),
-        indices: byName ? byName.indices : [],
+        score: best,
+        indices: !showAlias && byName ? byName.indices : [],
+        alias: showAlias ? aliasHit!.alias : undefined,
+        aliasIndices: showAlias ? aliasHit!.indices : undefined,
       });
     }
     matched.sort((a, b) => b.score - a.score);
     if (matched.length > MAX_RESULTS) matched.length = MAX_RESULTS;
 
-    const out: Row[] = matched.map(({ file, indices }) => ({ kind: "file", file, indices }));
+    const out: Row[] = matched.map(({ file, indices, alias, aliasIndices }) => ({ kind: "file", file, indices, alias, aliasIndices }));
     if (!exact) out.unshift({ kind: "create", name: q });
     return out;
     }
@@ -342,7 +358,7 @@ export function QuickSwitcher() {
                   data-testid="switcher-item"
                 >
                   <span className="palette-item-name">
-                    {toSegments(row.file.basename, row.indices).map((seg, j) =>
+                    {toSegments(row.alias ?? row.file.basename, row.alias ? row.aliasIndices ?? [] : row.indices).map((seg, j) =>
                       seg.hit ? (
                         <span key={j} className="fz-hit">
                           {seg.text}
@@ -352,7 +368,13 @@ export function QuickSwitcher() {
                       ),
                     )}
                   </span>
-                  {folder && (
+                  {/* R106: when matched via an alias, show the canonical note it points to */}
+                  {row.alias && (
+                    <span className="palette-path" title={row.file.basename}>
+                      ↪ {row.file.basename}
+                    </span>
+                  )}
+                  {!row.alias && folder && (
                     <span className="palette-path" title={folder}>
                       {folder}
                     </span>

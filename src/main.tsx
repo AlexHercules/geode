@@ -580,6 +580,15 @@ async function bootstrap() {
   attachmentRouteHost.__geodeAttachmentRouting = (paths) =>
     paths.map((p) => ({ path: p, isAttachment: isAttachmentPath(p), isImage: isImagePath(p) }));
 
+  // always-on alias-map probe (R106, ㉟ 续): returns the REAL frontmatter-alias index
+  // (path → aliases) — proves aliases are parsed + enumerated on the real build, which is
+  // what the `[[` autocomplete + QuickSwitcher surface. The completion/switcher DOM is
+  // browser-E2E only (§D).
+  const aliasMapHost = globalThis as unknown as {
+    __geodeAliasMap?: () => Record<string, string[]>;
+  };
+  aliasMapHost.__geodeAliasMap = () => Object.fromEntries(app.metadata.getAliasMap());
+
   // always-on media-kind probe (R104, ㊽ 续续续续续续): runs the pure mediaKind/mediaMime
   // classification on the real build, returning per-path {kind, mime} — proves which inline
   // preview (image/audio/video/pdf/other) the attachment view renders. The <audio>/<video>/

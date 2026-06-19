@@ -341,22 +341,42 @@ function wikilinkCompletionSource(app: GeodeApp) {
     // format applies. "absolute" → always the vault-root path; "shortest"/
     // "relative" (relative degrades for wikilinks) → basename unless ambiguous.
     const absolute = linkPathFormat.get() === "absolute";
-    const options: Completion[] = files.map((f) => {
-      const folder = f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "";
-      const ambiguous = (dupCount.get(f.basename.toLowerCase()) ?? 0) > 1;
-      const linkText = absolute || ambiguous ? f.path.replace(/\.md$/i, "") : f.basename;
-      return {
-        label: f.basename,
-        detail: folder || undefined,
-        apply: (view, _completion, from, to) => {
-          const closing = view.state.sliceDoc(to, to + 2) === "]]" ? "" : "]]";
-          view.dispatch({
-            changes: { from, to, insert: linkText + closing },
-            selection: { anchor: from + linkText.length + 2 },
-          });
-        },
-      };
-    });
+    // canonical wikilink text for a note (path-format aware: absolute / ambiguous → path)
+    const canonicalLink = (f: { path: string; basename: string }) =>
+      absolute || (dupCount.get(f.basename.toLowerCase()) ?? 0) > 1
+        ? f.path.replace(/\.md$/i, "")
+        : f.basename;
+    // shared apply: replace [[…] with `text` + a closing `]]` (unless one is already there)
+    const applyLink = (text: string) => (view: EditorView, _c: Completion, from: number, to: number) => {
+      const closing = view.state.sliceDoc(to, to + 2) === "]]" ? "" : "]]";
+      view.dispatch({
+        changes: { from, to, insert: text + closing },
+        selection: { anchor: from + text.length + 2 },
+      });
+    };
+    const options: Completion[] = files.map((f) => ({
+      label: f.basename,
+      detail: (f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "") || undefined,
+      apply: applyLink(canonicalLink(f)),
+    }));
+    // R106 (㉟ 续): surface frontmatter aliases — picking one inserts `[[canonical|alias]]`
+    // (resolves to the note via the canonical name, displays the alias). Obsidian behaviour.
+    const aliasMap = app.metadata.getAliasMap();
+    for (const f of files) {
+      const aliases = aliasMap.get(f.path);
+      if (!aliases) continue;
+      const canonical = canonicalLink(f);
+      for (const alias of aliases) {
+        // a `[` / `]` in the display text would break the `[[…]]` structure → skip it in the
+        // inserter (the alias still resolves + shows in QuickSwitcher, just isn't offered here)
+        if (alias.includes("[") || alias.includes("]")) continue;
+        options.push({
+          label: alias,
+          detail: `↪ ${f.basename}`,
+          apply: applyLink(`${canonical}|${alias}`),
+        });
+      }
+    }
     return { from: before.from + 2, options, validFor: /^[^\[\]]*$/ };
   };
 }
