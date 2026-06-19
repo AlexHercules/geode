@@ -9,6 +9,7 @@ import {
   showLineNumbers,
   tabIndentSize,
   indentUsingTabs,
+  showInlineTitle,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
@@ -143,6 +144,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   /* R92: indentation preferences — reconfigure CM compartment reactively */
   const indentSize = useStore(tabIndentSize);
   const useTabs = useStore(indentUsingTabs);
+  /* R94: Obsidian "Show inline title" — filename as an H1 atop the note (display-only) */
+  const inlineTitleOn = useStore(showInlineTitle);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -762,6 +765,16 @@ export function EditorPane({ tab }: { tab: TabState }) {
     [app, tab.id],
   );
 
+  // R94: Obsidian "Show inline title" — the note's filename (no extension) as an H1
+  // at the top of the content. Display-only in v1 (editing → rename is deferred). It
+  // renders inside the live/source + reading bodies (below), never on empty/error/loading.
+  const inlineTitleEl =
+    inlineTitleOn && tab.filePath ? (
+      <div className="inline-title" data-testid="inline-title">
+        {tab.title}
+      </div>
+    ) : null;
+
   let body: React.ReactNode;
   if (!tab.filePath) {
     body = (
@@ -788,6 +801,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   } else if (tab.mode !== "preview") {
     body = (
       <>
+        {inlineTitleEl}
         <div
           className={"editor-cm-host markdown-source-view mod-cm6" + cssSuffix}
           data-testid="cm-editor"
@@ -818,6 +832,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
         onClick={onPreviewClick}
         ref={previewScrollRef}
       >
+        {/* R94: inline title at the very top of the scroller (scrolls with the note,
+            before properties — mirrors Obsidian's reading-view order) */}
+        {inlineTitleEl}
         {/* R22: reading view renders the panel before the content, inside the
             same scroller (it scrolls with the note) */}
         {propsDisplay === "visible" && (

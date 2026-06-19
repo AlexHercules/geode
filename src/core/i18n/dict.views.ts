@@ -47,6 +47,10 @@ export const en = {
   "settings.indentUsingTabsDesc": "Insert a tab character when indenting, instead of spaces.",
   "settings.tabIndentSize": "Tab indent size",
   "settings.tabIndentSizeDesc": "The width of one indentation level.",
+  "settings.showInlineTitle": "Show inline title",
+  "settings.showInlineTitleDesc": "Show the note's filename as a heading at the top of the note.",
+  "settings.showRibbon": "Show ribbon",
+  "settings.showRibbonDesc": "Show the left sidebar ribbon. When off, use Ctrl+, or the command palette.",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -331,6 +335,10 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.indentUsingTabsDesc": "缩进时插入制表符而非空格。",
   "settings.tabIndentSize": "Tab 缩进宽度",
   "settings.tabIndentSizeDesc": "一级缩进的宽度。",
+  "settings.showInlineTitle": "显示行内标题",
+  "settings.showInlineTitleDesc": "在笔记顶部以标题形式显示文件名。",
+  "settings.showRibbon": "显示功能区",
+  "settings.showRibbonDesc": "显示左侧功能区。关闭后可用 Ctrl+, 或命令面板。",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",

@@ -149,6 +149,29 @@ export function setIndentUsingTabs(on: boolean): void {
   persistBool(INDENT_TABS_KEY, on);
 }
 
+/** R94 (㊺ 续续): Obsidian "Show inline title" — render the note's filename as an
+ *  H1 at the top of the editor + reading view. Default ON = Obsidian's shipped
+ *  default (a deliberate alignment; Geode had none). DISPLAY-ONLY in v1 — editing
+ *  the title to rename the file is deferred. Consumed reactively by EditorPane. */
+const INLINE_TITLE_KEY = "geode.showInlineTitle";
+export const showInlineTitle = new Store<boolean>(readBool(INLINE_TITLE_KEY, true));
+
+export function setShowInlineTitle(on: boolean): void {
+  showInlineTitle.set(on);
+  persistBool(INLINE_TITLE_KEY, on);
+}
+
+/** R94 (㊺ 续续): show the left ribbon (primary nav). Default ON = current behaviour
+ *  + Obsidian default. OFF hides it; settings stay reachable via Ctrl+, / the command
+ *  palette. Consumed reactively by App. */
+const RIBBON_KEY = "geode.showRibbon";
+export const showRibbon = new Store<boolean>(readBool(RIBBON_KEY, true));
+
+export function setShowRibbon(on: boolean): void {
+  showRibbon.set(on);
+  persistBool(RIBBON_KEY, on);
+}
+
 /** R87 (㊶): strict line breaks in the READING view. OFF (default) = a single
  *  newline renders as `<br>` (Obsidian's default reading behaviour); ON = strict
  *  CommonMark (single newline joins; needs two trailing spaces / a blank line).

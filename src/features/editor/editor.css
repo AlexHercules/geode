@@ -102,6 +102,21 @@
   padding: 36px 32px;
 }
 
+/* R94: Obsidian "Show inline title" — the note's filename as a heading at the top of
+   the note. Aligns with the readable content column (live + reading share the cap). */
+.inline-title {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--readable-line-width, 46em);
+  margin: 0 auto;
+  padding: 28px 32px 0;
+  font-size: 1.9em;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--text-normal);
+  word-break: break-word;
+}
+
 .editor-skeleton-line {
   height: 14px;
   border-radius: 4px;

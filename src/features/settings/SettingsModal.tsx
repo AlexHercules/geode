@@ -16,6 +16,10 @@ import {
   setTabIndentSize,
   indentUsingTabs,
   setIndentUsingTabs,
+  showInlineTitle,
+  setShowInlineTitle,
+  showRibbon,
+  setShowRibbon,
   accentColor,
   setAccentColor,
   interfaceFont,
@@ -88,7 +92,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.90.0";
+const APP_VERSION = "0.91.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -203,6 +207,9 @@ function AppearanceSection() {
   /* R92: editor indentation — indent using tabs + tab indent size */
   const useTabs = useStore(indentUsingTabs);
   const indentSize = useStore(tabIndentSize);
+  /* R94: interface — show inline title + show ribbon */
+  const inlineTitle = useStore(showInlineTitle);
+  const ribbon = useStore(showRibbon);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -424,6 +431,42 @@ function AppearanceSection() {
           aria-label={t("settings.strictLineBreaks")}
           data-testid="settings-strict-linebreaks-toggle"
           onClick={() => setStrictLineBreaks(!strict)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R94: show inline title (filename as H1 atop the note, default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showInlineTitle")}</div>
+          <div className="setting-desc">{t("settings.showInlineTitleDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${inlineTitle ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={inlineTitle}
+          aria-label={t("settings.showInlineTitle")}
+          data-testid="settings-inline-title-toggle"
+          onClick={() => setShowInlineTitle(!inlineTitle)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R94: show the left ribbon (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showRibbon")}</div>
+          <div className="setting-desc">{t("settings.showRibbonDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${ribbon ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={ribbon}
+          aria-label={t("settings.showRibbon")}
+          data-testid="settings-ribbon-toggle"
+          onClick={() => setShowRibbon(!ribbon)}
         >
           <span className="settings-toggle-thumb" />
         </button>

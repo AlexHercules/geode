@@ -1,6 +1,7 @@
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
+import { showRibbon } from "@core/appearance";
 import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
@@ -86,6 +87,9 @@ export function App() {
   const statusBarElements = useStore(app.plugins.statusBarElements);
   const ribbonItems = useStore(app.plugins.ribbonItems);
   const sidebarPanels = useStore(app.plugins.sidebarPanels);
+  /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
+     via Ctrl+, / the command palette) */
+  const ribbonVisible = useStore(showRibbon);
 
   /* plugin-contributed sidebar panels (compat registerView custom views) */
   const leftPanels = sidebarPanels.filter((p) => p.side === "left");
@@ -624,7 +628,8 @@ export function App() {
       {/* R20: appended "workspace*" classes mirror Obsidian's DOM so community
           theme CSS can target them — resident, additive only (contract) */}
       <div className="app-body workspace">
-        {/* ribbon */}
+        {/* ribbon (R94: hidden when showRibbon is off) */}
+        {ribbonVisible && (
         <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
           <RibbonButton
             icon="files"
@@ -693,6 +698,7 @@ export function App() {
           />
           <RibbonButton icon="settings" title={t("app.ribbonSettings")} onClick={() => app.workspace.openModal("settings")} />
         </nav>
+        )}
 
         {/* left sidebar */}
         {ws.leftSidebarOpen && (

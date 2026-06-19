@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode, setTabIndentSize, setIndentUsingTabs, tabIndentSize, indentUsingTabs } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode, setTabIndentSize, setIndentUsingTabs, tabIndentSize, indentUsingTabs, setShowInlineTitle, setShowRibbon, showInlineTitle, showRibbon } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -1064,6 +1064,9 @@ async function bootstrap() {
       // R85
       setFont: (which: "interface" | "text" | "monospace", raw: string) => void;
       fontVar: (prop: string) => string;
+      // R94: inline title + ribbon toggles (DOM is browser-E2E only, §D; this proves
+      // the Store + localStorage round-trip on the real WKWebView build)
+      setToggles: (inlineTitle: boolean, ribbon: boolean) => { inlineTitle: boolean; ribbon: boolean };
     };
   };
   apprHost.__geodeAppearance = {
@@ -1076,6 +1079,11 @@ async function bootstrap() {
     setFont: (which, raw) =>
       which === "interface" ? setInterfaceFont(raw) : which === "text" ? setTextFont(raw) : setMonospaceFont(raw),
     fontVar: (prop) => document.documentElement.style.getPropertyValue(prop) || "(default)",
+    setToggles: (inlineTitle, ribbon) => {
+      setShowInlineTitle(inlineTitle);
+      setShowRibbon(ribbon);
+      return { inlineTitle: showInlineTitle.get(), ribbon: showRibbon.get() };
+    },
   };
 
   // always-on find/replace probe (R34): drives the CM search panel + replaceAll
