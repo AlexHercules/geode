@@ -139,7 +139,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
 | `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**；**R22：`fileManager.processFrontMatter` 真实现**（core/properties 编辑引擎，逐 key diff 字节保留改写；opaque 条目不进 fm 对象且永不被改写、不可序列化值 TypeError reject、options/mtime 忽略——偏差见 ARCHITECTURE R22）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
 | `getFileCache().links` 缺 `[[#h]]` 条目 | 偏差（R16 记录）：同文链接不进 links 索引（官方含 `link: "#h"` 形态条目） |
-| `DataAdapter.appendBinary`（及 readBinary/writeBinary/stat/trash*） | warn-stub + 说明性 throw；append/process/rmdir/copy 已用字符串 IO 真实实现 |
+| `DataAdapter.readBinary` / `writeBinary` | **R111：桥接 core 原生二进制 IO**（`geode.readBinary`/`createBinary`，返回拷贝防别名）。`writeBinary` create-only（覆盖已存在路径抛，R17/R43 防截断竞态）。`appendBinary`/`stat`/`trash*` 仍 warn-stub + 说明性 throw；append/process/rmdir/copy 用字符串 IO 真实实现 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 | `Plugin.registerHoverLinkSource` / `hoverPopover`·`HoverParent` | **R25：`registerHoverLinkSource` 升真实无操作登记**（记录 source id 返回——Geode 全局悬停预览已覆盖插件渲染的 `a.internal-link`，无需插件参与）；插件自渲染预览 `hoverPopover`/`HoverParent` **仍为缺口**（插件被 Geode 全局 hover 被动覆盖，但其自挂 popover 不生效） |
 | `app.internalPlugins`（书签 instance API） | **R27：书签数据文件 `.obsidian/bookmarks.json` 双向保真**（Geode 原生书签读写同一文件，未知键/类型 round-trip——见 ARCHITECTURE R27），但 `app.internalPlugins.getPluginById("bookmarks").instance`（`getBookmarks()`/`addItem()`/`removeItem()` 等程序化 API）**仍为缺口**（插件无法经 API 操作书签，只能间接经文件） |
@@ -148,7 +148,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `Plugin.registerMarkdownPostProcessor` / `registerMarkdownCodeBlockProcessor` | **缺**：**生态影响最大单项**（Dataview / Tasks 等明星插件依赖）。需阅读侧 `core/markdown.ts` + 编辑侧 `liveBlockWidget`/`livePreview` 双线接 processor 管线，**工程大** |
 | `Plugin.registerEditorExtension` | **缺**：可做——`cmExtensions.ts` 增设 compat compartment，`registerEditorExtension` reconfigure 追加插件的 CM6 扩展 |
 | `app.commands`（executeCommandById / listCommands / commands） | **缺**：compat `App`（`plugin.ts:295-349`）仅 getter，无 `commands` 对象；跨插件触发/复用命令的事实标准，可在 core `commands` 上包一层 |
-| `vault.readBinary` / `createBinary` / `modifyBinary` | **缺**：`compat/obsidian/vault.ts:223-310` 仅字符串 IO；Geode core 已有原生二进制读写（R11/R17 摄入），**导出即可**。图片/PDF/Excalidraw 类插件普遍用 |
+| ~~`vault.readBinary` / `createBinary`~~ / `modifyBinary` | **R111 出队（部分）**：`readBinary`/`createBinary` 桥接 core 原生二进制 IO（`toArrayBuffer` 拷贝防别名、createBinary 返 TFile）。图片/PDF/Excalidraw 类插件可读写附件。**`modifyBinary` 仍缺**（二进制覆盖写——core 写是 create-only，需原子 tmp+rename 路径，类比 text modify）。连带修 core `createBinary` 缺失的 `assertSafeRelPath`（不可信插件 path 守卫，评审 MAJOR） |
 | `MarkdownView.getMode/getViewData/setViewData/setMode` + `workspace.activeEditor` | **缺**：`compat/obsidian/workspace.ts:30-42` MarkdownView 无 mode/data 访问器；`activeEditor`（MarkdownFileInfo）零命中。模式探测/全文读写类插件用，新插件首选 `activeEditor` |
 | `MetadataCache.getTags()` + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + `fileManager.generateMarkdownLink` | **缺/部分**：getTags（Geode 有 `getTagMap`，未导出 `Record<string,number>` 形态）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ generateMarkdownLink（高影响低成本，复用 linkRewrite + `metadata.fileToLinktext`） |
 | `app.loadLocalStorage/saveLocalStorage/isDarkMode` + `MenuItem.setSubmenu` + `Editor` 完整版方法 | **缺/部分**：loadLocalStorage（per-vault UI 状态）/ isDarkMode；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；Editor 余项（listSelections/setSelections/setLine/transaction/exec/wordAt/scrollTo/undo/redo——可直接映射 CM6，T1.5 子集扩展） |
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R111 套件回归（2026-06-20，macOS release 二进制 v0.108.0 实测 `r111-probe-vault`）
+
+R111 = compat 二进制 IO 桥接 `readBinary`/`createBinary`（**插件 API 商业主轴**，非原生候选池）。`compat/obsidian/vault.ts` 从抛 gap 改桥接 core 原生二进制 IO（图片/PDF/Excalidraw 类插件）。新私有 `toArrayBuffer`（拷贝防别名 Memory 内部存储）。`modifyBinary`/`appendBinary`/二进制覆盖写仍诚实 gap（core 写 create-only）。**评审连带修 core `createBinary` 缺失的 `assertSafeRelPath`**（桥接后不可信插件 path 直达原未守的 core，浏览器 MemoryVaultAdapter 无 path 校验 → `..` 会污染 store；订正 `:442` 失实注释）。
+
+新增套件：`r111-e2e.mjs` **12/12**（compat createBinary→readBinary 往返·桥到 core 真桥接·adapter.writeBinary 创建往返·返回 buffer 是拷贝不别名·modifyBinary/覆盖写诚实抛·**`..`/绝对 path 被 core guard 拒 + 无泄漏**）+ `r111-probe.mjs` **9/9**（真 WKWebView 原生 fs；探针 fire-and-forget+IPC 轮询 `window.app` 破 loadExternal/loadObsidianPlugins 时序死锁与 App-Nap）。**套件矩阵不回退**：r23 22/22·r27 22/22·r46 18/18·r42 17/17（compat + 附件二进制 IO 全绿）。
 
 ### R110 套件回归（2026-06-20，macOS release 二进制 v0.107.0 实测 `r110-probe-vault`）
 

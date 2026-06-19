@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 111 additions — compat 二进制 IO 桥接 readBinary/createBinary（插件 API 商业主轴）【As-built v0.108】
+
+> **状态：As-built（v0.108 交付，2026-06-20）。** Obsidian 兼容层（`compat/obsidian/vault.ts`）的二进制 IO 从「抛 gap」改为**桥接到 Geode core 原生二进制读写**——`Vault.readBinary/createBinary` + `DataAdapter.readBinary/writeBinary`（图片/PDF/Excalidraw 类插件普遍依赖）。core 二进制 IO（R11/R17 摄入）早已存在且桌面实测多轮（r101/r102/r104/r105），本轮只加 compat **桥接 surface**。**两根轴里这是插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表，非 ROADMAP 原生候选池）。二进制**覆盖写仍是诚实 gap**（core 二进制写是 create-only：Rust `vault_write_binary` 用 `create_new(true)`，R17/R43 防 check-then-act 截断竞态）。
+
+**契约（加性桥接；零改 core 公共签名）**：
+- `compat/obsidian/vault.ts`：新私有 helper **`toArrayBuffer(bytes: Uint8Array): ArrayBuffer`**（2 调用点=合法减法去重）——`new Uint8Array(len); copy.set(bytes); return copy.buffer`，把 adapter 字节**拷进全新 ArrayBuffer**（Memory adapter 的 `readBinary` 直返内部存储引用 → 不拷会把可变视图泄漏给插件；normalize byteOffset/SharedArrayBuffer）。
+- `CompatDataAdapter.readBinary/writeBinary`：桥接 `geode.readBinary`/`geode.createBinary`（原为抛错 stub）。`appendBinary` 仍 gap。**`.obsidian/` 不分流**（config IO 是 text-only `readConfig`/`writeConfig`）——二进制走 adapter 自身 dot-folder 处理（类注释已订正）。
+- `CompatVault.readBinary(file)→ArrayBuffer` / `createBinary(path,data)→TFile`（返回 `_registry.getFile(path) ?? ensureFile(path,true)`，复用 `create()` 先例）/ `modifyBinary` = 诚实抛 gap（`reportGap("Vault","modifyBinary",…)` 三参）。
+- **core 缺陷修复（评审 MAJOR，连带本轮）**：`core/vault.ts createBinary` 补 `assertSafeRelPath(path)`——R111 前 compat 抛错使不可信插件 path 无法触达 core，本轮桥接后插件任意 path 直达**原先未守**的 core createBinary（`create()`/`createFolder()` 有守、createBinary 漏，且 `:442` 注释**谎称**已守）。桌面被 Rust `safe_join` 兜底，但浏览器 `MemoryVaultAdapter.writeBinary` 无 path 校验 → `createBinary("../x",buf)` 会污染内存 store。补 guard + 订正失实注释。
+
+**对抗评审（reviewer 6 维 + WebFetch Obsidian API 核对签名 → 2 confirmed[1 MAJOR + 1 MINOR]，均收敛同一根因：桥接到 core 却未继承文本路径既有两道保护）：**
+- **MAJOR（已修+锁测）**：core createBinary 缺 `assertSafeRelPath`（上）。修复 = 加 guard 对齐 `create()`/`createFolder()` + 订正注释；e2e/probe 双锁 `..`/绝对 path 被拒 + 无 escape 文件泄漏。
+- **MINOR（已修）**：`.obsidian/` 二进制未分流违背类自述契约 → 订正类注释（config IO text-only，二进制本就无法走 config 分流，桌面 `safe_join` 允许 `.obsidian` 段一致落盘）。
+- **证伪 7 条**：`toArrayBuffer` 类型/别名安全（永远新分配普通 ArrayBuffer，offset=0）· read 侧拷贝确有必要（Memory 直返内部引用，e2e/probe「mutate 返回 buffer 不污染 store」锁）· create-only 无截断竞态完整保留 · modifyBinary 不静默吞写 · 契约签名逐一对齐 Obsidian · 分层铁律（仅 import core）· probe App-Nap 时序守纪律。
+
+**套件**：typecheck 0 · r111-e2e **12/12**（compat createBinary→readBinary 往返 + 桥到 core 真桥接 + adapter.writeBinary 创建 + 返回 buffer 是拷贝不别名 + modifyBinary/覆盖写诚实抛 + **`..`/绝对 path 被 core guard 拒 + 无泄漏**）· r111-probe **9/9** 真 WKWebView 原生 fs（同套 + escapeThrew）· 回归 r23 22/22·r27 22/22·r46 18/18·r42 17/17 全绿 · build exit 0（两次，含 guard 修复）· 简化门 clean（toArrayBuffer 2 调用点=合法减法；幸存形态直接受审）。**probe 设计教训**：native `.geode/plugins` 在 `loadExternal` 加载，**早于** `loadObsidianPlugins` 发布 `window.app`（main.tsx:1298 vs 1304）→ 探针 onload 时 compat app 未就位；onload 内 `await` 会**死锁** loadObsidianPlugins（loadExternal `await register`），且 App-Nap 区 setTimeout 永不归来。解法：onload **fire-and-forget 立即返回**（解死锁）+ 分离链用 **IPC vault.read 轮询** window.app（IPC 在 App-Nap 仍 drain、setTimeout 不）。**后续缺口**：`modifyBinary`/`appendBinary`/二进制覆盖写（需 core 原子 tmp+rename 路径，类比 text modify）· `DataAdapter.stat`/`trash`。
+
 ## Round 110 additions — graph 局部图谱 Neighbor links toggle（候选池 ㊵ 续 v1）【As-built v0.107】
 
 > **状态：As-built（v0.107 交付，2026-06-20）。** Obsidian local graph 第三 toggle（R103 已做 depth 1-5 + Incoming/Outgoing）。**Neighbor links ON**（默认）= 显示邻居间互连边（锚点周围的笔记彼此的连接）；**OFF** = 只显示触锚点的边（星形），隐藏「两个非锚点之间」的边。纯客户端、零改 getGraph，镜像 R103/R84/R90 范式。默认 ON = 零回归。
