@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 102 additions — 非 md 文件只读查看视图 attachment viewer（候选池第六梯队 ㊽ 续续续续续 v1）【As-built v0.99】
+
+> **状态：As-built（v0.99 交付，2026-06-20）。** 非 md 图片/二进制文件开新 `viewType: "attachment"` 的【只读】视图，而非可编辑 markdown 编辑器——**数据安全边界**：堵住「点击 .png → 当 markdown 解码（乱码）→ 编辑 + autosave → 损坏二进制原文件」的既有 wart（R101 评审标注）。镜像 graph 的「非编辑视图」处理：attachment 是 **file-backed**（有 filePath，参与 rename/delete/persist 生命周期）但 **non-editor**（绝不 `documents.acquire` → 无脏 buffer / 无 autosave；getActiveFile→null；不参与 nav 历史）。
+
+**核心不变量（数据安全）**：一个非 md 二进制**永不**进入可编辑 + autosave 路径。保障 = `viewType` 在**每一处**创建/重定向 file-backed tab 的地方都从**路径**派生（`fileViewType`），而非信任已存值：openFile / sanitizeTab（恢复）/ handleRenamed（改名）。AttachmentView 只 `vault.readBinary`（裸读，无 handle）。
+
+**契约（新增 viewType + 加性核心 helper；无破坏性签名改动）**：
+- `core/types.ts` + `workspace.ts`：`TabState.viewType` 加 `"attachment"`（+ ClosedTab）。
+- `core/attachments.ts`（接 R17 引擎）：`fileExtension`/`isImagePath`/`isAttachmentPath`/`imageMime` + IMAGE_MIME(含 svg=image/svg+xml)/IMAGE_EXTS/**OTHER_BINARY_EXTS（broad：文档/音视频/非预览图/归档/可执行/字体/数据库≈50 ext，评审 #2 收口）**。
+- `workspace.ts`：模块级 `fileViewType(path)=isAttachmentPath?attachment:markdown`（4 调用点）+ `retargetFileTab(t,newPath)`（重算 viewType+title，2 调用点）。openFile 用 `vt=fileViewType(path)`：dedup `viewType===vt`、replace 加 `&& vt==="markdown"`（attachment 永远开新 tab 不替换 md tab=二进制不覆盖可编辑 tab）、new-tab `viewType:vt`；recordNavigation 加 `if(isAttachmentPath(path))return`（attachment 不记 nav）；closeMissingFileTabs/handleDeleted/handleRenamed 改按 `filePath!==null` 覆盖 attachment（graph filePath===null 排除）；sanitizeTab 重算 viewType。
+- `App.tsx`：render dispatch 加 `viewType==="attachment" ? <AttachmentView/> : <EditorPane/>`；tab icon `file-text`。
+- `features/attachment/AttachmentView.tsx`（新，只读）：图片→readBinary→copy 进 fresh Uint8Array（BlobPart 拒 ArrayBufferLike）→Blob(imageMime)→objectURL→`<img onError=setFailed>`；其余二进制→只读占位（不 readBinary）。useEffect cleanup revokeObjectURL + cancelled 守卫。
+- `main.tsx` `__geodeAttachmentRouting` probe；dict 2 键×en/zh；app.css `.attachment-view/-image/-placeholder`。
+
+**对抗评审（reviewer 5 维 + data-safety）→ 2 confirmed MAJOR（数据安全）+ 2 nit，全修+锁测；核心 open 路径本就正确完整：**
+- **#1 [MAJOR data-safety] viewType 只在 openFile 派生，restore/rename 不重算**：① pre-R102 持久 blob 把 .png 存成 `viewType:"markdown"` → sanitizeTab 原样恢复成可编辑 tab → EditorPane acquire → 二进制按 UTF-8 有损解码 → 编辑即损坏；② 跨类型 rename `note.md→note.png` 留 markdown tab 在 .png 上可编辑。**根因**：viewType 单点派生。**修**：`fileViewType` + sanitizeTab/handleRenamed/retargetFileTab 全部从路径重算（脏 buffer 随 handle retarget，EditorPane deferred-drop flush 写新路径=无丢失）。锁测 r102-e2e fix 1a/1b。
+- **#2 [MAJOR data-safety] allowlist 漏未知扩展名二进制仍可编辑**：OTHER_BINARY_EXTS 太窄 → .docx/.heic/.exe/.7z… 落 markdown 可编辑损坏。**修**：扩到≈50 高频二进制扩展名（denylist 全面翻转列为后续）。锁测 r102-probe fix 2。
+- **自查附带修（评审未及，本轮 e2e 真实二进制 pic.png 暴露）**：`MemoryVaultAdapter.rename`/`remove`/碰撞守卫只处理 `this.files` 不处理 `binaryFiles` → 浏览器模式重命名/删除二进制附件抛 "Path not found"、tab 不 retarget。**修**：rename/remove/collision-guard 全补 binaryFiles 分支（镜像既有 copy()）。
+- **nit**：`<img>` 加 onError→setFailed（损坏图回退占位）。
+- **证伪**：openFile 替换守卫 `&&vt==="markdown"` 完备（二进制不覆盖 active md tab）；lifecycle `filePath!==null` 泛化对 graph 无回归（filePath 恒 null 排除）；viewType 其余消费点（toggleMode/navigate/getActiveFile/split/reopen）对 attachment 正确 no-op 或按 path 重路由，无崩溃；AttachmentView objectURL 竞态/泄漏由 cancelled+revoke 守卫覆盖；分层/颜色/i18n 合规。
+
+**套件**：typecheck 0 · r102-e2e 20/20（路由/数据安全无 handle/二进制占位/md 仍可编辑/开新 tab/dedup/rename retarget/delete close/persist save+sanitize 往返/fix 1a 恢复重算/fix 1b 跨类型 rename）· r102-probe 11/11 真 WKWebView（routing 分类含 fix 2 + 真文件 open→viewType）· 回归 13 套全绿（r37/r24/r45/r93/r42/r28/r44/r97/r70/r101/r36/r50/r23）· build exit 0 · 简化门 clean。**后续缺口**：denylist 全面翻转（只 md+已知文本可编辑，更贴 Obsidian Unsupported file）· pdf/audio/video 真预览 · Reveal-in-Finder（Tauri opener 硬边界）。
+
 ## Round 101 additions — 附件作图谱节点 attachments as graph nodes（候选池第六梯队 ㊵ 续续续续 v1）【As-built v0.98】
 
 > **状态：As-built（v0.98 交付，2026-06-20）。** Obsidian 图谱「Attachments」toggle：把非 md 附件作**黄节点**显示、与嵌入/链接它的笔记连边。**纯前端 read-only 客户端合并**（不写 .md、不动 markdown.ts），**逐字镜像 R99 tags-as-nodes**（扩节点/边集，不改 `getGraph` 形状）。默认 OFF=零回归。

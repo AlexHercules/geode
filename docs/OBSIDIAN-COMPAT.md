@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R102 套件回归（2026-06-20，macOS release 二进制 v0.99.0 实测 `r102-probe-vault`）
+
+R102 = 非 md 文件只读查看视图 attachment viewer（候选池第六梯队 ㊽ 续续续续续 slice，原生功能）。对照 Obsidian：非 md 图片/二进制开只读查看器（图片预览 / 其余 Unsupported 占位），不当 markdown 编辑。**数据安全核心**：新 `viewType:"attachment"` 绝不进 `documents.acquire` 编辑/autosave 路径——堵住「点 .png → 当 md 解码乱码 → 编辑损坏二进制」的既有 wart。allowlist 路由（md/文本仍可编辑=零回归）。
+
+新增套件：`r102-e2e.mjs` **20/20**（路由→viewType·只读无 editor handle·二进制占位·md 仍可编辑·开新 tab 不替换·dedup·rename retarget·delete close·persist save+sanitize 往返·评审 fix 1a 恢复重算 viewType·fix 1b 跨类型 rename 翻转只读）+ `r102-probe.mjs` **11/11**（真 WKWebView：isAttachmentPath/isImagePath 分类含 docx/heic/exe + 真文件 open→viewType）。**套件矩阵不回退**：r37/r24/r45/r93/r42/r28/r44/r97/r70/r101/r36/r50/r23 共 13 套全绿（workspace.ts + vault.ts 改动经 tab/rename/delete/binary/autosave 套件验证）。附带修浏览器模式 MemoryVaultAdapter 二进制 rename/remove。
+
 ### R101 套件回归（2026-06-20，macOS release 二进制 v0.98.0 实测 `r101-probe-vault`）
 
 R101 = 附件作图谱节点 attachments as graph nodes（候选池第六梯队 ㊵ 续续续续 slice，原生功能）。对照 Obsidian 图谱「Attachments」toggle：非 md 附件作**黄节点**、与嵌入/链接它的笔记连边。**纯前端 read-only 客户端合并**（`metadata.getAttachmentMap` + `buildAttachmentGraph`，不改 getGraph 形状），逐字镜像 R99 tags-as-nodes，默认 OFF=零回归。附带修 getGraph：附件引用不再当 unresolved 幽灵节点（贴近 Obsidian）。
