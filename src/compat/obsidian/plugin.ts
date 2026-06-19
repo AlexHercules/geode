@@ -2,6 +2,7 @@
  * Obsidian Plugin base class + App shim + SettingTab/PluginSettingTab
  * (API-REFERENCE area 1).
  */
+import { encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
 import {
@@ -226,11 +227,12 @@ async function doProcessFrontMatter(
 /**
  * fileManager shim: `renameFile` is real since R16 (rename + link rewrite via
  * the core engine, matching the official "update all links" semantics — the
- * official Vault.rename stays a bare rename by design) and
- * `processFrontMatter` is real since R22 (read-mutate-splice on the properties
- * model, see doProcessFrontMatter). Every OTHER method access records a gap
- * and resolves to undefined, so chained calls do not crash. `then` is
- * excluded so the proxy is not accidentally thenable.
+ * official Vault.rename stays a bare rename by design), `processFrontMatter`
+ * is real since R22 (read-mutate-splice on the properties model, see
+ * doProcessFrontMatter), and `generateMarkdownLink` is real since R112
+ * (delegates to core formatLink — honors link settings, resolve-back verified).
+ * Every OTHER method access records a gap and resolves to undefined, so chained
+ * calls do not crash. `then` is excluded so the proxy is not accidentally thenable.
  */
 function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
   // Official signature returns Promise<void>; the rewrite report is dropped.
@@ -255,6 +257,35 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
     pfmChain = result.catch(() => undefined);
     return result;
   };
+  // R112: real `generateMarkdownLink` (official d.ts: `(file, sourcePath, subpath?,
+  // alias?) => string`). Delegates to core `formatLink`, which honors the user's
+  // link settings (wikilink vs markdown, shortest/relative/absolute) and is
+  // resolve-back verified. `subpath` carries Obsidian's leading `#` (formatLink
+  // re-adds it); an empty-string alias means "use the file name" (→ undefined).
+  // formatLink returns null only when no safe resolve-back form exists; Obsidian
+  // always returns a string, so degrade to a best-effort basename link.
+  const generateMarkdownLink = (
+    file: { path: string },
+    sourcePath: string,
+    subpath?: string,
+    alias?: string,
+  ): string => {
+    const target = normalizePath(file.path);
+    const sub = subpath ? subpath.replace(/^#/, "") : undefined;
+    const al = alias ? alias : undefined;
+    const link = formatLink(handle.metadata, target, sourcePath, { subpath: sub, alias: al });
+    if (link !== null) return link;
+    const base = target.slice(target.lastIndexOf("/") + 1);
+    const linktext = /\.md$/i.test(base) ? base.replace(/\.md$/i, "") : base;
+    if (linkUseMarkdown.get()) {
+      // mirror formatLink: the markdown subpath fragment is %-encoded (href group is
+      // [^\s)]+); the wikilink branch below keeps it raw (spaces are valid in [[..]]).
+      const subMd = sub ? `#${encodeMdHref(sub)}` : "";
+      return `[${al ?? linktext}](${encodeMdHref(target)}${subMd})`;
+    }
+    const inner = linktext + (sub ? `#${sub}` : "");
+    return al !== undefined && al !== linktext ? `[[${inner}|${al}]]` : `[[${inner}]]`;
+  };
   return new Proxy(
     {},
     {
@@ -262,6 +293,7 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
         if (typeof prop !== "string" || prop === "then") return undefined;
         if (prop === "renameFile") return renameFile;
         if (prop === "processFrontMatter") return processFrontMatter;
+        if (prop === "generateMarkdownLink") return generateMarkdownLink;
         reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
         return async () => undefined;
       },

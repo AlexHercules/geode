@@ -169,5 +169,12 @@ export function formatLink(
   // WIKILINK_UNSAFE guard: no safe form → null → caller skips (never write a
   // silently-broken link). The href tolerates `]` (its group is `[^\s)]+`).
   if (display.includes("]")) return null;
-  return `[${display}](${href}${sub})`;
+  // The subpath (heading/block fragment) must be percent-encoded for a MARKDOWN
+  // link — its href group is `[^\s)]+`, so a raw `#Heading With Spaces` truncates
+  // at the first space on re-parse (R112: generateMarkdownLink is the first caller
+  // to combine markdown mode + an arbitrary heading subpath). The wikilink branch
+  // above keeps `sub` raw — `[[Note#Heading With Spaces]]` is valid. `^` (block) is
+  // not encoded by encodeMdHref, so `#^id` stays intact.
+  const subMd = opts?.subpath ? `#${encodeMdHref(opts.subpath)}` : "";
+  return `[${display}](${href}${subMd})`;
 }
