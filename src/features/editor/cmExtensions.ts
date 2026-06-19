@@ -328,6 +328,40 @@ function wikilinkClickHandler(app: GeodeApp, getPath: () => string): Extension {
 
 /* ---------------- [[ autocomplete ---------------- */
 
+/** R109 (㊹ 续): a one-line preview of a block (the paragraph the `^id` marker is on), for
+ *  the `[[note#^` completion — strip the trailing `^id` marker, collapse whitespace, truncate.
+ *  Geode mints opaque block ids, so the preview (not the id) is how you pick the block. */
+function blockPreview(content: string, from: number, to: number): string {
+  const raw = content.slice(from, to).replace(/\s*\^[A-Za-z0-9-]+\s*$/, "").replace(/\s+/g, " ").trim();
+  return raw.length > 80 ? raw.slice(0, 79) + "…" : raw;
+}
+
+/** R109 (㊹ 续): the block references a `[[<note>#^<query>` completion offers — resolve the
+ *  note, read its text (async — `BlockRef` carries only the span), return each block's id +
+ *  a one-line text preview (skipping ids that would break the `[[…#^…]]` structure). Returns
+ *  null when there is no `#^`, the note can't be resolved, or it has no blocks. Exported for
+ *  the probe. */
+export async function wikilinkBlockTargets(
+  app: GeodeApp,
+  typed: string,
+  fromPath: string | null,
+): Promise<Array<{ id: string; text: string }> | null> {
+  const hashIdx = typed.indexOf("#");
+  if (hashIdx < 0 || typed[hashIdx + 1] !== "^") return null;
+  const noteRef = typed.slice(0, hashIdx);
+  const target = noteRef === "" ? fromPath : app.metadata.resolveLink(noteRef, fromPath ?? "");
+  if (target === null) return null;
+  const blocks = (app.metadata.getMetadata(target)?.blocks ?? []).filter((b) => !/[[\]|#]/.test(b.id));
+  if (blocks.length === 0) return null;
+  let content: string;
+  try {
+    content = await app.vault.read(target);
+  } catch {
+    return null;
+  }
+  return blocks.map((b) => ({ id: b.id, text: blockPreview(content, b.from, b.to) }));
+}
+
 /** R107 (㊹ 续): the headings a `[[<note>#<query>` completion offers — resolve `<note>`
  *  (empty = the current file, a `[[#h]]` self-link), list its headings, and skip any whose
  *  text would break the `[[…#…]]` structure (`[ ] | #`). Returns null when there is no `#`
@@ -364,7 +398,7 @@ export function wikilinkAttachmentCandidates(
 }
 
 function wikilinkCompletionSource(app: GeodeApp, getPath: () => string) {
-  return (ctx: CompletionContext): CompletionResult | null => {
+  return (ctx: CompletionContext): CompletionResult | Promise<CompletionResult | null> | null => {
     const before = ctx.matchBefore(/\[\[[^\[\]]*$/);
     if (!before) return null;
     // shared apply: replace [from,to] with `text` + a closing `]]` (unless one is there)
@@ -383,6 +417,19 @@ function wikilinkCompletionSource(app: GeodeApp, getPath: () => string) {
       // R107 review: use THIS editor's path (getPath, always non-null) not the global
       // getActiveFile() — they diverge when focus enters a non-active pane, which would
       // resolve `[[#`/ambiguous `[[note#` against the wrong file.
+      if (typed[hashIdx + 1] === "^") {
+        // R109 (㊹ 续): `[[note#^` → block-reference completion. Async — the preview text needs
+        // the note's content. The displayed LABEL is the block text (you pick by content); the
+        // inserted text is the opaque block id, so apply replaces the typed filter after `#^`.
+        return wikilinkBlockTargets(app, typed, getPath()).then((blocks) => {
+          if (blocks === null || blocks.length === 0) return null;
+          return {
+            from: before.from + 2 + hashIdx + 2,
+            options: blocks.map((b) => ({ label: b.text || b.id, detail: `^${b.id}`, apply: applyLink(b.id) })),
+            validFor: /^[^\[\]#]*$/,
+          };
+        });
+      }
       const headings = wikilinkHeadingTargets(app, typed, getPath());
       if (headings === null || headings.length === 0) return null;
       return {

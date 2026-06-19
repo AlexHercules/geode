@@ -79,7 +79,7 @@ import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
-import { indentUnitString, wikilinkHeadingTargets, wikilinkAttachmentCandidates } from "@features/editor/cmExtensions";
+import { indentUnitString, wikilinkHeadingTargets, wikilinkAttachmentCandidates, wikilinkBlockTargets } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
@@ -579,6 +579,15 @@ async function bootstrap() {
   };
   attachmentRouteHost.__geodeAttachmentRouting = (paths) =>
     paths.map((p) => ({ path: p, isAttachment: isAttachmentPath(p), isImage: isImagePath(p) }));
+
+  // always-on wikilink block-completion probe (R109, ㊹ 续): runs the async
+  // wikilinkBlockTargets — given a typed `[[<note>#^<query>` body + a from-path, returns each
+  // block's {id, text preview}. The CM autocomplete DOM is browser-E2E only (§D); this proves
+  // the resolve + note-read + preview on the real build + fs.
+  const blockCompleteHost = globalThis as unknown as {
+    __geodeBlockComplete?: (typed: string, fromPath: string | null) => Promise<{ id: string; text: string }[] | null>;
+  };
+  blockCompleteHost.__geodeBlockComplete = (typed, fromPath) => wikilinkBlockTargets(app, typed, fromPath);
 
   // always-on wikilink heading-completion probe (R107, ㊹ 续): runs the pure
   // wikilinkHeadingTargets — given a typed `[[<note>#<query>` body + a from-path, returns the
