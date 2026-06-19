@@ -144,6 +144,11 @@
   color: var(--text-normal);
 }
 
+/* R98: "Show more context" paragraph mode — preserve the paragraph's line breaks */
+.bl-snippet.is-paragraph {
+  white-space: pre-wrap;
+}
+
 /* ---- unlinked mentions ---- */
 
 .bl-unlinked-head {

@@ -83,6 +83,7 @@ import { indentUnitString } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
+import { buildParagraph } from "@features/backlinks/BacklinksPanel";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -518,6 +519,12 @@ async function bootstrap() {
     const tree = vault.tree.get();
     return tree ? moveTargets(tree, fromPath) : [];
   };
+
+  // always-on backlink-paragraph probe (R98, ㊷ 续): the "Show more context" paragraph
+  // boundary logic (blank-line-delimited block around an offset). The panel DOM + the
+  // toggle are browser-E2E only (§D); this proves the pure boundary math on the real build.
+  const paraHost = globalThis as unknown as { __geodeBacklinkParagraph?: (content: string, from: number) => string };
+  paraHost.__geodeBacklinkParagraph = (content, from) => buildParagraph(content, from).text;
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is

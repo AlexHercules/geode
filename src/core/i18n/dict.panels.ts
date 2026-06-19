@@ -95,6 +95,7 @@ export const en = {
   "backlinks.sortNameDesc": "File name (Z→A)",
   "backlinks.collapseAll": "Collapse all",
   "backlinks.expandAll": "Expand all",
+  "backlinks.moreContext": "Show more context",
   "backlinks.filterPlaceholder": "Filter mentions…",
   "backlinks.noMatch": "No mentions match the filter",
 
@@ -259,6 +260,7 @@ export const zh: Record<keyof typeof en, string> = {
   "backlinks.sortNameDesc": "文件名 (Z→A)",
   "backlinks.collapseAll": "全部折叠",
   "backlinks.expandAll": "全部展开",
+  "backlinks.moreContext": "显示更多上下文",
   "backlinks.filterPlaceholder": "过滤提及…",
   "backlinks.noMatch": "没有匹配过滤条件的提及。",
 

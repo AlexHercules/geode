@@ -44,6 +44,10 @@ interface UnlinkedItem {
   /** mark offsets into `snippet` */
   markFrom: number;
   markTo: number;
+  /** R98: paragraph snippet + its mark offsets, shown when "more context" is on */
+  paragraph: string;
+  paraMarkFrom: number;
+  paraMarkTo: number;
 }
 
 interface UnlinkedGroup {
@@ -79,6 +83,48 @@ function buildSnippet(
   const prefix = start > 0 ? "…" : "";
   const text = prefix + trimmed.slice(start, end) + (end < trimmed.length ? "…" : "");
   return { text, markFrom: mf - start + prefix.length, markTo: mt - start + prefix.length };
+}
+
+const PARA_MAX = 500;
+const PARA_RADIUS = 240;
+
+/**
+ * R98 (㊷ 续): "Show more context" — the PARAGRAPH (run of consecutive non-blank
+ * lines, blank-line delimited) containing [from,to), trimmed, with the match offsets
+ * remapped. Capped at PARA_MAX (truncated around the match) so a giant block stays
+ * readable. `to` defaults to `from` (no highlight — linked mentions render plain).
+ */
+export function buildParagraph(
+  content: string,
+  from: number,
+  to: number = from,
+): { text: string; markFrom: number; markTo: number } {
+  let start = content.lastIndexOf("\n", from - 1) + 1;
+  while (start > 0) {
+    const prevStart = content.lastIndexOf("\n", start - 2) + 1;
+    if (content.slice(prevStart, start - 1).trim() === "") break;
+    start = prevStart;
+  }
+  let end = content.indexOf("\n", to);
+  if (end === -1) end = content.length;
+  while (end < content.length) {
+    let nextEnd = content.indexOf("\n", end + 1);
+    if (nextEnd === -1) nextEnd = content.length;
+    if (content.slice(end + 1, nextEnd).trim() === "") break;
+    end = nextEnd;
+  }
+  const block = content.slice(start, end);
+  const leading = block.length - block.trimStart().length;
+  const trimmedLeft = start + leading;
+  const trimmed = block.trim();
+  const mf = Math.max(0, Math.min(from - trimmedLeft, trimmed.length));
+  const mt = Math.max(0, Math.min(to - trimmedLeft, trimmed.length));
+  if (trimmed.length <= PARA_MAX) return { text: trimmed, markFrom: mf, markTo: mt };
+  const s = Math.max(0, mf - PARA_RADIUS);
+  const e = Math.min(trimmed.length, mt + PARA_RADIUS);
+  const prefix = s > 0 ? "…" : "";
+  const text = prefix + trimmed.slice(s, e) + (e < trimmed.length ? "…" : "");
+  return { text, markFrom: mf - s + prefix.length, markTo: mt - s + prefix.length };
 }
 
 /** Wrap [markFrom,markTo) of `text` in a single <mark>. */
@@ -168,6 +214,27 @@ export function BacklinksPanel() {
       return next;
     });
 
+  // R98 (㊷ 续): "Show more context" — show the surrounding paragraph instead of the
+  // matched line. A GLOBAL persistent preference (not reset per-file, unlike the R82
+  // toolbar above), mirroring SearchPanel's localStorage-backed moreContext.
+  const [moreContext, setMoreContext] = useState(() => {
+    try {
+      return localStorage.getItem("geode.backlinksContext") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleMoreContext = () =>
+    setMoreContext((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("geode.backlinksContext", next ? "1" : "0");
+      } catch {
+        /* storage unavailable — session-only */
+      }
+      return next;
+    });
+
   const data = useMemo<PanelData>(() => {
     void rev; // re-derive whenever the metadata index changes
     if (!activePath) return EMPTY_DATA;
@@ -242,6 +309,7 @@ export function BacklinksPanel() {
         if (spans.length === 0) continue;
         const items: UnlinkedItem[] = spans.map((s) => {
           const snip = buildSnippet(content, s.from, s.to);
+          const para = buildParagraph(content, s.from, s.to); // R98: content already in hand
           return {
             from: s.from,
             to: s.to,
@@ -249,6 +317,9 @@ export function BacklinksPanel() {
             snippet: snip.text,
             markFrom: snip.markFrom,
             markTo: snip.markTo,
+            paragraph: para.text,
+            paraMarkFrom: para.markFrom,
+            paraMarkTo: para.markTo,
           };
         });
         groups.push({ sourcePath: sourceMeta.path, items });
@@ -265,6 +336,47 @@ export function BacklinksPanel() {
       cancelled = true;
     };
   }, [app, activePath, rev]);
+
+  /* ---------- linked-mention paragraphs (R98, only when "more context" is on) ---------- */
+  // getBacklinks gives a one-line snippet + the link offset but NOT the source content,
+  // so the paragraph is built panel-side by re-reading each source — but ONLY when the
+  // toggle is on (off = the index line snippet, no read, zero regression).
+  // Tagged with the activePath it was built for (review F1): on a file switch the
+  // stale map is rejected by the render guard until the new read lands — a shared
+  // source then falls back to its (correct) line snippet, never the old file's paragraph.
+  const [linkedParas, setLinkedParas] = useState<{ path: string | null; map: Map<string, string[]> }>({
+    path: null,
+    map: new Map(),
+  });
+  useEffect(() => {
+    if (!moreContext) {
+      setLinkedParas({ path: null, map: new Map() });
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const map = new Map<string, string[]>();
+      // build for ALL backlinks (not the filtered set) so filter/sort keystrokes don't
+      // re-read from disk (review F2); the render still gates display by filter
+      for (const b of data.backlinks) {
+        let content: string;
+        try {
+          content = await app.vault.read(b.sourcePath);
+        } catch {
+          continue;
+        }
+        if (cancelled) return;
+        map.set(
+          b.sourcePath,
+          b.contexts.map((c) => buildParagraph(content, c.from).text),
+        );
+      }
+      if (!cancelled) setLinkedParas({ path: activePath, map });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [app.vault, moreContext, data.backlinks, activePath]);
 
   const unlinkedCount = useMemo(
     () => unlinked.reduce((n, g) => n + g.items.length, 0),
@@ -352,6 +464,16 @@ export function BacklinksPanel() {
                   >
                     <Icon name={allSourcesCollapsed ? "chevron-right" : "chevron-down"} size={14} />
                   </button>
+                  <button
+                    className={"bl-tool-btn" + (moreContext ? " is-active" : "")}
+                    data-testid="bl-context-toggle"
+                    onClick={toggleMoreContext}
+                    aria-pressed={moreContext}
+                    aria-label={t("backlinks.moreContext")}
+                    title={t("backlinks.moreContext")}
+                  >
+                    <Icon name="list" size={14} />
+                  </button>
                   <input
                     className="bl-filter"
                     data-testid="bl-filter"
@@ -398,11 +520,16 @@ export function BacklinksPanel() {
                             {b.contexts.map((c, i) => (
                               <button
                                 key={`${c.from}-${i}`}
-                                className="bl-snippet"
+                                className={"bl-snippet" + (moreContext ? " is-paragraph" : "")}
                                 data-testid="bl-snippet"
                                 onClick={() => app.workspace.openFile(b.sourcePath)}
                               >
-                                {c.snippet}
+                                {/* R98: paragraph when more-context is on AND the map is
+                                    for the current file (F1 stale-guard), else the line snippet */}
+                                {(moreContext &&
+                                  linkedParas.path === activePath &&
+                                  linkedParas.map.get(b.sourcePath)?.[i]) ||
+                                  c.snippet}
                               </button>
                             ))}
                           </div>
@@ -465,12 +592,14 @@ export function BacklinksPanel() {
                         return (
                           <div className="bl-mention-row" key={`${it.from}-${i}`}>
                             <button
-                              className="bl-snippet"
+                              className={"bl-snippet" + (moreContext ? " is-paragraph" : "")}
                               data-testid="bl-snippet"
                               title={g.sourcePath}
                               onClick={() => app.workspace.openFile(g.sourcePath)}
                             >
-                              {highlightMention(it.snippet, it.markFrom, it.markTo)}
+                              {moreContext
+                                ? highlightMention(it.paragraph, it.paraMarkFrom, it.paraMarkTo)
+                                : highlightMention(it.snippet, it.markFrom, it.markTo)}
                             </button>
                             <button
                               className="bl-link-btn bl-link-one"
