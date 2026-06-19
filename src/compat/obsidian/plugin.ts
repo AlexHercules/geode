@@ -2,7 +2,9 @@
  * Obsidian Plugin base class + App shim + SettingTab/PluginSettingTab
  * (API-REFERENCE area 1).
  */
+import type { Extension } from "@codemirror/state";
 import { getCommandName, type CommandRegistry } from "@core/commands";
+import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import { encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
@@ -700,8 +702,14 @@ export abstract class Plugin extends Component {
     reportGap(this.manifest.id, "Plugin.registerObsidianProtocolHandler");
   }
 
-  registerEditorExtension(_extension: unknown): void {
-    reportGap(this.manifest.id, "Plugin.registerEditorExtension");
+  /**
+   * R115: real — add a CM6 extension to every markdown editor. Routes through the
+   * core editorExtensions registry (compat cannot import features/editor, so the
+   * registry is the bridge: EditorPane reconfigures each view's compat compartment
+   * on the registry revision). The disposer is registered for plugin-unload cleanup.
+   */
+  registerEditorExtension(extension: Extension): void {
+    this.register(registerCoreEditorExtension(extension));
   }
 
   /**

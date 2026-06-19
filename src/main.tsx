@@ -30,6 +30,7 @@ import {
   setLinkUseMarkdown,
   type LinkPathFormat,
 } from "@core/linkFormat";
+import { editorExtensionsRevision, getEditorExtensions, registerEditorExtension } from "@core/editorExtensions";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -57,6 +58,7 @@ import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, s
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { EditorView } from "@codemirror/view";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
@@ -236,6 +238,18 @@ async function bootstrap() {
     if (opts?.pathFormat !== undefined) setLinkPathFormat(opts.pathFormat);
     return formatLink(metadata, targetPath, fromPath, { embed: opts?.embed, alias: opts?.alias });
   };
+
+  // always-on editor-extension probe (R115): register a marker CM6 extension via the SAME core
+  // path Plugin.registerEditorExtension uses (editorAttributes adds an attr to every .cm-editor),
+  // so browser/desktop E2E can assert it reaches open + new editor views and the disposer removes it.
+  const editorExtHost = globalThis as unknown as {
+    __geodeRegisterEditorExtension?: (attr: string, value: string) => () => void;
+    __geodeEditorExtState?: () => { count: number; rev: number };
+  };
+  editorExtHost.__geodeRegisterEditorExtension = (attr, value) =>
+    registerEditorExtension(EditorView.editorAttributes.of({ [attr]: value }));
+  // sync registry observer for the desktop probe (view integration is browser-E2E only, §D)
+  editorExtHost.__geodeEditorExtState = () => ({ count: getEditorExtensions().length, rev: editorExtensionsRevision.get() });
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

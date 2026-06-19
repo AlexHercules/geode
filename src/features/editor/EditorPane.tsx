@@ -12,6 +12,7 @@ import {
   showInlineTitle,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
+import { editorExtensionsRevision, getEditorExtensions } from "@core/editorExtensions";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
 import type { PropertyEdit } from "@core/properties";
@@ -147,6 +148,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const useTabs = useStore(indentUsingTabs);
   /* R94: Obsidian "Show inline title" — filename as an H1 atop the note (display-only) */
   const inlineTitleOn = useStore(showInlineTitle);
+  /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
+  const compatExtRev = useStore(editorExtensionsRevision);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -167,6 +170,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const lineNumberCompartmentRef = useRef<Compartment | null>(null);
   /** R92: compartment for indentation (tab width + unit) — settings reconfigure it */
   const indentCompartmentRef = useRef<Compartment | null>(null);
+  /** R115: compartment for plugin-contributed CM6 extensions (registerEditorExtension) */
+  const compatExtensionCompartmentRef = useRef<Compartment | null>(null);
   /** the editor mode the current view's compartment is configured with */
   const appliedModeRef = useRef<"live" | "source">("live");
   /** render-time mirror of tab.mode — the CM effect reads it without depending
@@ -307,6 +312,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     lineNumberCompartmentRef.current = lineNumberCompartment;
     const indentCompartment = new Compartment();
     indentCompartmentRef.current = indentCompartment;
+    const compatExtensionCompartment = new Compartment();
+    compatExtensionCompartmentRef.current = compatExtensionCompartment;
     appliedModeRef.current = mode;
     const view = new EditorView({
       // per-view state seeded with the shared doc + the handle's sync glue;
@@ -320,6 +327,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           modeCompartment,
           lineNumberCompartment,
           indentCompartment,
+          compatExtensionCompartment,
           // R22: portal target for the live-mode PropertiesPanel
           propertiesHost: propertiesHostRef.current ?? undefined,
         }),
@@ -387,6 +395,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       modeCompartmentRef.current = null;
       lineNumberCompartmentRef.current = null;
       indentCompartmentRef.current = null;
+      compatExtensionCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
       // view (other panes / the manager's deferred-drop flush / flushAll)
@@ -433,6 +442,15 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(indentExtensions(indentSize, useTabs)) });
   }, [indentSize, useTabs]);
+
+  /* ---------- plugin-contributed CM6 extensions → compat compartment (R115) ---------- */
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = compatExtensionCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(getEditorExtensions()) });
+  }, [compatExtRev]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

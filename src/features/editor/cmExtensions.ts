@@ -49,6 +49,7 @@ import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
 import { indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
@@ -578,10 +579,14 @@ export function buildEditorExtensions(opts: {
   lineNumberCompartment: Compartment;
   /** R92: owned by EditorPane — tabIndentSize / indentUsingTabs reconfigure it in place */
   indentCompartment: Compartment;
+  /** R115: owned by EditorPane — plugin-contributed CM6 extensions
+   *  (Plugin.registerEditorExtension); editorExtensionsRevision reconfigures it */
+  compatExtensionCompartment: Compartment;
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment } = opts;
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, compatExtensionCompartment } =
+    opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
     // editor is focused, at the HIGHEST precedence so it runs BEFORE CM's own
@@ -602,6 +607,11 @@ export function buildEditorExtensions(opts: {
     lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : []),
     // R92: indentation (tab width + indent unit) — EditorPane reconfigures on setting change
     indentCompartment.of(indentExtensions(tabIndentSize.get(), indentUsingTabs.get())),
+    // R115: plugin-contributed CM6 extensions (Plugin.registerEditorExtension) — empty when
+    // none registered; EditorPane reconfigures on editorExtensionsRevision. (Array position is
+    // not what guards the base: the command keymap is Prec.highest (R33) and autosave is an
+    // order-independent updateListener, so a plugin extension can't outrank either by placement.)
+    compatExtensionCompartment.of(getEditorExtensions()),
     revealFlashField,
     markdownSansHeaderFold(),
     syntaxHighlighting(mdHighlight),
