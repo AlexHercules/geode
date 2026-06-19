@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 103 additions — 局部图谱增强 depth 1-5 + 链接方向 toggle（候选池第六梯队 ㊵ 续续续续续 v1）【As-built v0.100】
+
+> **状态：As-built（v0.100 交付，2026-06-20）。** 局部图谱（local graph）从 `depth: 1|2` 扩到 **1-5**（Obsidian 范围）+ 新增 **Incoming/Outgoing 链接方向 toggle**（Obsidian local graph 设置）。**纯客户端、零改 getGraph 形状**，镜像 R84/R90/R99/R101 范式。**默认 depth:1 + both 方向 on = R43 旧无向局部 BFS 逐字节等价**（reviewer 140k fuzz 验证零回归）。**注：Daily notes/Calendar 本就在 R43/R48 完成——本轮 gate 发现候选池「㊼ Daily notes」条目陈旧，改取 ㊵ 续局部图谱。**
+
+**契约（加性；`depth` 类型 `1|2→number`，持久化无版本迁移）**：
+- `graphPrefs.ts`：`GraphPrefs.depth: number`（1-5）+ `outgoing/incoming: boolean`（默认 true）。DEFAULT_PREFS depth:1/both true。parse `depth` clamp `Math.min(5,Math.max(1,Math.round(p.depth)))`（非数字→1，旧 blob 1|2 原样保留）+ `outgoing/incoming: p.x !== false`（旧 blob 无键→true=零回归）。
+- 新纯函数 `localSubgraph(edges, anchor, depth, {outgoing, incoming}): Set<string>`：一趟建有向 `out`(source→target) + `inc`(target→source) 两 Map，从 anchor BFS、按方向 toggle 取邻居（`outgoing` 取 out、`incoming` 取 inc）、depth 跳数，visited 去重返回可达 id 集。**both on = out∪inc = 旧无向 adjacency**（零回归）；both off = 仅 anchor。
+- `GraphView.tsx`：local-mode rebuild 用 `localSubgraph(data.edges, anchorId, prefs.depth, {outgoing,incoming})` 替换旧 `bfs(buildAdjacency(...))`；**删死的 bfs 函数**（`buildAdjacency` 保留=hover 邻居高亮仍用无向）；depth `<select>` 2→5 option（`[1,2,3,4,5].map` + `Number(e.target.value)`）；设置面板加 local-mode-only Incoming/Outgoing 2 toggle（`setPrefs` 更新顶层字段，rebuild deps 含 prefs.depth/outgoing/incoming）。
+- `main.tsx` `__geodeGraphLocal` probe；dict `graph.depth1/depth2→depthLevel`（"Depth {n}"）+ `localLinks/localOutgoing/localIncoming`×en/zh。
+
+**对抗评审（reviewer 6 维 + 140k-trial 等价 fuzz）→ 0 confirmed 缺陷，零回归 byte-equivalent 验证：**
+- **零回归（headline）**：reviewer 抽取新旧两实现跑 140,000 trial（1-8 节点、0-14 随机边含自环+重复边+anchor 缺席、depth 0-6）**0 mismatch**——both-on `out∪inc` 严格等于旧 buildAdjacency 无向 adjacency，depth-limited BFS 可达集顺序无关。+ 结构论证（自环/重复边 getGraph 早已 strip+dedup）+ global→local 入口用 both-on 默认 = 旧邻域。RENDER_CAP/sampleByDegree 仍封顶（depth 5 大库不爆）。
+- **证伪**：方向语义对（edge source=linker→target=linkee：outgoing=out.get(anchor)=链出、incoming=inc.get(anchor)=反链）；prefs 向后兼容（depth 2→2、缺方向键→both true、`prefs.depth` 全仓仅 GraphView 消费无其他假设 1|2）；状态一致（setPrefs→rebuild deps→重跑、savePrefs effect 自动持久、both-off 渲染单 anchor 不触 localEmpty）；分层/i18n（纯函数无副作用、{n} 插值正确、depth1/depth2 零悬空引用）；无数据安全面（零 .md 写、仅 localStorage prefs）。
+
+**套件**：typecheck 0 · r103-e2e 23/23（localSubgraph 方向/depth 探针 7 + prefs clamp/默认 9 + UI 持久 5 + global 隐藏 2）· r103-probe 8/8 真 WKWebView（方向/depth/over-deep 有界）· 回归 r78/r84/r90/r99/r101 全绿 · build exit 0 · 简化门 clean（localSubgraph 2 调用点合法、死 bfs 已删、两方向 toggle 仅相似非相同不抽）。**后续缺口**：neighbor links（邻居间连边显示）· 嵌套标签层级 · unresolved/连线着色 · 局部图谱保存默认。
+
 ## Round 102 additions — 非 md 文件只读查看视图 attachment viewer（候选池第六梯队 ㊽ 续续续续续 v1）【As-built v0.99】
 
 > **状态：As-built（v0.99 交付，2026-06-20）。** 非 md 图片/二进制文件开新 `viewType: "attachment"` 的【只读】视图，而非可编辑 markdown 编辑器——**数据安全边界**：堵住「点击 .png → 当 markdown 解码（乱码）→ 编辑 + autosave → 损坏二进制原文件」的既有 wart（R101 评审标注）。镜像 graph 的「非编辑视图」处理：attachment 是 **file-backed**（有 filePath，参与 rename/delete/persist 生命周期）但 **non-editor**（绝不 `documents.acquire` → 无脏 buffer / 无 autosave；getActiveFile→null；不参与 nav 历史）。
