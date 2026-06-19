@@ -88,7 +88,7 @@ import { buildTagGraph, buildAttachmentGraph } from "@features/graph/graphPrefs"
 import { isAttachmentPath, isImagePath } from "@core/attachments";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
-import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
+import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, localSubgraph, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import { sortAndFilterLinks } from "@core/linkPanel";
 import { setNewNoteLocation, setNewNoteFolder, resolveNewNoteFolder, createNewNote } from "@core/newNote";
@@ -554,6 +554,21 @@ async function bootstrap() {
     const { nodes, edges } = buildAttachmentGraph(app.metadata.getAttachmentMap(), kept);
     return { nodes: nodes.map((n) => ({ id: n.id, degree: n.degree })), edges: edges.length };
   };
+
+  // always-on local-subgraph probe (R103, ㊵ 续续续续续): runs the pure localSubgraph over
+  // {source,target} edges from an anchor, honoring depth + incoming/outgoing direction
+  // toggles, returning the reachable node-id set. The depth select + toggles are
+  // browser-E2E only (§D); this proves the direction-aware BFS on the real build.
+  const graphLocalHost = globalThis as unknown as {
+    __geodeGraphLocal?: (
+      edges: { source: string; target: string }[],
+      anchor: string,
+      depth: number,
+      dirs: { outgoing: boolean; incoming: boolean },
+    ) => string[];
+  };
+  graphLocalHost.__geodeGraphLocal = (edges, anchor, depth, dirs) =>
+    [...localSubgraph(edges, anchor, depth, dirs)];
 
   // always-on attachment-routing probe (R102, ㊽ 续续续续续): runs the pure isAttachmentPath/
   // isImagePath classification on the real build, returning per-path {isAttachment,isImage}.

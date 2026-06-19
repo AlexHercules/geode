@@ -47,7 +47,12 @@ export interface GraphGroup {
 }
 export interface GraphPrefs {
   mode: "global" | "local";
-  depth: 1 | 2;
+  /** R103: local-mode BFS depth (hops from the anchor), 1–5 (Obsidian range). */
+  depth: number;
+  /** R103: in local mode, follow outgoing links (anchor → notes it links to). default on. */
+  outgoing: boolean;
+  /** R103: in local mode, follow incoming links (notes that link to the anchor). default on. */
+  incoming: boolean;
   showAll: boolean;
   forces: GraphForces;
   display: GraphDisplay;
@@ -71,6 +76,9 @@ export const GRAPH_RANGES = {
 export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   mode: "global",
   depth: 1,
+  // both directions on = the prior undirected local BFS (zero regression)
+  outgoing: true,
+  incoming: true,
   showAll: false,
   forces: Object.freeze({ center: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
   display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false, attachments: false }),
@@ -102,7 +110,13 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
     const D = DEFAULT_PREFS;
     return {
       mode: p.mode === "local" ? "local" : "global",
-      depth: p.depth === 2 ? 2 : 1,
+      // R103: depth 1–5 (old blobs stored 1|2; clamp + round any out-of-range value)
+      depth: typeof p.depth === "number" && Number.isFinite(p.depth)
+        ? Math.min(5, Math.max(1, Math.round(p.depth)))
+        : 1,
+      // R103: default ON unless explicitly false (old blobs without the keys → both on)
+      outgoing: p.outgoing !== false,
+      incoming: p.incoming !== false,
       showAll: p.showAll === true,
       forces: {
         center: num(f.center, D.forces.center, GRAPH_RANGES.center),
@@ -221,6 +235,45 @@ function buildAuxGraph(
     if (degree > 0) nodes.push({ id: prefix + key, label: labelOf(key), resolved: true, degree });
   }
   return { nodes, edges };
+}
+
+/**
+ * R103 (㊵ 续续续续续): the set of node ids reachable from `anchor` within `depth` hops,
+ * following edges in the enabled directions — `outgoing` walks source→target (notes the
+ * anchor links to), `incoming` walks target→source (notes that link to the anchor). Both
+ * on = the prior undirected local BFS (zero regression); both off = just the anchor.
+ * `anchor` is always included. Pure (exported for the probe + the local-mode rebuild).
+ */
+export function localSubgraph(
+  edges: readonly { source: string; target: string }[],
+  anchor: string,
+  depth: number,
+  dirs: { outgoing: boolean; incoming: boolean },
+): Set<string> {
+  const out = new Map<string, string[]>();
+  const inc = new Map<string, string[]>();
+  for (const e of edges) {
+    (out.get(e.source) ?? out.set(e.source, []).get(e.source)!).push(e.target);
+    (inc.get(e.target) ?? inc.set(e.target, []).get(e.target)!).push(e.source);
+  }
+  const visited = new Set<string>([anchor]);
+  let frontier = [anchor];
+  for (let d = 0; d < depth && frontier.length > 0; d++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      const neighbors: string[] = [];
+      if (dirs.outgoing) neighbors.push(...(out.get(id) ?? []));
+      if (dirs.incoming) neighbors.push(...(inc.get(id) ?? []));
+      for (const nb of neighbors) {
+        if (!visited.has(nb)) {
+          visited.add(nb);
+          next.push(nb);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return visited;
 }
 
 /** R99: tag node ids are prefixed (mirrors the `unresolved:` id-encoding convention)

@@ -26,6 +26,7 @@ import {
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
+  localSubgraph,
   nodeGroupColor,
   savePrefs,
   TAG_PREFIX,
@@ -173,25 +174,8 @@ function sampleByDegree(nodes: GraphNode[], cap: number, mustKeep: string | null
   return kept;
 }
 
-/** BFS over the full adjacency map, depth ≤ N (unresolved neighbors included). */
-function bfs(adjacency: Map<string, Set<string>>, start: string, depth: number): Set<string> {
-  const visited = new Set<string>([start]);
-  let frontier = [start];
-  for (let d = 0; d < depth && frontier.length > 0; d++) {
-    const next: string[] = [];
-    for (const id of frontier) {
-      for (const nb of adjacency.get(id) ?? []) {
-        if (!visited.has(nb)) {
-          visited.add(nb);
-          next.push(nb);
-        }
-      }
-    }
-    frontier = next;
-  }
-  return visited;
-}
-
+/** R103: undirected adjacency for the hover-neighbor highlight (the local-mode BFS uses
+ *  the direction-aware localSubgraph instead). */
 function buildAdjacency(edges: GraphEdge[]): Map<string, Set<string>> {
   const adjacency = new Map<string, Set<string>>();
   const addAdj = (a: string, b: string) => {
@@ -606,9 +590,12 @@ export function GraphView() {
         picked = [];
         localEmpty = true;
       } else {
-        // full adjacency (BFS source — must see ALL edges, not the rendered
-        // subset); only the local mode needs it, global would build-and-drop
-        const visited = bfs(buildAdjacency(data.edges), anchorId, prefs.depth);
+        // R103: walk ALL edges (not the rendered subset) from the anchor, honoring the
+        // depth + incoming/outgoing direction toggles. Both directions on = prior behaviour.
+        const visited = localSubgraph(data.edges, anchorId, prefs.depth, {
+          outgoing: prefs.outgoing,
+          incoming: prefs.incoming,
+        });
         picked = data.nodes.filter((n) => visited.has(n.id));
       }
     }
@@ -699,6 +686,8 @@ export function GraphView() {
     fitToView,
     prefs.mode,
     prefs.depth,
+    prefs.outgoing,
+    prefs.incoming,
     prefs.showAll,
     prefs.filters.orphans,
     prefs.filters.existingOnly,
@@ -1000,12 +989,13 @@ export function GraphView() {
             className="graph-depth-select"
             data-testid="graph-depth"
             value={prefs.depth}
-            onChange={(e) =>
-              setPrefs((p) => ({ ...p, depth: e.target.value === "2" ? 2 : 1 }))
-            }
+            onChange={(e) => setPrefs((p) => ({ ...p, depth: Number(e.target.value) }))}
           >
-            <option value={1}>{t("graph.depth1")}</option>
-            <option value={2}>{t("graph.depth2")}</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {t("graph.depthLevel", { n: String(n) })}
+              </option>
+            ))}
           </select>
         )}
         <button
@@ -1066,6 +1056,29 @@ export function GraphView() {
             />
             <span>{t("graph.showAttachments")}</span>
           </label>
+          {prefs.mode === "local" && (
+            <>
+              <div className="graph-settings-group">{t("graph.localLinks")}</div>
+              <label className="graph-toggle">
+                <input
+                  type="checkbox"
+                  data-testid="graph-local-outgoing"
+                  checked={prefs.outgoing}
+                  onChange={(e) => setPrefs((p) => ({ ...p, outgoing: e.target.checked }))}
+                />
+                <span>{t("graph.localOutgoing")}</span>
+              </label>
+              <label className="graph-toggle">
+                <input
+                  type="checkbox"
+                  data-testid="graph-local-incoming"
+                  checked={prefs.incoming}
+                  onChange={(e) => setPrefs((p) => ({ ...p, incoming: e.target.checked }))}
+                />
+                <span>{t("graph.localIncoming")}</span>
+              </label>
+            </>
+          )}
           <div className="graph-settings-group">{t("graph.filters")}</div>
           <label className="graph-toggle">
             <input
