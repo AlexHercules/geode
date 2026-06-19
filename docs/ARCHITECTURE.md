@@ -71,6 +71,27 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 94 additions — Show inline title + Show ribbon（候选池第六梯队 ㊺ 续续 v1）【As-built v0.91】
+
+> **状态：As-built（v0.91 交付，2026-06-19）。** Obsidian Appearance/Interface 两 toggle：**Show inline title**（笔记顶部把文件名作 H1 显示，默认 ON=Obsidian）+ **Show ribbon**（左侧主功能区显隐，默认 ON）。**纯前端 view-only**（不写 .md、不动 markdown.ts）。inline title **display-only**——编辑→重命名延期（避 data-safety 写路径）。镜像 R85/R88 appearance toggle 范式。
+
+**契约（无冻结接口改动）**：
+- `core/appearance.ts`：`showInlineTitle` Store（默认 true）+ `showRibbon` Store（默认 true）+ setter（persist，镜像 `showLineNumbers`）。
+- `features/editor/EditorPane.tsx`：`useStore(showInlineTitle)` → `inlineTitleEl`（`<div className="inline-title">{tab.title}</div>`，仅 `inlineTitleOn && tab.filePath`）渲染在**两处**：live/source body 片段首（cm-host **同级上方**，非 CM 内）+ reading view scroller 首子（PropertiesPanel 之前，**随笔记滚动**）。空/错/loading 不渲染。text=`tab.title`（rename 经 workspace.handleRenamed 保鲜，与 editor-header 同源）。**React 文本子节点=转义无 XSS**。
+- `app/App.tsx`：`useStore(showRibbon)` → `{ribbonVisible && (<nav className="ribbon …">…</nav>)}`（OFF 卸载 nav；设置经 Ctrl+,/palette 仍可达，无锁死）。
+- `features/settings/SettingsModal.tsx`：2 toggle。dict.views.ts 2 键+2 desc×en/zh。editor.css `.inline-title`（`max-width:var(--readable-line-width)` 居中 + `var(--text-normal)`，与内容列对齐）。main.tsx `setToggles` 并入**既有** `__geodeAppearance` probe（非新 host）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 默认翻转回归/XSS/ribbon 锁死+布局/CSS/反应式生命周期/分层）→ 0 confirmed critical/major/minor/nit（全维证伪）：**
+- **默认翻转证伪**：tab.title 经 `handleRenamed`(workspace.ts:1011/1015) + `file:renamed` 事件保鲜不 stale；reveal/flash 用 `scrollIntoView({block:"center"})` 实时重算、新增顶部高度不破；scroll round-trip 一致存恢复。新笔记→"Untitled"（对齐 Obsidian）。
+- **XSS 证伪**：`{tab.title}` React 文本子节点转义（非 dangerouslySetInnerHTML）；`<img>`/反引号/`&`/CJK/超长 渲染为惰性文本（word-break+max-width）；永不写盘。
+- **ribbon 锁死证伪**：`app:open-settings`(Mod+,)/`app:command-palette`(Mod+P) 全局命令独立于 ribbon；`.app-body` flex 无 `:first-child`/ribbon 依赖选择器、卸载 nav 仅塌列；plugin ribbon items store 保留 els、重挂回贴。
+- **反应式生命周期证伪（关键）**：片段子节点位置稳定 `[inlineTitleEl, cm-host, portal]`——index 0 null↔div 切换**不重挂** index 1 的无 key cm-host → CM view（handle-keyed effect 建、挂 hostRef）保留、选区/滚动/undo 存活；reading 同理 previewContentRef(index 2) 稳定不重渲。
+- **CSS/a11y/分层证伪**：`--text-normal`/`--readable-line-width` 均存在、无硬编码色；cm-host `flex:1;min-height:0` 同级 title 不破局；inline title 用 `<div>` 非 `<h1>`（对齐 Obsidian + 避 onPreviewClick 的 `closest("h1..h6")` fold 分支误命中）；App/EditorPane/main→@core/appearance app/features→core 合法。
+
+**验证（As-built）**：typecheck 0 · `r94-e2e` **14/14**（inline title live/source/reading + toggle off→消失→on + ribbon 显→隐→复 + 持久化）· `r94-probe` **5/5** 真 WKWebView · 回归 r23(22)/r25(17)/r26(12)/r30(25)/r50(15)/r88(13)/r74(23) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（inlineTitleEl 2 用点不内联、两 toggle 块结构似而非 token 同[合并需新抽象]、setToggles 并入既有 probe）。
+
+**v1 已知延期（reviewer 记 3 by-design）**：live/source inline title **不随内容滚动**（CM scroller 外，Obsidian 随滚——未来轮带进 scroller）· inline title **编辑→重命名**（contenteditable→renameWithLinkUpdate）· block/不可定位 reveal 近似落点因 title 高度微移（已是「approximate by design」、可忽略）· title↔内容双顶 padding（纯观感）。
+
 ## Round 93 additions — Explorer 右键上下文菜单补全（候选池第六梯队 ㊽ 续续 v1）【As-built v0.90】
 
 > **状态：As-built（v0.90 交付，2026-06-19）。** **前置门 gate① 揭露 ㊽ 描述失准**：Explorer **早已有**行右键菜单（New note here / New folder here / Rename / Delete-trash）——R93 非从零，而是**朝 Obsidian 平价扩展**（㉒–㉜ 同类失准已制度化两道门，本轮再次成功拦截「重建已有菜单」）。本轮**加性**补：文件项 **Open in new tab / Open to the right / Make a copy** + **空白区根菜单**（New note / New folder at root）+ R81 两轴 clamp + per-item testid。全部复用既有 vetted 路径（openFile/splitActivePane/createBinary/trash/renameWithLinkUpdate），**零新依赖**。**Reveal in Finder / Open in new window 延期**（需 Tauri opener / pop-out = 硬边界 #5）。

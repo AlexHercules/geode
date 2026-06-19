@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R94 套件回归（2026-06-19，macOS release 二进制 v0.91.0 实测 `r94-probe-vault`）
+
+R94 = Show inline title + Show ribbon（候选池第六梯队 ㊺ 续续 slice，原生功能）。对照 Obsidian Appearance/Interface：Show inline title（文件名作 H1，默认 ON）+ Show ribbon（左侧功能区显隐，默认 ON）。**纯前端 view-only**（appearance Store + EditorPane/App 反应式 + 设置 toggle），不写 .md、不动 markdown.ts；inline title display-only（编辑→rename 延期）。
+
+新增套件：`r94-e2e.mjs` **14/14**（inline title live/source/reading 三态 + toggle off→消失→on + ribbon 显→隐→复 + 持久化）+ `r94-probe.mjs` **5/5**（真 WKWebView，`__geodeAppearance.setToggles` Store+localStorage 往返）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（appearance toggle 纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；inline title 默认 ON 渲染于每篇笔记顶部（cm-host 同级/preview scroller 首子）+ ribbon 条件渲染 → 广跑 **r23(editor)22/22 + r25(hover)17/17 + r26(embeds)12/12 + r30(properties)25/25 + r50(appearance)15/15 + r88(行号/默认模式)13/13 + r74(slides)23/23 回归绿**（默认翻转零回归——inline title 是 preview-content 同级非内部、CM view 不重挂）。**对抗评审 6 维深挖 默认翻转/XSS/ribbon 锁死/反应式生命周期 → 0 confirmed critical/major/minor/nit**（tab.title rename 保鲜 + React 文本转义 + Ctrl+,/palette 独立于 ribbon + 片段位置稳定不重挂 cm-host）。**OBSIDIAN-COMPAT 缺口表**：㊺ inline title + ribbon 交付（续缺口：inline title 随内容滚动 + 编辑→rename / Show tab title bar / 状态栏显隐）。
+
 ### R93 套件回归（2026-06-19，macOS release 二进制 v0.90.0 实测 `r93-probe-vault`）
 
 R93 = Explorer 右键上下文菜单补全（候选池第六梯队 ㊽ 续续 slice，原生功能）。**前置门 gate① 揭露 ㊽ 描述失准**：Explorer 早已有行右键菜单（New note here/New folder here/Rename/Delete）→ R93 朝 Obsidian 平价**加性扩展**：文件项 Open in new tab / Open to the right / Make a copy + 空白区根菜单 + R81 两轴 clamp + per-item testid。复用既有 vetted 路径（openFile/splitActivePane/createBinary/trash），零新依赖；Reveal in Finder/pop-out 延期（硬边界 #5）。
