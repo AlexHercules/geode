@@ -316,17 +316,25 @@ interface CompatCommand {
 }
 
 /**
- * `app.commands` shim (R113): executeCommandById / listCommands / commands over the
- * core CommandRegistry — the de-facto API for cross-plugin command invocation.
- * Command names are i18n thunks internally (R8) → resolved to strings for plugins.
- * executeCommandById respects `available` (Obsidian pre-runs checkCallback(true) and
- * returns false WITHOUT executing when the command is unavailable); for plain
- * callback commands it just runs and returns true.
+ * `app.commands` shim (R113 + R118) over the core CommandRegistry — the de-facto API
+ * for cross-plugin command invocation. Command names are i18n thunks internally (R8) →
+ * resolved to strings for plugins. executeCommandById/executeCommand respect `available`
+ * (Obsidian pre-runs checkCallback(true) and returns false WITHOUT executing when the
+ * command is unavailable). R118 adds findCommand / executeCommand / editorCommands.
+ * NOTE executeCommand(command) routes by `command.id` back through the registry (so it
+ * honors `available` and runs the registered command) rather than invoking a passed-in,
+ * possibly-unregistered Command object directly — fine for the normal flow where the
+ * object came from findCommand/commands/listCommands.
+ * `removeCommand` stays a gap (Plugin.removeCommand already removes a plugin's own
+ * commands via its disposer; an app-level remove-by-id needs a core registry method).
  */
 function makeCommands(registry: CommandRegistry): {
   executeCommandById(id: string): boolean;
+  executeCommand(command: { id: string }): boolean;
+  findCommand(id: string): CompatCommand | undefined;
   listCommands(): CompatCommand[];
   readonly commands: Record<string, CompatCommand>;
+  readonly editorCommands: Record<string, CompatCommand>;
 } {
   const toCompat = (c: GeodeCommand): CompatCommand => ({
     id: c.id,
@@ -334,18 +342,31 @@ function makeCommands(registry: CommandRegistry): {
     callback: c.callback,
     hotkeys: [],
   });
+  const find = (id: string): GeodeCommand | undefined => registry.list().find((c) => c.id === id);
+  const executeById = (id: string): boolean => {
+    const cmd = find(id);
+    if (!cmd || cmd.available?.() === false) return false;
+    cmd.callback();
+    return true;
+  };
   return {
-    executeCommandById(id: string): boolean {
-      const cmd = registry.list().find((c) => c.id === id);
-      if (!cmd || cmd.available?.() === false) return false;
-      cmd.callback();
-      return true;
+    executeCommandById: executeById,
+    executeCommand: (command: { id: string }): boolean => executeById(command.id),
+    findCommand: (id: string): CompatCommand | undefined => {
+      const cmd = find(id);
+      return cmd ? toCompat(cmd) : undefined;
     },
     listCommands: (): CompatCommand[] => registry.list().map(toCompat),
     get commands(): Record<string, CompatCommand> {
       const out: Record<string, CompatCommand> = {};
       for (const c of registry.list()) out[c.id] = toCompat(c);
       return out;
+    },
+    /** Geode has no separately-tracked editor-scoped command set (editorCallback commands
+     *  flatten into the unified registry), so editorCommands is always empty — accessing it
+     *  never throws; Geode's editor commands appear in `commands`/`listCommands` instead. */
+    get editorCommands(): Record<string, CompatCommand> {
+      return {};
     },
   };
 }
