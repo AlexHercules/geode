@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R92 套件回归（2026-06-19，macOS release 二进制 v0.89.0 实测 `r92-probe-vault`）
+
+R92 = Tab 缩进设置（候选池第六梯队 ㊶ 续续 slice，原生功能）。对照 Obsidian Editor「Indent using tabs」（默认 ON）+「Tab indent size」（默认 4）。**纯前端 view/edit 配置**（appearance Store + CM `indentCompartment` 反应式 reconfigure + 设置 UI），不写 .md、不动 markdown.ts；默认对齐 Obsidian = 故意翻转（先例 R87）、不重写已存 .md。
+
+新增套件：`r92-e2e.mjs` **21/21**（全链 set→reconfigure→真 Tab→断言插入字符 + clamp + persist + 设置 UI）+ `r92-probe.mjs` **9/9**（真 WKWebView，`__geodeIndentConfig` clamp+persist+pure 派生）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（缩进配置纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；`indentCompartment` 独立切片、effects-only reconfigure 不 dirty/不污染他 pane → **r88(行号 compartment)13/13 + r50(appearance)15/15 + r29(fold gutter)19/19 + r24(autosave/flush)12/12 回归绿**。**默认翻转致 live `editor:indent` 现插 `\t`：实跑抓回归 → r52 显式 pin `__geodeIndentConfig(2,false)` 后断言 + 加 tabs-on 集成（r52 12/12）**；全库扫唯 r52 受影响。**对抗评审 6 维深挖 CM facet 语义/compartment 生命周期/data-safety 写路径 → 0 confirmed critical/major/minor/nit**。**OBSIDIAN-COMPAT 缺口表**：㊶ Tab 缩进宽度 + Indent using tabs 交付（续缺口：自由数字输入 / 缩进参考线 / 代码块复制按钮 / fold 分项开关）。
+
 ### R91 套件回归（2026-06-16，macOS release 二进制 v0.88.0 实测 `r91-probe-vault`）
 
 R91 = Explorer 文件树排序（候选池第六梯队 ㊽ slice，原生功能）。对照 Obsidian Explorer「File name A→Z / Z→A」。**纯展示层**（vault.ts sortTreeNodes + Explorer flattenVisible + toolbar toggle），不动 vault 存储序、不写 .md、不动 markdown.ts。

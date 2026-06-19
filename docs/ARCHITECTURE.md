@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 92 additions — Tab 缩进设置：Indent using tabs + Tab indent size（候选池第六梯队 ㊶ 续续 v1）【As-built v0.89】
+
+> **状态：As-built（v0.89 交付，2026-06-19）。** Obsidian Editor 两设置：「Indent using tabs」（默认 ON → Tab 插制表符；OFF → 空格）+「Tab indent size」（默认 4 = 一级缩进宽度）。**纯前端 view/edit 配置**（不写 .md、不动 markdown.ts/改写引擎；只改 Tab 键插入的字符）。**默认对齐 Obsidian = 故意翻转**（Geode 此前用 CM 默认 2 空格；先例 R87 翻转 breaks）——**不重写任何已存 .md**，仅未来 Tab 按键产出不同字符。CM 翻译走 Compartment 反应式 reconfigure，**镜像 R88 lineNumberCompartment**。
+
+**契约（冻结接口）**：
+- `core/appearance.ts`（**保持 core 纯净、不 import @codemirror**）：`tabIndentSize` Store<number>（默认 4，`readTabSize` 缺键→4）+ `indentUsingTabs` Store<boolean>（默认 true）+ `clampTabSize(n)`（1–8 整数 round，非有限→4，导出供 setter/reader/probe 共用）+ `setTabIndentSize`/`setIndentUsingTabs`（persist；size 存 `String(1..8)`）。
+- `features/editor/cmExtensions.ts`（CM 翻译属编辑器 feature，与 R88 `lineNumbers()` 同址）：`indentUnitString(size, useTabs)` = `useTabs ? "\t" : " ".repeat(size)`（**单一真值**，2 调用点）；`indentExtensions(size, useTabs)` = `[EditorState.tabSize.of(size), indentUnit.of(indentUnitString(...))]`（2 调用点：seed + EditorPane effect）。`buildEditorExtensions` opts **additive** 加 `indentCompartment: Compartment`，seed `indentExtensions(tabIndentSize.get(), indentUsingTabs.get())`。
+- `features/editor/EditorPane.tsx`：`indentCompartmentRef` 在 build effect 创建、传入 buildEditorExtensions、cleanup 置 null（镜像 lineNumberCompartmentRef 生命周期）；反应式 effect `compartment.reconfigure(indentExtensions(indentSize, useTabs))`，deps `[indentSize, useTabs]`。
+- `features/settings/SettingsModal.tsx`：toggle `settings-indent-tabs-toggle` + segmented `settings-tabsize-{2,4,8}`。dict.views.ts 4 键 × en/zh。
+- `main.tsx`：always-on probe `__geodeIndentConfig(size, useTabs)`（经真 setter 设置 → 返 `{size, useTabs, unit}`，证 clamp+persist+pure 派生于真 WKWebView）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 CM facet 语义/compartment 生命周期/data-safety 写路径/默认翻转/clamp/分层）→ 0 confirmed critical/major/minor/nit：**
+- **CM facet 语义证伪**：核 `@codemirror/commands` 源——`indentWithTab={key:"Tab",run:indentMore,shift:indentLess}`；`indentMore` 在 line.from 插 `state.facet(indentUnit)`；`indentLess` 读 `state.tabSize`+`getIndentUnit`。`indentExtensions` 同时供 tabSize+indentUnit 一致（`getIndentUnit("\t")=tabSize=size` 与 `getIndentUnit(" ".repeat(size))=size` 一致）→ Shift-Tab/选区缩进/Enter 续行皆按一单位、无 tab/space 错配。无重复 facet provider（无 basicSetup）。
+- **compartment 生命周期证伪**：R88 忠实克隆。build effect 先于反应式 effect 声明 → 同 commit 重建时 ref 已同步置位、反应式 effect 读到不 stale；preview 模式（无 CM view）改设置=no-op，下次 build 用 `.get()` seed 重拾不丢。
+- **data-safety 证伪**：`documents.ts` updateListener `if(!update.docChanged) return` 早退；`compartment.reconfigure` 是 effects-only 事务（无 changes/docChanged）→ 切设置永不 dirty/不调度 save/不污染他 pane buffer = 零字节重写已存内容。Tab 按键带 `userEvent:"input.indent"`+docChanged 走常规路径、只在新按键加单位、绝不重排已存字节。markdown.ts 未碰。r24(autosave/flush)12/12 回归绿。
+- **默认翻转证伪**：仅改未来 Tab 产出字节、不改已存内容。**关键：reviewer 漏判 r52 仍绿、实跑抓到真回归**——live `editor:indent` 命令对配置后 view 现插 `\t`（r52:75 旧断言 2 空格）→ **修=r52 显式 pin `__geodeIndentConfig(2,false)` 后断言（确定性、解耦 ambient 默认）+ 加 tabs-on 插 `\t` 集成断言（12/12）**。全库扫：唯 r52 受影响（r44/r57 是硬编码解析器输入、r74 仅 no-mutation）。
+- **clamp/分层证伪**：clampTabSize NaN/∞→4、0→1、99→8、round 非整；appearance.ts 不 import @codemirror（core 纯）；indentExtensions 属 features/editor；main.tsx(bootstrap)→@features/editor app→features 合法；buildEditorExtensions 新字段 additive、唯一消费者 EditorPane。
+
+**验证（As-built）**：typecheck 0 · `r92-e2e` **21/21**（**全链**：set 设置→反应式 reconfigure→真 Tab 按键→断言插入字符；clamp；persist；设置 UI 反应式回灌）· `r92-probe` **9/9** 真 WKWebView · `r52-e2e` **12/12**（修回归 + 加 tabs-on 集成）· 回归 r88(13)/r50(15)/r29-folds(19)/r35(25)/r87(11)/r24(12)/r91(10) · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（indentUnitString/indentExtensions 各 2 调用点不可删、R92 effect 与 R88 effect 故意非 token 相同[不同 facet 不合并]、无 ≥8 行内重复）。
+
+**已知偏差（非缺陷，记录）**：`__geodeEdit.indent` 纯逻辑 probe（r52 A 段，`runEdit` 裸 EditorState 无 indentUnit facet）**故意配置无关**（确定性命令逻辑测试，CM 默认 2 空格）——与配置后 live `editor:indent` 现分流（live 用配置单位）；二者皆有意，live 配置路径由 r92-e2e 全覆盖。**v1 已知延期**：自由数字输入（v1 用 segmented 2/4/8）/ 缩进参考线 / 行号点击选行（R88 延期项）。
+
 ## Round 91 additions — Explorer 文件树排序（候选池第六梯队 ㊽ 续 v1）【As-built v0.88】
 
 > **状态：As-built（v0.88 交付，2026-06-16）。** Obsidian Explorer「File name A→Z / Z→A」排序。**纯展示层**（只重排渲染顺序、不动 vault 存储序/不写盘）。默认 name-asc = vault.ts sortChildren 存储序 = 零回归。时间排序（mtime/ctime）延期（需 adapter stat=跨 Rust）。
