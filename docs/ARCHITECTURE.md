@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 107 additions — wikilink `[[note#` 标题补全（候选池 ㊹ 续 v1）【As-built v0.104】
+
+> **状态：As-built（v0.104 交付，2026-06-20）。** `[[<note>#<query>` 触发该笔记标题列表补全、选中插 `[[note#Heading]]`；`[[#…` 补全当前文件标题（self-link）。标题早已索引（`meta.headings`）+ `[[note#h]]` 早已 resolve/navigate（R14/R16）——本轮只加**补全 surface**。纯前端、零写 .md。builds on R106 的 `[[` 补全工作（同文件、复用 applyLink）。
+
+**契约（加性；补全源签名加 getPath）**：
+- `cmExtensions.ts`：新导出纯函数 `wikilinkHeadingTargets(app, typed, fromPath): HeadingRef[] | null`——`typed.indexOf("#")<0`→null；`noteRef=typed.slice(0,hashIdx)`，`target=noteRef===""?fromPath:resolveLink(noteRef, fromPath??"")`；null→null；返回 `getMetadata(target)?.headings` 过滤掉空 + 含 `[ ] | #`（防破坏 `[[…#…]]`，R106 教训复用）的标题。补全源加 heading 分支（`from=before.from+2+hashIdx+1`=过 `#`、options apply 复用 R106 `applyLink`[现 3 调用点]、`validFor:/^[^\[\]#]*$/`）；无 `#` 走既有 file+alias 补全（逐字节不变）。
+- `main.tsx` `__geodeHeadingComplete(typed, fromPath)` probe。
+
+**对抗评审（reviewer 5 维 + `git show HEAD:` 改前后函数体逐字节比对 + data-safety）→ 1 minor（修），无 critical/major、零回归 byte-equivalent：**
+- **零回归 byte-equivalent（headline）**：reviewer `git show` 比对——`applyLink` 仅上移（闭包只捕获自身参数 view/from/to/text，不依赖 files/dupCount/canonicalLink→上移安全）；从 `getMarkdownFiles` 到 file/alias return 与 R106 **完全一致**（仅一句注释改）；`[[note]]`(无 `#`)→heading 分支跳过→落 file 分支不变；tag 补全源被 `[[` 未闭合时 tagTrigger 抑制（双重保险不叠加）。
+- **#1 [minor] 补全源 fromPath 取源不一致**：用全局 `app.workspace.getActiveFile()`（可 null、返回全局活动 tab）而非同文件兄弟 handler（wikilinkClickHandler/Decorations）的 per-editor `getPath()`（恒本编辑器路径、非 null）——focus 进入非活动 pane 时（focusin 只 setActiveView 不 setActivePane）`[[#` self-link 会列**另一文件**标题、歧义 `[[note#` 用错 referrer 消歧。**修**：补全源签名加 `getPath`，`[[#`/heading 用 `getPath()`（接线 override 数组传 getPath）。
+- **证伪**：from 算术（`[[#` hashIdx=0→before.from+3 过 `[[#` 正确）；导航回路（插 `[[#H]]`/`[[note#H]]` 经 resolveSubpath 回标题，大小写不敏感）；alias 作 noteRef 可 resolve（nameToPaths 含 alias）；多级 `[[note#H1#H2`（取首 `#`，CM 过滤无匹配→空 popup 不崩，v1 限定）；过滤 `|` 正确（wikilink display 不能含 `|`）；性能（heading 分支先于 file 分支 return，更轻）；数据安全（零 .md 写、apply 仅替换 query 段）。
+
+**套件**：typecheck 0 · r107-e2e 12/12（probe 6 case + `[[note#` CM 补全 offer/filter/insert `[[ZZHead#Setup]]` + `[[#` self-link + 无 `#` file 补全零回归）· r107-probe 6/6 真 WKWebView · 回归 r31/r41 补全 + r106 alias + r24/r70 链接全绿 · build exit 0 · 简化门 clean（2 文件跳过条件）。**后续缺口**：`[[note#^block` 块补全（与 ㊴ 块ID）· 多级 `#H1#H2` 子标题 · 附件·非 md 候选入 `[[`。
+
 ## Round 106 additions — frontmatter aliases 在 suggester 层 surface（候选池 ㉟ 续 v1）【As-built v0.103】
 
 > **状态：As-built（v0.103 交付，2026-06-20）。** Gate 救场（第三次，R93/R103 同型）：grep 发现 frontmatter aliases **早已 resolve**（rebuildNameMap 把 alias 加进 nameToPaths，resolveLink 消费——`[[alias]]` 已通），**真缺口是两个 SUGGESTER 不 surface aliases**。本轮让 `[[` 补全 + QuickSwitcher surface aliases。**纯 surface 层、零改 resolveLink/nameToPaths 解析层**。读写：仅读 + `[[` 插入用户键入片段，无 .md 写竞态。

@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R107 套件回归（2026-06-20，macOS release 二进制 v0.104.0 实测 `r107-probe-vault`）
+
+R107 = wikilink `[[note#` 标题补全（候选池 ㊹ 续 slice，核心功能）。对照 Obsidian：`[[note#` suggest 目标笔记标题、`[[#` suggest 当前笔记标题、插 `[[note#Heading]]`。标题早已索引 + `[[note#h]]` 早已 navigate → 本轮加补全 surface。纯前端、零写 .md，复用 R106 applyLink。
+
+新增套件：`r107-e2e.mjs` **12/12**（wikilinkHeadingTargets probe 6 case·`[[note#` CM 补全 offer/unsafe-filter/insert `[[ZZHead#Setup]]`·`[[#` self-link·无 `#` file 补全零回归）+ `r107-probe.mjs` **6/6**（真 WKWebView，`__geodeHeadingComplete` 真 fs 标题解析）。**套件矩阵不回退**：r31/r41 补全 + r106 alias + r24/r70 链接全绿。
+
 ### R106 套件回归（2026-06-20，macOS release 二进制 v0.103.0 实测 `r106-probe-vault`）
 
 R106 = frontmatter aliases 在 suggester 层 surface（候选池 ㉟ 续 slice，核心功能）。对照 Obsidian：QuickSwitcher 按 name 或 alias 开笔记 + `[[` 补全 suggest alias（插 `[[canonical|alias]]`）。**Gate 救场**：alias 解析早已实现（resolveLink/nameToPaths）→ 真缺口是两 suggester 不 surface。纯加性 `getAliasMap`，零改解析层。
