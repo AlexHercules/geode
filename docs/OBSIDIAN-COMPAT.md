@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R108 套件回归（2026-06-20，macOS release 二进制 v0.105.0 实测 `r108-probe-vault`）
+
+R108 = `[[` 补全列非 md 附件候选（候选池 ㊹ 续续 slice，核心功能）。对照 Obsidian：`[[` 列附件、插 `[[image.png]]`（含扩展名）、`![[image.png]]` 嵌入。附件早已 resolve + 渲染 → 本轮加补全 surface，串起 R102-R105 附件 + R106-R108 补全。纯前端、零写 .md，复用 R106 applyLink。
+
+新增套件：`r108-e2e.mjs` **12/12**（wikilinkAttachmentCandidates probe[歧义→全路径]·`[[zzpic` 补全 offer/insert `[[zzpic.png]]`·`![[` 嵌入 insert `![[zzpic.png]]`·resolve 验证·无 `#` md note 补全零回归）+ `r108-probe.mjs` **7/7**（真 WKWebView，`__geodeWikilinkAttachments` 真 fs 含 md/无扩展名排除 + 歧义全路径）。**套件矩阵不回退**：r31/r41/r106/r107 补全 + r24/r70 链接全绿。
+
 ### R107 套件回归（2026-06-20，macOS release 二进制 v0.104.0 实测 `r107-probe-vault`）
 
 R107 = wikilink `[[note#` 标题补全（候选池 ㊹ 续 slice，核心功能）。对照 Obsidian：`[[note#` suggest 目标笔记标题、`[[#` suggest 当前笔记标题、插 `[[note#Heading]]`。标题早已索引 + `[[note#h]]` 早已 navigate → 本轮加补全 surface。纯前端、零写 .md，复用 R106 applyLink。

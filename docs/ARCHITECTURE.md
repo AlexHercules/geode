@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 108 additions — `[[` 补全列非 md 附件候选（候选池 ㊹ 续续 v1）【As-built v0.105】
+
+> **状态：As-built（v0.105 交付，2026-06-20）。** `[[` 补全现在也列出非 md 附件（图片/pdf/…）——选中插 `[[image.png]]`（链接）、`![[image.png]]`（嵌入，若键入了 `![[`）。附件早已 resolve（`resolveAttachment` 按 `f.name` 含扩展名索引）+ `![[image.png]]` 早已渲染——本轮只加**补全 surface**（grep gate 第五次确认核心已做）。串起 R102-R105 附件 + R106-R108 补全工作。纯前端、零写 .md。
+
+**契约（加性）**：
+- `cmExtensions.ts`：新导出纯函数 `wikilinkAttachmentCandidates(files: readonly FileNode[], absolute): Array<{file, linkText}>`——`files.filter(f => f.extension!=="md" && f.extension!=="")`（非 md、非无扩展名=排除 R105 可编辑文件）；dup map 按 `f.name.toLowerCase()` 计数；`linkText = absolute || dup>1 ? f.path : f.name`（歧义/absolute→全路径，否则裸名含扩展名）；过滤掉含 `[ ] | #`（破坏 `[[…]]`，R106/R107 教训复用）的 linkText。补全源 return 前 append 附件循环（label=`file.name`/detail=folder/apply 复用 R106 applyLink）。
+- `main.tsx` `__geodeWikilinkAttachments(absolute)` probe。
+
+**对抗评审（reviewer 5 维深挖 + 跨模块 key 对照 + data-safety）→ 0 confirmed 缺陷（3 nit 非阻断）：**
+- **零回归 byte-equivalent（headline）**：diff 是**纯 append**（唯一删除是 import 加 `FileNode`）；note basename + R106 alias + R107 heading 三分支**逐字节未动**；heading 分支（`hashIdx>=0`）early-return 隔离附件（附件无标题不参与 `#` 补全）。
+- **附件链接真 resolve、无悬空（headline）**：`wikilinkAttachmentCandidates` 的 dup map 与 `resolveAttachment` 的 `lowerBasenameToPaths` **用同一 key（`f.name.toLowerCase()`）** → 歧义判定一致；唯一→裸名命中 basename 分支、歧义/absolute→全路径命中 `lowerPathToPath` 精确分支。双端实证（e2e resolveAttachment + probe）。
+- **证伪**：`![[` 嵌入（matchBefore 从 `[[` 起、`!` 在 from-1 外不动→`![[image.png]]`）；大小写（`extension()` 强制 lowercase→note/attachment 严格 disjoint、无 `.MD` 悬空）；getFiles dot-skip（不含 `.geode/.trash`）；空格/CJK 附件名合法保留、含定界符跳过；数据安全（零 .md 写、apply 仅替换 query 段）。
+- **nit（非阻断，未改）**：每键 getFiles() 调两次（note 分支内 getMarkdownFiles + 附件分支）——O(files) 同量级常数 ~2x，**无实测数字不做性能改动**（SIMPLIFY-NO ④）；过滤正则不含换行（note 分支根本不过滤、附件分支反更防御，非回归）；无扩展名文件两分支都不列（v1 取舍）。
+
+**套件**：typecheck 0 · r108-e2e 12/12（probe 含歧义全路径 + `[[`/`![[` 插入 + resolve 验证 + 无 `#` md note 零回归）· r108-probe 7/7 真 WKWebView · 回归 r31/r41/r106/r107/r24/r70 全绿 · build exit 0 · 简化门 clean（2 文件跳过）。**后续缺口**：`[[note#^block` 块补全（与 ㊴ 块ID）· 多级 `#H1#H2`。
+
 ## Round 107 additions — wikilink `[[note#` 标题补全（候选池 ㊹ 续 v1）【As-built v0.104】
 
 > **状态：As-built（v0.104 交付，2026-06-20）。** `[[<note>#<query>` 触发该笔记标题列表补全、选中插 `[[note#Heading]]`；`[[#…` 补全当前文件标题（self-link）。标题早已索引（`meta.headings`）+ `[[note#h]]` 早已 resolve/navigate（R14/R16）——本轮只加**补全 surface**。纯前端、零写 .md。builds on R106 的 `[[` 补全工作（同文件、复用 applyLink）。
