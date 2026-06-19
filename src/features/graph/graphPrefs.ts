@@ -53,6 +53,8 @@ export interface GraphPrefs {
   outgoing: boolean;
   /** R103: in local mode, follow incoming links (notes that link to the anchor). default on. */
   incoming: boolean;
+  /** R110: in local mode, show links BETWEEN neighbours (not just to the anchor). default on. */
+  neighborLinks: boolean;
   showAll: boolean;
   forces: GraphForces;
   display: GraphDisplay;
@@ -79,6 +81,8 @@ export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   // both directions on = the prior undirected local BFS (zero regression)
   outgoing: true,
   incoming: true,
+  // neighbour-to-neighbour links shown = prior behaviour (zero regression)
+  neighborLinks: true,
   showAll: false,
   forces: Object.freeze({ center: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
   display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false, attachments: false }),
@@ -117,6 +121,7 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
       // R103: default ON unless explicitly false (old blobs without the keys → both on)
       outgoing: p.outgoing !== false,
       incoming: p.incoming !== false,
+      neighborLinks: p.neighborLinks !== false,
       showAll: p.showAll === true,
       forces: {
         center: num(f.center, D.forces.center, GRAPH_RANGES.center),
@@ -235,6 +240,24 @@ function buildAuxGraph(
     if (degree > 0) nodes.push({ id: prefix + key, label: labelOf(key), resolved: true, degree });
   }
   return { nodes, edges };
+}
+
+/**
+ * R110 (㊵ 续): the edges rendered for a graph — kept iff BOTH endpoints are in the
+ * displayed node set, and (local mode, `neighborLinks` OFF, anchor present) only those
+ * INCIDENT to the anchor — i.e. hide links between two non-anchor neighbours (Obsidian's
+ * "Neighbor links" off = show just the anchor's star). `neighborLinks` ON or no anchor
+ * (global mode) → all kept edges (zero regression). Pure (exported for the probe + rebuild).
+ */
+export function localEdges<E extends { source: string; target: string }>(
+  edges: readonly E[],
+  keptIds: ReadonlySet<string>,
+  anchor: string | null,
+  neighborLinks: boolean,
+): E[] {
+  const within = edges.filter((e) => keptIds.has(e.source) && keptIds.has(e.target));
+  if (neighborLinks || anchor === null) return within;
+  return within.filter((e) => e.source === anchor || e.target === anchor);
 }
 
 /**

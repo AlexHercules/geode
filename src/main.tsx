@@ -88,7 +88,7 @@ import { buildTagGraph, buildAttachmentGraph } from "@features/graph/graphPrefs"
 import { isAttachmentPath, isImagePath, mediaKind, mediaMime } from "@core/attachments";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
-import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, localSubgraph, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
+import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, localSubgraph, localEdges, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
 import { Workspace, resolveTheme, tabIdsToClose } from "@core/workspace";
 import { sortAndFilterLinks } from "@core/linkPanel";
 import { setNewNoteLocation, setNewNoteFolder, resolveNewNoteFolder, createNewNote } from "@core/newNote";
@@ -569,6 +569,20 @@ async function bootstrap() {
   };
   graphLocalHost.__geodeGraphLocal = (edges, anchor, depth, dirs) =>
     [...localSubgraph(edges, anchor, depth, dirs)];
+
+  // always-on neighbor-links edge-filter probe (R110, ㊵ 续): runs the pure localEdges over
+  // {source,target} edges + a kept-id set, returning the rendered edges — proves the
+  // neighbor-links OFF filter (drop edges between two non-anchor nodes) on the real build.
+  const localEdgesHost = globalThis as unknown as {
+    __geodeLocalEdges?: (
+      edges: { source: string; target: string }[],
+      keptIds: string[],
+      anchor: string | null,
+      neighborLinks: boolean,
+    ) => { source: string; target: string }[];
+  };
+  localEdgesHost.__geodeLocalEdges = (edges, keptIds, anchor, neighborLinks) =>
+    localEdges(edges, new Set(keptIds), anchor, neighborLinks);
 
   // always-on attachment-routing probe (R102, ㊽ 续续续续续): runs the pure isAttachmentPath/
   // isImagePath classification on the real build, returning per-path {isAttachment,isImage}.

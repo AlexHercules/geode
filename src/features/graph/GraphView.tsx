@@ -26,6 +26,7 @@ import {
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
+  localEdges,
   localSubgraph,
   nodeGroupColor,
   savePrefs,
@@ -606,9 +607,8 @@ export function GraphView() {
       capped = true;
     }
     const keptIds = new Set(picked.map((n) => n.id));
-    const renderedEdges = data.edges.filter(
-      (e) => keptIds.has(e.source) && keptIds.has(e.target),
-    );
+    // R110 (㊵ 续): neighbor-links OFF (local mode) drops edges between two non-anchor nodes.
+    const renderedEdges = localEdges(data.edges, keptIds, anchorId, prefs.neighborLinks);
 
     // local re-anchor (incl. entering local mode) → auto-fit
     const reAnchor = anchorId !== null && anchorId !== lastAnchorRef.current;
@@ -688,6 +688,7 @@ export function GraphView() {
     prefs.depth,
     prefs.outgoing,
     prefs.incoming,
+    prefs.neighborLinks,
     prefs.showAll,
     prefs.filters.orphans,
     prefs.filters.existingOnly,
@@ -1076,6 +1077,15 @@ export function GraphView() {
                   onChange={(e) => setPrefs((p) => ({ ...p, incoming: e.target.checked }))}
                 />
                 <span>{t("graph.localIncoming")}</span>
+              </label>
+              <label className="graph-toggle">
+                <input
+                  type="checkbox"
+                  data-testid="graph-local-neighbor"
+                  checked={prefs.neighborLinks}
+                  onChange={(e) => setPrefs((p) => ({ ...p, neighborLinks: e.target.checked }))}
+                />
+                <span>{t("graph.localNeighbor")}</span>
               </label>
             </>
           )}
