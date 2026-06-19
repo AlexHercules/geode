@@ -79,7 +79,7 @@ import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
-import { indentUnitString } from "@features/editor/cmExtensions";
+import { indentUnitString, wikilinkHeadingTargets } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
@@ -579,6 +579,16 @@ async function bootstrap() {
   };
   attachmentRouteHost.__geodeAttachmentRouting = (paths) =>
     paths.map((p) => ({ path: p, isAttachment: isAttachmentPath(p), isImage: isImagePath(p) }));
+
+  // always-on wikilink heading-completion probe (R107, ㊹ 续): runs the pure
+  // wikilinkHeadingTargets — given a typed `[[<note>#<query>` body + a from-path, returns the
+  // heading labels offered (resolved note's headings, unsafe-char filtered). The CM
+  // autocomplete DOM is browser-E2E only (§D); this proves the resolve+lookup on the bin.
+  const headingCompleteHost = globalThis as unknown as {
+    __geodeHeadingComplete?: (typed: string, fromPath: string | null) => string[] | null;
+  };
+  headingCompleteHost.__geodeHeadingComplete = (typed, fromPath) =>
+    wikilinkHeadingTargets(app, typed, fromPath)?.map((h) => h.text) ?? null;
 
   // always-on alias-map probe (R106, ㉟ 续): returns the REAL frontmatter-alias index
   // (path → aliases) — proves aliases are parsed + enumerated on the real build, which is

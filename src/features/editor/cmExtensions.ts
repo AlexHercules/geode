@@ -44,6 +44,7 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
+import type { HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
@@ -327,10 +328,47 @@ function wikilinkClickHandler(app: GeodeApp, getPath: () => string): Extension {
 
 /* ---------------- [[ autocomplete ---------------- */
 
-function wikilinkCompletionSource(app: GeodeApp) {
+/** R107 (㊹ 续): the headings a `[[<note>#<query>` completion offers — resolve `<note>`
+ *  (empty = the current file, a `[[#h]]` self-link), list its headings, and skip any whose
+ *  text would break the `[[…#…]]` structure (`[ ] | #`). Returns null when there is no `#`
+ *  yet or the note can't be resolved. Exported for the probe. */
+export function wikilinkHeadingTargets(app: GeodeApp, typed: string, fromPath: string | null): HeadingRef[] | null {
+  const hashIdx = typed.indexOf("#");
+  if (hashIdx < 0) return null;
+  const noteRef = typed.slice(0, hashIdx);
+  const target = noteRef === "" ? fromPath : app.metadata.resolveLink(noteRef, fromPath ?? "");
+  if (target === null) return null;
+  return (app.metadata.getMetadata(target)?.headings ?? []).filter((h) => h.text !== "" && !/[[\]|#]/.test(h.text));
+}
+
+function wikilinkCompletionSource(app: GeodeApp, getPath: () => string) {
   return (ctx: CompletionContext): CompletionResult | null => {
     const before = ctx.matchBefore(/\[\[[^\[\]]*$/);
     if (!before) return null;
+    // shared apply: replace [from,to] with `text` + a closing `]]` (unless one is there)
+    const applyLink = (text: string) => (view: EditorView, _c: Completion, from: number, to: number) => {
+      const closing = view.state.sliceDoc(to, to + 2) === "]]" ? "" : "]]";
+      view.dispatch({
+        changes: { from, to, insert: text + closing },
+        selection: { anchor: from + text.length + 2 },
+      });
+    };
+    // R107 (㊹ 续): `[[<note>#<query>` → complete that note's headings (insert
+    // `[[note#Heading]]`). Replaces only the text after `#`; `[[#…` targets the current file.
+    const typed = before.text.slice(2);
+    const hashIdx = typed.indexOf("#");
+    if (hashIdx >= 0) {
+      // R107 review: use THIS editor's path (getPath, always non-null) not the global
+      // getActiveFile() — they diverge when focus enters a non-active pane, which would
+      // resolve `[[#`/ambiguous `[[note#` against the wrong file.
+      const headings = wikilinkHeadingTargets(app, typed, getPath());
+      if (headings === null || headings.length === 0) return null;
+      return {
+        from: before.from + 2 + hashIdx + 1,
+        options: headings.map((h) => ({ label: h.text, detail: `H${h.level}`, apply: applyLink(h.text) })),
+        validFor: /^[^\[\]#]*$/,
+      };
+    }
     const files = app.vault.getMarkdownFiles();
     const dupCount = new Map<string, number>();
     for (const f of files) {
@@ -346,14 +384,6 @@ function wikilinkCompletionSource(app: GeodeApp) {
       absolute || (dupCount.get(f.basename.toLowerCase()) ?? 0) > 1
         ? f.path.replace(/\.md$/i, "")
         : f.basename;
-    // shared apply: replace [[…] with `text` + a closing `]]` (unless one is already there)
-    const applyLink = (text: string) => (view: EditorView, _c: Completion, from: number, to: number) => {
-      const closing = view.state.sliceDoc(to, to + 2) === "]]" ? "" : "]]";
-      view.dispatch({
-        changes: { from, to, insert: text + closing },
-        selection: { anchor: from + text.length + 2 },
-      });
-    };
     const options: Completion[] = files.map((f) => ({
       label: f.basename,
       detail: (f.path.includes("/") ? f.path.slice(0, f.path.lastIndexOf("/")) : "") || undefined,
@@ -546,7 +576,7 @@ export function buildEditorExtensions(opts: {
     markdownWrapHandler,
     closeBrackets(),
     autocompletion({
-      override: [wikilinkCompletionSource(app), slashCommandSource(app), tagCompletionSource(app)],
+      override: [wikilinkCompletionSource(app, getPath), slashCommandSource(app), tagCompletionSource(app)],
       icons: false,
     }),
     wikilinkDecorations(app, getPath),
