@@ -71,6 +71,18 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 117 additions — compat Workspace.activeEditor（MarkdownFileInfo · 插件 API 商业主轴）【As-built v0.114】
+
+> **状态：As-built（v0.114 交付，2026-06-20）。** Obsidian `Workspace.activeEditor: MarkdownFileInfo | null`（活动 markdown 编辑器的 info——`editor` + `file` + `app`）现真实现。**新插件首选**（替代 `getActiveViewOfType(MarkdownView)`）。纯读、零改 core、零新 import（复用 R116 的 `makeActiveMarkdownView`）。
+
+**契约（加性；1 只读 getter）**：
+- `compat/obsidian/workspace.ts`：Workspace 加 `get activeEditor(): MarkdownView | null` → `makeActiveMarkdownView(handle, registry, makePaneLeaf(false))`。compat MarkdownView **即 MarkdownFileInfo 超集**（有 editor/file/app；`makePaneLeaf` 设 leaf._app → View.app）。live getter（每读经 getActiveView 重算），阅读视图无 CM view → null（R116 既有偏离）。
+
+**对抗评审（reviewer 6 维 → 0 confirmed 代码缺陷）：**
+- **证伪 6 条**：①契约——MarkdownView 是 MarkdownFileInfo 超集，editor/file/app 齐，唯缺 hoverPopover（历轮既有 GAP、非本轮）；②live 一致性——getter 每读新建实例但其 Editor 都包同一 live EditorView（getValue 读 cm.state.doc），同 tick 值/写一致，与 getActiveViewOfType/activeLeaf.view 同源（身份不稳定属既有 compat 模型）；③数据安全——纯读、新 MarkdownView 从不 load()→无 Component/View 注册/timer/listener→瞬态可 GC 无泄漏；④**无 R116 两源发散**——activeEditor **只读单源 getActiveView**、不读 active tab mode，天然无「活动 tab vs 活动 editor 发散」；⑤分层——零新 import、无命名冲突、typecheck 0；⑥`app` 时序——`_setApp` 在 createCompatContext 中**同步**于 Workspace 构造后立即调（`context.ts:58-61`），早于任何 plugin load → makePaneLeaf 的 this._app 运行期恒非空、activeEditor.app 恒非空（_app-null 路径仅 context 同步构造窗口内、无插件代码运行→不可达）。
+
+**套件**：typecheck 0 · cargo check 0 · r117-e2e **9/9**（活动编辑器 .editor/.file/.app · 切文件 activeEditor.file 跟随 · getValue 反映新内容 · 与 activeLeaf.view 同文件 · reading mode null 偏离 · 回 live 恢复）· r117-probe **4/4** 真 WKWebView（表面 + getter 定义 + makeActiveMarkdownView null-guard；editor-mount headless 不可达[R115/§D]→activeEditor 字段语义归 browser-E2E 平台同码）· 回归 r116 9/9·r23 22/22·r46 18/18 · build exit 0 · 简化门 clean（getter 复用 makeActiveMarkdownView=纯减法）。**后续缺口（compat 商业主轴）**：`MarkdownView.setViewData/setMode`（写=data-safety）· `app.commands` 余项 · `CachedMetadata.embeds/sections/listItems` · `MarkdownFileInfo.hoverPopover` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 116 additions — compat MarkdownView.getMode/getViewData（读子集 · 插件 API 商业主轴）【As-built v0.113】
 
 > **状态：As-built（v0.113 交付，2026-06-20）。** Obsidian `MarkdownView.getMode(): "source"|"preview"`（编辑视图 live/source 都 → "source"，阅读 → "preview"）+ `getViewData(): string`（编辑器原始 markdown 源）现真实现（读子集；`setViewData`/`setMode` 写=data-safety 敏感，留后续）。模式探测/全文读类插件用。纯读、零改 core。
