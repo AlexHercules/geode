@@ -2,6 +2,7 @@
  * Obsidian Plugin base class + App shim + SettingTab/PluginSettingTab
  * (API-REFERENCE area 1).
  */
+import { getCommandName, type CommandRegistry } from "@core/commands";
 import { encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
@@ -301,6 +302,52 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
   );
 }
 
+/** Obsidian-shaped command for plugin consumption: a plain id/name (string) + the
+ *  executable callback. Geode flattens checkCallback/editorCallback into
+ *  callback+available, so the *Callback variants are not reconstructable here
+ *  (documented gap); `hotkeys` is empty (Geode stores a single host hotkey string). */
+interface CompatCommand {
+  id: string;
+  name: string;
+  callback: () => void;
+  hotkeys: never[];
+}
+
+/**
+ * `app.commands` shim (R113): executeCommandById / listCommands / commands over the
+ * core CommandRegistry — the de-facto API for cross-plugin command invocation.
+ * Command names are i18n thunks internally (R8) → resolved to strings for plugins.
+ * executeCommandById respects `available` (Obsidian pre-runs checkCallback(true) and
+ * returns false WITHOUT executing when the command is unavailable); for plain
+ * callback commands it just runs and returns true.
+ */
+function makeCommands(registry: CommandRegistry): {
+  executeCommandById(id: string): boolean;
+  listCommands(): CompatCommand[];
+  readonly commands: Record<string, CompatCommand>;
+} {
+  const toCompat = (c: GeodeCommand): CompatCommand => ({
+    id: c.id,
+    name: getCommandName(c),
+    callback: c.callback,
+    hotkeys: [],
+  });
+  return {
+    executeCommandById(id: string): boolean {
+      const cmd = registry.list().find((c) => c.id === id);
+      if (!cmd || cmd.available?.() === false) return false;
+      cmd.callback();
+      return true;
+    },
+    listCommands: (): CompatCommand[] => registry.list().map(toCompat),
+    get commands(): Record<string, CompatCommand> {
+      const out: Record<string, CompatCommand> = {};
+      for (const c of registry.list()) out[c.id] = toCompat(c);
+      return out;
+    },
+  };
+}
+
 const keymapStub = {
   pushScope(_scope: unknown): void {},
   popScope(_scope: unknown): void {},
@@ -334,6 +381,7 @@ export class App {
   _suggests: EditorSuggestManager | null = null;
   private _scopeStub: Scope | null = null;
   private _fileManager: unknown = null;
+  private _commands: ReturnType<typeof makeCommands> | null = null;
 
   constructor(bridge: GeodeBridge, vault: Vault, workspace: Workspace, metadataCache: MetadataCache) {
     this._geode = bridge;
@@ -347,6 +395,12 @@ export class App {
   /** renameFile (R16) + processFrontMatter (R22) are real; other methods gap per access. */
   get fileManager(): unknown {
     return (this._fileManager ??= makeFileManager(this._geode.handle));
+  }
+
+  /** app.commands (R113): executeCommandById/listCommands/commands over the core
+   *  CommandRegistry — real, not a stub. The de-facto cross-plugin command API. */
+  get commands(): ReturnType<typeof makeCommands> {
+    return (this._commands ??= makeCommands(this._geode.handle.commands));
   }
 
   get keymap(): typeof keymapStub {
