@@ -394,6 +394,17 @@ export class Workspace extends Events {
   }
 
   /**
+   * R117: Obsidian `Workspace.activeEditor: MarkdownFileInfo | null` — the active markdown
+   * editor's info (a compat MarkdownView IS a MarkdownFileInfo: it carries `editor` + `file`
+   * + `app`). The modern API plugins prefer over `getActiveViewOfType(MarkdownView)`. Live
+   * getter; null in reading view / when no editor is active (Geode reading view is not
+   * CM-backed → getActiveView is null, same divergence as R116).
+   */
+  get activeEditor(): MarkdownView | null {
+    return makeActiveMarkdownView(this.handle, this.registry, this.makePaneLeaf(false));
+  }
+
+  /**
    * Resolve + open a wikilink linktext. Unresolved links create the note
    * (vault root) like real Obsidian, then open it.
    */
