@@ -149,7 +149,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | ~~`Plugin.registerEditorExtension`~~ | **R115 出队**：新 core `editorExtensions` 注册表桥接（compat 写、EditorPane 读+订阅 revision）；新 compat compartment，register/dispose 经 revision reconfigure 所有 open view + 新 view seed。数据安全：reconfigure 无 doc change + autosave 是 view 外 updateListener → 编辑期注册不丢 |
 | ~~`app.commands`（executeCommandById / listCommands / commands）~~ | **R113 出队**：3 高频成员架在 core `CommandRegistry` 上（共享原生 palette 注册表）。`executeCommandById` 尊重 available 预检；name thunk 解析成 string 给插件。余项（editorCommands/findCommand/removeCommand/executeCommand）续缺 |
 | ~~`vault.readBinary` / `createBinary`~~ / `modifyBinary` | **R111 出队（部分）**：`readBinary`/`createBinary` 桥接 core 原生二进制 IO（`toArrayBuffer` 拷贝防别名、createBinary 返 TFile）。图片/PDF/Excalidraw 类插件可读写附件。**`modifyBinary` 仍缺**（二进制覆盖写——core 写是 create-only，需原子 tmp+rename 路径，类比 text modify）。连带修 core `createBinary` 缺失的 `assertSafeRelPath`（不可信插件 path 守卫，评审 MAJOR） |
-| `MarkdownView.getMode/getViewData/setViewData/setMode` + `workspace.activeEditor` | **缺**：`compat/obsidian/workspace.ts:30-42` MarkdownView 无 mode/data 访问器；`activeEditor`（MarkdownFileInfo）零命中。模式探测/全文读写类插件用，新插件首选 `activeEditor` |
+| ~~`MarkdownView.getMode/getViewData`~~ / `setViewData/setMode` + `workspace.activeEditor` | **部分**：~~getMode/getViewData~~（**R116 出队**：getMode hardcode "source"[compat MarkdownView 只在编辑模式存在]、getViewData=editor.getValue() live 源文本）。`setViewData`/`setMode`（写=data-safety）+ `activeEditor`（MarkdownFileInfo）仍缺。**已知偏离**：阅读视图非 CM-backed → reading mode `getActiveViewOfType(MarkdownView)`/`activeLeaf.view` 返 null（Obsidian 返 view+getMode "preview"） |
 | ~~`MetadataCache.getTags()`~~ + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + ~~`fileManager.generateMarkdownLink`~~ | **部分**：~~getTags~~（**R114 出队**：投影 core `getTagMap`→`Record<string,number>`，`#` 前缀 + distinct 笔记数；大小写敏感=镜像 Geode 标签模型，chief 拍板 deferred 偏离）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ ~~generateMarkdownLink~~（**R112 出队**：委托 core `formatLink`，resolve-back 验证，总返 string；连带修 markdown-subpath 未编码） |
 | `app.loadLocalStorage/saveLocalStorage/isDarkMode` + `MenuItem.setSubmenu` + `Editor` 完整版方法 | **缺/部分**：loadLocalStorage（per-vault UI 状态）/ isDarkMode；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；Editor 余项（listSelections/setSelections/setLine/transaction/exec/wordAt/scrollTo/undo/redo——可直接映射 CM6，T1.5 子集扩展） |
 
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R116 套件回归（2026-06-20，macOS release 二进制 v0.113.0 实测 `r116-probe-vault`）
+
+R116 = compat `MarkdownView.getMode` + `getViewData`（读子集，**插件 API 商业主轴**，缺口表出队）。getMode hardcode "source"（compat MarkdownView 只在编辑模式经 getActiveView 构建、阅读视图非 CM-backed）；getViewData = `editor.getValue()` live 源文本。**对抗评审揪出 1 minor**：首版读 active TAB 的 mode 映射，但 active tab（findActiveTab 活动面板）与 active editor（getActiveView focus 追踪）是两独立活动源、split/瞬态时发散 → getMode 在 live 编辑器误报 "preview"；修 = hardcode "source"（纯减法，更简且严格更正确）。**已知偏离**：阅读视图返 null MarkdownView（Obsidian 返 view+"preview"）。
+
+新增套件：`r116-e2e.mjs` **9/9**（live/source getMode "source"·getViewData 源文本+反映实时编辑+=== CM doc·reading mode active view null 偏离·回 live 恢复）+ `r116-probe.mjs` **3/3**（真 WKWebView compat 表面 + makeActiveMarkdownView null-guard；editor-mount headless 不可达[R115/§D]→语义归 browser-E2E 平台同码）。**套件矩阵不回退**：r23 22/22·r46 18/18。
 
 ### R115 套件回归（2026-06-20，macOS release 二进制 v0.112.0 实测 `r115-probe-vault`）
 

@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 116 additions — compat MarkdownView.getMode/getViewData（读子集 · 插件 API 商业主轴）【As-built v0.113】
+
+> **状态：As-built（v0.113 交付，2026-06-20）。** Obsidian `MarkdownView.getMode(): "source"|"preview"`（编辑视图 live/source 都 → "source"，阅读 → "preview"）+ `getViewData(): string`（编辑器原始 markdown 源）现真实现（读子集；`setViewData`/`setMode` 写=data-safety 敏感，留后续）。模式探测/全文读类插件用。纯读、零改 core。
+
+**契约（加性；2 只读方法）**：
+- `compat/obsidian/workspace.ts`：`MarkdownView` 加 `getMode(): "source"|"preview"`（**hardcode "source"**）+ `getViewData(): string`（`this.editor.getValue()` = CM doc.toString()，live 源文本）。
+- **为何 getMode hardcode "source"（评审 fix 根因）**：compat MarkdownView 只在 `makeActiveMarkdownView` 经 `handle.documents.getActiveView()`（CM focus 追踪）非 null 时构建；Geode 阅读视图**非 CM-backed**、从不进 setActiveView——故 Geode 能交给插件的任何 MarkdownView 都包着真编辑器、恒 "source"。**首版曾读 active TAB 的 mode 映射（`findActiveTab`）——评审揪出 MAJOR-adjacent minor 缺陷**：active tab（`findActiveTab` 活动面板）与 active editor（`getActiveView` focus 追踪）是**两个独立活动源**，split 多面板点预览面板 / 单面板 preview 切换瞬态时二者发散 → getMode 在 live 编辑器上误报 "preview"（插件 `if getMode==="preview" 不编辑` 假阴性）。hardcode "source" 既更简又严格更正确，消除发散。
+
+**对抗评审（reviewer 6 维 → 1 minor 已修 + 已知偏离文档化）：**
+- **已修 minor**：getMode 两源发散误报（上）→ hardcode "source"（删 findActiveTab 分支 + 构造器 mode 参数=纯减法）。
+- **证伪**：getViewData live 读（`WorkspaceLeaf.view` getter 每次新建 MarkdownView 覆当前 getActiveView → 编辑后 fresh-build 读到新内容、=== doc.toString()）· 纯读无副作用无写 · 分层合规（findActiveTab 既有 import，hardcode 后零新依赖）· 其余 makeActiveMarkdownView caller（editorCallback/getActiveViewOfType/leaf.view）不读 getMode/getViewData→零回归。
+- **已知偏离（文档化）**：Geode 阅读视图非 CM-backed → `getActiveViewOfType(MarkdownView)`/`activeLeaf.view` 在 reading mode 返 **null**（Obsidian 返该 view + getMode "preview"）；任何 compat MarkdownView getMode 恒 "source"。既有 Geode 架构事实、非 R116 引入。
+
+**套件**：typecheck 0 · cargo check 0 · r116-e2e **9/9**（live getMode "source"/getViewData 源文本/反映实时编辑/=== CM doc/source mode 仍 "source"/**reading mode active view null=偏离**/回 live 恢复）· r116-probe **3/3** 真 WKWebView（compat 表面 + makeActiveMarkdownView null-guard；**editor-mount headless 不可达[无 focus→getActiveView null，R115]→getMode/getViewData 语义归 browser-E2E、平台同码**）· 回归 r23 22/22·r46 18/18 · build exit 0 · 简化门 clean（评审 fix 本身即减法）。**后续缺口（compat 商业主轴）**：`MarkdownView.setViewData/setMode`（写=data-safety）· `workspace.activeEditor` · `app.commands` 余项 · `CachedMetadata.embeds/sections/listItems` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 115 additions — compat Plugin.registerEditorExtension（CM6 扩展注入 · 插件 API 商业主轴）【As-built v0.112】
 
 > **状态：As-built（v0.112 交付，2026-06-20）。** Obsidian `Plugin.registerEditorExtension(ext)`（让插件给所有 markdown 编辑器注入 CM6 扩展——装饰/widget/keymap，Dataview inline 等用）从 warn-stub 改真实现。**跨模块契约**：registerEditorExtension 是全局（应用到所有编辑器），但 CM compartment 是 per-view 且 **compat 绝不能 import features**——故经一个**新 core 注册表**桥接（compat 写、features/editor 读+订阅）。
