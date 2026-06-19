@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 113 additions — compat app.commands（executeCommandById/listCommands/commands · 插件 API 商业主轴）【As-built v0.110】
+
+> **状态：As-built（v0.110 交付，2026-06-20）。** Obsidian `app.commands`（跨插件触发/复用命令的事实标准 API）现真实现 3 个高频成员：`executeCommandById(id): boolean`、`listCommands(): Command[]`、`commands: Record<string, Command>`，**全部架在 core `CommandRegistry` 上**（与原生 palette/hotkeys 共享同一注册表）。明星插件常用 executeCommandById 触发内置/他插件命令。**插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表 R60 登记）。
+
+**契约（加性；纯 compat 层，零改 core）**：
+- `compat/obsidian/plugin.ts`：新 `interface CompatCommand {id; name; callback; hotkeys:never[]}` + 工厂 `makeCommands(registry: CommandRegistry)` + App 类 `get commands()`（lazy 缓存，镜像 `fileManager` 先例，读 `this._geode.handle.commands`）。
+- **`executeCommandById`**：`registry.list().find(c=>c.id===id)`；`!cmd || cmd.available?.()===false → false`（**尊重 available 预检**——Obsidian 对 checkCallback 命令先 `checkCallback(true)`、false 则不执行返 false）；否则 `cmd.callback()` 返 true。比 core `registry.execute()`（无视 available）更贴 Obsidian——有意分工（core execute 服务 palette，palette 已先按 available 过滤）。
+- **名字 thunk 解析**：Geode `Command.name` 是 i18n thunk（`string | (()=>string)`，R8）→ `listCommands`/`commands` 用 `getCommandName(c)` 解析成 string 给插件（否则 `cmd.name.toLowerCase()` 炸）。
+- **`commands` getter** 每次重建 Record（反映动态注册/注销，live）。
+
+**对抗评审（reviewer 6 维 + 共享 registry 单例分析 + e2e 实跑核对 → 0 confirmed 缺陷）：**
+- **证伪 6 条**：executeCommandById 逐分支映射 Obsidian checkCallback 预检语义（available undefined→直接跑+true；===false→不跑+false，返回值不误导 `if(!exec)fallback`）· name thunk 全解析成 string · 纯读 registry + 触发 callback、无 fs 写无新竞态 · `list()` 排序不影响 find 命中/Record 键（功能正确，无 profiler 不调性能）· compat 只 import core + lazy 缓存闭包持全局单例 registry 永不陈旧（同 `_fileManager` 先例）· diff 纯加法未触 addCommand/fileManager，features 用 core AppHandle.commands（独立对象）不受影响。
+- **信息级（非缺陷，文档化）**：① CompatCommand 缺 checkCallback/editorCallback/icon、`hotkeys:[]`（Geode 已扁平化为 callback+available，不可逆重建）——插件几乎都走 executeCommandById 读 id/name，不受影响；② `commands` Record 用 plain `{}`，理论上 id 恰为 bare `__proto__` 会被原型 setter 吞——但 compat 注册 id 恒带 `manifest.id:` 前缀、且 executeCommandById 走 list().find 免疫，**实际不可达**（与 Obsidian 同用 plain Record，保真，不加固）。
+
+**套件**：typecheck 0 · cargo check 0 · r113-e2e **10/10**（executeCommandById[plain+true / unknown+false / available=false 不跑+false / available=true 跑+true]·listCommands[含 seeded·name 全 string·thunk 解析·含 native 命令非空]·commands record[id 映射+string name·live 注销消失]）· r113-probe **10/10** 真 WKWebView 共享 registry · 回归 r23 22/22·r46 18/18·r112 16/16 · build exit 0 · 简化门 clean（toCompat 2 调用点=合法；纯加法工厂）。**后续缺口（compat 商业主轴）**：`commands` 余项（editorCommands/findCommand/removeCommand/executeCommand）· `MetadataCache.getTags()` Record 形态 · `registerEditorExtension` · `MarkdownView.getMode/getViewData` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 112 additions — compat fileManager.generateMarkdownLink（插件 API 商业主轴）【As-built v0.109】
 
 > **状态：As-built（v0.109 交付，2026-06-20）。** Obsidian `fileManager.generateMarkdownLink(file, sourcePath, subpath?, alias?): string`（生态高频——插件靠它按用户设置生成链接插入）现为真实现，**委托 core `formatLink`**（R72 ㉞-c 既有引擎：按 `linkUseMarkdown`/`linkPathFormat` 构建 wikilink 或 markdown link、shortest/relative/absolute、resolve-back 验证）。**插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表 R60 登记「高影响低成本」项）。前置门 WebSearch 揭露 Obsidian graph 不做嵌套标签层级 → 原候选池 ㊵ 站不住，改取本 compat 项。
