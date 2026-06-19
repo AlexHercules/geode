@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 104 additions — attachment viewer 续：audio/video/pdf 内联预览（候选池第六梯队 ㊽ 续续续续续续 v1）【As-built v0.101】
+
+> **状态：As-built（v0.101 交付，2026-06-20）。** 扩 R102 只读 attachment viewer：非图片媒体从「只读占位」改「**内联预览**」——audio→`<audio controls>`、video→`<video controls>`、pdf→`<embed type=application/pdf>`（image `<img>` 不变）。**数据安全核心不变**：仍只 `vault.readBinary` 裸读、**绝不 documents.acquire**（无可编辑缓冲/无 autosave）。匹配 Obsidian 原生 audio/video/pdf 格式表。
+
+**契约（加性；reorganize mime 表 + 新 mediaKind）**：
+- `core/attachments.ts`：拆 `IMAGE_MIME`/`AUDIO_MIME`/`VIDEO_MIME` 三表（audio/video/pdf 从 `OTHER_BINARY_EXTS` 移出）；新 `type MediaKind = "image"|"audio"|"video"|"pdf"|"other"` + `mediaKind(path)` + `mediaMime(path)`（取代 `imageMime`，超集）。**`isAttachmentPath` 总集与 R102 字节相同**（reviewer 对称差验证 DROPPED=[]）**仅新增 {3gp, ogv}**（媒体格式入预览集 = 安全改进，二者原本会落可编辑 markdown）。
+- `features/attachment/AttachmentView.tsx`：按 `mediaKind` 渲染 image/audio/video/pdf/placeholder；effect 对所有 previewable kind（≠other）取 blob（`mediaMime` 设 type，复用 R102 readBinary→copy→Blob→objectURL + cancelled/revoke 守卫）。**onError 仅留 `<img>`**（audio/video 有原生错误 UI、pdf embed 无可靠 onError）；`failed` 仅由 readBinary reject（真·文件丢失）触发→占位。
+- `main.tsx` `__geodeMediaKind` probe；`app.css` `.attachment-audio/-video/-pdf`。
+
+**对抗评审（reviewer 6 维 + data-safety）→ 1 confirmed minor（修+锁），无 critical/major、无数据安全回归：**
+- **路由集零回归（headline）**：reviewer node 计算新旧 `isAttachmentPath` 对称差 → **DROPPED=[]、ADDED=["3gp","ogv"]**，「binary→可编辑 markdown→损坏」危险方向**不存在**；三新预览路径仍纯 readBinary 只读、永不 acquire。
+- **#1 [minor] `in`/方括号索引穿透原型链**（`attachments.ts`）：`ext in IMAGE_MIME` / `IMAGE_MIME[ext]` 会遍历原型链 → 文件名末段恰为 `toString`/`constructor`/`valueOf`/`__proto__` 等 → `mediaKind` 误判 "image"、`mediaMime` 返回 Object.prototype 函数（非 nullish→`??` 不兜底）。方向是「可编辑→只读」（不损数据，现实命中率≈0），但我「无 proto 污染」的判断错了——本轮由 Set.has 换 `in` 新引入的确定性偏差。**修**：`mediaKind`/`mediaMime` 改用 `Object.hasOwn`（仅自有属性，ES2022）。锁测 r104-e2e/probe「x.toString → other」。
+- **证伪**：数据安全（三新路径只 readBinary 不 acquire）；失败语义（readBinary reject→failed→占位兜住「文件丢失」，onError 移除只放弃「能读但解码失败」兜底=audio/video 原生错误 UI/pdf 空白降级，可接受）；资源竞态（cancelled+revoke 守卫、path 入 deps、kind 派生自 path 无需入 deps）；分层（只 import core+app、删 imageMime 无悬空引用）；pdf `<embed>` WKWebView 渲染不出=空白降级非崩溃（数据安全不受损）。
+
+**套件**：typecheck 0 · r104-e2e 19/19（mediaKind 分类含 proto-fix + audio/video/pdf 真元素 blob 渲染 + zip 占位 + 数据安全无 handle）· r104-probe 12/12 真 WKWebView · 回归 r102 20/20（pdf→placeholder 断言因 pdf 现可预览合理改用 .zip）· build exit 0 · 简化门 clean。**后续缺口**：pdf 桌面端空白时的兜底提示 · 大文件流式（现全量入内存，blob，同 R102 已知）· denylist 全翻转（R102 评审推荐数据安全收尾）。
+
 ## Round 103 additions — 局部图谱增强 depth 1-5 + 链接方向 toggle（候选池第六梯队 ㊵ 续续续续续 v1）【As-built v0.100】
 
 > **状态：As-built（v0.100 交付，2026-06-20）。** 局部图谱（local graph）从 `depth: 1|2` 扩到 **1-5**（Obsidian 范围）+ 新增 **Incoming/Outgoing 链接方向 toggle**（Obsidian local graph 设置）。**纯客户端、零改 getGraph 形状**，镜像 R84/R90/R99/R101 范式。**默认 depth:1 + both 方向 on = R43 旧无向局部 BFS 逐字节等价**（reviewer 140k fuzz 验证零回归）。**注：Daily notes/Calendar 本就在 R43/R48 完成——本轮 gate 发现候选池「㊼ Daily notes」条目陈旧，改取 ㊵ 续局部图谱。**
