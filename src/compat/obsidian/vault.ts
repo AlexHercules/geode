@@ -31,7 +31,8 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * through the vault adapter. R111: binary read/write bridge straight to native binary
  * IO — they do NOT route `.obsidian/` through config IO (config IO is text-only), so a
  * binary under `.obsidian/` resolves via the adapter's own dot-folder handling. stat/trash
- * and binary append/overwrite remain gaps.
+ * and DataAdapter binary append/overwrite remain gaps (binary OVERWRITE is available via
+ * Vault.modifyBinary, R120 — this lower-level adapter.writeBinary stays create-only).
  */
 export class CompatDataAdapter {
   constructor(private geode: GeodeVault) {}
@@ -135,10 +136,11 @@ export class CompatDataAdapter {
     return toArrayBuffer(await this.geode.readBinary(normalizedPath));
   }
   async writeBinary(normalizedPath: string, data: ArrayBuffer): Promise<void> {
-    // Geode's binary write is create-only (create_new — R17/R43 data-safety against the
-    // check-then-act truncation race), so overwriting an existing binary throws "File already
-    // exists" (deviation from Obsidian's overwrite). A true binary overwrite needs a dedicated
-    // atomic path (tmp + rename, like text modify); tracked as the modifyBinary gap.
+    // This DataAdapter path stays create-only (create_new — R17/R43 data-safety): overwriting an
+    // existing binary throws "File already exists" (deviation from Obsidian's overwrite). To
+    // OVERWRITE a binary, plugins use Vault.modifyBinary (R120, atomic tmp + rename); routing
+    // create-or-overwrite through here would need a check-then-act exists() test (the race R17
+    // hardened) or create-vs-overwrite tree-refresh handling — out of scope for this stub.
     await this.geode.createBinary(normalizedPath, new Uint8Array(data));
   }
   /* gaps — keep the surface honest instead of silently lying */
@@ -269,11 +271,10 @@ export class Vault extends Events {
     return this._registry.getFile(path) ?? this._registry.ensureFile(path, true);
   }
 
-  async modifyBinary(_file: TFile, _data: ArrayBuffer, _options?: DataWriteOptions): Promise<void> {
-    // Geode's binary write is create-only (create_new — R17/R43 data-safety); a true overwrite
-    // needs a dedicated atomic path (gap). Throw honestly rather than silently dropping the write.
-    reportGap("Vault", "modifyBinary", "binary overwrite is create-only (no atomic overwrite yet)");
-    throw new Error("Vault.modifyBinary is not available in Geode (binary write is create-only)");
+  // R120: real — overwrite an existing binary atomically (core modifyBinary = tmp + rename,
+  // so a mid-write crash never truncates the file). Supersedes the R111 create-only gap.
+  async modifyBinary(file: TFile, data: ArrayBuffer, _options?: DataWriteOptions): Promise<void> {
+    await this._geode.modifyBinary(file.path, new Uint8Array(data));
   }
 
   async append(file: TFile, data: string, _options?: DataWriteOptions): Promise<void> {

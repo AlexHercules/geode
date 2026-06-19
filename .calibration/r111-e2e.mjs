@@ -5,8 +5,8 @@
  *
  * The Obsidian compat shim (`window.app`, set by the plugin loader) now bridges binary IO to
  * Geode's native binary read/create — Vault.readBinary/createBinary + DataAdapter.readBinary/
- * writeBinary (image/PDF/Excalidraw plugins). Binary OVERWRITE (modifyBinary / write-on-exist)
- * stays an honest gap (Geode binary write is create-only — create_new, R17/R43 data safety).
+ * writeBinary (image/PDF/Excalidraw plugins). Binary OVERWRITE via Vault.modifyBinary is real
+ * since R120 (atomic tmp+rename); the lower-level DataAdapter.writeBinary stays create-only.
  */
 import { chromium } from "playwright";
 
@@ -71,13 +71,13 @@ const isolated = await app(async () => {
 });
 ok("mutating the returned ArrayBuffer does NOT corrupt the store", eq(isolated, [10, 20, 30, 255]), JSON.stringify(isolated));
 
-// ── modifyBinary is an honest gap (binary overwrite create-only) ────────────
-console.log("— binary overwrite is an honest gap —");
-const modThrew = await app(async () => {
-  try { await window.app.vault.modifyBinary(window.app.vault.getFileByPath("r111compat.bin"), new Uint8Array([1]).buffer); return false; }
-  catch { return true; }
+// ── modifyBinary now OVERWRITES (R120 — atomic tmp+rename; superseded the R111 gap) ──
+console.log("— binary overwrite via modifyBinary (R120) —");
+const modOk = await app(async () => {
+  try { await window.app.vault.modifyBinary(window.app.vault.getFileByPath("r111compat.bin"), new Uint8Array([1]).buffer); return true; }
+  catch { return false; }
 });
-ok("vault.modifyBinary throws an honest gap error (create-only binary write)", modThrew);
+ok("vault.modifyBinary overwrites an existing binary (R120, no longer a gap)", modOk);
 const overwriteThrew = await app(async () => {
   try { await window.app.vault.adapter.writeBinary("r111compat.bin", new Uint8Array([1]).buffer); return false; }
   catch { return true; }

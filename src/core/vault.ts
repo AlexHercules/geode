@@ -32,6 +32,9 @@ export interface VaultAdapter {
   /** Write raw bytes to a NEW file (attachment ingestion, R17). Rejects when
    *  the path already exists; parent folders are created as needed. */
   writeBinary(path: string, data: Uint8Array): Promise<void>;
+  /** Overwrite an existing binary file's bytes ATOMICALLY (tmp + rename, R120) —
+   *  a mid-write crash never truncates the existing file. Creates if absent. */
+  modifyBinary(path: string, data: Uint8Array): Promise<void>;
   writeFile(path: string, content: string): Promise<void>;
   createFile(path: string, content: string): Promise<void>;
   createFolder(path: string): Promise<void>;
@@ -438,6 +441,18 @@ export class Vault {
     await this.refreshTree();
     this.events.emit("file:created", { path });
     this.events.emit("vault:changed", { reason: "create" });
+  }
+
+  /** Overwrite an existing binary file's bytes (Obsidian-compat Vault.modifyBinary, R120).
+   *  Like modify() but binary: uncached, no echo fingerprint (FNV is text-scoped) — the
+   *  watcher reports our overwrite as external (a redundant event, safe direction). No tree
+   *  refresh (the path already exists, structure unchanged). Atomicity (tmp + rename) lives
+   *  in the adapter so a mid-write crash never truncates the existing file. */
+  async modifyBinary(path: string, data: Uint8Array): Promise<void> {
+    assertSafeRelPath(path); // untrusted plugin paths reach here via the compat Vault (R111 guard)
+    await this.adapter.modifyBinary(path, data);
+    this.events.emit("file:modified", { path });
+    this.events.emit("vault:changed", { reason: "modify" });
   }
 
   async createFolder(path: string): Promise<void> {
@@ -976,6 +991,18 @@ export class MemoryVaultAdapter implements VaultAdapter {
     }
   }
 
+  async modifyBinary(path: string, data: Uint8Array): Promise<void> {
+    // overwrite (real-fs tmp+rename parity): replace the bytes; one path = one
+    // representation, so drop any text twin (mirrors writeFile dropping the binary twin)
+    this.binaryFiles.set(path, data);
+    this.files.delete(path);
+    let parent = parentPath(path);
+    while (parent) {
+      this.folders.add(parent);
+      parent = parentPath(parent);
+    }
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     this.files.set(path, content);
     // one path = one representation (real-fs parity): writing text drops any binary
@@ -1182,14 +1209,22 @@ export class TauriVaultAdapter implements VaultAdapter {
     return out;
   }
 
-  async writeBinary(path: string, data: Uint8Array): Promise<void> {
-    // chunked btoa input — String.fromCharCode(...whole) overflows the arg stack
+  /** chunked btoa — String.fromCharCode(...whole) overflows the arg stack on large buffers */
+  private toBase64(data: Uint8Array): string {
     let bin = "";
     const chunk = 0x8000;
     for (let i = 0; i < data.length; i += chunk) {
       bin += String.fromCharCode(...data.subarray(i, i + chunk));
     }
-    await this.invoke("vault_write_binary", { vault: this.root, path, data: btoa(bin) });
+    return btoa(bin);
+  }
+
+  async writeBinary(path: string, data: Uint8Array): Promise<void> {
+    await this.invoke("vault_write_binary", { vault: this.root, path, data: this.toBase64(data) });
+  }
+
+  async modifyBinary(path: string, data: Uint8Array): Promise<void> {
+    await this.invoke("vault_modify_binary", { vault: this.root, path, data: this.toBase64(data) });
   }
 
   async writeFile(path: string, content: string): Promise<void> {

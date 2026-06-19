@@ -198,6 +198,34 @@ fn vault_write_binary(vault: String, path: String, data: String) -> CmdResult<()
     Ok(())
 }
 
+// async — binary overwrite off the main thread (R6); the bytes can be MBs. Unlike
+// vault_write_binary (create-only, exclusivity via create_new), this REPLACES an existing
+// binary file (Obsidian modifyBinary, R120). Atomic tmp + rename (vault_write precedent) so a
+// mid-write crash never truncates the existing file — only the throwaway tmp can be lost.
+#[tauri::command(async)]
+fn vault_modify_binary(vault: String, path: String, data: String) -> CmdResult<()> {
+    use base64::Engine as _;
+    let abs = safe_join(&vault, &path)?;
+    if let Some(parent) = abs.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("mkdir parents for {path}: {e}"))?;
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("decode {path}: {e}"))?;
+    // dot-prefixed tmp: the watcher's noise filter drops dotfile segments, so the
+    // temp file's create/rename events never reach the frontend (vault_write precedent).
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(abs.file_name().map(|n| n.to_os_string()).unwrap_or_default());
+    tmp_name.push(".geode-tmp");
+    let tmp = abs.with_file_name(tmp_name);
+    fs::write(&tmp, &bytes)
+        .and_then(|_| fs::rename(&tmp, &abs))
+        .map_err(|e| {
+            let _ = fs::remove_file(&tmp);
+            format!("write {path}: {e}")
+        })
+}
+
 #[tauri::command]
 fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
     let abs = safe_join(&vault, &path)?;
@@ -712,6 +740,7 @@ fn main() {
             vault_read,
             vault_read_binary,
             vault_write_binary,
+            vault_modify_binary,
             vault_write,
             vault_create,
             vault_mkdir,

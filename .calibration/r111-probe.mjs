@@ -2,8 +2,8 @@
  * R111 desktop probe — exercises the Obsidian compat binary IO bridge on the REAL Tauri /
  * WKWebView build against the native filesystem (not the Memory adapter). The compat App
  * (`globalThis.app`, built by the plugin loader) bridges Vault.readBinary/createBinary +
- * DataAdapter.readBinary/writeBinary to Geode's native binary IO. Binary OVERWRITE
- * (modifyBinary / write-on-exist) stays an honest gap (create-only, R17/R43 data safety).
+ * DataAdapter.readBinary/writeBinary to Geode's native binary IO. Binary OVERWRITE via
+ * Vault.modifyBinary is real since R120 (atomic tmp+rename); adapter.writeBinary stays create-only.
  * Run: node .calibration/r111-probe.mjs   (needs src-tauri/target/release/geode)
  *
  * App-Nap discipline (data-safety §D): the round-trip runs immediately in onload, results are
@@ -72,10 +72,10 @@ const probe = `module.exports = {
       const ab = await v.adapter.readBinary("r111a.bin");
       rec("adapter", [...new Uint8Array(ab)]);
 
-      // modifyBinary is an honest gap (binary overwrite create-only)
-      let mod = false;
-      try { await v.modifyBinary(v.getFileByPath("r111c.bin"), new Uint8Array([1]).buffer); } catch { mod = true; }
-      rec("modThrew", mod);
+      // modifyBinary now OVERWRITES (R120 — atomic tmp+rename; superseded the R111 gap)
+      let modOk = false;
+      try { await v.modifyBinary(v.getFileByPath("r111c.bin"), new Uint8Array([1]).buffer); modOk = true; } catch { modOk = false; }
+      rec("modOk", modOk);
 
       // adapter.writeBinary on an EXISTING path throws (no silent truncation)
       let ow = false;
@@ -122,7 +122,7 @@ ok("compat vault.createBinary returns a TFile", data.tfile === "r111c.bin", JSON
 ok("compat vault.readBinary round-trips the exact bytes (native fs)", eq(data.rt, [10, 20, 30, 255]), JSON.stringify(data.rt));
 ok("returned ArrayBuffer is a copy (store not corrupted by mutation)", eq(data.copy, [10, 20, 30, 255]), JSON.stringify(data.copy));
 ok("compat adapter.writeBinary creates + readBinary round-trips", eq(data.adapter, [7, 8, 9]), JSON.stringify(data.adapter));
-ok("vault.modifyBinary throws an honest gap (create-only)", data.modThrew === true);
+ok("vault.modifyBinary overwrites an existing binary (R120, no longer a gap)", data.modOk === true);
 ok("adapter.writeBinary on existing path throws (no silent truncation)", data.overwriteThrew === true);
 ok("untrusted plugin `..` path rejected by core assertSafeRelPath (R111 review fix)", data.escapeThrew === true);
 
