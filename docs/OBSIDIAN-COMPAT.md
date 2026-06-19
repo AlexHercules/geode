@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R100 套件回归（2026-06-19，macOS release 二进制 v0.97.0 实测 `r100-probe-vault`）
+
+R100 = Show tab title bar + Show status bar（候选池第六梯队 ㊺ 续续续 slice，原生功能）。对照 Obsidian Appearance/Interface：Show tab title bar（显隐窗格标签栏）+ status bar 显隐。**纯前端 view-only**（appearance Store + 条件渲染 + 设置 toggle），逐字镜像 R94 showInlineTitle/showRibbon 范式，默认 ON=零回归。
+
+新增套件：`r100-e2e.mjs` **15/15**（tab bar 默认显·toggle 隐→显·隐藏不丢 tab + status bar 同 + setChrome 往返）+ `r100-probe.mjs` **5/5**（真 WKWebView，`__geodeAppearance.setChrome`）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（chrome toggle 纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；TabBar 条件 return null（hooks 后）+ status footer 条件渲染、status 插件项 Store App 顶层无条件订阅（footer 卸载不报错） → **r94(inline title/ribbon)14/14 + r36(tabs)47/47 + r66(status bar)8/8 + r50(appearance)15/15 + r99(tags 节点)16/16 回归绿**。**对抗评审 6 维深挖 TabBar hooks 顺序/tab 丢失/status 插件 unmount → 0 confirmed**（EditorPane 是 TabBar 兄弟不被卸载=脏 tab 不困、PluginElementHost detach/reattach 同 R94）。**OBSIDIAN-COMPAT 缺口表**：㊺ tab title bar+status bar 交付（㊺ 外观补全续缺口：Native title bar / 半透明窗口 / Translucent——多需 Tauri 窗口能力）。
+
 ### R99 套件回归（2026-06-19，macOS release 二进制 v0.96.0 实测 `r99-probe-vault`）
 
 R99 = 标签作图谱节点 tags as graph nodes（候选池第六梯队 ㊵ 续续续 slice，原生功能）。对照 Obsidian 图谱「Tags」toggle：标签作绿色节点 + 与含标签的笔记连边。**纯前端 read-only 客户端合并**（新纯函数 `buildTagGraph` + toggle，零改 getGraph/GraphNode 形状），默认 OFF=零回归。

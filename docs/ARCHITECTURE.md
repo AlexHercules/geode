@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 100 additions — Show tab title bar + Show status bar（候选池第六梯队 ㊺ 续续续 v1）【As-built v0.97】
+
+> **状态：As-built（v0.97 交付，2026-06-19）。** Obsidian Appearance/Interface 两 toggle：**Show tab title bar**（显隐每个窗格的标签栏）+ **Show status bar**（显隐底部状态栏）。**纯前端 view-only**（不写 .md、不动 markdown.ts），**逐字镜像 R94 showInlineTitle/showRibbon appearance toggle 范式**（appearance Store + 反应式 useStore + 条件渲染 + 设置 toggle，全局持久，默认 ON=零回归+Obsidian）。
+
+**契约（无冻结接口改动）**：
+- `core/appearance.ts`：`showTabTitleBar`/`showStatusBar` Store（默认 true，localStorage `geode.showTabTitleBar`/`geode.showStatusBar`）+ setter（**showRibbon 的复制**；无 DOM 副作用故不入 `applyAppearanceSettings`，反应式消费）。
+- `App.tsx`：`TabBar` 组件加 `useStore(showTabTitleBar)` + `if (!tabBarVisible) return null`（**在全部 hooks 之后**——React 规则）；底部 `<footer className="status-bar">` 包 `{statusBarVisible && (…)}`（`statusBarVisible=useStore(showStatusBar)`）。**status 插件项 Store 在 App 顶层无条件 useStore 订阅**（footer 卸载时 plugin 仍 setStatusBarItem 不报错）。
+- `SettingsModal.tsx` 2 toggle（`settings-tab-title-bar-toggle`/`settings-status-bar-toggle`）。dict.views.ts 2 键+2 desc×en/zh。main.tsx `setChrome(tabTitleBar, statusBar)` 并入既有 `__geodeAppearance` probe。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 TabBar hooks 顺序/tab 丢失/status 插件 unmount/反应式持久/锁死/分层）→ 0 confirmed critical/major/minor/nit（全维证伪）：**
+- **TabBar hooks 证伪**：8 hooks 全在 `if (!tabBarVisible) return null` 之前、`menuTab`/`runMenu`/`indexFromEvent` 是普通值/函数非 hook → 无条件 hook 违规；TabBar 是 `.main-content` flex 兄弟、return null 在 `.pane{column}` 下干净塌缩、`.main-content{flex:1}` 填充。
+- **data-safety 证伪**：diff 零 .md/vault 写；EditorPane 在 `.main-content key={activeTab.id}` 是 TabBar 兄弟、隐藏 tab bar 不卸载它 → autosave debounce + 脏 buffer 存活、Ctrl+S/W/Tab/palette 操作 workspace state 非 TabBar DOM → 脏 tab 不可被困。
+- **status 插件证伪**：statusItems/statusBarElements App 顶层无条件订阅、word-count/backlink-count 经 setStatusBarItem(Store 非 DOM) 不报错、PluginElementHost cleanup 卸载时 detach 重显时 re-append（el 仍有效，同 R94 ribbon）。
+- **持久/锁死/分层证伪**：readBool/persistBool「true/false」精确往返、默认 ON 零回归、同步初始化无 FOUC；ribbon+tab bar+status 全隐藏仍可 Ctrl+,/palette 开设置（模态无条件渲染）；App/SettingsModal/main→@core/appearance 合法、setChrome 并入既有对象。
+
+**验证（As-built）**：typecheck 0 · `r100-e2e` **15/15**（tab bar 默认显·toggle 隐→显·**隐藏不丢 tab[仍可切]**·持久 + status bar 同 + setChrome 往返）· `r100-probe` **5/5** 真 WKWebView · 回归 r94(14)/r36(tabs 47)/r66(status 8)/r50(15)/r99(16) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（两 Store/setter + 两 toggle 块镜像 R94、合并=禁的加性 loop 碰 out-of-diff R94）。
+
+**v1 已知延期（reviewer 记）**：r100-e2e 仅单窗格（多窗格同隐 flexbox-safe 未测）/ status bar 隐藏对 compat addStatusBarItem el 的 detach-reattach（同 R94 ribbon PluginElementHost 路径已验，未单独断言）/ footer body 未随包裹层缩进（纯观感、与 R94 ribbon 一致）。
+
 ## Round 99 additions — 标签作图谱节点 tags as graph nodes（候选池第六梯队 ㊵ 续续续 v1）【As-built v0.96】
 
 > **状态：As-built（v0.96 交付，2026-06-19）。** Obsidian 图谱「Tags」toggle：把标签作为**绿色节点**显示、与含该标签的笔记连边。**纯前端 read-only 客户端合并**（不写 .md、不动 markdown.ts、**零改 getGraph/GraphNode 形状**——镜像 R96/R84 客户端思路）。默认 OFF = 零回归。
