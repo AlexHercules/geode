@@ -24,6 +24,7 @@ html[data-theme="dark"] {
   --border-strong: #444444;
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.55);
   --link-unresolved: #8b7cf680;
+  --graph-tag: #4cc46a; /* R99: tag nodes in the graph (Obsidian-style green) */
   --code-bg: rgba(255, 255, 255, 0.06);
   --selection: rgba(139, 124, 246, 0.3);
   --danger: #e06c75;
@@ -66,6 +67,7 @@ html[data-theme="light"] {
   --border-strong: #c8c8c8;
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.18);
   --link-unresolved: #6c5ce780;
+  --graph-tag: #2e9e4f; /* R99: tag nodes (darker green for the light background) */
   --code-bg: rgba(0, 0, 0, 0.05);
   --selection: rgba(108, 92, 231, 0.25);
   --danger: #d04848;

@@ -20,11 +20,13 @@ import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import type { GraphEdge, GraphNode } from "@core/types";
 import {
   applyGraphFilters,
+  buildTagGraph,
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
   nodeGroupColor,
   savePrefs,
+  TAG_PREFIX,
   type GraphForces,
   type GraphGroup,
   type GraphPrefs,
@@ -60,6 +62,7 @@ interface Palette {
   textMuted: string;
   bgPanel: string;
   unresolved: string;
+  tag: string;
 }
 
 const FALLBACK_PALETTE: Palette = {
@@ -70,6 +73,7 @@ const FALLBACK_PALETTE: Palette = {
   textMuted: "#9e9e9e",
   bgPanel: "#262626",
   unresolved: "#8b7cf680",
+  tag: "#3aa655",
 };
 
 type DragState =
@@ -130,6 +134,7 @@ function readPalette(el: HTMLElement): Palette {
     textMuted: v("--text-muted", FALLBACK_PALETTE.textMuted),
     bgPanel: v("--bg-panel", FALLBACK_PALETTE.bgPanel),
     unresolved: v("--link-unresolved", FALLBACK_PALETTE.unresolved),
+    tag: v("--graph-tag", FALLBACK_PALETTE.tag),
   };
 }
 
@@ -343,7 +348,12 @@ export function GraphView() {
       const dim = isDim(n.id);
       let path: Path2D;
       if (n.resolved) {
-        const color = groups.length ? nodeGroupColor(n, groups, p.accent) : p.accent;
+        // R99: tag nodes (resolved=true, id-prefixed) draw green; notes keep accent/group
+        const color = n.id.startsWith(TAG_PREFIX)
+          ? p.tag
+          : groups.length
+            ? nodeGroupColor(n, groups, p.accent)
+            : p.accent;
         let b = colorBatches.get(color);
         if (!b) {
           b = { normal: new Path2D(), dim: new Path2D() };
@@ -555,8 +565,15 @@ export function GraphView() {
     const raw = app.metadata.getGraph();
     // R96: drop excluded-files nodes + any edge touching them, before the R84 filters
     const exKept = new Set(raw.nodes.filter((n) => !isExcluded(n.id)).map((n) => n.id));
-    const exNodes = raw.nodes.filter((n) => exKept.has(n.id));
-    const exEdges = raw.edges.filter((e) => exKept.has(e.source) && exKept.has(e.target));
+    let exNodes = raw.nodes.filter((n) => exKept.has(n.id));
+    let exEdges = raw.edges.filter((e) => exKept.has(e.source) && exKept.has(e.target));
+    // R99 (㊵ 续续续): merge tag nodes + note→tag edges (client-side, only when on) so
+    // the existing exclude/filter/sample pipeline treats them like any other node
+    if (prefs.display.tags) {
+      const { nodes: tagNodes, edges: tagEdges } = buildTagGraph(app.metadata.getTagMap(), exKept);
+      exNodes = exNodes.concat(tagNodes);
+      exEdges = exEdges.concat(tagEdges);
+    }
     const data = applyGraphFilters(exNodes, exEdges, prefs.filters);
     const buildStart = performance.now();
 
@@ -667,6 +684,7 @@ export function GraphView() {
     prefs.showAll,
     prefs.filters.orphans,
     prefs.filters.existingOnly,
+    prefs.display.tags,
     excluded,
     anchor,
   ]);
@@ -690,6 +708,12 @@ export function GraphView() {
 
   const openNode = useCallback(
     (node: SimNode) => {
+      // R99: a tag node is NOT a file — clicking it searches the tag (mirrors the Tags
+      // pane / Obsidian), never openFile("tag:…") which would spawn a broken phantom tab
+      if (node.id.startsWith(TAG_PREFIX)) {
+        app.workspace.requestSearch(node.label);
+        return;
+      }
       if (node.resolved) {
         app.workspace.openFile(node.id);
         return;
@@ -701,6 +725,21 @@ export function GraphView() {
     },
     [app],
   );
+
+  // R99 probe: route a click to a node by id (canvas has no DOM nodes to click in E2E),
+  // so the tag-node click path (search, never openFile) is testable. Browser-E2E only.
+  useEffect(() => {
+    const g = globalThis as unknown as { __geodeGraphClickNode?: (id: string) => boolean };
+    g.__geodeGraphClickNode = (id) => {
+      const n = stateRef.current.nodes.find((x) => x.id === id);
+      if (!n) return false;
+      openNode(n);
+      return true;
+    };
+    return () => {
+      delete g.__geodeGraphClickNode;
+    };
+  }, [openNode]);
 
   /* ---------- pointer + wheel interactions ---------- */
 
@@ -982,6 +1021,15 @@ export function GraphView() {
               onChange={(e) => setDisplay("arrows", e.target.checked)}
             />
             <span>{t("graph.arrows")}</span>
+          </label>
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              data-testid="graph-tags"
+              checked={prefs.display.tags}
+              onChange={(e) => setDisplay("tags", e.target.checked)}
+            />
+            <span>{t("graph.showTags")}</span>
           </label>
           <div className="graph-settings-group">{t("graph.filters")}</div>
           <label className="graph-toggle">

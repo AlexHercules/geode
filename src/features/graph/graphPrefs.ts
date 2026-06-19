@@ -5,6 +5,7 @@
  * Backward compatible: an old `{mode,depth,showAll}` blob (or any missing/corrupt
  * field) falls back to the defaults below — forces/display simply default in.
  */
+import type { GraphNode, GraphEdge } from "@core/types";
 
 export interface GraphForces {
   /** pull toward the origin (forceCenter strength) */
@@ -25,6 +26,8 @@ export interface GraphDisplay {
   labelThreshold: number;
   /** draw directional arrowheads on edges */
   arrows: boolean;
+  /** R99: show tags as their own (green) nodes, linked to the notes that use them */
+  tags: boolean;
 }
 export interface GraphFilters {
   /** show notes with no connections (degree 0). Obsidian default: ON */
@@ -68,7 +71,7 @@ export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   depth: 1,
   showAll: false,
   forces: Object.freeze({ center: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
-  display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false }),
+  display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false }),
   // defaults = "show everything" (zero regression vs the pre-R84 unfiltered graph)
   filters: Object.freeze({ orphans: true, existingOnly: false }),
   // no colour groups by default → every resolved node keeps the accent (zero regression)
@@ -110,6 +113,7 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
         linkThickness: num(d.linkThickness, D.display.linkThickness, GRAPH_RANGES.linkThickness),
         labelThreshold: num(d.labelThreshold, D.display.labelThreshold, GRAPH_RANGES.labelThreshold),
         arrows: d.arrows === true,
+        tags: d.tags === true,
       },
       filters: {
         // default ON unless explicitly false; old blobs (no `filters`) keep "show all"
@@ -186,6 +190,34 @@ export function applyGraphFilters<
     n = n.filter((x) => (deg.get(x.id) ?? 0) > 0); // orphans have no edges → edges stay valid
   }
   return { nodes: [...n], edges: [...e] };
+}
+
+/** R99: tag node ids are prefixed (mirrors the `unresolved:` id-encoding convention)
+ *  so consumers (draw, hover) can tell a tag node from a note without a shape change. */
+export const TAG_PREFIX = "tag:";
+
+/**
+ * R99 (㊵ 续续续): build the tag half of the graph — one node per tag (id `tag:<name>`,
+ * label `#<name>`, green via draw, degree = # of using notes) + a note→tag edge for every
+ * (note, tag) pair where the note is in `keptNotes` (so excluded/filtered notes don't drag
+ * a tag in). `resolved: true` so the existing-files-only filter keeps tags. Pure.
+ */
+export function buildTagGraph(
+  tagMap: Map<string, Set<string>>,
+  keptNotes: Set<string>,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  for (const [tag, paths] of tagMap) {
+    let degree = 0;
+    for (const path of paths) {
+      if (!keptNotes.has(path)) continue;
+      edges.push({ source: path, target: TAG_PREFIX + tag });
+      degree++;
+    }
+    if (degree > 0) nodes.push({ id: TAG_PREFIX + tag, label: "#" + tag, resolved: true, degree });
+  }
+  return { nodes, edges };
 }
 
 export function loadPrefs(): GraphPrefs {

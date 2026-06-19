@@ -84,6 +84,7 @@ import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
 import { buildParagraph } from "@features/backlinks/BacklinksPanel";
+import { buildTagGraph } from "@features/graph/graphPrefs";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -525,6 +526,19 @@ async function bootstrap() {
   // toggle are browser-E2E only (§D); this proves the pure boundary math on the real build.
   const paraHost = globalThis as unknown as { __geodeBacklinkParagraph?: (content: string, from: number) => string };
   paraHost.__geodeBacklinkParagraph = (content, from) => buildParagraph(content, from).text;
+
+  // always-on tags-as-graph-nodes probe (R99, ㊵ 续续续): runs the pure buildTagGraph over
+  // the REAL tag index + all note paths, returning the tag node ids + edge count — proving
+  // the tag-graph construction on the real build. The draw colour + toggle are browser-E2E
+  // only (§D). Tag node ids are `tag:<name>` (id-encoding convention, like `unresolved:`).
+  const tagGraphHost = globalThis as unknown as {
+    __geodeGraphTags?: () => { nodes: { id: string; degree: number }[]; edges: number };
+  };
+  tagGraphHost.__geodeGraphTags = () => {
+    const kept = new Set(vault.getMarkdownFiles().map((f) => f.path));
+    const { nodes, edges } = buildTagGraph(app.metadata.getTagMap(), kept);
+    return { nodes: nodes.map((n) => ({ id: n.id, degree: n.degree })), edges: edges.length };
+  };
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is
