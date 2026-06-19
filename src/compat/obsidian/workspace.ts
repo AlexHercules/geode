@@ -39,6 +39,22 @@ export class MarkdownView extends FileView {
   override getViewType(): string {
     return "markdown";
   }
+
+  /** R116: Obsidian `MarkdownView.getMode()` — "source" (editor: live OR source) or
+   *  "preview" (reading). A compat MarkdownView is ONLY ever built over the editor
+   *  `getActiveView()` tracks (set on CM focus); Geode's reading view is not CM-backed
+   *  and never enters that tracker — so any MarkdownView Geode can hand a plugin wraps a
+   *  real editor and is always "source". (Don't read the active TAB's mode here: the
+   *  active tab and the active editor are independent sources and can point at different
+   *  tabs in a split, which would report "preview" over a live editor — review R116.) */
+  getMode(): "source" | "preview" {
+    return "source";
+  }
+
+  /** R116: Obsidian `MarkdownView.getViewData()` — the editor's raw markdown source. */
+  getViewData(): string {
+    return this.editor.getValue();
+  }
 }
 
 /**
