@@ -82,6 +82,7 @@ import { splitSlides } from "@features/slides";
 import { indentUnitString } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
+import { moveTargets } from "@core/explorerMove";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -506,6 +507,16 @@ async function bootstrap() {
   excludedHost.__geodeExcluded = (raw, path) => {
     setExcludedFiles(raw);
     return isExcluded(path);
+  };
+
+  // always-on move-targets probe (R97, ㊽ 续续续续): the valid folder targets the
+  // "Move to…" picker offers for a path (excludes self/descendants + current parent),
+  // proving the candidate enumeration on the real tree. The picker DOM + the actual move
+  // (vetted moveNode/renameWithLinkUpdate, R28-probed) are browser-E2E only (§D).
+  const moveHost = globalThis as unknown as { __geodeMoveFolders?: (fromPath: string) => string[] };
+  moveHost.__geodeMoveFolders = (fromPath) => {
+    const tree = vault.tree.get();
+    return tree ? moveTargets(tree, fromPath) : [];
   };
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a

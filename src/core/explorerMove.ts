@@ -58,6 +58,29 @@ export function resolveDropTarget(
   return targetFolder;
 }
 
+/**
+ * R97 (㊽ 续续续续): the VALID folder targets for moving `fromPath` (the "Move to…"
+ * picker candidate list). All folders in the tree EXCEPT — the current parent (a no-op
+ * move), and (when `fromPath` is itself a folder) `fromPath` and its descendants (a move
+ * into self). Root ("") is offered separately by the picker. Depth-first tree order.
+ */
+export function moveTargets(tree: FolderNode, fromPath: string): string[] {
+  const fromIsFolder = findFolder(tree, fromPath) !== null;
+  const parent = parentPath(fromPath);
+  const out: string[] = [];
+  const walk = (folder: FolderNode) => {
+    for (const child of folder.children) {
+      if (child.kind !== "folder") continue;
+      const p = child.path;
+      const selfOrDescendant = fromIsFolder && (p === fromPath || p.startsWith(fromPath + "/"));
+      if (!selfOrDescendant && p !== parent) out.push(p);
+      walk(child);
+    }
+  };
+  walk(tree);
+  return out;
+}
+
 /** Does `targetFolder` already hold a child with the dragged item's name?
  *  (case-insensitive, mirrors `validateName`). Checked at drop → notice, never
  *  blind-overwrite. */

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
-import { EXPLORER_MIME, findFolder, resolveDropTarget, wouldCollide } from "@core/explorerMove";
+import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
+import { MoveToModal } from "./MoveToModal";
 import { explorerSort, setExplorerSort } from "@core/appearance";
 import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
@@ -181,6 +182,8 @@ export function Explorer() {
   const [selected, setSelected] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
+  /* R97: path being moved via the "Move to…" folder picker (null = closed) */
+  const [movePath, setMovePath] = useState<string | null>(null);
   /* R28 drag-to-move: source path being dragged; current drop folder
      (null = none/illegal, "" = vault root, "a/b" = that folder) */
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
@@ -858,6 +861,16 @@ export function Explorer() {
                   </>
                 )}
                 <button
+                  data-testid="explorerctx-move-to"
+                  onClick={() => {
+                    setMenu(null);
+                    setMovePath(node.path);
+                  }}
+                >
+                  <Icon name="folder-plus" size={14} />
+                  {t("explorer.moveTo")}
+                </button>
+                <button
                   data-testid="explorerctx-rename"
                   onClick={() => {
                     setMenu(null);
@@ -882,6 +895,21 @@ export function Explorer() {
             ))(menu.node)
           )}
         </div>
+      )}
+
+      {/* R97: "Move to…" folder picker (modal overlay; select → vetted moveNode) */}
+      {movePath !== null && tree && (
+        <MoveToModal
+          fromPath={movePath}
+          folders={moveTargets(tree, movePath)}
+          allowRoot={parentPath(movePath) !== ""}
+          onSelect={(target) => {
+            const from = movePath;
+            setMovePath(null);
+            void moveNode(from, target);
+          }}
+          onClose={() => setMovePath(null)}
+        />
       )}
     </div>
   );
