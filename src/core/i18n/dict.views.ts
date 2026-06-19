@@ -43,6 +43,10 @@ export const en = {
   "settings.modeReading": "Reading",
   "settings.modeLive": "Live",
   "settings.modeSource": "Source",
+  "settings.indentUsingTabs": "Indent using tabs",
+  "settings.indentUsingTabsDesc": "Insert a tab character when indenting, instead of spaces.",
+  "settings.tabIndentSize": "Tab indent size",
+  "settings.tabIndentSizeDesc": "The width of one indentation level.",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS",
@@ -323,6 +327,10 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.modeReading": "阅读",
   "settings.modeLive": "实时",
   "settings.modeSource": "源码",
+  "settings.indentUsingTabs": "使用 Tab 缩进",
+  "settings.indentUsingTabsDesc": "缩进时插入制表符而非空格。",
+  "settings.tabIndentSize": "Tab 缩进宽度",
+  "settings.tabIndentSizeDesc": "一级缩进的宽度。",
 
   // ---- settings: Obsidian CSS (R20) ----
   "settings.obsidianCss": "Obsidian CSS 兼容",

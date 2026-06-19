@@ -12,6 +12,10 @@ import {
   setShowLineNumbers,
   defaultNewTabMode,
   setDefaultNewTabMode,
+  tabIndentSize,
+  setTabIndentSize,
+  indentUsingTabs,
+  setIndentUsingTabs,
   accentColor,
   setAccentColor,
   interfaceFont,
@@ -84,7 +88,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.88.0";
+const APP_VERSION = "0.89.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -196,6 +200,9 @@ function AppearanceSection() {
   const strict = useStore(strictLineBreaks);
   const lineNo = useStore(showLineNumbers);
   const newTabMode = useStore(defaultNewTabMode);
+  /* R92: editor indentation — indent using tabs + tab indent size */
+  const useTabs = useStore(indentUsingTabs);
+  const indentSize = useStore(tabIndentSize);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -470,6 +477,45 @@ function AppearanceSection() {
           >
             {t("settings.modeSource")}
           </button>
+        </div>
+      </div>
+
+      {/* R92: indent using tabs (default ON = Obsidian) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.indentUsingTabs")}</div>
+          <div className="setting-desc">{t("settings.indentUsingTabsDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${useTabs ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={useTabs}
+          aria-label={t("settings.indentUsingTabs")}
+          data-testid="settings-indent-tabs-toggle"
+          onClick={() => setIndentUsingTabs(!useTabs)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R92: tab indent size (default 4 = Obsidian) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.tabIndentSize")}</div>
+          <div className="setting-desc">{t("settings.tabIndentSizeDesc")}</div>
+        </div>
+        <div className="settings-segmented" role="group" aria-label={t("settings.tabIndentSize")}>
+          {[2, 4, 8].map((n) => (
+            <button
+              key={n}
+              className={indentSize === n ? "is-active" : ""}
+              aria-pressed={indentSize === n}
+              data-testid={`settings-tabsize-${n}`}
+              onClick={() => setTabIndentSize(n)}
+            >
+              {n}
+            </button>
+          ))}
         </div>
       </div>
 

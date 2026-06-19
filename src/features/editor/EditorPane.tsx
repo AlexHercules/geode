@@ -3,7 +3,13 @@ import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { foldEffect } from "@codemirror/language";
-import { spellcheckEnabled, strictLineBreaks, showLineNumbers } from "@core/appearance";
+import {
+  spellcheckEnabled,
+  strictLineBreaks,
+  showLineNumbers,
+  tabIndentSize,
+  indentUsingTabs,
+} from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
@@ -17,6 +23,7 @@ import {
   buildEditorExtensions,
   clearRevealFlash,
   editorModeExtensions,
+  indentExtensions,
   refreshProperties,
   refreshWikilinks,
   revealFlash,
@@ -133,6 +140,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const strict = useStore(strictLineBreaks);
   /* R88: line-number gutter preference — reconfigure CM compartment reactively */
   const showLineNo = useStore(showLineNumbers);
+  /* R92: indentation preferences — reconfigure CM compartment reactively */
+  const indentSize = useStore(tabIndentSize);
+  const useTabs = useStore(indentUsingTabs);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -151,6 +161,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const modeCompartmentRef = useRef<Compartment | null>(null);
   /** R88: compartment for the line-number gutter — showLineNumbers reconfigures it */
   const lineNumberCompartmentRef = useRef<Compartment | null>(null);
+  /** R92: compartment for indentation (tab width + unit) — settings reconfigure it */
+  const indentCompartmentRef = useRef<Compartment | null>(null);
   /** the editor mode the current view's compartment is configured with */
   const appliedModeRef = useRef<"live" | "source">("live");
   /** render-time mirror of tab.mode — the CM effect reads it without depending
@@ -289,6 +301,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     modeCompartmentRef.current = modeCompartment;
     const lineNumberCompartment = new Compartment();
     lineNumberCompartmentRef.current = lineNumberCompartment;
+    const indentCompartment = new Compartment();
+    indentCompartmentRef.current = indentCompartment;
     appliedModeRef.current = mode;
     const view = new EditorView({
       // per-view state seeded with the shared doc + the handle's sync glue;
@@ -301,6 +315,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           mode,
           modeCompartment,
           lineNumberCompartment,
+          indentCompartment,
           // R22: portal target for the live-mode PropertiesPanel
           propertiesHost: propertiesHostRef.current ?? undefined,
         }),
@@ -367,6 +382,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       viewRef.current = null;
       modeCompartmentRef.current = null;
       lineNumberCompartmentRef.current = null;
+      indentCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
       // view (other panes / the manager's deferred-drop flush / flushAll)
@@ -404,6 +420,15 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(showLineNo ? [lineNumbers()] : []) });
   }, [showLineNo]);
+
+  /* ---------- indentation preference → CM compartment (R92) ---------- */
+
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = indentCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(indentExtensions(indentSize, useTabs)) });
+  }, [indentSize, useTabs]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

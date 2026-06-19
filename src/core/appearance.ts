@@ -111,6 +111,44 @@ export function setDefaultNewTabMode(mode: NewTabMode): void {
   persistString(DEFAULT_TAB_MODE_KEY, mode);
 }
 
+/** R92 (㊶ 续续): editor indentation. Mirrors Obsidian's "Indent using tabs"
+ *  (default ON → insert a tab char; OFF → spaces) + "Tab indent size" (default 4 =
+ *  one indent level's width). Both default to Obsidian's shipped values; this is a
+ *  deliberate alignment (Geode previously inserted CM's default 2 spaces on Tab —
+ *  no existing .md is rewritten, only future Tab presses differ). The CM translation
+ *  lives in cmExtensions.indentExtensions — a Compartment reconfigured per-view in
+ *  EditorPane, mirroring R88's lineNumberCompartment. */
+const TAB_SIZE_KEY = "geode.tabIndentSize";
+const INDENT_TABS_KEY = "geode.indentUsingTabs";
+
+/** Clamp a tab indent size to a sane integer width (1–8, Obsidian-style); junk → 4. */
+export function clampTabSize(n: number): number {
+  return Number.isFinite(n) ? Math.min(8, Math.max(1, Math.round(n))) : 4;
+}
+
+function readTabSize(): number {
+  try {
+    const v = localStorage.getItem(TAB_SIZE_KEY);
+    return v === null ? 4 : clampTabSize(Number(v));
+  } catch {
+    return 4;
+  }
+}
+
+export const tabIndentSize = new Store<number>(readTabSize());
+export const indentUsingTabs = new Store<boolean>(readBool(INDENT_TABS_KEY, true));
+
+export function setTabIndentSize(n: number): void {
+  const size = clampTabSize(n);
+  tabIndentSize.set(size);
+  persistString(TAB_SIZE_KEY, String(size));
+}
+
+export function setIndentUsingTabs(on: boolean): void {
+  indentUsingTabs.set(on);
+  persistBool(INDENT_TABS_KEY, on);
+}
+
 /** R87 (㊶): strict line breaks in the READING view. OFF (default) = a single
  *  newline renders as `<br>` (Obsidian's default reading behaviour); ON = strict
  *  CommonMark (single newline joins; needs two trailing spaces / a blank line).

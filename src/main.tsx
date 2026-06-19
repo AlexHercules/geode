@@ -53,7 +53,7 @@ import {
   listWorkspaceNames,
 } from "@core/workspaces";
 import { initSnapshots, recordSnapshot, listSnapshots, restoreSnapshot } from "@core/snapshots";
-import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode } from "@core/appearance";
+import { applyAppearanceSettings, setReadableLineLength, setSpellcheckEnabled, setAccentColor, sanitizeFontFamily, setInterfaceFont, setTextFont, setMonospaceFont, setDefaultNewTabMode, setTabIndentSize, setIndentUsingTabs, tabIndentSize, indentUsingTabs } from "@core/appearance";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { copyLineDown, copyLineUp, indentLess, indentMore, insertBlankLine, moveLineDown, moveLineUp, selectLine, toggleComment } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -79,6 +79,7 @@ import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
+import { indentUnitString } from "@features/editor/cmExtensions";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -441,6 +442,28 @@ async function bootstrap() {
     ) => string[];
   };
   searchSortHost.__geodeSearchSort = (items, key) => sortResults(items, key).map((r) => r.basename);
+
+  // always-on indent-config probe (R92, ㊶ 续续): applies the indentation settings
+  // through the real setters (clamp + persist) and returns the resolved unit string
+  // Tab inserts. The live-CM reconfigure (view.state.facet(indentUnit)) is browser-E2E
+  // only (§D timing: the reconfigure rides a React effect); this proves the setter +
+  // clamp + pure unit derivation on the real WKWebView build.
+  const indentHost = globalThis as unknown as {
+    __geodeIndentConfig?: (size: number, useTabs: boolean) => {
+      size: number;
+      useTabs: boolean;
+      unit: string;
+    };
+  };
+  indentHost.__geodeIndentConfig = (size, useTabs) => {
+    setTabIndentSize(size);
+    setIndentUsingTabs(useTabs);
+    return {
+      size: tabIndentSize.get(),
+      useTabs: indentUsingTabs.get(),
+      unit: indentUnitString(tabIndentSize.get(), indentUsingTabs.get()),
+    };
+  };
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is

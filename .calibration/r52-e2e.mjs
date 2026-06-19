@@ -66,13 +66,29 @@ await app(() => window.__app.commands.execute("editor:toggle-comment"));
 await wait(120);
 const doc2 = await liveDoc();
 ok("editor:toggle-comment uncomments (round-trip)", doc2.startsWith("alpha\nbeta"), JSON.stringify(doc2));
-// indent line "beta" (offset 6)
+// indent line "beta" (offset 6). R92: the live editor:indent command now reads
+// the configured indentUnit facet (default flipped to tabs). Pin tabs-off/size-2
+// so this stays deterministic regardless of the ambient default AND asserts the
+// live command honours the setting. (The pure __geodeEdit.indent probe above is
+// config-independent by design — bare state, CM's default 2 spaces.)
+await app(() => window.__geodeIndentConfig(2, false));
+await wait(120);
 await app(() => { const v = window.__app.documents.getActiveView()?.view; if (v) v.dispatch({ selection: { anchor: 6 } }); });
 await wait(40);
 await app(() => window.__app.commands.execute("editor:indent"));
 await wait(120);
 const doc3 = await liveDoc();
-ok("editor:indent indents line beta", doc3.startsWith("alpha\n  beta"), JSON.stringify(doc3));
+ok("editor:indent indents line beta (honours 2-space setting)", doc3.startsWith("alpha\n  beta"), JSON.stringify(doc3));
+// and with tabs-on the same command inserts a tab (R92 integration). Reset the
+// live buffer via dispatch (mirrors section C), then indent line "beta".
+await app(() => window.__geodeIndentConfig(4, true));
+await wait(120);
+await app(() => { const v = window.__app.documents.getActiveView()?.view; if (v) v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: "alpha\nbeta\n" }, selection: { anchor: 6 } }); });
+await wait(40);
+await app(() => window.__app.commands.execute("editor:indent"));
+await wait(120);
+const doc3b = await liveDoc();
+ok("editor:indent inserts a tab when indent-using-tabs is on", doc3b.startsWith("alpha\n\tbeta"), JSON.stringify(doc3b));
 
 // ── C. real keystroke routes Mod+/ through the Prec.highest interceptor ───────
 console.log("C. hotkey routing (Mod+/ via interceptor)");

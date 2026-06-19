@@ -17,7 +17,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, LanguageSupport, foldService, syntaxHighlighting } from "@codemirror/language";
+import { HighlightStyle, LanguageSupport, foldService, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { search, searchKeymap } from "@codemirror/search";
 import {
@@ -47,7 +47,7 @@ import type { GeodeApp } from "@app/AppContext";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { showLineNumbers } from "@core/appearance";
+import { indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
 import { markdownFolding } from "./folding";
@@ -405,6 +405,25 @@ export function editorModeExtensions(
 }
 
 /**
+ * R92 (㊶ 续续): the string inserted for ONE indent level — a tab char when
+ * "Indent using tabs" is on, otherwise `size` spaces. Single source of truth for
+ * the CM `indentUnit` facet (drives Tab / indentWithTab) and the probe.
+ */
+export function indentUnitString(size: number, useTabs: boolean): string {
+  return useTabs ? "\t" : " ".repeat(size);
+}
+
+/**
+ * R92: the indentation slice (tab visual width + indent unit). Lives in a
+ * Compartment so EditorPane can reconfigure it on a settings change WITHOUT
+ * rebuilding the view — mirrors R88's lineNumberCompartment. tabSize sets how
+ * wide a literal `\t` renders; indentUnit is what Tab inserts.
+ */
+export function indentExtensions(size: number, useTabs: boolean): Extension {
+  return [EditorState.tabSize.of(size), indentUnit.of(indentUnitString(size, useTabs))];
+}
+
+/**
  * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
  * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
  * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
@@ -432,10 +451,12 @@ export function buildEditorExtensions(opts: {
   modeCompartment: Compartment;
   /** R88: owned by EditorPane — showLineNumbers toggle reconfigures it in place */
   lineNumberCompartment: Compartment;
+  /** R92: owned by EditorPane — tabIndentSize / indentUsingTabs reconfigure it in place */
+  indentCompartment: Compartment;
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment } = opts;
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment } = opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
     // editor is focused, at the HIGHEST precedence so it runs BEFORE CM's own
@@ -454,6 +475,8 @@ export function buildEditorExtensions(opts: {
     modeCompartment.of(editorModeExtensions(app, getPath, mode)),
     // R88: line-number gutter — empty when off; EditorPane reconfigures on toggle
     lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : []),
+    // R92: indentation (tab width + indent unit) — EditorPane reconfigures on setting change
+    indentCompartment.of(indentExtensions(tabIndentSize.get(), indentUsingTabs.get())),
     revealFlashField,
     markdownSansHeaderFold(),
     syntaxHighlighting(mdHighlight),
