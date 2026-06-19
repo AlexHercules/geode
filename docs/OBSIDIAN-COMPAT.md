@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R110 套件回归（2026-06-20，macOS release 二进制 v0.107.0 实测 `r110-probe-vault`）
+
+R110 = graph 局部图谱 Neighbor links toggle（候选池 ㊵ 续 slice）。对照 Obsidian local graph 第三 toggle：Neighbor links ON=显示邻居间互连边、OFF=只显示触锚点的星形边。纯客户端（graphPrefs 纯函数 `localEdges` + GraphView 消费，零改 getGraph），默认 ON=零回归。R103 已做 depth+in/out，本轮第三件。
+
+新增套件：`r110-e2e.mjs` **10/10**（localEdges probe[ON 全留/OFF 只 incident 丢 B↔C/global 不滤/精确丢 between-neighbour]·prefs 默认 ON+兼容+显式 false·local-mode toggle 在/持久/global 隐藏）+ `r110-probe.mjs` **5/5**（真 WKWebView，`__geodeLocalEdges` neighbor-links 边筛）。**套件矩阵不回退**：r78/r84/r99/r101/r103 graph 全套绿。
+
 ### R109 套件回归（2026-06-20，macOS release 二进制 v0.106.0 实测 `r109-probe-vault`）
 
 R109 = wikilink `[[note#^` 块引用补全（候选池 ㊹ 续 slice，收官 ㊹）。对照 Obsidian：`[[note#^` 列块引用、显示块文本预览（按内容选）、插 `[[note#^id]]`。块早已索引 + navigate → 本轮加补全 surface（首个 async 补全源，读笔记取预览，因 BlockRef 无 text）。复用 R106 applyLink。

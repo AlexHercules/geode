@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 110 additions — graph 局部图谱 Neighbor links toggle（候选池 ㊵ 续 v1）【As-built v0.107】
+
+> **状态：As-built（v0.107 交付，2026-06-20）。** Obsidian local graph 第三 toggle（R103 已做 depth 1-5 + Incoming/Outgoing）。**Neighbor links ON**（默认）= 显示邻居间互连边（锚点周围的笔记彼此的连接）；**OFF** = 只显示触锚点的边（星形），隐藏「两个非锚点之间」的边。纯客户端、零改 getGraph，镜像 R103/R84/R90 范式。默认 ON = 零回归。
+
+**契约（加性；新纯函数）**：
+- `graphPrefs.ts`：`GraphPrefs.neighborLinks: boolean`（默认 true）。DEFAULT_PREFS + parse `p.neighborLinks !== false`（旧 blob 无键→true=零回归）。新导出纯函数 **`localEdges<E extends {source,target}>(edges, keptIds, anchor, neighborLinks): E[]`**——`within = edges.filter(双端∈keptIds)`；`neighborLinks || anchor===null → return within`（ON 或 global 模式=全留）；否则 `within.filter(source===anchor || target===anchor)`（OFF=只留 incident）。**替换原 GraphView inline 双端边筛**（减法去重 + probe 化）。
+- `GraphView.tsx`：local rebuild 用 `localEdges(data.edges, keptIds, anchorId, prefs.neighborLinks)`；rebuild deps 加 prefs.neighborLinks；设置面板 local-mode 第三 toggle `graph-local-neighbor`（R103 in/out 旁）。
+- `main.tsx` `__geodeLocalEdges` probe；dict `graph.localNeighbor`×en/zh。
+
+**对抗评审（reviewer 5 维 + `git diff` 改前后边筛逐字符比对 + 套件断言逐条核）→ 0 confirmed 代码缺陷，零回归 byte-equivalent：**
+- **零回归 byte-equivalent（headline）**：`localEdges` 在 ON（默认）与 global（anchor===null）两条路径返回 `within`（= 原 inline `keptIds.has(source)&&keptIds.has(target)` 同谓词、同 `.filter` 新数组），与原 inline **逐字符等价**；仅 local+OFF 才改变行为=预期新特性。rebuild deps/消费链(buildAdjacency hover+sim links)/节点采样(sampleByDegree 在 keptIds 前)/prefs 兼容均无回归。
+- **已知行为（非缺陷，文档化）**：neighbor OFF 在 **depth≥2** 时会滤掉 depth1↔depth2 边（两端非锚点）→ 深层节点变无边孤立点（节点仍在 picked 集、只是无渲染边）。这是 OFF「隐藏邻居间连边」字面语义的直接结果；**默认 depth=1 产生干净星形、无孤立点**。深层星形清理留作后续（neighbor OFF 时按渲染边重筛节点集）。
+- **证伪**：自环边（source===target===anchor）OFF 时 incident 保留；anchorId 在 picked 集（localSubgraph 含 anchor）→ incident 边安全；toggle 仅 local-mode 渲染 + setPrefs→savePrefs effect 持久 + rebuild deps→切换即 rebuild；分层/i18n/probe 合规。
+
+**套件**：typecheck 0 · r110-e2e 10/10（localEdges probe ON/OFF/global/精确丢 between-neighbour + prefs 默认 ON+兼容+显式 false + UI 在/持久/global 隐藏）· r110-probe 5/5 真 WKWebView · 回归 r78/r84/r99/r101/r103 graph 全绿 · build exit 0 · 简化门 clean（localEdges 吸收原 inline 边筛=减法+probe 化）。**后续缺口**：neighbor OFF depth≥2 深层星形节点清理 · 嵌套标签层级 · 局部图谱保存默认。
+
 ## Round 109 additions — wikilink `[[note#^` 块引用补全（候选池 ㊹ 续 v1，收官 ㊹）【As-built v0.106】
 
 > **状态：As-built（v0.106 交付，2026-06-20）。** `[[<note>#^<query>` 触发该笔记块引用补全——**显示块文本预览**（按内容选，因 Geode 块 id 不透明）、插块 id → `[[note#^id]]`。块早已索引（`BlockRef{id,from,to}`，**无 text**）+ `[[note#^id]]` 早已 navigate（resolveSubpath）→ 本轮加补全 surface。**首个 async 补全源**（BlockRef 无 text → 须读笔记内容取预览）。**收官 ㊹**（alias R106 + heading R107 + attachment R108 + block R109）。
