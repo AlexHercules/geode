@@ -79,7 +79,7 @@ import { findTableRanges } from "@features/editor/liveTables";
 import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
-import { indentUnitString, wikilinkHeadingTargets } from "@features/editor/cmExtensions";
+import { indentUnitString, wikilinkHeadingTargets, wikilinkAttachmentCandidates } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
@@ -589,6 +589,16 @@ async function bootstrap() {
   };
   headingCompleteHost.__geodeHeadingComplete = (typed, fromPath) =>
     wikilinkHeadingTargets(app, typed, fromPath)?.map((h) => h.text) ?? null;
+
+  // always-on wikilink attachment-candidate probe (R108, ㊹ 续续): runs the pure
+  // wikilinkAttachmentCandidates over the REAL file list — proves which non-md attachments
+  // the `[[` completion offers + their insert text (name vs full path by ambiguity). The CM
+  // autocomplete DOM is browser-E2E only (§D).
+  const wikiAttachHost = globalThis as unknown as {
+    __geodeWikilinkAttachments?: (absolute: boolean) => { name: string; linkText: string }[];
+  };
+  wikiAttachHost.__geodeWikilinkAttachments = (absolute) =>
+    wikilinkAttachmentCandidates(vault.getFiles(), absolute).map((c) => ({ name: c.file.name, linkText: c.linkText }));
 
   // always-on alias-map probe (R106, ㉟ 续): returns the REAL frontmatter-alias index
   // (path → aliases) — proves aliases are parsed + enumerated on the real build, which is

@@ -44,7 +44,7 @@ import {
 } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
-import type { HeadingRef } from "@core/types";
+import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
@@ -341,6 +341,28 @@ export function wikilinkHeadingTargets(app: GeodeApp, typed: string, fromPath: s
   return (app.metadata.getMetadata(target)?.headings ?? []).filter((h) => h.text !== "" && !/[[\]|#]/.test(h.text));
 }
 
+/** R108 (㊹ 续续): the non-md attachments a `[[` completion offers — picking one inserts
+ *  `[[image.png]]` (a link) / `![[image.png]]` (an embed if the user typed `![[`), resolved
+ *  by `resolveAttachment` (keyed on the name WITH extension). Link text = the name unless it
+ *  is ambiguous (a same-named attachment elsewhere) or `absolute` path format, then the full
+ *  path; names that would break the `[[…]]` structure (`[ ] | #`) are dropped. Pure; exported
+ *  for the probe. Extensionless files are excluded (they are editable, not attachments). */
+export function wikilinkAttachmentCandidates(
+  files: readonly FileNode[],
+  absolute: boolean,
+): Array<{ file: FileNode; linkText: string }> {
+  const attachments = files.filter((f) => f.extension !== "md" && f.extension !== "");
+  const dup = new Map<string, number>();
+  for (const f of attachments) dup.set(f.name.toLowerCase(), (dup.get(f.name.toLowerCase()) ?? 0) + 1);
+  const out: Array<{ file: FileNode; linkText: string }> = [];
+  for (const f of attachments) {
+    const linkText = absolute || (dup.get(f.name.toLowerCase()) ?? 0) > 1 ? f.path : f.name;
+    if (/[[\]|#]/.test(linkText)) continue;
+    out.push({ file: f, linkText });
+  }
+  return out;
+}
+
 function wikilinkCompletionSource(app: GeodeApp, getPath: () => string) {
   return (ctx: CompletionContext): CompletionResult | null => {
     const before = ctx.matchBefore(/\[\[[^\[\]]*$/);
@@ -406,6 +428,12 @@ function wikilinkCompletionSource(app: GeodeApp, getPath: () => string) {
           apply: applyLink(`${canonical}|${alias}`),
         });
       }
+    }
+    // R108 (㊹ 续续): also offer non-md attachments (images/pdf/…) so `[[image.png]]` links
+    // and `![[image.png]]` embeds. The label keeps the extension (it's how attachments resolve).
+    for (const { file, linkText } of wikilinkAttachmentCandidates(app.vault.getFiles(), absolute)) {
+      const folder = file.path.includes("/") ? file.path.slice(0, file.path.lastIndexOf("/")) : "";
+      options.push({ label: file.name, detail: folder || undefined, apply: applyLink(linkText) });
     }
     return { from: before.from + 2, options, validFor: /^[^\[\]]*$/ };
   };
