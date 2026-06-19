@@ -25,6 +25,7 @@ html[data-theme="dark"] {
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.55);
   --link-unresolved: #8b7cf680;
   --graph-tag: #4cc46a; /* R99: tag nodes in the graph (Obsidian-style green) */
+  --graph-attachment: #e0b341; /* R101: attachment nodes in the graph (Obsidian-style yellow) */
   --code-bg: rgba(255, 255, 255, 0.06);
   --selection: rgba(139, 124, 246, 0.3);
   --danger: #e06c75;
@@ -68,6 +69,7 @@ html[data-theme="light"] {
   --shadow-modal: 0 12px 40px rgba(0, 0, 0, 0.18);
   --link-unresolved: #6c5ce780;
   --graph-tag: #2e9e4f; /* R99: tag nodes (darker green for the light background) */
+  --graph-attachment: #c8902b; /* R101: attachment nodes (darker yellow for the light background) */
   --code-bg: rgba(0, 0, 0, 0.05);
   --selection: rgba(108, 92, 231, 0.25);
   --danger: #d04848;

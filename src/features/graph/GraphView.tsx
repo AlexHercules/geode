@@ -20,6 +20,8 @@ import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import type { GraphEdge, GraphNode } from "@core/types";
 import {
   applyGraphFilters,
+  ATTACHMENT_PREFIX,
+  buildAttachmentGraph,
   buildTagGraph,
   DEFAULT_PREFS,
   GRAPH_RANGES,
@@ -63,6 +65,7 @@ interface Palette {
   bgPanel: string;
   unresolved: string;
   tag: string;
+  attachment: string;
 }
 
 const FALLBACK_PALETTE: Palette = {
@@ -74,6 +77,7 @@ const FALLBACK_PALETTE: Palette = {
   bgPanel: "#262626",
   unresolved: "#8b7cf680",
   tag: "#3aa655",
+  attachment: "#e0b341",
 };
 
 type DragState =
@@ -135,6 +139,7 @@ function readPalette(el: HTMLElement): Palette {
     bgPanel: v("--bg-panel", FALLBACK_PALETTE.bgPanel),
     unresolved: v("--link-unresolved", FALLBACK_PALETTE.unresolved),
     tag: v("--graph-tag", FALLBACK_PALETTE.tag),
+    attachment: v("--graph-attachment", FALLBACK_PALETTE.attachment),
   };
 }
 
@@ -348,12 +353,15 @@ export function GraphView() {
       const dim = isDim(n.id);
       let path: Path2D;
       if (n.resolved) {
-        // R99: tag nodes (resolved=true, id-prefixed) draw green; notes keep accent/group
+        // R99/R101: tag nodes draw green, attachment nodes yellow (both resolved=true,
+        // id-prefixed); notes keep accent/group
         const color = n.id.startsWith(TAG_PREFIX)
           ? p.tag
-          : groups.length
-            ? nodeGroupColor(n, groups, p.accent)
-            : p.accent;
+          : n.id.startsWith(ATTACHMENT_PREFIX)
+            ? p.attachment
+            : groups.length
+              ? nodeGroupColor(n, groups, p.accent)
+              : p.accent;
         let b = colorBatches.get(color);
         if (!b) {
           b = { normal: new Path2D(), dim: new Path2D() };
@@ -574,6 +582,16 @@ export function GraphView() {
       exNodes = exNodes.concat(tagNodes);
       exEdges = exEdges.concat(tagEdges);
     }
+    // R101 (㊵ 续续续续): merge attachment nodes + note→attachment edges (same client-side
+    // pattern as tags) so the exclude/filter/sample pipeline treats them like any node
+    if (prefs.display.attachments) {
+      const { nodes: attNodes, edges: attEdges } = buildAttachmentGraph(
+        app.metadata.getAttachmentMap(),
+        exKept,
+      );
+      exNodes = exNodes.concat(attNodes);
+      exEdges = exEdges.concat(attEdges);
+    }
     const data = applyGraphFilters(exNodes, exEdges, prefs.filters);
     const buildStart = performance.now();
 
@@ -685,6 +703,7 @@ export function GraphView() {
     prefs.filters.orphans,
     prefs.filters.existingOnly,
     prefs.display.tags,
+    prefs.display.attachments,
     excluded,
     anchor,
   ]);
@@ -712,6 +731,13 @@ export function GraphView() {
       // pane / Obsidian), never openFile("tag:…") which would spawn a broken phantom tab
       if (node.id.startsWith(TAG_PREFIX)) {
         app.workspace.requestSearch(node.label);
+        return;
+      }
+      // R101: an attachment node IS a real file — strip the `attachment:` prefix and open
+      // the actual vault path (NOT openFile("attachment:…"), which would phantom-tab). The
+      // id suffix is the resolveAttachment-verified path, so the file always exists.
+      if (node.id.startsWith(ATTACHMENT_PREFIX)) {
+        app.workspace.openFile(node.id.slice(ATTACHMENT_PREFIX.length));
         return;
       }
       if (node.resolved) {
@@ -1030,6 +1056,15 @@ export function GraphView() {
               onChange={(e) => setDisplay("tags", e.target.checked)}
             />
             <span>{t("graph.showTags")}</span>
+          </label>
+          <label className="graph-toggle">
+            <input
+              type="checkbox"
+              data-testid="graph-attachments"
+              checked={prefs.display.attachments}
+              onChange={(e) => setDisplay("attachments", e.target.checked)}
+            />
+            <span>{t("graph.showAttachments")}</span>
           </label>
           <div className="graph-settings-group">{t("graph.filters")}</div>
           <label className="graph-toggle">

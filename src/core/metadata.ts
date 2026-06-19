@@ -334,6 +334,8 @@ export class MetadataIndex {
   /** R41: tag → file-set cache, keyed on the index revision (the `#` completion
    *  hot path + Tags pane both call getTagMap per keystroke/render). */
   private tagMapCache: { rev: number; map: Map<string, Set<string>> } | null = null;
+  /** R101 (㊵ 续续续续): attachment path → set of notes referencing it (graph nodes) */
+  private attachmentRefMapCache: { rev: number; map: Map<string, Set<string>> } | null = null;
 
   constructor(
     private vault: Vault,
@@ -394,7 +396,15 @@ export class MetadataIndex {
   }
 
   private async reindexFile(path: string): Promise<void> {
-    if (!path.toLowerCase().endsWith(".md")) return;
+    if (!path.toLowerCase().endsWith(".md")) {
+      // R101: a non-md file create/modify changes the attachment SET (createBinary +
+      // the external fs-watcher both fire file:created for attachments) → bump so
+      // attachment-dependent consumers (getAttachmentMap cache, graph rebuild) refresh.
+      // Mirrors how delete (dropPath) / rename (reindexFolder) already bump; only the
+      // create path was silent. md files fall through to the normal index+bump below.
+      this.bump();
+      return;
+    }
     // guard against late events for files that no longer exist (ghost entries)
     if (!this.vault.fileExists(path)) {
       if (this.byPath.delete(path)) {
@@ -736,6 +746,41 @@ export class MetadataIndex {
   }
 
   /**
+   * R101 (㊵ 续续续续): every non-md attachment referenced by a note → the set of
+   * notes that reference it. Captures `[[img.png]]` / `![[img.png]]` (wikilink
+   * embeds) and `[txt](doc.pdf)` (markdown links); markdown image embeds `![](…)`
+   * are NOT in `meta.links` (parseMarkdown skips them) so they're not indexed here.
+   * Lazily computed, cached per index revision (mirrors getTagMap). Drives the
+   * graph "Attachments" nodes — every value is a real vault path (a node id is
+   * `attachment:<path>`; openNode strips the prefix to open the actual file).
+   */
+  getAttachmentMap(): Map<string, Set<string>> {
+    const rev = this.revision.get();
+    if (this.attachmentRefMapCache?.rev === rev) return this.attachmentRefMapCache.map;
+    const map = new Map<string, Set<string>>();
+    for (const meta of this.byPath.values()) {
+      for (const link of meta.links) {
+        // mirror getGraph's resolution so the attachment SET matches getGraph's skip
+        // set exactly: a markdown link decodes/strips via resolveByKind (a non-note
+        // result is the attachment path); a bare wikilink (resolveLink→null) needs the
+        // explicit resolveAttachment. Using the raw target for both would miss
+        // percent-encoded / relative markdown hrefs (or fuzz-match the wrong file).
+        const resolvedRaw = this.resolveByKind(link, meta.path);
+        const att =
+          resolvedRaw !== null && !this.byPath.has(resolvedRaw)
+            ? resolvedRaw
+            : this.resolveAttachment(link.target, meta.path);
+        if (!att) continue;
+        let set = map.get(att);
+        if (!set) map.set(att, (set = new Set()));
+        set.add(meta.path);
+      }
+    }
+    this.attachmentRefMapCache = { rev, map };
+    return map;
+  }
+
+  /**
    * R22: every frontmatter key used anywhere in the vault — authored casing,
    * case-insensitively deduplicated (first occurrence wins), sorted
    * lexicographically. Lazily computed and cached per index revision.
@@ -826,13 +871,22 @@ export class MetadataIndex {
     }
     for (const meta of this.byPath.values()) {
       for (const link of meta.links) {
-        // graph nodes are notes only (byPath); a markdown link can resolve to an
-        // ATTACHMENT (resolveMarkdownLink falls back to resolveAttachment) which
-        // has no node — treat any non-note resolution as a ghost, matching how a
-        // wikilink-to-attachment already behaves (resolveLink returns null). This
-        // also guards the degree++ below from an absent target node.
+        // graph nodes are notes only (byPath). resolveByKind yields a note path, an
+        // ATTACHMENT path (markdown→resolveAttachment fallback), or null.
         const resolvedRaw = this.resolveByKind(link, meta.path);
         const resolved = resolvedRaw !== null && nodes.has(resolvedRaw) ? resolvedRaw : null;
+        // R101: an attachment reference is NOT an unresolved *note* — skip it so it doesn't
+        // masquerade as a ghost note (matching Obsidian, where attachments are a separate
+        // class shown only via the graph "Attachments" toggle, which adds them as their own
+        // yellow nodes through buildAttachmentGraph). Markdown attachment links surface as a
+        // non-note resolvedRaw; bare-wikilink attachments (resolveLink→null) need the
+        // explicit resolveAttachment probe. Genuine missing notes still ghost below.
+        if (
+          resolved === null &&
+          (resolvedRaw !== null || this.resolveAttachment(link.target, meta.path) !== null)
+        ) {
+          continue;
+        }
         const targetId = resolved ?? `unresolved:${link.target.toLowerCase()}`;
         if (!resolved && !nodes.has(targetId)) {
           nodes.set(targetId, { id: targetId, label: link.target, resolved: false, degree: 0 });

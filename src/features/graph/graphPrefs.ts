@@ -28,6 +28,8 @@ export interface GraphDisplay {
   arrows: boolean;
   /** R99: show tags as their own (green) nodes, linked to the notes that use them */
   tags: boolean;
+  /** R101: show attachments as their own (yellow) nodes, linked to the notes referencing them */
+  attachments: boolean;
 }
 export interface GraphFilters {
   /** show notes with no connections (degree 0). Obsidian default: ON */
@@ -71,7 +73,7 @@ export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   depth: 1,
   showAll: false,
   forces: Object.freeze({ center: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
-  display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false }),
+  display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false, attachments: false }),
   // defaults = "show everything" (zero regression vs the pre-R84 unfiltered graph)
   filters: Object.freeze({ orphans: true, existingOnly: false }),
   // no colour groups by default → every resolved node keeps the accent (zero regression)
@@ -114,6 +116,7 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
         labelThreshold: num(d.labelThreshold, D.display.labelThreshold, GRAPH_RANGES.labelThreshold),
         arrows: d.arrows === true,
         tags: d.tags === true,
+        attachments: d.attachments === true,
       },
       filters: {
         // default ON unless explicitly false; old blobs (no `filters`) keep "show all"
@@ -192,32 +195,62 @@ export function applyGraphFilters<
   return { nodes: [...n], edges: [...e] };
 }
 
+/**
+ * R99/R101: shared builder for an "aux" half of the graph — one resolved node per
+ * map key (id `prefix+key`, label via `labelOf`, degree = # of kept referencing notes)
+ * + a note→key edge for every (note, key) pair whose note is in `keptNotes` (so
+ * excluded/filtered notes don't drag an aux node in). `resolved: true` so the
+ * existing-files-only filter keeps them. Pure. The only thing tags (R99) and
+ * attachments (R101) vary is the id prefix + how the key maps to a label.
+ */
+function buildAuxGraph(
+  map: Map<string, Set<string>>,
+  keptNotes: Set<string>,
+  prefix: string,
+  labelOf: (key: string) => string,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  for (const [key, paths] of map) {
+    let degree = 0;
+    for (const path of paths) {
+      if (!keptNotes.has(path)) continue;
+      edges.push({ source: path, target: prefix + key });
+      degree++;
+    }
+    if (degree > 0) nodes.push({ id: prefix + key, label: labelOf(key), resolved: true, degree });
+  }
+  return { nodes, edges };
+}
+
 /** R99: tag node ids are prefixed (mirrors the `unresolved:` id-encoding convention)
  *  so consumers (draw, hover) can tell a tag node from a note without a shape change. */
 export const TAG_PREFIX = "tag:";
 
-/**
- * R99 (㊵ 续续续): build the tag half of the graph — one node per tag (id `tag:<name>`,
- * label `#<name>`, green via draw, degree = # of using notes) + a note→tag edge for every
- * (note, tag) pair where the note is in `keptNotes` (so excluded/filtered notes don't drag
- * a tag in). `resolved: true` so the existing-files-only filter keeps tags. Pure.
- */
+/** R99 (㊵ 续续续): the tag half of the graph — one green node per tag (label `#<name>`),
+ *  note→tag edges for kept notes. See buildAuxGraph. */
 export function buildTagGraph(
   tagMap: Map<string, Set<string>>,
   keptNotes: Set<string>,
 ): { nodes: GraphNode[]; edges: GraphEdge[] } {
-  const nodes: GraphNode[] = [];
-  const edges: GraphEdge[] = [];
-  for (const [tag, paths] of tagMap) {
-    let degree = 0;
-    for (const path of paths) {
-      if (!keptNotes.has(path)) continue;
-      edges.push({ source: path, target: TAG_PREFIX + tag });
-      degree++;
-    }
-    if (degree > 0) nodes.push({ id: TAG_PREFIX + tag, label: "#" + tag, resolved: true, degree });
-  }
-  return { nodes, edges };
+  return buildAuxGraph(tagMap, keptNotes, TAG_PREFIX, (tag) => "#" + tag);
+}
+
+/** R101: attachment node ids are prefixed (mirrors `tag:`/`unresolved:`) so draw/click
+ *  can tell an attachment from a note; the suffix is the real vault path, so openNode
+ *  strips the prefix to open the actual file. */
+export const ATTACHMENT_PREFIX = "attachment:";
+
+/** R101 (㊵ 续续续续): the attachment half of the graph — one yellow node per referenced
+ *  attachment (label = basename), note→attachment edges for kept notes. The map's keys
+ *  are real vault paths (metadata.getAttachmentMap). See buildAuxGraph. */
+export function buildAttachmentGraph(
+  attachmentMap: Map<string, Set<string>>,
+  keptNotes: Set<string>,
+): { nodes: GraphNode[]; edges: GraphEdge[] } {
+  return buildAuxGraph(attachmentMap, keptNotes, ATTACHMENT_PREFIX, (p) =>
+    p.slice(p.lastIndexOf("/") + 1),
+  );
 }
 
 export function loadPrefs(): GraphPrefs {

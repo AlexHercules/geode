@@ -84,7 +84,7 @@ import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
 import { buildParagraph } from "@features/backlinks/BacklinksPanel";
-import { buildTagGraph } from "@features/graph/graphPrefs";
+import { buildTagGraph, buildAttachmentGraph } from "@features/graph/graphPrefs";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -537,6 +537,20 @@ async function bootstrap() {
   tagGraphHost.__geodeGraphTags = () => {
     const kept = new Set(vault.getMarkdownFiles().map((f) => f.path));
     const { nodes, edges } = buildTagGraph(app.metadata.getTagMap(), kept);
+    return { nodes: nodes.map((n) => ({ id: n.id, degree: n.degree })), edges: edges.length };
+  };
+
+  // always-on attachments-as-graph-nodes probe (R101, ㊵ 续续续续): runs the pure
+  // buildAttachmentGraph over the REAL attachment index (note→attachment refs from
+  // meta.links) + all note paths, returning the attachment node ids + edge count. The
+  // draw colour + toggle + click→openFile are browser-E2E only (§D). Node ids are
+  // `attachment:<vault-path>` (id-encoding convention, like `tag:` / `unresolved:`).
+  const attachmentGraphHost = globalThis as unknown as {
+    __geodeGraphAttachments?: () => { nodes: { id: string; degree: number }[]; edges: number };
+  };
+  attachmentGraphHost.__geodeGraphAttachments = () => {
+    const kept = new Set(vault.getMarkdownFiles().map((f) => f.path));
+    const { nodes, edges } = buildAttachmentGraph(app.metadata.getAttachmentMap(), kept);
     return { nodes: nodes.map((n) => ({ id: n.id, degree: n.degree })), edges: edges.length };
   };
 
