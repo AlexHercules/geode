@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 93 additions — Explorer 右键上下文菜单补全（候选池第六梯队 ㊽ 续续 v1）【As-built v0.90】
+
+> **状态：As-built（v0.90 交付，2026-06-19）。** **前置门 gate① 揭露 ㊽ 描述失准**：Explorer **早已有**行右键菜单（New note here / New folder here / Rename / Delete-trash）——R93 非从零，而是**朝 Obsidian 平价扩展**（㉒–㉜ 同类失准已制度化两道门，本轮再次成功拦截「重建已有菜单」）。本轮**加性**补：文件项 **Open in new tab / Open to the right / Make a copy** + **空白区根菜单**（New note / New folder at root）+ R81 两轴 clamp + per-item testid。全部复用既有 vetted 路径（openFile/splitActivePane/createBinary/trash/renameWithLinkUpdate），**零新依赖**。**Reveal in Finder / Open in new window 延期**（需 Tauri opener / pop-out = 硬边界 #5）。
+
+**契约（无冻结接口改动；MenuState 是 Explorer 内部类型）**：
+- `features/explorer/Explorer.tsx`：`MenuState.node: VaultNode | null`（null = 空白区根菜单）。新 handler `openInNewTab`（`workspace.openFile(path,{newTab:true})`）/ `openToRight`（`splitActivePane("row")`→`openFile(path,{paneId})`，**null→newTab 兜底**[graph/无活动 pane]）/ `makeCopy`（**R42 flushAll → readBinary → createBinary at uniquePath(parent,basename,ext)**，byte-identical，md 副本 openFile；源永不写）。行 `onContextMenu` 加 `e.stopPropagation()`（不冒泡到容器根菜单 handler）；`.explorer-tree` 容器加 `onContextMenu`→根菜单。菜单 render `menu.node === null ? 根 : ((node)=>(…))(menu.node)` **IIFE 收窄**（闭包不保留 `=== null ?` 三元收窄 → 必须捕获非空 const，否则满地 `menu.node!`）。
+- `core/vault.ts`（**对抗评审修根因**）：MemoryVaultAdapter `readFile` 缺二进制回退 → createBinary 写的 md 在浏览器模式不可文本读（真 fs 无此分裂）→ **加对称回退**（`files` 缺则 decode `binaryFiles`）；+ **两 map 互斥**（`writeFile` 删 binary twin / `createFile` 碰撞检查含 binaryFiles）防 readBinary 读到陈旧字节；+ `uniquePath` ext="" 不加尾点（`README` 不变 `README.`）。
+- `main.tsx`：`__geodeExplorerCopy(path)` always-on probe（uniquePath+readBinary+createBinary+逐字节比对）。dict.panels.ts 3 键 × en/zh。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 data-safety 写路径/readFile 回退/事件协调/pane split/IIFE 收窄/分层）→ 0 confirmed critical/major + 3 minor（全确认已修）+ 1 注释（已订正）：**
+- **Finding 1（minor，根因·已修）**：MemoryVaultAdapter `files`/`binaryFiles` 非互斥——makeCopy(createBinary→binaryFiles) 后编辑+存(writeFile→files) → 两 map 并存、`readFile`(files-first 新) 与 `readBinary`(binaryFiles-first 旧) 分歧 → 再 copy 读到陈旧字节（违 R93 自身注释引的「one file」不变式）。**修=writeFile 删 binary twin + createFile 碰撞含 binaryFiles**（一路一表示=真 fs 平价）。**测试遮蔽=r93-e2e 从不 edit-then-recopy → 补「编辑副本→再 copy→断言新内容非陈旧」**。
+- **Finding 2（minor，已修）**：无扩展名文件（README/LICENSE）`uniquePath(…,"")` 产 `README.` 尾点（mac 怪名/win 静默撞源）。**修=uniquePath ext="" 略点**。补无扩展名 copy e2e（`LICENSE 1` 无点）。
+- **Finding 3（minor，已修）**：`flushAll()` 在 makeCopy try 外 → flushAll reject = unhandled。**修=移进 try**（对齐 deleteNode）。
+- **注释订正**：「createBinary assertSafeRelPath guarded」失准（Vault.createBinary 不调它，仅 create/createFolder 调）→ 改述「dest 由源 path 派生天然在库内 + Rust safe_join/create_new 兜底」。
+- **PASS 维度**：desktop 写路径（`vault_write_binary` 用 `create_new(true)`→dest 撞=硬错非覆盖、源只读、flushAll 先行）；stopPropagation 仅 contextmenu（不碰 drag/click）；空白区 handler 仅真空白触发（行恒 stop）；splitActivePane null 兜底 + openFile retarget 新 pane 无孤儿 dup；非 md「Open in new tab」与既有 activateNode 一致（非 R93 回归）；IIFE 分区干净；分层合规。
+
+**验证（As-built）**：typecheck 0 · `r93-e2e` **22/22**（文件/文件夹/根菜单项 + make-copy 创建+同内容+源不变 + **编辑副本再 copy 非陈旧[Finding 1]** + **无扩展名无尾点[Finding 2]** + open-in-new-tab + open-to-right 分 pane）· `r93-probe` **9/9** 真 fs（byte-identical copy + 唯一命名 + 子文件夹 + 源文本可读）· 回归 r28(23)/r91(10)/r24(12)/r23(22)/r89(16) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（3 handler 各单站不同体非重复、按钮块结构似而非 token 同[合并需新抽象 + 碰 out-of-diff]、IIFE/vault 修/probe 受保护）。
+
+**v1 已知延期**：Move to…（需文件夹 picker modal）· Reveal in Finder / Open in default app（Tauri opener=硬边界 #5）· Open in new window（pop-out=硬边界）· Bookmark 项 · 多选批量操作。
+
 ## Round 92 additions — Tab 缩进设置：Indent using tabs + Tab indent size（候选池第六梯队 ㊶ 续续 v1）【As-built v0.89】
 
 > **状态：As-built（v0.89 交付，2026-06-19）。** Obsidian Editor 两设置：「Indent using tabs」（默认 ON → Tab 插制表符；OFF → 空格）+「Tab indent size」（默认 4 = 一级缩进宽度）。**纯前端 view/edit 配置**（不写 .md、不动 markdown.ts/改写引擎；只改 Tab 键插入的字符）。**默认对齐 Obsidian = 故意翻转**（Geode 此前用 CM 默认 2 空格；先例 R87 翻转 breaks）——**不重写任何已存 .md**，仅未来 Tab 按键产出不同字符。CM 翻译走 Compartment 反应式 reconfigure，**镜像 R88 lineNumberCompartment**。

@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R93 套件回归（2026-06-19，macOS release 二进制 v0.90.0 实测 `r93-probe-vault`）
+
+R93 = Explorer 右键上下文菜单补全（候选池第六梯队 ㊽ 续续 slice，原生功能）。**前置门 gate① 揭露 ㊽ 描述失准**：Explorer 早已有行右键菜单（New note here/New folder here/Rename/Delete）→ R93 朝 Obsidian 平价**加性扩展**：文件项 Open in new tab / Open to the right / Make a copy + 空白区根菜单 + R81 两轴 clamp + per-item testid。复用既有 vetted 路径（openFile/splitActivePane/createBinary/trash），零新依赖；Reveal in Finder/pop-out 延期（硬边界 #5）。
+
+新增套件：`r93-e2e.mjs` **22/22**（文件/文件夹/根菜单项 + make-copy 创建·同内容·源不变·编辑副本再 copy 非陈旧·无扩展名无尾点 + open-in-new-tab + open-to-right 分 pane）+ `r93-probe.mjs` **9/9**（真 fs，`__geodeExplorerCopy` byte-identical + 唯一命名 + 子文件夹）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（右键菜单纯前端 + 复用 vetted vault 写）；不碰 markdown.ts → **r26-bytes 不涉及**；MemoryVaultAdapter `readFile` 加二进制回退 + 两 map 互斥（真 fs 平价）+ uniquePath ext="" 无尾点 → **r28(Explorer 移动)23/23 + r91(排序)10/10 + r24(autosave/flush)12/12 + r23(editor)22/22 + r89(createNewNote/uniquePath)16/16 回归绿**。**对抗评审 6 维深挖 data-safety 写路径 / readFile 回退 / 事件协调 / pane split → 0 confirmed critical/major + 3 minor（Finding 1 readBinary 陈旧[两 map 互斥修] / Finding 2 无扩展名尾点 / Finding 3 flushAll 进 try，全修）+ 1 注释订正**。desktop 写路径 `vault_write_binary` 用 `create_new(true)`=dest 撞硬错非覆盖、源只读。**OBSIDIAN-COMPAT 缺口表**：㊽ 右键菜单 Open/Copy/根菜单交付（续缺口：Move to…[文件夹 picker] / Reveal in Finder[Tauri opener=硬边界] / Open in new window[pop-out] / Bookmark / 多选批量 / excluded files / detect-all-extensions / 非 md 查看视图）。
+
 ### R92 套件回归（2026-06-19，macOS release 二进制 v0.89.0 实测 `r92-probe-vault`）
 
 R92 = Tab 缩进设置（候选池第六梯队 ㊶ 续续 slice，原生功能）。对照 Obsidian Editor「Indent using tabs」（默认 ON）+「Tab indent size」（默认 4）。**纯前端 view/edit 配置**（appearance Store + CM `indentCompartment` 反应式 reconfigure + 设置 UI），不写 .md、不动 markdown.ts；默认对齐 Obsidian = 故意翻转（先例 R87）、不重写已存 .md。
