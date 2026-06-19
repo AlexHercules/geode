@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R109 套件回归（2026-06-20，macOS release 二进制 v0.106.0 实测 `r109-probe-vault`）
+
+R109 = wikilink `[[note#^` 块引用补全（候选池 ㊹ 续 slice，收官 ㊹）。对照 Obsidian：`[[note#^` 列块引用、显示块文本预览（按内容选）、插 `[[note#^id]]`。块早已索引 + navigate → 本轮加补全 surface（首个 async 补全源，读笔记取预览，因 BlockRef 无 text）。复用 R106 applyLink。
+
+新增套件：`r109-e2e.mjs` **12/12**（wikilinkBlockTargets probe[`#^`/self-link/heading 路由/无块/不可解析]·`[[note#^` 按内容过滤选插 `[[ZZBlk#^blkfox]]`·无 caret heading 零回归·file 零回归）+ `r109-probe.mjs` **7/7**（真 WKWebView，`__geodeBlockComplete` async 真 fs 块解析 + 预览）。**套件矩阵不回退**：r31/r41/r106/r107/r108 补全 + r24/r70 链接全绿。**㊹ wikilink 补全增强收官**（alias/heading/attachment/block）。
+
 ### R108 套件回归（2026-06-20，macOS release 二进制 v0.105.0 实测 `r108-probe-vault`）
 
 R108 = `[[` 补全列非 md 附件候选（候选池 ㊹ 续续 slice，核心功能）。对照 Obsidian：`[[` 列附件、插 `[[image.png]]`（含扩展名）、`![[image.png]]` 嵌入。附件早已 resolve + 渲染 → 本轮加补全 surface，串起 R102-R105 附件 + R106-R108 补全。纯前端、零写 .md，复用 R106 applyLink。

@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 109 additions — wikilink `[[note#^` 块引用补全（候选池 ㊹ 续 v1，收官 ㊹）【As-built v0.106】
+
+> **状态：As-built（v0.106 交付，2026-06-20）。** `[[<note>#^<query>` 触发该笔记块引用补全——**显示块文本预览**（按内容选，因 Geode 块 id 不透明）、插块 id → `[[note#^id]]`。块早已索引（`BlockRef{id,from,to}`，**无 text**）+ `[[note#^id]]` 早已 navigate（resolveSubpath）→ 本轮加补全 surface。**首个 async 补全源**（BlockRef 无 text → 须读笔记内容取预览）。**收官 ㊹**（alias R106 + heading R107 + attachment R108 + block R109）。
+
+**契约（加性；补全源返回类型加 Promise）**：
+- `cmExtensions.ts`：私有 `blockPreview(content, from, to)`（slice → 去尾部 `^id` marker → 折叠空白 → 80 截断）。新导出 **async** `wikilinkBlockTargets(app, typed, fromPath): Promise<Array<{id,text}> | null>`——`#` 后非 `^`→null；resolve note → `getMetadata.blocks` 过滤定界符 id → `await vault.read(target)`（try/catch→null）→ 每块 {id, preview}。补全源 block 子分支（`typed[hashIdx+1]==="^"`，在 heading 分支前）：返回 `wikilinkBlockTargets(...).then(...)` Promise——`from=过 #^`、`label=b.text||b.id`（按内容过滤）、`detail=^id`、`apply=applyLink(b.id)`（插 id）、`validFor:/^[^\[\]#]*$/`。补全源返回类型加 `| Promise<CompletionResult|null>`（CM 允许 async source）。
+- `main.tsx` `__geodeBlockComplete(typed, fromPath)` async probe。
+
+**对抗评审（reviewer 6 维 + 读 CM autocomplete 库内部验 async 竞态 + data-safety）→ 0 confirmed 缺陷（2 nit 留档）：**
+- **零回归 byte-equivalent（headline）**：diff 是**纯新增**（block 子分支 + 返回类型联合加宽）；heading（R107）/ file·alias·attachment（R108）分支**逐字节未动**；`#` 无 caret 落 heading（block 子分支门控 `typed[hashIdx+1]==="^"`）。
+- **async 竞态安全（headline，读库内部坐实）**：CM `@codemirror/autocomplete@6.20.3` 每 source 单一在飞 query（`!running.some(same source)`）→ 不并发两次 vault.read；resolve 时 replay updates 前向映射、abort 守门丢弃过期 Promise → 无「旧盖新」。`validFor` 保证 `#^` 后过滤只客户端重过滤、**不重读笔记**（读一次/激活）。vault.read 命中 contentCache（首次后内存）。
+- **证伪**：from 算术（`[[#^` hashIdx=0→before.from+4 过 `[[#^`、嵌入 `![[` from 不含 `!`）；apply 插 id→resolveSubpath 大小写不敏感命中；blockPreview 去 marker 正则与 BLOCK_MARKER_RE 一致；数据安全（仅 vault.read 只读、apply 插 ASCII id 走标准 dispatch、无 .md 写）。
+- **2 nit（留档不改）**：① 目标笔记为脏（未保存）开文件时 metadata 偏移可能与 vault.read 已存内容轻微错位→preview 退化空/偏移→label 回退 id（无崩无写）；② `!/[[\]|#]/.test(b.id)` 对 `[A-Za-z0-9-]+` id 恒真=对称 heading 分支的死防御（无害）。
+
+**套件**：typecheck 0 · r109-e2e 12/12（wikilinkBlockTargets probe 6 case + `[[note#^` CM 按内容过滤选 + 插 `[[ZZBlk#^blkfox]]` + `[[#^` self-link + 无 caret heading 零回归）· r109-probe 7/7 真 WKWebView · 回归 r31/r41/r106/r107/r108/r24/r70 全绿 · build exit 0 · 简化门 clean（blockPreview 保留=命名非平凡变换、内联反更密）。**㊹ wikilink 补全增强收官**（alias/heading/attachment/block 四件）。**后续缺口**：多级 `[[note#H1#H2`（次标题）· `[[note#^` 块文本 markdown 渲染。
+
 ## Round 108 additions — `[[` 补全列非 md 附件候选（候选池 ㊹ 续续 v1）【As-built v0.105】
 
 > **状态：As-built（v0.105 交付，2026-06-20）。** `[[` 补全现在也列出非 md 附件（图片/pdf/…）——选中插 `[[image.png]]`（链接）、`![[image.png]]`（嵌入，若键入了 `![[`）。附件早已 resolve（`resolveAttachment` 按 `f.name` 含扩展名索引）+ `![[image.png]]` 早已渲染——本轮只加**补全 surface**（grep gate 第五次确认核心已做）。串起 R102-R105 附件 + R106-R108 补全工作。纯前端、零写 .md。
