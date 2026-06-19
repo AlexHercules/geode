@@ -30,6 +30,7 @@ import {
   revealFlash,
 } from "./cmExtensions";
 import { hydrateEmbeds } from "./embeds";
+import { hydrateCodeCopy } from "./codeCopy";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { openWikilink } from "./wikilinks";
@@ -557,7 +558,10 @@ export function EditorPane({ tab }: { tab: TabState }) {
   useEffect(() => {
     if (tab.mode !== "preview" || !handle) return;
     const el = previewContentRef.current;
-    if (el) void hydrateEmbeds(el, app, handle.path);
+    if (el) {
+      void hydrateEmbeds(el, app, handle.path);
+      hydrateCodeCopy(el); // R95: code-fence copy buttons (post-render, byte-neutral)
+    }
   }, [app, tab.mode, handle, previewHtml]);
 
   /* ---------- one-shot reveal consumption (R14 editor / R15 preview) ---------- */

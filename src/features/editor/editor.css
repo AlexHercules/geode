@@ -618,6 +618,35 @@ iframe.geode-embed-pdf.cm-live-embed {
   padding: 12px 16px;
   overflow-x: auto;
   margin: 0.8em 0;
+  /* R95: anchor the hover copy button (top-right) */
+  position: relative;
+}
+
+/* R95: code-fence copy button — hidden until the block is hovered (Obsidian) */
+.code-copy-button {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  font-size: 0.75em;
+  line-height: 1.6;
+  color: var(--text-muted);
+  background: var(--bg-secondary, var(--code-bg));
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.preview-content pre:hover .code-copy-button,
+.code-copy-button:focus-visible {
+  opacity: 1;
+}
+.code-copy-button:hover {
+  color: var(--text-normal);
+}
+.code-copy-button.is-copied {
+  color: var(--accent);
 }
 
 .preview-content pre code {

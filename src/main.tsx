@@ -80,6 +80,7 @@ import { findMermaidRanges } from "@features/editor/liveMermaid";
 import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { indentUnitString } from "@features/editor/cmExtensions";
+import { hydrateCodeCopy } from "@features/editor/codeCopy";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -484,6 +485,18 @@ async function bootstrap() {
     const copy = await vault.readBinary(dest);
     const sameBytes = data.length === copy.length && data.every((b, i) => b === copy[i]);
     return { dest, sameBytes, len: data.length };
+  };
+
+  // always-on code-copy probe (R95, ㊶ 续续): runs the hydrateCodeCopy pass over an
+  // HTML fragment and returns how many copy buttons it adds — proving the pre>code
+  // matching logic (code fences get buttons; mermaid/query/non-code pre do not) on the
+  // real WKWebView build. The actual click→clipboard is browser-E2E only (§D).
+  const codeCopyHost = globalThis as unknown as { __geodeCodeCopy?: (html: string) => number };
+  codeCopyHost.__geodeCodeCopy = (html) => {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    hydrateCodeCopy(div);
+    return div.querySelectorAll(".code-copy-button").length;
   };
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
