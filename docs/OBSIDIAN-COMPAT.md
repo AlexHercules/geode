@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R101 套件回归（2026-06-20，macOS release 二进制 v0.98.0 实测 `r101-probe-vault`）
+
+R101 = 附件作图谱节点 attachments as graph nodes（候选池第六梯队 ㊵ 续续续续 slice，原生功能）。对照 Obsidian 图谱「Attachments」toggle：非 md 附件作**黄节点**、与嵌入/链接它的笔记连边。**纯前端 read-only 客户端合并**（`metadata.getAttachmentMap` + `buildAttachmentGraph`，不改 getGraph 形状），逐字镜像 R99 tags-as-nodes，默认 OFF=零回归。附带修 getGraph：附件引用不再当 unresolved 幽灵节点（贴近 Obsidian）。
+
+新增套件：`r101-e2e.mjs` **23/23**（probe 构造·getGraph 去幽灵·prefs 默认 OFF+向后兼容·toggle 持久+legend delta·**click 路由=附件 openFile 真文件不生成幽灵 tab**·评审 #1 markdown 附件链接·评审 #2 后置创建附件出现）+ `r101-probe.mjs` **7/7**（真 WKWebView，`__geodeGraphAttachments` 真 fs 附件索引）。**套件矩阵不回退**：r99/r84/r90/r96/r98 全绿（getGraph 改动经 4 图谱套件验证）。缺口表 graph 行附件节点缺口划除。
+
 ### R100 套件回归（2026-06-19，macOS release 二进制 v0.97.0 实测 `r100-probe-vault`）
 
 R100 = Show tab title bar + Show status bar（候选池第六梯队 ㊺ 续续续 slice，原生功能）。对照 Obsidian Appearance/Interface：Show tab title bar（显隐窗格标签栏）+ status bar 显隐。**纯前端 view-only**（appearance Store + 条件渲染 + 设置 toggle），逐字镜像 R94 showInlineTitle/showRibbon 范式，默认 ON=零回归。

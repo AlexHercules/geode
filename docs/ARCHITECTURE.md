@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 101 additions — 附件作图谱节点 attachments as graph nodes（候选池第六梯队 ㊵ 续续续续 v1）【As-built v0.98】
+
+> **状态：As-built（v0.98 交付，2026-06-20）。** Obsidian 图谱「Attachments」toggle：把非 md 附件作**黄节点**显示、与嵌入/链接它的笔记连边。**纯前端 read-only 客户端合并**（不写 .md、不动 markdown.ts），**逐字镜像 R99 tags-as-nodes**（扩节点/边集，不改 `getGraph` 形状）。默认 OFF=零回归。
+
+**契约（无冻结接口改动；新增加性读方法 + 新抽象）**：
+- `core/metadata.ts`：① 新增 `getAttachmentMap(): Map<attachmentPath, Set<notePath>>`（附件路径→引用它的笔记集，revision 缓存，**镜像 getTagMap**；遍历每笔记 `meta.links`，用 `resolveByKind`+`resolveAttachment` 命中累加）。② `getGraph()` 改：附件引用**不再当 `unresolved:` 幽灵节点**——`if (resolved === null && (resolvedRaw !== null || resolveAttachment(link.target) !== null)) continue;`（贴近 Obsidian：附件是独立类，仅 Attachments toggle 显示；也防 toggle ON 时同一附件既出幽灵又出黄节点的**双节点**）。③ `reindexFile` 非 md 分支补 `this.bump()`（见下评审 #2）。
+- `features/graph/graphPrefs.ts`：抽出私有共享 `buildAuxGraph(map, keptNotes, prefix, labelOf)`（**2 真实调用点的减法去重**）；`buildTagGraph`(R99) + 新 `buildAttachmentGraph` 均委托它；新增 `ATTACHMENT_PREFIX="attachment:"`、`GraphDisplay.attachments`（默认 false，parse `d.attachments===true`）。
+- `features/graph/GraphView.tsx`：Palette+FALLBACK+readPalette 加 `attachment`（`--graph-attachment` 黄）；draw 三元加 attachment 分支；rebuild 当 `prefs.display.attachments` 合并 `buildAttachmentGraph(getAttachmentMap(), exKept)`；rebuild deps 加 `prefs.display.attachments`；**openNode 守卫**：`if (node.id.startsWith(ATTACHMENT_PREFIX)) { openFile(node.id.slice(prefixLen)); return; }`（在 `if (node.resolved)` 前——附件节点 resolved=true，漏守卫会 `openFile("attachment:…")` 生成幽灵 tab=R99 MAJOR 教训复用）；设置 toggle `graph-attachments`。
+- `main.tsx` `__geodeGraphAttachments` probe；dict.views.ts `graph.showAttachments`×en/zh；app.css `--graph-attachment` 双主题。
+- **标记缺口（v1 范围非缺陷）**：markdown 图片嵌入 `![](…)` 不在 `meta.links`（parseMarkdown line 206 跳过）→ 不索引；`[[img.png]]`/`![[img.png]]`/`[txt](doc.pdf)` 均索引。
+
+**对抗评审（reviewer 7 维 + skeptic verify）→ 2 confirmed minor（全修+锁测），0 critical/major、0 数据安全/契约/分层缺陷：**
+- **#1 [minor] getAttachmentMap 解析与 getGraph 不对称**（`metadata.ts`）：索引侧最初用 raw `link.target` 直接 `resolveAttachment`，而 getGraph 跳过侧用 `resolveByKind`（markdown 链接会解码 %xx/解相对路径）→ `[img](my%20image.png)` 在 getGraph 正确跳过却在 getAttachmentMap 漏索引（或 basename-fuzz 命中错文件）。**修**：getAttachmentMap 镜像 getGraph——`resolvedRaw=resolveByKind(...); att = (resolvedRaw!==null && !byPath.has(resolvedRaw)) ? resolvedRaw : resolveAttachment(link.target)`，使索引集与跳过集字节对称。锁测：r101-e2e「markdown 链接到附件也出节点」。
+- **#2 [minor] 非 md 文件 create 不 bump revision**（`metadata.ts`）：`getAttachmentMap` 按 revision 缓存且图谱 rebuild 由 `rev` 门控；delete(`dropPath`)/rename(`reindexFolder`) 早有 bump，唯独 `file:created`→`reindexFile` 对非 md 早返回不 bump → 笔记先写 `![[diagram.png]]`、之后才放入 diagram.png（外部/独立加附件）→ 黄节点延迟到下次无关 bump 才出现。**修**：`reindexFile` 非 md 分支补 `this.bump()`（createBinary + 外部 fs-watcher 均 fire file:created）。锁测：r101-e2e「后置创建附件→节点出现」。
+- **证伪**：双节点（getGraph 无条件跳过附件、黄节点唯一来源 buildAttachmentGraph，无重边/重节点）；openNode 二进制损坏（**非 R101 新入口**——`Explorer.activateNode` + `workspace.openFile` 一律建 markdown tab 是既有全应用行为，仅打开不写不脏，R101 复用未新增数据丢失类）；getGraph 误杀真·缺失笔记（resolveAttachment 按 basename+扩展名匹配不到非 md → 仍正常 ghost）；R99 消费者审计（draw/openNode 已覆盖，hover/filter/legend 无需 per-prefix）。
+
+**套件**：typecheck 0 · r101-e2e 23/23（含 #1/#2 锁测 + click 路由 + 双节点防护 + getGraph 去幽灵）· r101-probe 7/7 真 WKWebView · 回归 r99(16)/r84(17)/r90(17)/r96(17)/r98(15) 绿 · build exit 0 · 简化门 clean（buildAuxGraph 为 2 调用点合法减法去重，保留）。
+
 ## Round 100 additions — Show tab title bar + Show status bar（候选池第六梯队 ㊺ 续续续 v1）【As-built v0.97】
 
 > **状态：As-built（v0.97 交付，2026-06-19）。** Obsidian Appearance/Interface 两 toggle：**Show tab title bar**（显隐每个窗格的标签栏）+ **Show status bar**（显隐底部状态栏）。**纯前端 view-only**（不写 .md、不动 markdown.ts），**逐字镜像 R94 showInlineTitle/showRibbon appearance toggle 范式**（appearance Store + 反应式 useStore + 条件渲染 + 设置 toggle，全局持久，默认 ON=零回归+Obsidian）。
