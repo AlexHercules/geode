@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 95 additions — 代码块复制按钮 code-fence copy button（候选池第六梯队 ㊶ 续续 v1）【As-built v0.92】
+
+> **状态：As-built（v0.92 交付，2026-06-19）。** Obsidian 阅读视图代码块 hover→「Copy」按钮（右上角，复制代码）。**post-render hydration pass**（镜像 hydrateEmbeds）——**markdown.ts 完全不碰**（r26-bytes 0），按钮注入已渲染 DOM。reading view only（live preview 延期）。
+
+**契约（无冻结接口改动）**：
+- 新 `features/editor/codeCopy.ts`：`hydrateCodeCopy(root)`——`querySelectorAll("pre")` 找每个 `pre>code`、加 hover Copy 按钮（`.code-copy-button`，绝对定位右上、`pre:hover`/`:focus-visible` opacity 0→1）；点击复制 `code.textContent`（trim 单尾换行）+ 瞬态「Copied」1500ms + `.catch` 吞不安全上下文；幂等守卫（已带按钮的 pre 跳过）。**关键排除（对抗评审根因）**：`pre.closest(".geode-mermaid, .geode-query")` 跳过 mermaid/query 占位符的 source-fallback pre。
+- `features/editor/EditorPane.tsx`：hydration effect（`[app,tab.mode,handle,previewHtml]`）在 `hydrateEmbeds` 后调 `hydrateCodeCopy(el)`。
+- editor.css：`.code-copy-button` 规则 + `.preview-content pre{position:relative}`（锚定按钮，CSS 不影响 HTML 字节）。dict.views.ts `editor.copyCode`/`editor.copied`×en/zh。main.tsx `__geodeCodeCopy(html)` probe 返按钮数。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 DOM 生命周期/复制正确性/匹配精度/事件协调/XSS/分层）→ 1 确认 MAJOR（已修）+ 1 minor（记 v1 gap）：**
+- **MAJOR（根因·已修）= mermaid/query source-fallback pre 误加按钮**：markdown.ts 把 mermaid/query fence 渲染成 `<div class="geode-mermaid"><pre class="geode-mermaid-source"><code>${src}</code></pre></div>`——**source pre 在 hydrateCodeCopy 同步跑时仍在 DOM**（async mermaid/query 渲染尚未 swap）→ 误给图表源加 Copy 按钮（瞬态闪现；若 mermaid 加载失败/渲染 error/query throw 则**永久**残留、复制的是图表源码）。**测试遮蔽=fixture 用了不真实的空 `<div class="geode-mermaid">`（无内层 pre）→ 平凡返 0**。**修=`pre.closest(".geode-mermaid, .geode-query")` 排除 + fixture 改真实输出 `div>pre.geode-*-source>code` 断言 0 + 加真 mermaid+js 渲染断言（仅 js 块得按钮=1）**。
+- **minor（v1 gap，记录不修）= note embed 内代码块无按钮**：`hydrateNote` 经 `await vault.read` 异步注入 embed HTML，在同步 hydrateCodeCopy 之后 → 转写笔记内的代码块拿不到按钮（false-negative，Obsidian 有）。同根因（hydrateCodeCopy 单次同步先于 async embed/mermaid/query settle）；v1 可接受，未来轮可在 embed hydration resolve 后重跑。
+- **PASS 维度**：setTimeout 在 detached btn 不抛、closures GC 安全；textContent 重组顺序 + 实体解码正确（Geode 阅读视图不做高亮、code 纯文本）；inline code（无 pre）排除；button `e.stopPropagation` 阻 onPreviewClick + 真 `<button type=button>`+aria-label 键盘可达；label 静态 tr()、textContent 读非写=无 XSS；codeCopy 仅 import @core/i18n（features→core 合法）；`--bg-secondary` 无基定义→`var(--bg-secondary, var(--code-bg))` 回退 load-bearing。
+
+**验证（As-built）**：typecheck 0 · `r95-e2e` **12/12**（probe 匹配 + 真 clipboard 写[trim 尾换行] + Copied 反馈 + mermaid/query source 排除 + 真 mermaid+js 渲染仅 1 按钮）· `r95-probe` **8/8** 真 WKWebView · **r26-bytes 0 violations**（markdown.ts 未碰）· 回归 r26(12)/r25(17)/r75(16)/r55(15)/r94(14) 绿 · release build exit 0 · 简化门 clean（hydrateCodeCopy 2 用点[effect+probe]、label/code 闭包捕获不内联、无 ≥8 行重复）。
+
+**v1 已知延期**：live preview 代码块复制（CM 装饰）· note embed 内代码块按钮（async 时序 gap）· hover preview/slides/export 代码块按钮 · 语言标签显示 · blockquote 复制（Obsidian 社区请求非核心）。
+
 ## Round 94 additions — Show inline title + Show ribbon（候选池第六梯队 ㊺ 续续 v1）【As-built v0.91】
 
 > **状态：As-built（v0.91 交付，2026-06-19）。** Obsidian Appearance/Interface 两 toggle：**Show inline title**（笔记顶部把文件名作 H1 显示，默认 ON=Obsidian）+ **Show ribbon**（左侧主功能区显隐，默认 ON）。**纯前端 view-only**（不写 .md、不动 markdown.ts）。inline title **display-only**——编辑→重命名延期（避 data-safety 写路径）。镜像 R85/R88 appearance toggle 范式。

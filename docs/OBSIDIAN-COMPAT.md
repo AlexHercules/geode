@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R95 套件回归（2026-06-19，macOS release 二进制 v0.92.0 实测 `r95-probe-vault`）
+
+R95 = 代码块复制按钮（候选池第六梯队 ㊶ 续续 slice，原生功能）。对照 Obsidian 阅读视图代码块 hover→Copy（右上角复制代码）。**post-render hydration pass**（新 `codeCopy.ts`，镜像 hydrateEmbeds）——markdown.ts 不碰、按钮注入已渲染 DOM，reading view only。
+
+新增套件：`r95-e2e.mjs` **12/12**（probe 匹配 + 真 clipboard 写[trim 尾换行] + Copied 反馈 + mermaid/query source-fallback 排除 + 真 mermaid+js 渲染仅 1 按钮）+ `r95-probe.mjs` **8/8**（真 WKWebView，`__geodeCodeCopy` 匹配逻辑）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（复制按钮纯前端 hydration）；**不碰 markdown.ts → r26-bytes 0 violations**（hydration 注入 DOM、渲染字节零回退）；hydration pass 与 hydrateEmbeds/mermaid/query 共存 → **r26(embeds)12/12 + r25(hover)17/17 + r75(query)16/16 + r55(live tables)15/15 + r94(inline title)14/14 回归绿**。**对抗评审 6 维深挖 DOM 生命周期/复制正确性/匹配精度/事件协调/XSS → 1 确认 MAJOR（已修）+ 1 minor（v1 gap）**：MAJOR=mermaid/query 的 `<pre class="geode-*-source">` source-fallback 在同步 hydrateCodeCopy 时仍在 DOM → 误加按钮（fixture 用空 div 遮蔽）→ 修 `pre.closest(".geode-mermaid,.geode-query")` 排除 + 真渲染断言；minor=note embed 内代码块 async 注入晚于同步 pass 拿不到按钮（v1 gap 记录）。**OBSIDIAN-COMPAT 缺口表**：㊶ 代码块复制按钮交付（续缺口：live preview 复制 / note embed 内代码块 / 语言标签 / blockquote 复制）。
+
 ### R94 套件回归（2026-06-19，macOS release 二进制 v0.91.0 实测 `r94-probe-vault`）
 
 R94 = Show inline title + Show ribbon（候选池第六梯队 ㊺ 续续 slice，原生功能）。对照 Obsidian Appearance/Interface：Show inline title（文件名作 H1，默认 ON）+ Show ribbon（左侧功能区显隐，默认 ON）。**纯前端 view-only**（appearance Store + EditorPane/App 反应式 + 设置 toggle），不写 .md、不动 markdown.ts；inline title display-only（编辑→rename 延期）。
