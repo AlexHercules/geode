@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 118 additions — compat app.commands 余项 findCommand/executeCommand/editorCommands（插件 API 商业主轴）【As-built v0.115】
+
+> **状态：As-built（v0.115 交付，2026-06-20）。** R113 已做 `app.commands` 的 executeCommandById/listCommands/commands；本轮补 `findCommand(id)` + `executeCommand(command)` + `editorCommands`，over 同一 core CommandRegistry。命令管理类插件用。纯逻辑、零改 core、零新 import。
+
+**契约（加性；扩展 R113 makeCommands 工厂）**：
+- 抽出共享 local `find(id) = registry.list().find(c=>c.id===id)` + `executeById(id)`（含 available 预检）——`executeCommandById` 改复用 `executeById`（R113 原 inline，**逐字节等价**：均闭包 registry、不读 this、同 find+available?.()===false→false+callback 逻辑）。
+- `findCommand(id): CompatCommand | undefined`——命中 toCompat（name thunk 解析成 string）、未命中 undefined（精确 `===`、不抛）。
+- `executeCommand(command: {id}): boolean` = `executeById(command.id)`——**按 id 回查 registry 再跑**（honor available + 跑已注册命令），而非直接 invoke 传入对象。常规流（对象来自 findCommand/commands/listCommands、id 在 registry）与 Obsidian 一致；仅「插件自造未注册 Command 传入」偏差（Obsidian 跑其 callback、Geode 查不到返 false）——极罕见、更安全（统一走 available），注释已点明。
+- `editorCommands: Record<string, CompatCommand>` getter → **恒 `{}`**（Geode 不单独追踪 editor-scoped——editorCallback/editorCheckCallback 命令在 addCommand 扁平进统一 registry）；返空对象非 undefined → 防 `Object.keys` 崩。
+- `removeCommand` **仍 gap**（Plugin.removeCommand 已经由 disposer 移除插件自身命令；app 级 remove-by-id 需 core 新 removeById，未做）。
+
+**对抗评审（reviewer 6 维 + WebFetch + r113/r118 双套件实测 → 0 confirmed 代码缺陷）：**
+- **证伪**：①executeCommand by-id 回查=合理简化+更安全（round-trip findCommand→executeCommand 实测；自造未注册对象极罕见）；②findCommand toCompat 缺 checkCallback/icon=既有 CompatCommand GAP 非回退、`find(undefined)` 精确 === 返 undefined 不抛；③editorCommands `{}` 正确防崩、空集无消费方；④**executeById/find 抽取后 executeCommandById 逐字节等价**（r113 四态 10/10 实测）；⑤纯读/触发同 R113 路径无新写无新竞态、精确字符串 === 对元字符/CJK id 安全；⑥零新 import、App.commands getter ReturnType 自动纳入、typecheck 0。
+- **偏离（文档化）**：editorCommands 恒空（Obsidian 含 editorCallback 命令）；executeCommand 不执行未注册的传入对象。
+
+**套件**：typecheck 0 · cargo check 0 · r118-e2e **13/13**（findCommand 命中/thunk 解析/未命中·executeCommand 跑+true/available=false 不跑+false/未知/round-trip·editorCommands 空+不抛·R113 三成员回归）· r118-probe **10/10** 真 WKWebView 共享 registry（**registry 级、无需 editor mount → 桌面全验**，对比 R116/R117 需编辑器只能 browser-E2E）· 回归 r113 10/10·r23 22/22·r46 18/18 · build exit 0 · 简化门 clean（find/executeById 2 调用点抽取=减法去重）。**后续缺口（compat 商业主轴）**：`app.commands.removeCommand`（需 core removeById）· `CachedMetadata.embeds/sections/listItems` · `MarkdownView.setViewData/setMode`（写=data-safety）· `MarkdownFileInfo.hoverPopover` · `vault.modifyBinary`（需 core 原子覆盖写）· `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 117 additions — compat Workspace.activeEditor（MarkdownFileInfo · 插件 API 商业主轴）【As-built v0.114】
 
 > **状态：As-built（v0.114 交付，2026-06-20）。** Obsidian `Workspace.activeEditor: MarkdownFileInfo | null`（活动 markdown 编辑器的 info——`editor` + `file` + `app`）现真实现。**新插件首选**（替代 `getActiveViewOfType(MarkdownView)`）。纯读、零改 core、零新 import（复用 R116 的 `makeActiveMarkdownView`）。
