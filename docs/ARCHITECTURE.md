@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 115 additions — compat Plugin.registerEditorExtension（CM6 扩展注入 · 插件 API 商业主轴）【As-built v0.112】
+
+> **状态：As-built（v0.112 交付，2026-06-20）。** Obsidian `Plugin.registerEditorExtension(ext)`（让插件给所有 markdown 编辑器注入 CM6 扩展——装饰/widget/keymap，Dataview inline 等用）从 warn-stub 改真实现。**跨模块契约**：registerEditorExtension 是全局（应用到所有编辑器），但 CM compartment 是 per-view 且 **compat 绝不能 import features**——故经一个**新 core 注册表**桥接（compat 写、features/editor 读+订阅）。
+
+**契约（冻结接口；新 core 模块 + 一个新 compartment）**：
+- **`core/editorExtensions.ts`（新）**：`registered: Extension[]`（模块级）+ `editorExtensionsRevision: Store<number>` + `registerEditorExtension(ext): ()=>void`（push+bump，返回 disposer：indexOf+splice+bump，幂等）+ `getEditorExtensions(): Extension[]`（`.slice()` 防别名）。core 可 import `@codemirror/*`（分层铁律允许），不解释 Extension 值。
+- **`cmExtensions.ts`**：buildEditorExtensions opts 加 `compatExtensionCompartment`，扩展列表加 `compatExtensionCompartment.of(getEditorExtensions())`（**数组位置不是保护机制**——命令 keymap 是 `Prec.highest`(R33)、autosave 是顺序无关的 updateListener，插件扩展无法靠位置盖过；评审订正注释精度）。
+- **`EditorPane.tsx`**：`compatExtensionCompartmentRef` + `compatExtRev = useStore(editorExtensionsRevision)` + 视图构建 `new Compartment()` + reconfigure effect（`[compatExtRev]` → `compartment.reconfigure(getEditorExtensions())`）+ teardown 置 null。镜像既有 lineNumber/indent compartment 范式。
+- **`compat/obsidian/plugin.ts`**：`registerEditorExtension(ext)` → `this.register(registerCoreEditorExtension(ext))`（forward + plugin-unload 经 Component 清理）。
+- **`main.tsx`**：always-on probe 钩子 `__geodeRegisterEditorExtension`（注册 editorAttributes 标记扩展）+ `__geodeEditorExtState`（registry count/rev 观察，桌面 probe 用）。
+
+**对抗评审（reviewer 6 维 + data-safety 优先 → 0 confirmed 代码缺陷）：**
+- **数据安全（第一优先 · 确凿）**：compartment reconfigure **不携带任何 doc change** + 待保存编辑活在 handle（view 外的 updateListener，per-file，outlives view）+ register **不重建 view** → register/dispose/plugin-unload 期间正在编辑也**不丢数据**。r24 autosave 12/12 + e2e「扩展激活时编辑→落盘」断言双证。
+- **证伪**：disposer 经 `this.register` 绑 plugin-unload→revision bump→所有 open view 移除扩展 · 新建 view 经 getEditorExtensions seed、已开 view 经 revision reconfigure 两路全覆盖（含 split 多 pane）· view destroy 后 revision bump 被 `if(!view||!compartment) return` 兜住 · 分层（core 只 import @codemirror+store；compat 经 core 桥、不 import features；features 不 import compat）· getEditorExtensions `.slice()` 防别名 · probe 钩子纯测试基础设施（生产插件不调）。
+- **评审修 1 minor**：cmExtensions 注释把「数组位置防 plugin 盖过 base」订正为「Prec.highest + updateListener 顺序无关才是保护机制」。
+
+**套件**：typecheck 0 · cargo check 0 · r115-e2e **7/7**（register 达已开 view/达新 view/**编辑 autosave 落盘[数据安全]**/dispose 移除/幂等）· r115-probe **7/7** 真 WKWebView（core 注册表 register 增长+rev bump / dispose 收缩+rev bump / 幂等；**view 集成属 browser-E2E，§D 桌面 probe 只验 sync 逻辑**）· 回归 r24 12/12·r88 13/13·r92 21/21·r50 15/15·r63 9/9·r23 22/22（editor data-safety + compartment 范式全绿）· build exit 0 · 简化门 clean（fresh code-simplifier 确认最小形态、拒抽 4 个 reconfigure effect=3 个在 diff 外）。**后续缺口（compat 商业主轴）**：`MarkdownView.getMode/getViewData/setViewData/setMode` · `app.commands` 余项 · `CachedMetadata.embeds/sections/listItems` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉，工程大）· `file-menu`/`editor-menu` 钩子（阻塞面最大）。
+
 ## Round 114 additions — compat MetadataCache.getTags（Record<string,number> · 插件 API 商业主轴）【As-built v0.111】
 
 > **状态：As-built（v0.111 交付，2026-06-20）。** Obsidian `metadataCache.getTags(): Record<string, number>`（所有标签→计数，Dataview/标签类插件常用）现真实现，**投影 core `getTagMap()`**（tag→note-path Set，按 index revision 缓存）。key 加前导 `#`（Obsidian 约定）；count = `paths.size` = **含该标签的 distinct 笔记数**（对齐 Obsidian `getAllTags` per-file 去重聚合）。纯读、零改 core。
