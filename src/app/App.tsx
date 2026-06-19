@@ -10,6 +10,7 @@ import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
 import { EditorPane } from "@features/editor/EditorPane";
 import { GraphView } from "@features/graph/GraphView";
+import { AttachmentView } from "@features/attachment/AttachmentView";
 import { AllPropertiesPanel } from "@features/allproperties/AllPropertiesPanel";
 import { BacklinksPanel } from "@features/backlinks/BacklinksPanel";
 import { BookmarksPanel } from "@features/bookmarks/BookmarksPanel";
@@ -1217,6 +1218,8 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
         {activeTab ? (
           activeTab.viewType === "graph" ? (
             <GraphView />
+          ) : activeTab.viewType === "attachment" ? (
+            <AttachmentView key={activeTab.id} tab={activeTab} />
           ) : (
             <EditorPane key={activeTab.id} tab={activeTab} />
           )
@@ -1386,6 +1389,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           title={tab.filePath ?? title}
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
+          {tab.viewType === "attachment" && <Icon name="file-text" size={14} />}
           {tab.pinned && (
             <span className="tab-pin" aria-label={t("app.pinnedTab")} title={t("app.pinnedTab")}>
               <Icon name="pin" size={12} />

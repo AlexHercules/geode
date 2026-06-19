@@ -85,6 +85,7 @@ import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
 import { buildParagraph } from "@features/backlinks/BacklinksPanel";
 import { buildTagGraph, buildAttachmentGraph } from "@features/graph/graphPrefs";
+import { isAttachmentPath, isImagePath } from "@core/attachments";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -553,6 +554,16 @@ async function bootstrap() {
     const { nodes, edges } = buildAttachmentGraph(app.metadata.getAttachmentMap(), kept);
     return { nodes: nodes.map((n) => ({ id: n.id, degree: n.degree })), edges: edges.length };
   };
+
+  // always-on attachment-routing probe (R102, ㊽ 续续续续续): runs the pure isAttachmentPath/
+  // isImagePath classification on the real build, returning per-path {isAttachment,isImage}.
+  // The viewer DOM + open→viewType are browser-E2E only (§D); this proves the routing
+  // predicate (the data-safety boundary deciding md-editor vs read-only viewer) on the bin.
+  const attachmentRouteHost = globalThis as unknown as {
+    __geodeAttachmentRouting?: (paths: string[]) => { path: string; isAttachment: boolean; isImage: boolean }[];
+  };
+  attachmentRouteHost.__geodeAttachmentRouting = (paths) =>
+    paths.map((p) => ({ path: p, isAttachment: isAttachmentPath(p), isImage: isImagePath(p) }));
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is

@@ -633,6 +633,33 @@ textarea:focus {
   color: var(--text-muted);
 }
 
+/* R102: read-only attachment viewer (non-md files: images + binary placeholder) */
+.attachment-view {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+.attachment-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.attachment-placeholder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.attachment-placeholder .attachment-name {
+  color: var(--text-normal);
+  font-weight: 600;
+  word-break: break-all;
+}
+
 .vault-picker-card h1 {
   font-size: 40px;
   margin-bottom: 4px;

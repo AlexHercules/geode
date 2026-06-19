@@ -168,3 +168,61 @@ async function doImport(
   const linktext = deps.metadata.resolveAttachment(fileName, notePath) === path ? fileName : path;
   return { path, linktext };
 }
+
+/* ---------- R102 (㊽ 续续续续续): attachment viewer routing ---------- */
+//
+// Which non-md files open in the read-only attachment viewer (`viewType:
+// "attachment"`) instead of the markdown editor — the data-safety boundary that keeps
+// binaries out of the editable/autosave path. Allowlist, not denylist: only known
+// image/binary extensions route to the viewer, so unknown / text-ish files (.txt,
+// .json, .csv, extensionless) stay editable markdown exactly as before (zero regression).
+
+/** images we can preview inline via an <img> blob URL, mapped to their MIME type
+ *  (svg in particular won't render in an <img> without image/svg+xml) */
+const IMAGE_MIME: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif",
+};
+const IMAGE_EXTS = new Set(Object.keys(IMAGE_MIME));
+/** other clearly-binary files — shown as a read-only placeholder (no preview yet). Kept
+ *  broad on purpose: every binary kept off this list falls back to the editable markdown
+ *  editor, where a UTF-8 round-trip + autosave would corrupt it (review fix — close the
+ *  high-frequency holes). A future slice may flip to a denylist (only known text editable).
+ *  Non-previewable images (heic/tiff/psd) live here too — attachment, but no <img>. */
+const OTHER_BINARY_EXTS = new Set([
+  // documents
+  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
+  // audio / video
+  "mp3", "m4a", "aac", "opus", "aiff", "wav", "ogg", "flac", "mp4", "m4v", "mov", "mkv",
+  "webm", "avi", "wmv", "flv",
+  // non-previewable images
+  "heic", "heif", "tiff", "tif", "psd", "ai", "raw",
+  // archives
+  "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "tgz",
+  // executables / libraries / disk / data / fonts
+  "exe", "dll", "so", "dylib", "bin", "wasm", "app", "deb", "rpm", "msi", "dmg", "iso",
+  "db", "sqlite", "sqlite3", "ttf", "otf", "woff", "woff2",
+]);
+
+/** lowercased extension after the final dot of the basename, or "" if none. */
+export function fileExtension(path: string): string {
+  const base = path.slice(path.lastIndexOf("/") + 1);
+  const dot = base.lastIndexOf(".");
+  return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
+}
+
+/** a previewable image (drives <img> vs placeholder inside the attachment view). */
+export function isImagePath(path: string): boolean {
+  return IMAGE_EXTS.has(fileExtension(path));
+}
+
+/** MIME type for an image path's <img> blob (octet-stream fallback). */
+export function imageMime(path: string): string {
+  return IMAGE_MIME[fileExtension(path)] ?? "application/octet-stream";
+}
+
+/** true ⟺ this path opens in the read-only attachment viewer (image or other binary). */
+export function isAttachmentPath(path: string): boolean {
+  const ext = fileExtension(path);
+  return IMAGE_EXTS.has(ext) || OTHER_BINARY_EXTS.has(ext);
+}

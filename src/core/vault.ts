@@ -1006,13 +1006,21 @@ export class MemoryVaultAdapter implements VaultAdapter {
     // never silently clobber an existing target. Normal renames are collision-
     // checked upstream; this closes the narrow race where a concurrent external
     // change drops a same-named file into the destination mid-move (R28 review).
-    if (oldPath !== newPath && (this.files.has(newPath) || this.folders.has(newPath))) {
+    if (oldPath !== newPath && (this.files.has(newPath) || this.binaryFiles.has(newPath) || this.folders.has(newPath))) {
       throw new Error(`target already exists: ${newPath}`);
     }
     if (this.files.has(oldPath)) {
       const content = this.files.get(oldPath)!;
       this.files.delete(oldPath);
       this.files.set(newPath, content);
+      return;
+    }
+    // R102: binary attachments (pasted/imported images) live in binaryFiles only —
+    // rename them too, else renaming an open attachment throws "Path not found" and its
+    // tab is never retargeted (mirrors copy()'s binaryFiles handling).
+    if (this.binaryFiles.has(oldPath)) {
+      this.binaryFiles.set(newPath, this.binaryFiles.get(oldPath)!);
+      this.binaryFiles.delete(oldPath);
       return;
     }
     if (this.folders.has(oldPath)) {
@@ -1022,6 +1030,12 @@ export class MemoryVaultAdapter implements VaultAdapter {
         if (p.startsWith(oldPath + "/")) {
           this.files.delete(p);
           this.files.set(newPath + p.slice(oldPath.length), c);
+        }
+      }
+      for (const [p, b] of [...this.binaryFiles]) {
+        if (p.startsWith(oldPath + "/")) {
+          this.binaryFiles.delete(p);
+          this.binaryFiles.set(newPath + p.slice(oldPath.length), b);
         }
       }
       for (const f of [...this.folders]) {
@@ -1037,9 +1051,11 @@ export class MemoryVaultAdapter implements VaultAdapter {
 
   async remove(path: string): Promise<void> {
     if (this.files.delete(path)) return;
+    if (this.binaryFiles.delete(path)) return; // R102: binary attachments
     if (this.folders.has(path)) {
       this.folders.delete(path);
       for (const p of [...this.files.keys()]) if (p.startsWith(path + "/")) this.files.delete(p);
+      for (const p of [...this.binaryFiles.keys()]) if (p.startsWith(path + "/")) this.binaryFiles.delete(p);
       for (const f of [...this.folders]) if (f.startsWith(path + "/")) this.folders.delete(f);
       return;
     }

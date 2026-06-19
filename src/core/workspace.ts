@@ -15,6 +15,7 @@ import { EventBus } from "./events";
 import { Store } from "./store";
 import { defaultNewTabMode } from "./appearance";
 import { basename, stripExtension } from "./vault";
+import { isAttachmentPath } from "./attachments";
 
 const PERSIST_KEY = "geode.workspace.v1";
 const RECENTLY_CLOSED_MAX = 20;
@@ -68,7 +69,7 @@ interface NavHistory {
 
 /** A user-closed tab, captured for reopen (Mod+Shift+T). Session-only. */
 interface ClosedTab {
-  viewType: "markdown" | "graph";
+  viewType: "markdown" | "graph" | "attachment";
   filePath: string | null;
   mode: ViewMode;
   /** the pane it was closed from — reopen prefers it if it still exists */
@@ -153,6 +154,20 @@ function mapAllLeaves(node: PaneNode, fn: (leaf: PaneLeaf) => PaneLeaf): PaneNod
     return next;
   });
   return changed ? { ...node, children } : node;
+}
+
+/** R102: the file-backed viewType for a path — non-md attachments open the read-only
+ *  viewer, everything else the editable markdown editor. Derived from the path at EVERY
+ *  point a file-backed tab is created/retargeted (openFile / sanitizeTab / rename), so a
+ *  binary can never reach the editable/autosave path through a stale or persisted type. */
+function fileViewType(path: string): "markdown" | "attachment" {
+  return isAttachmentPath(path) ? "attachment" : "markdown";
+}
+
+/** R102: retarget a file-backed tab to a new path, RE-deriving viewType (a cross-type
+ *  rename must flip editable↔read-only) and title. */
+function retargetFileTab(t: TabState, newPath: string): TabState {
+  return { ...t, viewType: fileViewType(newPath), filePath: newPath, title: stripExtension(basename(newPath)) };
 }
 
 /**
@@ -291,7 +306,9 @@ export class Workspace {
       const target = findLeaf(s.root, paneId) ?? flattenLeaves(s.root)[0];
       let root = s.root;
 
-      const existing = target.tabs.find((t) => t.viewType === "markdown" && t.filePath === path);
+      // R102: route non-md attachments to the read-only viewer (viewType "attachment").
+      const vt = fileViewType(path);
+      const existing = target.tabs.find((t) => t.viewType === vt && t.filePath === path);
       if (existing && !opts.newTab) {
         root = mapLeaf(root, target.id, (l) => ({ ...l, activeTabId: existing.id }));
         return { ...s, root, activePaneId: target.id, modal: null };
@@ -299,8 +316,10 @@ export class Workspace {
       const active = target.tabs.find((t) => t.id === target.activeTabId);
       // replace the active markdown tab's content (Obsidian default behaviour) —
       // UNLESS it is pinned (R39): a pinned tab is never replaced, so fall through
-      // to the new-tab branch (open the file in a fresh tab).
-      if (active && active.viewType === "markdown" && !opts.newTab && !active.pinned) {
+      // to the new-tab branch (open the file in a fresh tab). R102: only markdown→markdown
+      // replaces in place; attachments always open in a fresh tab (they don't participate
+      // in nav history / mode — like graph), so a binary never overwrites an editable tab.
+      if (active && active.viewType === "markdown" && vt === "markdown" && !opts.newTab && !active.pinned) {
         root = mapLeaf(root, target.id, (l) => ({
           ...l,
           tabs: l.tabs.map((t) =>
@@ -311,7 +330,7 @@ export class Workspace {
       }
       const tab: TabState = {
         id: newTabId(),
-        viewType: "markdown",
+        viewType: vt,
         filePath: path,
         // R88: new tabs open in the user's default mode (Obsidian's "Default view
         // for new tabs" + "Default editing mode"); default "live" = prior behaviour
@@ -421,8 +440,9 @@ export class Workspace {
     // collect outside the updater so the count is updater-call-count independent
     const stale = new Set<string>();
     for (const t of allTabs(this.state.get().root)) {
-      // graph tabs (viewType !== "markdown") and null-path tabs are never touched
-      if (t.viewType === "markdown" && t.filePath !== null && !exists(t.filePath)) {
+      // R102: any file-backed tab (markdown OR attachment) whose file is gone is stale;
+      // graph tabs have filePath === null so are never touched.
+      if (t.filePath !== null && !exists(t.filePath)) {
         stale.add(t.id);
       }
     }
@@ -703,6 +723,9 @@ export class Workspace {
    *  (switching to an already-open file = tab switch, not navigation). */
   private recordNavigation(s: WorkspaceState, targetPaneId: string, path: string, newTab: boolean) {
     if (newTab) return;
+    // R102: attachments open in a fresh tab (no in-place replace) → they never
+    // overwrite the active markdown tab, so there is no navigation to record.
+    if (isAttachmentPath(path)) return;
     const target = findLeaf(s.root, targetPaneId) ?? flattenLeaves(s.root)[0];
     if (!target) return;
     if (target.tabs.some((t) => t.viewType === "markdown" && t.filePath === path)) return; // reuse → tab switch
@@ -969,8 +992,9 @@ export class Workspace {
     this.update((s) => {
       let root = mapAllLeaves(s.root, (l) => {
         const tabs = l.tabs.filter(
-          (t) =>
-            !(t.viewType === "markdown" && t.filePath && (t.filePath === path || t.filePath.startsWith(path + "/"))),
+          // R102: close any file-backed tab (markdown OR attachment) under the deleted
+          // path; graph tabs have filePath === null so are never matched.
+          (t) => !(t.filePath && (t.filePath === path || t.filePath.startsWith(path + "/"))),
         );
         if (tabs.length === l.tabs.length) return l;
         const activeTabId = tabs.some((t) => t.id === l.activeTabId)
@@ -1006,13 +1030,18 @@ export class Workspace {
       root: mapAllLeaves(s.root, (l) => ({
         ...l,
         tabs: l.tabs.map((t) => {
-          if (t.viewType !== "markdown" || !t.filePath) return t;
+          // R102: retarget any file-backed tab (markdown OR attachment) on rename;
+          // graph tabs have filePath === null so are skipped. The viewType is RE-DERIVED
+          // from the new path (review fix) — a cross-type rename (note.md → note.png) must
+          // flip an editable tab to the read-only attachment view, never leave a binary in
+          // the editable/autosave path (the dirty buffer follows the handle's retarget, so
+          // EditorPane's deferred-drop flush still writes it to the new path — no loss).
+          if (!t.filePath) return t;
           if (t.filePath === oldPath) {
-            return { ...t, filePath: newPath, title: stripExtension(basename(newPath)) };
+            return retargetFileTab(t, newPath);
           }
           if (t.filePath.startsWith(oldPath + "/")) {
-            const p = newPath + t.filePath.slice(oldPath.length);
-            return { ...t, filePath: p, title: stripExtension(basename(p)) };
+            return retargetFileTab(t, newPath + t.filePath.slice(oldPath.length));
           }
           return t;
         }),
@@ -1194,12 +1223,19 @@ function sanitizeTab(raw: unknown): TabState | null {
   if (typeof raw !== "object" || raw === null) return null;
   const t = raw as Record<string, unknown>;
   if (typeof t.id !== "string" || typeof t.title !== "string") return null;
-  if (t.viewType !== "markdown" && t.viewType !== "graph") return null;
+  if (t.viewType !== "markdown" && t.viewType !== "graph" && t.viewType !== "attachment") return null;
   // migrate pre-R2 "edit" mode to live preview
   const mode: ViewMode =
     t.mode === "preview" ? "preview" : t.mode === "source" ? "source" : "live";
   if (typeof t.filePath !== "string" && t.filePath !== null) return null;
-  const tab: TabState = { id: t.id, viewType: t.viewType, filePath: t.filePath, mode, title: t.title };
+  const filePath = t.filePath;
+  // R102: RE-derive a file-backed tab's viewType from its path (not the persisted value),
+  // so a pre-R102 blob that stored a .png as an editable "markdown" tab — or a file whose
+  // type changed while the app was closed — can never restore into the editable/autosave
+  // path (binary corruption on edit). graph keeps its persisted type (filePath === null).
+  const viewType: TabState["viewType"] =
+    t.viewType === "graph" ? "graph" : filePath !== null ? fileViewType(filePath) : "markdown";
+  const tab: TabState = { id: t.id, viewType, filePath, mode, title: t.title };
   if (t.pinned === true) tab.pinned = true; // R39: persist pin state (omit when false)
   return tab;
 }
