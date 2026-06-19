@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 96 additions — Excluded files 排除列表（候选池第六梯队 ㊽ 续续续 v1）【As-built v0.93】
+
+> **状态：As-built（v0.93 交付，2026-06-19）。** Obsidian Settings>Files&Links>「Excluded files」：一组路径模式，匹配的文件从**搜索结果 + 图谱**隐藏、在**文件树变暗**（仍可正常打开=软排除非删除）。**纯前端 read-only 过滤**（不写 .md、不动 markdown.ts、不动改写引擎）。v1 接 search/graph/explorer 三消费者；completion/quickswitcher/未链接提及延期。
+
+**契约（无冻结接口改动）**：
+- 新 `core/excludedFiles.ts`（只 import `./store`）：`excludedRaw` Store<string>（verbatim 多行，localStorage `geode.excludedFiles`）+ `setExcludedFiles(raw)` + `isExcluded(path): boolean`（**单一谓词**，4 消费者共用）。每行模式对**路径**匹配：`{regex}<re>`→JS 正则（非法→该行忽略、永不抛）；否则 glob（escape 正则元字符**含 `?`**[Obsidian 只 `*` 是通配] → `*`→`.*` → substring-anywhere `.test`）。模块级编译缓存 `cachedRaw`/`cachedRes`（raw 变才重编译，全库扫描每次调用 O(patterns) 不重编译）。
+- `features/search/SearchPanel.tsx`：扫描循环 `if (isExcluded(f.path)) continue` + `excluded`(useStore) 入 effect deps（改模式即重扫）。
+- `features/graph/GraphView.tsx`：rebuild 在 R84 `applyGraphFilters` **之前**预过滤——`exKept` 保留集 + `exNodes`/`exEdges`（**两端都在 exKept 的边才留 = 无悬空边**）+ `excluded` 入 rebuild deps。**applyGraphFilters 保持纯**（不注入 Store 依赖）。
+- `features/explorer/Explorer.tsx`：renderRow `is-excluded` className（`isExcluded(node.path)`）+ 裸 `useStore(excludedRaw)` 订阅触发重渲（dim 经 renderRow 重算）。`.is-excluded{opacity:.45}`（**opacity-only=行仍可点开**）。
+- SettingsModal textarea（受控绑 excludedRaw，verbatim 无变换=无光标跳）+ dict.views.ts 2 键×en/zh + settings.css `.settings-textarea`/`.setting-item-stacked`。main.tsx `__geodeExcluded(raw,path)` probe。
+
+**对抗评审（reviewer subagent 两次被中断 → chief 亲自逐维评审，核 模式语义/编译缓存/data-safety/反应式/图谱预过滤/分层）→ 1 确认 minor（已修）+ 5 维证伪：**
+- **minor（已修）= glob 漏 escape `?`**：escape 集 `[.+^${}()|[\]\\]` 缺 `?`（正则量词）→ 用户 glob 含 `?` 被当量词（误匹配；首位 `?` 则 `new RegExp` 抛→该行静默失效）。Obsidian glob 只 `*` 是通配、`?` 应字面 → **修=escape 集加 `?`** + 加 e2e/probe 锁（`a?c` 匹配 "a?c" 字面、不匹配 "abc"）。
+- **data-safety 证伪**：isExcluded 纯读正则 test、无写/删；search 跳过=可见性、graph 过滤=可见性、explorer dim=`opacity` only（行 onClick→activateNode→openFile 仍触发）→ **排除文件仍可经 explorer 点开 / 链接 / switcher 到达**；无 rename/save/link 路径查 isExcluded。
+- **编译缓存证伪**：`raw !== cachedRaw` 字符串值比较、setExcludedFiles 改 Store→下次 isExcluded 见新 raw 重编译、单模块单例无 stale。
+- **反应式证伪**：search effect / graph rebuild deps 含 `excluded`、explorer 裸 useStore 重渲、settings 受控 textarea verbatim 无光标跳（e2e 反应式实测：改→隐+暗、清→现+亮）。
+- **图谱预过滤证伪**：边两端都在 exKept 才留=无悬空边；邻居被排除致 degree-0→R84 orphans 过滤（exclusion 上游、对齐 Obsidian）；phantom 节点 id=链接名按名匹配（边缘可接受）。
+- **分层/perf 证伪**：excludedFiles.ts 只 import store；features→core 合法；isExcluded O(patterns)/call 缓存无重编译无 O(N²)。
+
+**验证（As-built）**：typecheck 0 · `r96-e2e` **17/17**（模式匹配 9 例 + 真搜索排除 + explorer dim + 反应式 clear→现+亮 + `?` 字面锁）· `r96-probe` **12/12** 真 WKWebView · 回归 r80(17)/r68(40)/r84(17)/r78(16)/r93(22)/r91(10) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（isExcluded 4 消费者、compile 缓存 load-bearing、裸 useStore 订阅必需）。
+
+**v1 已知延期**：completion/quickswitcher/未链接提及接 isExcluded（按消费者逐个审）· 文件夹本身（非其下文件）变暗 · Obsidian「降权非隐藏」精细度（v1 是硬隐藏/硬过滤）。
+
 ## Round 95 additions — 代码块复制按钮 code-fence copy button（候选池第六梯队 ㊶ 续续 v1）【As-built v0.92】
 
 > **状态：As-built（v0.92 交付，2026-06-19）。** Obsidian 阅读视图代码块 hover→「Copy」按钮（右上角，复制代码）。**post-render hydration pass**（镜像 hydrateEmbeds）——**markdown.ts 完全不碰**（r26-bytes 0），按钮注入已渲染 DOM。reading view only（live preview 延期）。

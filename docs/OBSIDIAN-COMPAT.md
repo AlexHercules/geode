@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R96 套件回归（2026-06-19，macOS release 二进制 v0.93.0 实测 `r96-probe-vault`）
+
+R96 = Excluded files 排除列表（候选池第六梯队 ㊽ 续续续 slice，原生功能）。对照 Obsidian Settings>Files&Links>「Excluded files」：路径模式（glob `*` / `{regex}`）匹配的文件从搜索+图谱隐藏、文件树变暗（仍可打开）。**纯前端 read-only 过滤**（新 `core/excludedFiles.ts isExcluded` 单一谓词接 search/graph/explorer 三消费者），不写 .md、不动 markdown.ts。
+
+新增套件：`r96-e2e.mjs` **17/17**（模式匹配 9 例[folder/ext glob + {regex} 锚定 + 非法忽略 + `?` 字面] + 真搜索排除 + explorer dim + 反应式 clear→现+亮）+ `r96-probe.mjs` **12/12**（真 WKWebView，`__geodeExcluded` glob/regex 匹配）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（排除过滤纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；search 扫描跳过 + graph rebuild 预过滤（R84 之前）+ explorer dim class 全加性 → **r80(search UI)17/17 + r68(search 运算符)40/40 + r84(graph 过滤)17/17 + r78(graph 设置)16/16 + r93(explorer 右键)22/22 + r91(explorer 排序)10/10 回归绿**。**对抗评审（reviewer subagent 两次中断→chief 亲评 6 维）→ 1 minor（glob 漏 escape `?`→当正则量词误匹配，已修+锁）+ 5 维证伪**（isExcluded 纯读不写、排除文件仍可点开[dim=opacity-only]、编译缓存无 stale、图谱预过滤无悬空边、反应式实测）。**OBSIDIAN-COMPAT 缺口表**：㊽ Excluded files 交付（续缺口：completion/quickswitcher/未链接提及接 isExcluded / 降权非硬隐藏精细度）。
+
 ### R95 套件回归（2026-06-19，macOS release 二进制 v0.92.0 实测 `r95-probe-vault`）
 
 R95 = 代码块复制按钮（候选池第六梯队 ㊶ 续续 slice，原生功能）。对照 Obsidian 阅读视图代码块 hover→Copy（右上角复制代码）。**post-render hydration pass**（新 `codeCopy.ts`，镜像 hydrateEmbeds）——markdown.ts 不碰、按钮注入已渲染 DOM，reading view only。
