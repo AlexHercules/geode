@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 112 additions — compat fileManager.generateMarkdownLink（插件 API 商业主轴）【As-built v0.109】
+
+> **状态：As-built（v0.109 交付，2026-06-20）。** Obsidian `fileManager.generateMarkdownLink(file, sourcePath, subpath?, alias?): string`（生态高频——插件靠它按用户设置生成链接插入）现为真实现，**委托 core `formatLink`**（R72 ㉞-c 既有引擎：按 `linkUseMarkdown`/`linkPathFormat` 构建 wikilink 或 markdown link、shortest/relative/absolute、resolve-back 验证）。**插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表 R60 登记「高影响低成本」项）。前置门 WebSearch 揭露 Obsidian graph 不做嵌套标签层级 → 原候选池 ㊵ 站不住，改取本 compat 项。
+
+**契约（加性；零改 core 公共签名，仅修 formatLink 一处既有缺陷）**：
+- `compat/obsidian/plugin.ts`：`makeFileManager` 内新增 `generateMarkdownLink`（Proxy 加 `renameFile`/`processFrontMatter` 之后第三个真方法）。参数映射：`subpath` 带 Obsidian 前导 `#` → `subpath.replace(/^#/,"")`（formatLink 内部再加 `#`）；**空串 alias = 用文件名** → `alias ? alias : undefined`；`normalizePath(file.path)`（duck-typed 输入也规范）。委托 `formatLink(handle.metadata, target, sourcePath, {subpath, alias})`。
+- **best-effort fallback**：formatLink 返 null（不可解析 / wikilink-unsafe 名）时，Obsidian 契约要求**总返 string** → 用 basename 构造退化链接（honor markdown/wikilink 设置）。markdown 分支 subpath 同样 `encodeMdHref`（见下方修复）。
+- import `{ encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat"`。
+
+**对抗评审（reviewer 6 维 + WebFetch Obsidian API + MARKDOWN_LINK_RE 往返实测 → 2 confirmed[均 major]）：**
+- **MAJOR #1（已修+锁测）· markdown subpath 未编码**：`formatLink`（`linkFormat.ts:152/172`）markdown 分支把 subpath **原样**拼在已编码 href 后——`MARKDOWN_LINK_RE` href 组 `[^\s)]+`，故 `[Note](Note.md#Heading With Spaces)` 在空格处截断、**整体 NO MATCH 渲染成纯文本**。**根因 = formatLink 既有潜伏缺陷**（R77 唯一 subpath 调用方是 block id `^id`，无空格、且走 wikilink；generateMarkdownLink 是**首个把任意 heading 路由进 markdown 分支**的调用者，新暴露）。修：markdown 分支 `#${encodeMdHref(opts.subpath)}`（保 `#` 分隔符、`^` 不被编码、空格→`%20`）；compat fallback 同步修。wikilink 分支保持 raw（`[[Note#Heading With Spaces]]` 合法）。
+- **MAJOR #2（已补）· 桌面 probe 缺失** → 补 `r112-probe.mjs` 9/9。
+- **证伪/已知（非缺陷）**：fallback 与成功路径互斥无分叉 · 纯字符串生成零 fs 写零副作用（数据安全 A 全不适用）· 签名逐项对齐 Obsidian · 分层仅 import core · 未触 renameFile/processFrontMatter/r72 行为。**已知 by-design**：unsafe 名（`We#ird.md`）fallback 产坏链=「总返 string」契约固有代价（不写文件、插件担责）；wikilink subpath 含 `|`/`]` 不净化=Obsidian 自身亦如此（罕见，文档化不修）。
+
+**套件**：typecheck 0 · cargo check 0 · r112-e2e **16/16**（wikilink shortest[基本/subpath heading+block/alias/空串 alias=文件名/alias==linktext 省略/subpath+alias/子目录唯一 basename]·总返 string fallback[unindexed+unsafe 名]·markdown[基本/alias/subpath/**含空格 subpath %-编码**/block ^id]·absolute）· r112-probe **9/9** 真 WKWebView 原生 fs index · 回归 r72 26/26（formatLink 改动零回归）·r77 14/14（block id wikilink subpath 未动）·r26-bytes 0 违反·r111/r46/r23 全绿 · build exit 0（两次）· 简化门 clean（thin wrapper，fallback 是受测退化 sibling 非 dup）。**后续缺口（compat 商业主轴）**：`MetadataCache.getTags()` Record 形态 · `app.commands` · `registerEditorExtension` · `MarkdownView.getMode/getViewData` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉，工程大）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 111 additions — compat 二进制 IO 桥接 readBinary/createBinary（插件 API 商业主轴）【As-built v0.108】
 
 > **状态：As-built（v0.108 交付，2026-06-20）。** Obsidian 兼容层（`compat/obsidian/vault.ts`）的二进制 IO 从「抛 gap」改为**桥接到 Geode core 原生二进制读写**——`Vault.readBinary/createBinary` + `DataAdapter.readBinary/writeBinary`（图片/PDF/Excalidraw 类插件普遍依赖）。core 二进制 IO（R11/R17 摄入）早已存在且桌面实测多轮（r101/r102/r104/r105），本轮只加 compat **桥接 surface**。**两根轴里这是插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表，非 ROADMAP 原生候选池）。二进制**覆盖写仍是诚实 gap**（core 二进制写是 create-only：Rust `vault_write_binary` 用 `create_new(true)`，R17/R43 防 check-then-act 截断竞态）。

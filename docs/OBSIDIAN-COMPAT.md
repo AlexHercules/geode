@@ -150,7 +150,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `app.commands`（executeCommandById / listCommands / commands） | **缺**：compat `App`（`plugin.ts:295-349`）仅 getter，无 `commands` 对象；跨插件触发/复用命令的事实标准，可在 core `commands` 上包一层 |
 | ~~`vault.readBinary` / `createBinary`~~ / `modifyBinary` | **R111 出队（部分）**：`readBinary`/`createBinary` 桥接 core 原生二进制 IO（`toArrayBuffer` 拷贝防别名、createBinary 返 TFile）。图片/PDF/Excalidraw 类插件可读写附件。**`modifyBinary` 仍缺**（二进制覆盖写——core 写是 create-only，需原子 tmp+rename 路径，类比 text modify）。连带修 core `createBinary` 缺失的 `assertSafeRelPath`（不可信插件 path 守卫，评审 MAJOR） |
 | `MarkdownView.getMode/getViewData/setViewData/setMode` + `workspace.activeEditor` | **缺**：`compat/obsidian/workspace.ts:30-42` MarkdownView 无 mode/data 访问器；`activeEditor`（MarkdownFileInfo）零命中。模式探测/全文读写类插件用，新插件首选 `activeEditor` |
-| `MetadataCache.getTags()` + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + `fileManager.generateMarkdownLink` | **缺/部分**：getTags（Geode 有 `getTagMap`，未导出 `Record<string,number>` 形态）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ generateMarkdownLink（高影响低成本，复用 linkRewrite + `metadata.fileToLinktext`） |
+| `MetadataCache.getTags()` + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + ~~`fileManager.generateMarkdownLink`~~ | **缺/部分**：getTags（Geode 有 `getTagMap`，未导出 `Record<string,number>` 形态）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ ~~generateMarkdownLink~~（**R112 出队**：委托 core `formatLink`——wikilink/markdown + shortest/relative/absolute + alias/subpath，resolve-back 验证，总返 string；连带修 formatLink markdown-subpath 未编码缺陷） |
 | `app.loadLocalStorage/saveLocalStorage/isDarkMode` + `MenuItem.setSubmenu` + `Editor` 完整版方法 | **缺/部分**：loadLocalStorage（per-vault UI 状态）/ isDarkMode；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；Editor 余项（listSelections/setSelections/setLine/transaction/exec/wordAt/scrollTo/undo/redo——可直接映射 CM6，T1.5 子集扩展） |
 
 ## 验收方式（可度量，防自嗨）
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R112 套件回归（2026-06-20，macOS release 二进制 v0.109.0 实测 `r112-probe-vault`）
+
+R112 = compat `fileManager.generateMarkdownLink`（**插件 API 商业主轴**，缺口表「高影响低成本」项出队）。委托 core `formatLink`（R72 既有引擎）——按用户设置生成 wikilink 或 markdown link，alias/subpath/path-format 全支持、resolve-back 验证、总返 string（formatLink null → basename fallback）。**对抗评审揪出 1 MAJOR：formatLink markdown 分支 subpath 未编码**（`#Heading With Spaces` 在 MARKDOWN_LINK_RE href 组 `[^\s)]+` 处截断 → 整体 NO MATCH 渲染成纯文本）——formatLink 既有潜伏缺陷，generateMarkdownLink 首次把任意 heading 路由进 markdown 分支而暴露；修 = markdown subpath `encodeMdHref`（wikilink 分支保持 raw 合法）。
+
+新增套件：`r112-e2e.mjs` **16/16**（wikilink shortest 基本/subpath/alias/空串 alias/省略 alias/子目录·总返 string fallback·markdown 基本/alias/**含空格 subpath %-编码**/block·absolute）+ `r112-probe.mjs` **9/9**（真 WKWebView 原生 fs index；fire-and-forget+IPC 轮询破时序死锁）。**套件矩阵不回退**：r72 26/26（formatLink 改动零回归）·r77 14/14·r26-bytes 0 违反·r111 12/12·r46 18/18·r23 22/22。
 
 ### R111 套件回归（2026-06-20，macOS release 二进制 v0.108.0 实测 `r111-probe-vault`）
 
