@@ -191,6 +191,23 @@ export class MetadataCache extends Events {
     return omit ? file.path.replace(/\.md$/i, "") : file.path;
   }
 
+  /**
+   * R114: 'Get all tags in the vault, with the count of how many notes use each.'
+   * Keys carry the leading `#` (Obsidian convention); the count is the number of
+   * DISTINCT notes containing the tag — Obsidian aggregates getAllTags() per file
+   * (unique-per-file), so notes-containing matches its count. Reuses the core tag
+   * map (cached per index revision). Geode indexes tags case-sensitively, so
+   * `#Tag` / `#tag` are distinct keys (minor divergence if a vault mixes casing).
+   * The `#` prefix also keeps a literal `__proto__` tag a safe own key.
+   */
+  getTags(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [tag, paths] of this.handle.metadata.getTagMap()) {
+      out[`#${tag}`] = paths.size;
+    }
+    return out;
+  }
+
   /* ----- typed event overloads ----- */
 
   on(
