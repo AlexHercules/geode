@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 105 additions — Unsupported file denylist 翻转（候选池第六梯队 ㊽ 续续续续续续续 v1）【As-built v0.102】
+
+> **状态：As-built（v0.102 交付，2026-06-20）。** `isAttachmentPath` 从 **allowlist** 翻成 **denylist**——堵 R102/R104 评审标记的最后一个数据安全洞：旧 allowlist 漏未知扩展名二进制仍可编辑→UTF-8 round-trip+autosave 损坏。**现在只有 markdown + 已知文本/代码/配置扩展名 + 无扩展名文件可编辑，其余一切（含未知扩展名）→ 只读 attachment viewer**（Obsidian「Unsupported file」语义）。纯 core 1 文件改动。
+
+**契约（`isAttachmentPath` 签名不变；判定逻辑翻转）**：
+- `core/attachments.ts`：删 `OTHER_BINARY_EXTS`（列举二进制的旧 allowlist，全仓 0 残留引用）；加 `EDITABLE_TEXT_EXTS`（md + ~130 文本/代码/配置扩展名）；`isAttachmentPath(path) = ext !== "" && !EDITABLE_TEXT_EXTS.has(ext)`（无扩展名→可编辑保 README/LICENSE/Dockerfile；md/已知文本→可编辑；**未知扩展名+二进制→只读**=堵死损坏）。`mediaKind`/`mediaMime`（viewer 内预览分类）不变、不依赖本改动。
+- 消费方 `workspace.ts fileViewType`（viewType 路由）+ recordNavigation + `__geodeAttachmentRouting` probe 契约稳——只是「哪些扩展名是 attachment」变了（未知扩展名现归 attachment）。
+
+**对抗评审（reviewer 6 维 + data-safety，程序化交集 + 对称差）→ 0 confirmed 缺陷（3 nit，其一 .plist 已采纳）：**
+- **数据安全方向（headline，双重证明）**：① reviewer 程序化求 `EDITABLE_TEXT_EXTS ∩ (IMAGE∪AUDIO∪VIDEO∪PDF∪旧 OTHER_BINARY) = ∅`（无二进制混入可编辑集）；② **结构性证明**：R105 只从可编辑集**移除**未知扩展名、**未新增**任何可编辑扩展名 → 新可编辑集 ⊊ 旧可编辑集 → 「曾只读→变可编辑」按构造不可能 → 任何二进制都不会变可编辑被损坏。r105-e2e 用全量 OLD_ATTACH(69 binary/media ext) symmetric diff「none flips to editable」+ probe 双端断言（**复用 R104 元教训：算对称差坐实安全方向**）。
+- **nit 采纳 #1 `.plist`**：plist 有 binary 变体（bplist00），与「EDITABLE 不含二进制」不变量张力 → **移出 EDITABLE_TEXT_EXTS**（XML plist 变只读=安全降级可接受）。锁测 `.plist → read-only`。补 ipynb/srt/vtt/po/hbs/el/lisp 等冷门文本入表减只读 surprise（全零数据安全风险）。
+- **证伪**：边界（`fileExtension` dot<=0→""→可编辑；`.gitignore`→""+表内双保险；`Set.has` 不查原型链=无 R104 那类洞）；零回归（常见文本/代码全在表、无扩展名仍可编辑）；消费一致（sanitizeTab/handleRenamed 从路径重算→持久化/改名的未知扩展名也翻只读）；简化门（1 文件，OTHER_BINARY_EXTS 删净、EDITABLE 被引用，无死代码）。
+
+**套件**：typecheck 0 · r105-e2e 12/12（symmetric-diff 安全 + 文本可编辑 + 未知只读 + 无扩展名可编辑 + 端到端路由 + 数据安全无 handle + plist 锁）· r105-probe 6/6 真 WKWebView · 回归 r102 20/20 + r104 19/19 · build exit 0 · 简化门 clean（1 文件跳过条件）。**attachment 全链（R102 viewer + R104 媒体预览 + R105 denylist）至此收官。**
+
 ## Round 104 additions — attachment viewer 续：audio/video/pdf 内联预览（候选池第六梯队 ㊽ 续续续续续续 v1）【As-built v0.101】
 
 > **状态：As-built（v0.101 交付，2026-06-20）。** 扩 R102 只读 attachment viewer：非图片媒体从「只读占位」改「**内联预览**」——audio→`<audio controls>`、video→`<video controls>`、pdf→`<embed type=application/pdf>`（image `<img>` 不变）。**数据安全核心不变**：仍只 `vault.readBinary` 裸读、**绝不 documents.acquire**（无可编辑缓冲/无 autosave）。匹配 Obsidian 原生 audio/video/pdf 格式表。
