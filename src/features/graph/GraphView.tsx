@@ -16,6 +16,7 @@ import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
+import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import type { GraphEdge, GraphNode } from "@core/types";
 import {
   applyGraphFilters,
@@ -202,6 +203,7 @@ export function GraphView() {
   const t = useI18n();
   const rev = useStore(app.metadata.revision);
   const lastActiveFile = useStore(app.workspace.lastActiveFile);
+  const excluded = useStore(excludedRaw); // R96: rebuild when the exclude list changes
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [prefs, setPrefs] = useState<GraphPrefs>(loadPrefs);
@@ -551,7 +553,11 @@ export function GraphView() {
     // R84 (㊵): client-side filters (orphans / existing-files-only) applied to the
     // full graph BEFORE local-BFS + degree sampling, so both see the filtered set.
     const raw = app.metadata.getGraph();
-    const data = applyGraphFilters(raw.nodes, raw.edges, prefs.filters);
+    // R96: drop excluded-files nodes + any edge touching them, before the R84 filters
+    const exKept = new Set(raw.nodes.filter((n) => !isExcluded(n.id)).map((n) => n.id));
+    const exNodes = raw.nodes.filter((n) => exKept.has(n.id));
+    const exEdges = raw.edges.filter((e) => exKept.has(e.source) && exKept.has(e.target));
+    const data = applyGraphFilters(exNodes, exEdges, prefs.filters);
     const buildStart = performance.now();
 
     // pick the rendered node set: local BFS subgraph, then degree sampling
@@ -661,6 +667,7 @@ export function GraphView() {
     prefs.showAll,
     prefs.filters.orphans,
     prefs.filters.existingOnly,
+    excluded,
     anchor,
   ]);
 

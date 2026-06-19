@@ -29,6 +29,7 @@ import {
   monospaceFont,
   setMonospaceFont,
 } from "@core/appearance";
+import { excludedRaw, setExcludedFiles } from "@core/excludedFiles";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
 import {
   newNoteLocation,
@@ -92,7 +93,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.92.0";
+const APP_VERSION = "0.93.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
 
@@ -210,6 +211,8 @@ function AppearanceSection() {
   /* R94: interface — show inline title + show ribbon */
   const inlineTitle = useStore(showInlineTitle);
   const ribbon = useStore(showRibbon);
+  /* R96: excluded files (search/graph/explorer filter) */
+  const excluded = useStore(excludedRaw);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -859,6 +862,24 @@ function AppearanceSection() {
           aria-label={t("settings.attachmentFolder")}
           data-testid="settings-attachment-folder"
           onChange={(e) => setAttachmentFolder(e.target.value)}
+        />
+      </div>
+
+      {/* R96: excluded files — patterns hidden from search/graph + dimmed in the tree */}
+      <div className="setting-item setting-item-stacked">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.excludedFiles")}</div>
+          <div className="setting-desc">{t("settings.excludedFilesDesc")}</div>
+        </div>
+        <textarea
+          className="settings-textarea"
+          value={excluded}
+          rows={3}
+          placeholder={"Archive/\n*.png\n{regex}^drafts/"}
+          spellCheck={false}
+          aria-label={t("settings.excludedFiles")}
+          data-testid="settings-excluded-files"
+          onChange={(e) => setExcludedFiles(e.target.value)}
         />
       </div>
 

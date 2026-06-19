@@ -6,6 +6,7 @@ import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import type { I18nKey } from "@core/i18n";
 import { parseSearchQuery, evaluateSearch } from "@core/search";
+import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import type { SearchInput, SearchMatchRange, SearchParseErrorCode } from "@core/search";
 import "./search.css";
 
@@ -185,6 +186,7 @@ export function SearchPanel() {
   const app = useApp();
   const t = useI18n();
   const rev = useStore(app.metadata.revision);
+  const excluded = useStore(excludedRaw); // R96: re-scan when the exclude list changes
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   /** every matched file (unsorted, untruncated) — `results` is derived from it */
@@ -249,6 +251,7 @@ export function SearchPanel() {
       const files = app.vault.getMarkdownFiles();
       const out: FileResult[] = [];
       for (const f of files) {
+        if (isExcluded(f.path)) continue; // R96: excluded files don't appear in search
         let content: string;
         try {
           content = await app.vault.read(f.path);
@@ -290,7 +293,7 @@ export function SearchPanel() {
     return () => {
       cancelled = true;
     };
-  }, [app.vault, app.metadata, parsed, rev]);
+  }, [app.vault, app.metadata, parsed, rev, excluded]);
 
   // R80: sort + truncate derived from allResults (re-sort never re-scans).
   const results = useMemo(

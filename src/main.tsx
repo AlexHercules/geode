@@ -81,6 +81,7 @@ import { findMathBlockRanges } from "@features/editor/liveMath";
 import { splitSlides } from "@features/slides";
 import { indentUnitString } from "@features/editor/cmExtensions";
 import { hydrateCodeCopy } from "@features/editor/codeCopy";
+import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -497,6 +498,14 @@ async function bootstrap() {
     div.innerHTML = html;
     hydrateCodeCopy(div);
     return div.querySelectorAll(".code-copy-button").length;
+  };
+
+  // always-on excluded-files probe (R96, ㊽ 续续续): sets the patterns + returns whether
+  // a path is excluded — proving the glob/regex matching on the real WKWebView build.
+  const excludedHost = globalThis as unknown as { __geodeExcluded?: (raw: string, path: string) => boolean };
+  excludedHost.__geodeExcluded = (raw, path) => {
+    setExcludedFiles(raw);
+    return isExcluded(path);
   };
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a

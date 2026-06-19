@@ -223,6 +223,39 @@
   color: var(--text-faint);
 }
 
+/* R96: stacked layout (label above a full-width control) + multi-line textarea */
+.setting-item.setting-item-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.settings-textarea {
+  width: 100%;
+  padding: 6px 10px;
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  resize: vertical;
+}
+
+.settings-textarea:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-textarea:focus {
+  border-color: var(--accent);
+}
+
+.settings-textarea::placeholder {
+  color: var(--text-faint);
+}
+
 /* ---------- font size slider ---------- */
 
 .settings-slider {

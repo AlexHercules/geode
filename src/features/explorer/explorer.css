@@ -61,6 +61,11 @@
   color: var(--accent);
 }
 
+/* R96: excluded files (Settings → Excluded files) are dimmed but still openable */
+.explorer-item.is-excluded {
+  opacity: 0.45;
+}
+
 .explorer-chevron {
   width: 15px;
   flex-shrink: 0;

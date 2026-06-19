@@ -104,6 +104,9 @@ export const en = {
   "settings.attachmentFolder": "Default location for new attachments",
   "settings.attachmentFolderDesc":
     'Folder for pasted or dropped images. "/" = vault root, "./" = same folder as the note, "./name" = subfolder under the note\'s folder, "name" = fixed vault folder.',
+  "settings.excludedFiles": "Excluded files",
+  "settings.excludedFilesDesc":
+    'Files whose path matches a pattern (one per line) are hidden from search + the graph and dimmed in the file explorer. Use "*" as a wildcard, or prefix "{regex}" for a regular expression. They stay openable.',
 
   // ---- settings: templates (R23) ----
   "settings.templates": "Templates",
@@ -390,6 +393,9 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.attachmentFolder": "新附件默认位置",
   "settings.attachmentFolderDesc":
     "粘贴/拖入图片的保存目录。「/」表示库根目录，「./」表示笔记所在目录，「./名称」表示笔记所在目录下的子文件夹，「名称」表示库内固定文件夹。",
+  "settings.excludedFiles": "排除的文件",
+  "settings.excludedFilesDesc":
+    "路径匹配任一模式（每行一条）的文件会从搜索和图谱中隐藏、并在文件树中变暗。用「*」作通配符，或以「{regex}」前缀启用正则。文件仍可正常打开。",
 
   // ---- settings: templates (R23) ----
   "settings.templates": "模板",

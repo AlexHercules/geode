@@ -3,6 +3,7 @@ import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
 import { EXPLORER_MIME, findFolder, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { explorerSort, setExplorerSort } from "@core/appearance";
+import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
@@ -189,6 +190,9 @@ export function Explorer() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const sortKey = useStore(explorerSort);
+  // R96: subscribe so the tree re-renders (re-applying the dim via renderRow's
+  // isExcluded) whenever the excluded-files patterns change
+  useStore(excludedRaw);
   const rows = useMemo(
     () => (tree ? flattenVisible(tree, expanded, sortKey) : []),
     [tree, expanded, sortKey],
@@ -583,12 +587,13 @@ export function Explorer() {
     const isRenaming = node.path === renaming;
     const isDragging = node.path === draggingPath;
     const isDropTarget = dropTarget !== null && dropTarget !== "" && node.path === dropTarget;
+    const isExcludedRow = isExcluded(node.path); // R96: dim excluded files
     const label = isFolder ? node.name : node.basename;
 
     return (
       <div
         key={node.path}
-        className={`explorer-item${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}`}
+        className={`explorer-item${isActive ? " is-active" : ""}${isSelected ? " is-selected" : ""}${isDragging ? " is-dragging" : ""}${isDropTarget ? " is-drop-target" : ""}${isExcludedRow ? " is-excluded" : ""}`}
         data-testid="explorer-item"
         data-path={node.path}
         data-hover-path={isFolder ? undefined : node.path}
