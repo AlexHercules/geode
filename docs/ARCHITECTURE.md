@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 98 additions — 反链「Show more context」（候选池第六梯队 ㊷ 续 v1）【As-built v0.95】
+
+> **状态：As-built（v0.95 交付，2026-06-19）。** Obsidian 反链面板「Show more context」toggle：每条反链片段从**匹配行**扩展到**周围整段**（空行分隔块）。**纯前端 read-only**（不写 .md、不动 markdown.ts）。**关键 = 面板侧现算，零改 getBacklinks/索引**（R82 延期理由「需改共享索引」被规避）——linked mentions 仅在 toggle 开时**重读源内容**建整段，关时用索引行片段（零回归）。
+
+**契约（无冻结接口改动；getBacklinks/BacklinkEntry 不变）**：
+- `BacklinksPanel.tsx`：新 `buildParagraph(content, from, to=from)`（**export 供 probe**，3 调用点）——从 from 向上扩展至前一行空白、向下至后一行空白得整段块，trim + mark 重映射，**capped PARA_MAX=500**（超长按 PARA_RADIUS=240 截断围匹配，镜像 buildSnippet 截断分支但用整段边界）。`moreContext` state（localStorage `geode.backlinksContext`，**全局持久非按文件重置**，镜像 SearchPanel）+ 工具栏 toggle `bl-context-toggle`。
+- **Unlinked**：既有 async 扫描已读内容 → 顺带建整段（UnlinkedItem 加 paragraph/paraMarkFrom/paraMarkTo），render moreContext 切换（带高亮）。
+- **Linked**：getBacklinks 给 `{snippet, from}`（行+偏移，无内容）→ 新 async effect **gated on moreContext** 重读每个源 + 建整段 `Map<sourcePath,string[]>`（关时早退、零读）。render `(moreContext && linkedParas.path===activePath && map.get(path)?.[i]) || c.snippet`（无 to=无高亮，对齐既有 plain 行片段）。
+- dict.panels.ts `backlinks.moreContext`×en/zh。backlinks.css `.bl-snippet.is-paragraph{white-space:pre-wrap}`（保留整段换行）。main.tsx `__geodeBacklinkParagraph` probe。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，核 整段边界/async 竞态/data-safety/反应式持久/render/分层）→ 0 critical/major + 2 minor（全确认已修）：**
+- **F1（minor，已修）= 切档陈旧整段**：`linkedParas` 仅按 sourcePath 键、切活动文件不清 → 源 X 同时链旧档 A + 新档 B 时，A→B 切换后 X 短暂显示**A 偏移建的整段**（错）→ **修=map 标 `{path, map}` 携建图时的 activePath，render guard `linkedParas.path===activePath` 拒陈旧 → 回退正确行片段直到新读落地**。补 e2e（C 同链 A/B、切档断言无陈旧 alpha block）。
+- **F2（minor，已修，大库可能 major）= 过度失效**：effect 依赖 `shownBacklinks`（filter/sort/rev 都重算）→ toggle 开时每次过滤键入重读全部源 → **修=依赖 `data.backlinks`（未过滤集）建全部、render 仍按 filter 显示**，filter/sort 不再触发磁盘读（仅切档/rev）。
+- **PASS 维度**：buildParagraph 边界（offset 0/EOF 无尾换行/单行/连续合并/空行隔离/CRLF——`.trim()` 吸收 `\r`、内部 `\r` 双坐标计入 mark 对齐）；data-safety 纯读 `app.vault.read` 无写、markdown.ts 未碰；moreContext 全局态不被 R82 activePath-reset 清、独立 localStorage 键；空整段回退不可达（链接偏移恒在非空行）；React 文本子节点转义无 XSS；分层 app→features probe 有先例、索引契约不动。
+
+**验证（As-built）**：typecheck 0 · `r98-e2e` **15/15**（整段边界 probe + 真面板 行→整段切换 + 隔离段 + 持久化 + toggle-off + **F1 切档陈旧守卫**）· `r98-probe` **6/6** 真 WKWebView · 回归 r82(27)/r62(14)/r80(17)/r97(15) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（buildParagraph 故意镜像 buildSnippet 形态不同边界=不可合并、两 async effect 同组件不同数据=不可合并）。
+
+**v1 已知延期**：rev bump（编辑活动笔记）仍重读全部源建整段（链接可能变、对齐 Obsidian）· 整段内匹配高亮（linked 仍 plain 对齐既有）· 内容缓存避免重读。
+
 ## Round 97 additions — 右键「Move to…」文件夹选择器（候选池第六梯队 ㊽ 续续续续 v1）【As-built v0.94】
 
 > **状态：As-built（v0.94 交付，2026-06-19）。** 完成 R93 延期的 Explorer 右键「Move to…」：fuzzy 文件夹选择器选目标 → 文件/文件夹移过去。**复用既有 vetted 移动写路径**——R28/R93 的 `moveNode`（`resolveDropTarget` 四守卫 + `wouldCollide` + R16/R70 `renameWithLinkUpdate`），**本轮零新写机制**，picker 只选目标。

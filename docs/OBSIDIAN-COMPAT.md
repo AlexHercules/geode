@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R98 套件回归（2026-06-19，macOS release 二进制 v0.95.0 实测 `r98-probe-vault`）
+
+R98 = 反链「Show more context」（候选池第六梯队 ㊷ 续 slice，原生功能）。对照 Obsidian 反链面板「Show more context」toggle：片段从匹配行扩展到周围整段。**纯前端 read-only 面板侧现算**（新 `buildParagraph` + toggle，linked 仅 toggle 开时重读源），**零改 getBacklinks/索引**（规避 R82 延期理由）。
+
+新增套件：`r98-e2e.mjs` **15/15**（整段边界 probe + 真面板 行→整段 + 隔离段 + 持久化 + toggle-off + F1 切档陈旧守卫）+ `r98-probe.mjs` **6/6**（真 WKWebView，`__geodeBacklinkParagraph` 边界）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（反链整段纯前端）；不碰 markdown.ts → **r26-bytes 不涉及**；面板侧 buildParagraph + linked async 重读 gated on moreContext、getBacklinks/BacklinkEntry 契约不动 → **r82(反链工具栏)27/27 + r62(出链)14/14 + r80(搜索 UI)17/17 + r97(Move to)15/15 回归绿**。**对抗评审 6 维深挖整段边界/async 竞态/data-safety → 0 critical/major + 2 minor（F1 切档陈旧整段[map 标 activePath guard]/F2 过度失效[依赖 data.backlinks 非 shownBacklinks]全修+F1 补 e2e）**。**OBSIDIAN-COMPAT 缺口表**：㊷ Show more context 交付（㊷ 续缺口仅剩：笔记底部内嵌 backlinks / 修改·创建时间排序需 adapter stat）。
+
 ### R97 套件回归（2026-06-19，macOS release 二进制 v0.94.0 实测 `r97-probe-vault`）
 
 R97 = 右键「Move to…」文件夹选择器（候选池第六梯队 ㊽ 续续续续 slice，原生功能）。对照 Obsidian 文件浏览器右键「Move file to…」：fuzzy 文件夹建议器选目标移文件。**复用既有 vetted moveNode**（R28/R16/R70 renameWithLinkUpdate），本轮零新写机制；新 fuzzy picker（`MoveToModal.tsx` 镜像 QuickSwitcher）+ 纯函数 `moveTargets`。
