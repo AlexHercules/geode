@@ -67,9 +67,10 @@ export interface FrontMatterCache {
 }
 
 /**
- * embeds / sections / listItems / frontmatterLinks are NOT produced by
- * Geode's parser yet (all optional fields — recorded gap). blocks is real
- * since R13 (`^id` markers indexed by core's parseNote).
+ * embeds is real since R119 (`![[..]]` wikilink embeds, split out of links).
+ * sections / listItems / frontmatterLinks are NOT produced by Geode's parser yet
+ * (all optional fields — recorded gap). blocks is real since R13 (`^id` markers
+ * indexed by core's parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
@@ -260,19 +261,33 @@ export class MetadataCache extends Events {
       out.blocks = blocks;
     }
     if (meta.links.length > 0) {
-      out.links = meta.links.map((l) => ({
-        link: l.target,
-        // R70: the no-content fallback must reconstruct the link in its OWN
-        // syntax — a markdown link `[text](href)` is not `[[href]]`.
-        original:
-          content !== undefined
-            ? content.slice(l.from, l.to)
-            : l.kind === "markdown"
-              ? `[${l.alias ?? ""}](${l.target})`
-              : `[[${l.target}${l.alias ? `|${l.alias}` : ""}]]`,
-        ...(l.alias !== undefined ? { displayText: l.alias } : {}),
-        position: pos(l.from, l.to),
-      }));
+      // R119: split `![[..]]` embeds out of links (Obsidian files them separately).
+      // Core's WIKILINK_RE matches the inner `[[..]]` (l.from points at `[[`), so an
+      // embed's `!` sits at l.from-1; include it in the embed's original/position.
+      // When content is undefined (pre-warm transient, NOT cached) embeds can't be
+      // detected → everything stays in links; the next call heals once content lands.
+      const links: LinkCache[] = [];
+      const embeds: EmbedCache[] = [];
+      for (const l of meta.links) {
+        const isEmbed =
+          l.kind === "wikilink" && content !== undefined && l.from > 0 && content[l.from - 1] === "!";
+        const from = isEmbed ? l.from - 1 : l.from;
+        (isEmbed ? embeds : links).push({
+          link: l.target,
+          // R70: the no-content fallback must reconstruct the link in its OWN
+          // syntax — a markdown link `[text](href)` is not `[[href]]`.
+          original:
+            content !== undefined
+              ? content.slice(from, l.to)
+              : l.kind === "markdown"
+                ? `[${l.alias ?? ""}](${l.target})`
+                : `[[${l.target}${l.alias ? `|${l.alias}` : ""}]]`,
+          ...(l.alias !== undefined ? { displayText: l.alias } : {}),
+          position: pos(from, l.to),
+        });
+      }
+      if (links.length > 0) out.links = links;
+      if (embeds.length > 0) out.embeds = embeds;
     }
     // frontmatter-sourced tag refs (parseNote pushes them with from: 0) are
     // excluded: real Obsidian keeps cache.tags body-only and merges
