@@ -190,6 +190,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R99 套件回归（2026-06-19，macOS release 二进制 v0.96.0 实测 `r99-probe-vault`）
+
+R99 = 标签作图谱节点 tags as graph nodes（候选池第六梯队 ㊵ 续续续 slice，原生功能）。对照 Obsidian 图谱「Tags」toggle：标签作绿色节点 + 与含标签的笔记连边。**纯前端 read-only 客户端合并**（新纯函数 `buildTagGraph` + toggle，零改 getGraph/GraphNode 形状），默认 OFF=零回归。
+
+新增套件：`r99-e2e.mjs` **16/16**（buildTagGraph 度数 + prefs 默认关·向后兼容 + 真图谱 toggle·legend 增 tag-node 数 + tag-click 开搜索不开 tab/note-click 开文件[MAJOR 锁]）+ `r99-probe.mjs` **7/7**（真 WKWebView，净库精确 2 标签节点/度/3 边）。
+
+- **套件矩阵不回退**：本轮 compat 调用面零改动（标签节点纯前端客户端）；不碰 markdown.ts → **r26-bytes 不涉及**；GraphNode 形状不变（tag 节点 id 前缀区分，沿用 `unresolved:` 惯例）、tags 走既有 exclude/filter/sample 管线 → **r78(graph 设置)16/16 + r84(graph 过滤)17/17 + r90(分组着色)17/17 + r96(excluded)17/17 + r98(more context)15/15 回归绿**。**对抗评审 6 维深挖（特别盯点击 tag 节点）→ 1 确认 MAJOR（已修）+ 5 维证伪**：MAJOR=点击 tag 节点 openNode 仅按 resolved 判→openFile("tag:…")→破损持久幽灵 tab（漏给 click handler 加 TAG_PREFIX 守卫）→ 修 openNode 加 tag 守卫 → requestSearch（对齐 Obsidian/TagsPanel）+ 加 `__geodeGraphClickNode` 探针锁。**OBSIDIAN-COMPAT 缺口表**：㊵ 标签作节点交付（㊵ 续缺口仅剩：附件作节点 / 嵌套标签层级 / 标签↔标签连边）。
+
 ### R98 套件回归（2026-06-19，macOS release 二进制 v0.95.0 实测 `r98-probe-vault`）
 
 R98 = 反链「Show more context」（候选池第六梯队 ㊷ 续 slice，原生功能）。对照 Obsidian 反链面板「Show more context」toggle：片段从匹配行扩展到周围整段。**纯前端 read-only 面板侧现算**（新 `buildParagraph` + toggle，linked 仅 toggle 开时重读源），**零改 getBacklinks/索引**（规避 R82 延期理由）。

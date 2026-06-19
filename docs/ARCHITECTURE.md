@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 99 additions — 标签作图谱节点 tags as graph nodes（候选池第六梯队 ㊵ 续续续 v1）【As-built v0.96】
+
+> **状态：As-built（v0.96 交付，2026-06-19）。** Obsidian 图谱「Tags」toggle：把标签作为**绿色节点**显示、与含该标签的笔记连边。**纯前端 read-only 客户端合并**（不写 .md、不动 markdown.ts、**零改 getGraph/GraphNode 形状**——镜像 R96/R84 客户端思路）。默认 OFF = 零回归。
+
+**契约（GraphNode 形状不变——tag 节点用 id 前缀区分，沿用 `unresolved:` id-编码惯例）**：
+- `graphPrefs.ts`：新纯函数 `buildTagGraph(tagMap, keptNotes): {nodes, edges}`（**export 供 probe**，2 调用点）——每个 tag 一个 GraphNode（`id="tag:"+name`、`label="#"+name`、`resolved:true`、`degree`=用此标签且 ∈keptNotes 的笔记数）+ 每个 (note∈keptNotes, tag) 一条 note→tag 边；**degree>0 守卫**（全被排除的标签不生成节点）。`export TAG_PREFIX="tag:"`（buildTagGraph + draw 共用）。`GraphDisplay.tags` flag（默认 false，parse `d.tags===true`，镜像 arrows）。
+- `GraphView.tsx`：palette 加 `tag`（读 `--graph-tag` 绿，FALLBACK `#3aa655`）。rebuild：R96 排除后、`applyGraphFilters` 前，IF `prefs.display.tags` 合并 `buildTagGraph(getTagMap(), exKept)`（tags 走既有 exclude/filter/sample/BFS 同管线）+ `prefs.display.tags` 入 rebuild deps。draw：`n.resolved` 分支对 `tag:` id 用 `p.tag` 绿（**先于 nodeGroupColor**，标签不取分组色）。**openNode 加 tag 守卫**（见根因）。设置 toggle `graph-tags`。
+- app.css `--graph-tag`（暗 `#4cc46a`/亮 `#2e9e4f` 双主题）。dict.views.ts `graph.showTags`×en/zh。main.tsx `__geodeGraphTags` probe（buildTagGraph over 真索引）+ GraphView `__geodeGraphClickNode` probe（按 id 路由点击，测 openNode 路由）。
+
+**对抗评审（reviewer 6 维各独立 + skeptic verify，**特别盯第 6 维点击 tag 节点**）→ 1 确认 MAJOR（已修）+ 5 维证伪：**
+- **MAJOR（根因·已修）= 点击 tag 节点开破损持久幽灵 tab**：tag 节点 `resolved:true`，`openNode`(GraphView) 仅按 `resolved` 判 → `openFile("tag:alpha")` → acquire 失败 → loadError 错误 tab，**且 filePath 序列化进 layout、每次 reload 重开破损**。根因 = `TAG_PREFIX` id-惯例用于 draw/hover 却**漏了 click handler**。**修=openNode 顶部加 `node.id.startsWith(TAG_PREFIX)` 守卫 → `requestSearch(node.label)`（点标签=搜该标签，对齐 Obsidian + TagsPanel）return**。**测试遮蔽=r99-e2e 只点 toggle 不点 canvas 节点 → 加 `__geodeGraphClickNode` 探针 + 断言 tag-click 开搜索不开 tab / note-click 仍开文件**。
+- **PASS 维度**：data-safety——点 tag 失败读两端皆 throw「File not found」→ EditorPane loadError 分支、不建 CM view、无 autosave，纯读无写；buildTagGraph——`#a/b`→`tag:a/b`、CJK、空 map→空、`#a #a` 按笔记计一次（path Set）；管线——tags 在 R96 排除后合并[全排除标签 degree0 丢]、existingOnly 保留 tags(resolved)、orphans 不丢 tags(≥1 边)；draw——tag 前缀先于 nodeGroupColor[分组色绕过]；id 碰撞——笔记 id 恒 `.md` 结尾、tag id 永不撞；持久/反应式——`d.tags===true` 旧 blob 默认 false、入 rebuild deps、reset 默认 false；perf——getTagMap revision-cached、buildTagGraph 仅 toggle 开时跑；分层——graphPrefs→@core/types features→core 合法。
+
+**验证（As-built）**：typecheck 0 · `r99-e2e` **16/16**（buildTagGraph #alpha度2/#beta度1 + prefs 默认关·向后兼容·显式真 + 真图谱 toggle·legend 增 tag-node 数·持久 + **tag-click 开搜索不开 tab / note-click 开文件[MAJOR 锁]**）· `r99-probe` **7/7** 真 WKWebView+真 fs（净库精确 2 标签节点/度/3 边）· 回归 r78(16)/r84(17)/r90(17)/r96(17)/r98(15) 绿 · release build exit 0 · 不碰 markdown.ts（r26-bytes 不涉及）· 简化门 clean（buildTagGraph/TAG_PREFIX 各 2 调用点、draw 三元各分支真实）。
+
+**v1 已知延期**：嵌套标签层级（`#a/b` 现为独立节点非层级）· 标签节点不同形状（现仅绿色同形）· 标签↔标签连边 · 标签节点大小按用量调参。
+
 ## Round 98 additions — 反链「Show more context」（候选池第六梯队 ㊷ 续 v1）【As-built v0.95】
 
 > **状态：As-built（v0.95 交付，2026-06-19）。** Obsidian 反链面板「Show more context」toggle：每条反链片段从**匹配行**扩展到**周围整段**（空行分隔块）。**纯前端 read-only**（不写 .md、不动 markdown.ts）。**关键 = 面板侧现算，零改 getBacklinks/索引**（R82 延期理由「需改共享索引」被规避）——linked mentions 仅在 toggle 开时**重读源内容**建整段，关时用索引行片段（零回归）。
