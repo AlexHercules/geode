@@ -150,7 +150,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | ~~`app.commands`（executeCommandById / listCommands / commands）~~ | **R113 出队**：3 高频成员架在 core `CommandRegistry` 上（共享原生 palette 注册表）。`executeCommandById` 尊重 available 预检；name thunk 解析成 string 给插件。余项（editorCommands/findCommand/removeCommand/executeCommand）续缺 |
 | ~~`vault.readBinary` / `createBinary`~~ / `modifyBinary` | **R111 出队（部分）**：`readBinary`/`createBinary` 桥接 core 原生二进制 IO（`toArrayBuffer` 拷贝防别名、createBinary 返 TFile）。图片/PDF/Excalidraw 类插件可读写附件。**`modifyBinary` 仍缺**（二进制覆盖写——core 写是 create-only，需原子 tmp+rename 路径，类比 text modify）。连带修 core `createBinary` 缺失的 `assertSafeRelPath`（不可信插件 path 守卫，评审 MAJOR） |
 | `MarkdownView.getMode/getViewData/setViewData/setMode` + `workspace.activeEditor` | **缺**：`compat/obsidian/workspace.ts:30-42` MarkdownView 无 mode/data 访问器；`activeEditor`（MarkdownFileInfo）零命中。模式探测/全文读写类插件用，新插件首选 `activeEditor` |
-| `MetadataCache.getTags()` + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + ~~`fileManager.generateMarkdownLink`~~ | **缺/部分**：getTags（Geode 有 `getTagMap`，未导出 `Record<string,number>` 形态）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ ~~generateMarkdownLink~~（**R112 出队**：委托 core `formatLink`——wikilink/markdown + shortest/relative/absolute + alias/subpath，resolve-back 验证，总返 string；连带修 formatLink markdown-subpath 未编码缺陷） |
+| ~~`MetadataCache.getTags()`~~ + `CachedMetadata.embeds/sections/listItems/frontmatterLinks` + ~~`fileManager.generateMarkdownLink`~~ | **部分**：~~getTags~~（**R114 出队**：投影 core `getTagMap`→`Record<string,number>`，`#` 前缀 + distinct 笔记数；大小写敏感=镜像 Geode 标签模型，chief 拍板 deferred 偏离）+ getFileCache 形状余项（embeds 小、sections/listItems 大）+ ~~generateMarkdownLink~~（**R112 出队**：委托 core `formatLink`，resolve-back 验证，总返 string；连带修 markdown-subpath 未编码） |
 | `app.loadLocalStorage/saveLocalStorage/isDarkMode` + `MenuItem.setSubmenu` + `Editor` 完整版方法 | **缺/部分**：loadLocalStorage（per-vault UI 状态）/ isDarkMode；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；Editor 余项（listSelections/setSelections/setLine/transaction/exec/wordAt/scrollTo/undo/redo——可直接映射 CM6，T1.5 子集扩展） |
 
 ## 验收方式（可度量，防自嗨）
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R114 套件回归（2026-06-20，macOS release 二进制 v0.111.0 实测 `r114-probe-vault`）
+
+R114 = compat `MetadataCache.getTags(): Record<string,number>`（**插件 API 商业主轴**，缺口表出队）。投影 core `getTagMap`（tag→note-path Set，缓存）→ `#` 前缀 key + distinct 笔记数（对齐 Obsidian getAllTags per-file 聚合）。`#` 前缀顺带消解 R113 `__proto__` 类风险（literal `__proto__` 标签→key `#__proto__` 安全 own 属性）。**对抗评审 0 confirmed 缺陷**；**已知偏离（chief 拍板 deferred）= 大小写敏感**（Geode 全局标签模型大小写敏感，getTags 镜像之；只让 getTags 合并会内部不一致）。
+
+新增套件：`r114-e2e.mjs` **12/12**（shape/`#`前缀/distinct 计数/大小写分离/frontmatter/nested `#a/b`/CJK/literal `#__proto__` 安全/live bump）+ `r114-probe.mjs` **8/8**（真 WKWebView 原生 fs index）。**套件矩阵不回退**：r99 16/16（tag graph 共享 getTagMap）·r69 36/36（tag rename）·r23 22/22·r113 10/10。
 
 ### R113 套件回归（2026-06-20，macOS release 二进制 v0.110.0 实测 `r113-probe-vault`）
 

@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 114 additions — compat MetadataCache.getTags（Record<string,number> · 插件 API 商业主轴）【As-built v0.111】
+
+> **状态：As-built（v0.111 交付，2026-06-20）。** Obsidian `metadataCache.getTags(): Record<string, number>`（所有标签→计数，Dataview/标签类插件常用）现真实现，**投影 core `getTagMap()`**（tag→note-path Set，按 index revision 缓存）。key 加前导 `#`（Obsidian 约定）；count = `paths.size` = **含该标签的 distinct 笔记数**（对齐 Obsidian `getAllTags` per-file 去重聚合）。纯读、零改 core。
+
+**契约（加性；纯 compat 读层）**：
+- `compat/obsidian/metadata.ts`：CompatMetadataCache 加 `getTags(): Record<string, number>`——`for ([tag, paths] of handle.metadata.getTagMap()) out["#"+tag] = paths.size`。
+- **数据安全**：只读迭代缓存 Map、只发出 primitive number 进全新 out 对象——**不泄漏内部 Set/Map 引用**给插件（无需 getAliasMap 那样的 `.slice()` 防泄漏，因不交出容器）。
+- **`#` 前缀消解 R113 `__proto__` 类风险**：literal `__proto__` 标签 → key `#__proto__`（普通 own 属性，非原型 setter）；无 `Object.prototype` key 以 `#` 开头 → 整类原型污染被前缀中和。
+
+**对抗评审（reviewer 6 维 + 缓存别名 + R113 复发检查 → 0 confirmed 缺陷）：**
+- **证伪**：count 语义保真（distinct 笔记数 == Obsidian getAllTags 聚合；同笔记 frontmatter+inline 同标签仍算 1，getTagMap Set<path> 去重）· `#` key 对齐 + 嵌套 `#a/b` 输出全路径不合成父节点（与 Obsidian 一致）· 纯读不泄漏缓存引用 · `#` 前缀防 `__proto__` 污染 · 空 vault→`{}` + 空串 tag 被 core 挡（`tag !== ""`）· 分层合规 · getTagMap 只读不 mutate→graph(R99)/Tags pane/rename(R69) 零回归。
+- **已知偏离（chief 已拍板 deferred · 文档化非缺陷）· 大小写敏感**：Obsidian 标签大小写不敏感、getTags 合并 case 变体；Geode 标签索引**有意大小写敏感**（`metadata.ts:221/296` 不 lowercase）→ getTags 把 `#Tag`/`#tag` 拆成两 key。**根因是 Geode 全局标签模型大小写敏感**（graph/Tags pane/rename/`#` 补全一致）；只让 getTags 合并会造成内部不一致（getTags 报 merged 计数而 Tags pane 显分开）。**裁决：getTags 镜像 Geode 标签模型（大小写敏感）**——保持 Geode 内部一致优先于单 API 对 Obsidian 保真；全局大小写不敏感是独立大改、非本轮 scope。
+
+**套件**：typecheck 0 · cargo check 0 · r114-e2e **12/12**（shape/`#`前缀/distinct 计数/大小写分离/frontmatter `#gamma`/正数/无空 key/**nested `#a/b`/CJK `#标签`/literal `#__proto__` 安全 own key**/live revision bump）· r114-probe **8/8** 真 WKWebView 原生 fs index · 回归 r99 16/16·r69 36/36·r23 22/22·r113 10/10 · build exit 0 · 简化门 clean（5 行单方法纯加法）。**后续缺口（compat 商业主轴）**：`registerEditorExtension`（cmExtensions compartment）· `MarkdownView.getMode/getViewData/setViewData` · `app.commands` 余项 · `CachedMetadata.embeds/sections/listItems` · `vault.modifyBinary` · `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 113 additions — compat app.commands（executeCommandById/listCommands/commands · 插件 API 商业主轴）【As-built v0.110】
 
 > **状态：As-built（v0.110 交付，2026-06-20）。** Obsidian `app.commands`（跨插件触发/复用命令的事实标准 API）现真实现 3 个高频成员：`executeCommandById(id): boolean`、`listCommands(): Command[]`、`commands: Record<string, Command>`，**全部架在 core `CommandRegistry` 上**（与原生 palette/hotkeys 共享同一注册表）。明星插件常用 executeCommandById 触发内置/他插件命令。**插件 API 差距 = 商业主轴**（OBSIDIAN-COMPAT 缺口表 R60 登记）。
