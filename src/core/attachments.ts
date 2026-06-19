@@ -171,11 +171,12 @@ async function doImport(
 
 /* ---------- R102 (㊽ 续续续续续): attachment viewer routing ---------- */
 //
-// Which non-md files open in the read-only attachment viewer (`viewType:
-// "attachment"`) instead of the markdown editor — the data-safety boundary that keeps
-// binaries out of the editable/autosave path. Allowlist, not denylist: only known
-// image/binary extensions route to the viewer, so unknown / text-ish files (.txt,
-// .json, .csv, extensionless) stay editable markdown exactly as before (zero regression).
+// Which files open in the read-only attachment viewer (`viewType: "attachment"`) instead
+// of the markdown editor — the data-safety boundary that keeps binaries out of the
+// editable/autosave path. R105 flipped this to a DENYLIST: editing is restricted to
+// markdown + known text/code formats + extensionless files; everything else (binaries,
+// media, AND unknown extensions) opens read-only, so an unrecognised binary can never be
+// edited-as-markdown and corrupted (Obsidian "Unsupported file" semantics).
 
 // Each previewable media family maps its extensions → MIME type (R104: audio/video/pdf
 // joined images). The MIME is the blob `type` so <img>/<audio>/<video>/<embed> can decode.
@@ -193,21 +194,33 @@ const VIDEO_MIME: Record<string, string> = {
   webm: "video/webm", ogv: "video/ogg", avi: "video/x-msvideo", wmv: "video/x-ms-wmv", flv: "video/x-flv",
 };
 const IMAGE_EXTS = new Set(Object.keys(IMAGE_MIME));
-/** other clearly-binary files — shown as a read-only placeholder (no inline preview). Kept
- *  broad on purpose: every binary kept off this list falls back to the editable markdown
- *  editor, where a UTF-8 round-trip + autosave would corrupt it (review fix — close the
- *  high-frequency holes). A future slice may flip to a denylist (only known text editable).
- *  Non-previewable images (heic/tiff/psd) live here too — attachment, but no <img>. */
-const OTHER_BINARY_EXTS = new Set([
-  // documents (pdf is previewable → handled separately below)
-  "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
-  // non-previewable images
-  "heic", "heif", "tiff", "tif", "psd", "ai", "raw",
-  // archives
-  "zip", "7z", "rar", "tar", "gz", "bz2", "xz", "tgz",
-  // executables / libraries / disk / data / fonts
-  "exe", "dll", "so", "dylib", "bin", "wasm", "app", "deb", "rpm", "msi", "dmg", "iso",
-  "db", "sqlite", "sqlite3", "ttf", "otf", "woff", "woff2",
+/** R105: the DENYLIST flip — extensions that open in the editable markdown editor. Only
+ *  markdown + known plain-text/code/config formats (and extensionless files) are editable;
+ *  EVERYTHING ELSE — including UNKNOWN extensions — opens in the read-only attachment viewer
+ *  (Obsidian "Unsupported file" semantics). This closes the data-safety hole R102/R104 left
+ *  open: an unrecognised binary can no longer fall through to the editor and be corrupted by
+ *  a UTF-8 round-trip + autosave. MUST contain NO binary/media extension (else a binary would
+ *  become editable). Generous on text/code so .txt/.json/.csv/code keep editing (zero
+ *  regression); an obscure text format missing here is merely read-only (safe degradation). */
+const EDITABLE_TEXT_EXTS = new Set([
+  // markdown + plain text
+  "md", "markdown", "mdx", "txt", "text", "log", "nfo", "rst", "adoc", "asciidoc", "org", "textile", "tex", "bib", "wiki",
+  // data / config (NOTE: .plist deliberately EXCLUDED — it has a binary variant, bplist00)
+  "json", "jsonc", "json5", "ipynb", "csv", "tsv", "xml", "yaml", "yml", "toml", "ini", "cfg", "conf",
+  "env", "properties", "diff", "patch", "gitignore", "gitattributes", "gitconfig", "po", "pot",
+  "editorconfig", "dockerignore", "npmrc", "nvmrc", "babelrc", "eslintrc", "prettierrc", "hcl", "tf",
+  // web / templates
+  "html", "htm", "css", "scss", "sass", "less", "vue", "svelte", "astro", "hbs", "ejs", "pug", "styl",
+  // js / ts
+  "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts", "coffee",
+  // languages
+  "py", "rb", "rs", "go", "java", "kt", "kts", "c", "h", "cpp", "cc", "cxx", "hpp", "hh",
+  "cs", "php", "swift", "m", "mm", "scala", "clj", "cljs", "ex", "exs", "erl", "hs", "ml", "mli",
+  "lua", "r", "dart", "jl", "nim", "zig", "pl", "pm", "groovy", "gradle", "vb", "pas",
+  "el", "lisp", "scm", "rkt", "elm", "fs", "fsx", "asm", "s", "vim", "tcl", "awk", "applescript",
+  // scripts / query
+  "sh", "bash", "zsh", "fish", "bat", "cmd", "ps1", "sql", "graphql", "gql", "proto", "cmake", "makefile", "mk",
+  "srt", "vtt",
 ]);
 
 /** lowercased extension after the final dot of the basename, or "" if none. */
@@ -245,8 +258,10 @@ export function isImagePath(path: string): boolean {
   return IMAGE_EXTS.has(fileExtension(path));
 }
 
-/** true ⟺ this path opens in the read-only attachment viewer (image/audio/video/pdf or
- *  other binary). Same total set as R102 — audio/video/pdf just moved into preview kinds. */
+/** true ⟺ this path opens in the read-only attachment viewer rather than the editable
+ *  markdown editor. R105 denylist: editable = markdown + known text/code + extensionless;
+ *  everything else (binaries, media, AND unknown extensions) is a read-only attachment. */
 export function isAttachmentPath(path: string): boolean {
-  return mediaKind(path) !== "other" || OTHER_BINARY_EXTS.has(fileExtension(path));
+  const ext = fileExtension(path);
+  return ext !== "" && !EDITABLE_TEXT_EXTS.has(ext);
 }
