@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 119 additions — compat CachedMetadata.embeds（getFileCache 形状补全 · 插件 API 商业主轴）【As-built v0.116】
+
+> **状态：As-built（v0.116 交付，2026-06-20）。** Obsidian `getFileCache(file).embeds: EmbedCache[]`（`![[..]]` wikilink 嵌入）现真实现，**与 `.links`（`[[..]]`）分开**（R119 前所有 link 含嵌入都进 .links=既有偏差）。Dataview/嵌入分析类插件读 cache.embeds。纯读解析、零改 core。
+
+**契约（加性 + links 行为订正；compat buildCache 内）**：
+- `compat/obsidian/metadata.ts buildCache`：把 `meta.links` 拆成 `links` + `embeds`。**core 事实**：WIKILINK_RE 不捕获前导 `!`，故 `![[foo]]` 被索引为 `kind:"wikilink"`、`l.from` 指 `[[`、`!` 在 `l.from-1`；markdown 图片 `![](…)` 在 core link 解析里已 skip → meta.links 只有 wikilink 嵌入。
+- 判据 `isEmbed = l.kind==="wikilink" && content!==undefined && l.from>0 && content[l.from-1]==="!"`；embed 的 `from=l.from-1`（含 `!`）→ original=`![[..]]`、position 覆盖整个 `![[..]]`。非 embed `from=l.from` 不变（`.links` 对 `[[..]]` 逐字节恒等，仅移出 embeds）。`content===undefined`（pre-warm transient、不缓存）→ 暂全进 links、embeds 空，warm 后自愈。
+
+**对抗评审（reviewer 6 维 + 字节对齐核 + 回归面 grep → 0 confirmed 代码缺陷）：**
+- **证伪**：①embed 检测——`l.from`（masked `m.index`）与原始 content 逐字节对齐（maskCodeRegions + withoutFm 均等长空格替换、offset 稳定）→ `content[from-1]`/`slice` 读原文安全；「`!` 不紧邻 `[[`」（"hi! [[x]]" 空格、首行 from=0 的 content[-1]=undefined、CJK 前驱）一律不误检；`kind` 守卫使 markdown 链接永不当 embed；②original/position 含 `!` 对齐 Obsidian，非 embed 逐字节恒等；③**links 移除 embeds 零回归**——唯一 compat getFileCache 内部消费者 fixture.ts 只读 headings/blocks、r70 用 core getBacklinks、内部全用 core metadata；`resolvedLinks` addLinkRows 未动（Obsidian resolvedLinks 本含 embeds，只 getFileCache().links↔.embeds 分离）；④纯读无写无竞态、slice 边界安全、空集省略与 headings/tags 一致；⑤no-content transient 不缓存自愈；⑥分层合规、EmbedCache 形状对齐、typecheck 0。
+- **已知偏离（文档化、不修）**：**O1（既有非本轮）** `EmbedCache.link` 对 `![[Note#Heading]]` 丢 `#anchor`（WIKILINK_RE `(?:#…)?` 非捕获）+ 无 alias 时不派生 displayText——R119 前 links 映射早已如此、仅搬记录；**O2（本轮新、罕见）** 转义 `\![[foo]]` 误判为 embed——core 自身也不建模 `\!` 转义（当普通 wikilink）、偏差与 core 一致、输入极罕见、修需 core 层统一识别。
+
+**套件**：typecheck 0 · cargo check 0 · r119-e2e **10/10**（embeds 2 嵌入/original 含 `!`/alias displayText/position 含 `!`·links 含 `[[target]]` 不含嵌入·只 link/只 embed 各缺省）· r119-probe **7/7** 真 WKWebView 原生 fs index（**metadata 级无需 editor mount → 桌面全验**）· 回归 r23 22/22·r46 18/18·r70 23/23 · build exit 0 · 简化门 clean（拆分循环、无 dup）。**后续缺口（compat 商业主轴）**：`CachedMetadata.sections/listItems`（大）· `EmbedCache.link` 含 anchor + 派生 displayText（O1）· `MarkdownView.setViewData/setMode`（写=data-safety）· `app.commands.removeCommand`（需 core removeById）· `vault.modifyBinary`（需 core 原子覆盖写）· `registerMarkdownPostProcessor`（Dataview 命脉）· `file-menu`/`editor-menu` 钩子。
+
 ## Round 118 additions — compat app.commands 余项 findCommand/executeCommand/editorCommands（插件 API 商业主轴）【As-built v0.115】
 
 > **状态：As-built（v0.115 交付，2026-06-20）。** R113 已做 `app.commands` 的 executeCommandById/listCommands/commands；本轮补 `findCommand(id)` + `executeCommand(command)` + `editorCommands`，over 同一 core CommandRegistry。命令管理类插件用。纯逻辑、零改 core、零新 import。
