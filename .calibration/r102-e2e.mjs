@@ -73,11 +73,14 @@ ok("NO markdown editor (.cm-editor) mounted for an attachment tab", await app(()
 console.log("— data safety: no editable document handle —");
 ok("documents.getActiveView() is null while an attachment tab is active", (await app(() => window.__app.documents.getActiveView())) === null);
 
-// ── binary (non-image) → read-only placeholder, not an <img> ────────────────
+// ── non-previewable binary → read-only placeholder, not an <img> ────────────
+// (R104 moved pdf/audio/video to inline preview; use a .zip which stays a placeholder)
 console.log("— binary placeholder —");
-await open("doc.pdf");
+await create("archive.zip", "PK fake-zip");
+await wait(60);
+await open("archive.zip");
 await wait(200);
-ok("opening a .pdf sets viewType 'attachment'", (await activeTab())?.viewType === "attachment");
+ok("opening a .zip sets viewType 'attachment'", (await activeTab())?.viewType === "attachment");
 ok("a read-only placeholder (not an image) is shown", await app(() => !!document.querySelector('[data-testid="attachment-placeholder"]') && !document.querySelector('[data-testid="attachment-image"]')));
 
 // ── md + text-ish files stay editable (zero regression) ─────────────────────

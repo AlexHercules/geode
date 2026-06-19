@@ -177,24 +177,30 @@ async function doImport(
 // image/binary extensions route to the viewer, so unknown / text-ish files (.txt,
 // .json, .csv, extensionless) stay editable markdown exactly as before (zero regression).
 
-/** images we can preview inline via an <img> blob URL, mapped to their MIME type
- *  (svg in particular won't render in an <img> without image/svg+xml) */
+// Each previewable media family maps its extensions → MIME type (R104: audio/video/pdf
+// joined images). The MIME is the blob `type` so <img>/<audio>/<video>/<embed> can decode.
+// svg needs image/svg+xml; matching Obsidian's native audio/video format lists.
 const IMAGE_MIME: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
   webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", ico: "image/x-icon", avif: "image/avif",
 };
+const AUDIO_MIME: Record<string, string> = {
+  mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav",
+  ogg: "audio/ogg", opus: "audio/ogg", flac: "audio/flac", aiff: "audio/aiff", "3gp": "audio/3gpp",
+};
+const VIDEO_MIME: Record<string, string> = {
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", mkv: "video/x-matroska",
+  webm: "video/webm", ogv: "video/ogg", avi: "video/x-msvideo", wmv: "video/x-ms-wmv", flv: "video/x-flv",
+};
 const IMAGE_EXTS = new Set(Object.keys(IMAGE_MIME));
-/** other clearly-binary files — shown as a read-only placeholder (no preview yet). Kept
+/** other clearly-binary files — shown as a read-only placeholder (no inline preview). Kept
  *  broad on purpose: every binary kept off this list falls back to the editable markdown
  *  editor, where a UTF-8 round-trip + autosave would corrupt it (review fix — close the
  *  high-frequency holes). A future slice may flip to a denylist (only known text editable).
  *  Non-previewable images (heic/tiff/psd) live here too — attachment, but no <img>. */
 const OTHER_BINARY_EXTS = new Set([
-  // documents
-  "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
-  // audio / video
-  "mp3", "m4a", "aac", "opus", "aiff", "wav", "ogg", "flac", "mp4", "m4v", "mov", "mkv",
-  "webm", "avi", "wmv", "flv",
+  // documents (pdf is previewable → handled separately below)
+  "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "rtf", "epub",
   // non-previewable images
   "heic", "heif", "tiff", "tif", "psd", "ai", "raw",
   // archives
@@ -211,18 +217,36 @@ export function fileExtension(path: string): string {
   return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
 }
 
-/** a previewable image (drives <img> vs placeholder inside the attachment view). */
+/** R104: which inline preview the attachment view renders — image (<img>), audio
+ *  (<audio>), video (<video>), pdf (<embed>), or "other" (read-only placeholder). */
+export type MediaKind = "image" | "audio" | "video" | "pdf" | "other";
+export function mediaKind(path: string): MediaKind {
+  // Object.hasOwn (NOT `in` / bracket truthiness): a file named e.g. "x.toString" must not
+  // match an inherited Object.prototype key and be misclassified as a media type (review fix).
+  const ext = fileExtension(path);
+  if (Object.hasOwn(IMAGE_MIME, ext)) return "image";
+  if (Object.hasOwn(AUDIO_MIME, ext)) return "audio";
+  if (Object.hasOwn(VIDEO_MIME, ext)) return "video";
+  if (ext === "pdf") return "pdf";
+  return "other";
+}
+
+/** MIME type for the blob `type` of a previewable media path (octet-stream fallback). */
+export function mediaMime(path: string): string {
+  const ext = fileExtension(path);
+  if (Object.hasOwn(IMAGE_MIME, ext)) return IMAGE_MIME[ext];
+  if (Object.hasOwn(AUDIO_MIME, ext)) return AUDIO_MIME[ext];
+  if (Object.hasOwn(VIDEO_MIME, ext)) return VIDEO_MIME[ext];
+  return ext === "pdf" ? "application/pdf" : "application/octet-stream";
+}
+
+/** a previewable image (drives <img> vs placeholder; kept for the routing probe). */
 export function isImagePath(path: string): boolean {
   return IMAGE_EXTS.has(fileExtension(path));
 }
 
-/** MIME type for an image path's <img> blob (octet-stream fallback). */
-export function imageMime(path: string): string {
-  return IMAGE_MIME[fileExtension(path)] ?? "application/octet-stream";
-}
-
-/** true ⟺ this path opens in the read-only attachment viewer (image or other binary). */
+/** true ⟺ this path opens in the read-only attachment viewer (image/audio/video/pdf or
+ *  other binary). Same total set as R102 — audio/video/pdf just moved into preview kinds. */
 export function isAttachmentPath(path: string): boolean {
-  const ext = fileExtension(path);
-  return IMAGE_EXTS.has(ext) || OTHER_BINARY_EXTS.has(ext);
+  return mediaKind(path) !== "other" || OTHER_BINARY_EXTS.has(fileExtension(path));
 }

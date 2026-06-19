@@ -85,7 +85,7 @@ import { setExcludedFiles, isExcluded } from "@core/excludedFiles";
 import { moveTargets } from "@core/explorerMove";
 import { buildParagraph } from "@features/backlinks/BacklinksPanel";
 import { buildTagGraph, buildAttachmentGraph } from "@features/graph/graphPrefs";
-import { isAttachmentPath, isImagePath } from "@core/attachments";
+import { isAttachmentPath, isImagePath, mediaKind, mediaMime } from "@core/attachments";
 import { blockRefAt } from "@core/blockId";
 import { sortResults } from "@features/search/SearchPanel";
 import { applyGraphFilters, nodeGroupColor, parseGraphPrefs, localSubgraph, loadPrefs as loadGraphPrefs, type GraphPrefs } from "@features/graph/graphPrefs";
@@ -579,6 +579,16 @@ async function bootstrap() {
   };
   attachmentRouteHost.__geodeAttachmentRouting = (paths) =>
     paths.map((p) => ({ path: p, isAttachment: isAttachmentPath(p), isImage: isImagePath(p) }));
+
+  // always-on media-kind probe (R104, ㊽ 续续续续续续): runs the pure mediaKind/mediaMime
+  // classification on the real build, returning per-path {kind, mime} — proves which inline
+  // preview (image/audio/video/pdf/other) the attachment view renders. The <audio>/<video>/
+  // <embed> DOM is browser-E2E only (§D).
+  const mediaKindHost = globalThis as unknown as {
+    __geodeMediaKind?: (paths: string[]) => { path: string; kind: string; mime: string }[];
+  };
+  mediaKindHost.__geodeMediaKind = (paths) =>
+    paths.map((p) => ({ path: p, kind: mediaKind(p), mime: mediaMime(p) }));
 
   // always-on tab-close probe (R81, ㊿): runs the pure tabIdsToClose (which tabs a
   // close-others/right/all action removes, skipping pinned). The menu DOM is
