@@ -428,10 +428,12 @@ export class Vault {
     this.events.emit("vault:changed", { reason: "create" });
   }
 
-  /** Create a new binary file (attachment ingestion, R17). Uncached; no echo
-   *  fingerprint (FNV is text-scoped) — on desktop the watcher reports our own
-   *  create as external, costing one redundant tree refresh (safe direction). */
+  /** Create a new binary file (attachment ingestion R17; Obsidian-compat plugin
+   *  binary IO R111). Uncached; no echo fingerprint (FNV is text-scoped) — on
+   *  desktop the watcher reports our own create as external, costing one redundant
+   *  tree refresh (safe direction). */
   async createBinary(path: string, data: Uint8Array): Promise<void> {
+    assertSafeRelPath(path); // R111: untrusted plugin paths now reach here via the compat Vault — guard like create()/createFolder so a `..`/absolute path can't escape (Memory adapter has no path check of its own)
     await this.adapter.writeBinary(path, data);
     await this.refreshTree();
     this.events.emit("file:created", { path });
@@ -439,7 +441,7 @@ export class Vault {
   }
 
   async createFolder(path: string): Promise<void> {
-    assertSafeRelPath(path); // R48 review: R46 guarded create()/createBinary but missed this — a `..`/absolute folder (e.g. a daily-note folder setting) would otherwise pollute the Memory adapter's folder set
+    assertSafeRelPath(path); // R48 review: R46 guarded create() but missed this folder path (and createBinary, fixed R111) — a `..`/absolute folder (e.g. a daily-note folder setting) would otherwise pollute the Memory adapter's folder set
     await this.adapter.createFolder(path);
     await this.refreshTree();
     this.events.emit("vault:changed", { reason: "create" });

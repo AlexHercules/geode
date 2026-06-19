@@ -17,10 +17,21 @@ export interface DataWriteOptions {
 
 const CONFIG_PREFIX = ".obsidian/";
 
+/** R111: copy adapter bytes into a fresh ArrayBuffer — never hand a plugin a view onto the
+ *  Memory adapter's internal store, and normalize any byteOffset / SharedArrayBuffer backing. */
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 /**
- * Minimal DataAdapter: plain string IO. Paths under `.obsidian/` route to the
- * Geode config IO (the only sanctioned dot-folder access); everything else
- * goes through the vault adapter. Binary/stat/trash operations are gaps.
+ * Minimal DataAdapter: plain string IO. TEXT paths under `.obsidian/` route to the
+ * Geode config IO (the only sanctioned dot-folder access); everything else goes
+ * through the vault adapter. R111: binary read/write bridge straight to native binary
+ * IO — they do NOT route `.obsidian/` through config IO (config IO is text-only), so a
+ * binary under `.obsidian/` resolves via the adapter's own dot-folder handling. stat/trash
+ * and binary append/overwrite remain gaps.
  */
 export class CompatDataAdapter {
   constructor(private geode: GeodeVault) {}
@@ -119,15 +130,18 @@ export class CompatDataAdapter {
     return { files, folders: [...folders] };
   }
 
+  // R111: binary read/write bridge to Geode's native binary IO (image/PDF/etc. plugins).
+  async readBinary(normalizedPath: string): Promise<ArrayBuffer> {
+    return toArrayBuffer(await this.geode.readBinary(normalizedPath));
+  }
+  async writeBinary(normalizedPath: string, data: ArrayBuffer): Promise<void> {
+    // Geode's binary write is create-only (create_new — R17/R43 data-safety against the
+    // check-then-act truncation race), so overwriting an existing binary throws "File already
+    // exists" (deviation from Obsidian's overwrite). A true binary overwrite needs a dedicated
+    // atomic path (tmp + rename, like text modify); tracked as the modifyBinary gap.
+    await this.geode.createBinary(normalizedPath, new Uint8Array(data));
+  }
   /* gaps — keep the surface honest instead of silently lying */
-  async readBinary(_p: string): Promise<ArrayBuffer> {
-    reportGap("DataAdapter", "readBinary");
-    throw new Error("DataAdapter.readBinary is not available in Geode");
-  }
-  async writeBinary(_p: string, _d: ArrayBuffer): Promise<void> {
-    reportGap("DataAdapter", "writeBinary");
-    throw new Error("DataAdapter.writeBinary is not available in Geode");
-  }
   async appendBinary(_p: string, _d: ArrayBuffer): Promise<void> {
     reportGap("DataAdapter", "appendBinary");
     throw new Error("DataAdapter.appendBinary is not available in Geode");
@@ -243,6 +257,23 @@ export class Vault extends Events {
 
   async modify(file: TFile, data: string, _options?: DataWriteOptions): Promise<void> {
     await this._geode.modify(file.path, data);
+  }
+
+  // R111: binary read/create bridge to Geode's native binary IO (image/PDF/Excalidraw etc.).
+  async readBinary(file: TFile): Promise<ArrayBuffer> {
+    return toArrayBuffer(await this._geode.readBinary(file.path));
+  }
+
+  async createBinary(path: string, data: ArrayBuffer, _options?: DataWriteOptions): Promise<TFile> {
+    await this._geode.createBinary(path, new Uint8Array(data));
+    return this._registry.getFile(path) ?? this._registry.ensureFile(path, true);
+  }
+
+  async modifyBinary(_file: TFile, _data: ArrayBuffer, _options?: DataWriteOptions): Promise<void> {
+    // Geode's binary write is create-only (create_new — R17/R43 data-safety); a true overwrite
+    // needs a dedicated atomic path (gap). Throw honestly rather than silently dropping the write.
+    reportGap("Vault", "modifyBinary", "binary overwrite is create-only (no atomic overwrite yet)");
+    throw new Error("Vault.modifyBinary is not available in Geode (binary write is create-only)");
   }
 
   async append(file: TFile, data: string, _options?: DataWriteOptions): Promise<void> {
