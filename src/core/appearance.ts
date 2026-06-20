@@ -89,6 +89,17 @@ export function setShowLineNumbers(on: boolean): void {
   persistBool(LINE_NUMBERS_KEY, on);
 }
 
+/** R153 (㊶): Obsidian's "Auto pair brackets" — auto-close `( [ { " '` while typing.
+ *  Default ON (Obsidian default + zero-regression — Geode had closeBrackets() always on).
+ *  Applied per CM view via a Compartment reconfigured reactively in EditorPane. */
+const AUTO_PAIR_KEY = "geode.autoPairBrackets";
+export const autoPairBrackets = new Store<boolean>(readBool(AUTO_PAIR_KEY, true));
+
+export function setAutoPairBrackets(on: boolean): void {
+  autoPairBrackets.set(on);
+  persistBool(AUTO_PAIR_KEY, on);
+}
+
 /** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
  *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
  *  (zero regression). Consumed by workspace.openFile. */

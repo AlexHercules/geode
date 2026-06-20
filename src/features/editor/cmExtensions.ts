@@ -48,7 +48,7 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
@@ -550,6 +550,16 @@ export function indentExtensions(size: number, useTabs: boolean): Extension {
 }
 
 /**
+ * R153 (㊶): the auto-pair-brackets slice (Obsidian's "Auto pair brackets"). Lives in a
+ * Compartment so EditorPane can toggle it without rebuilding the view — mirrors R88/R92.
+ * `on` → CM's closeBrackets() (auto-close `( [ { " '`) + its keymap (Backspace-delete-pair);
+ * `off` → nothing. The keymap must precede defaultKeymap so the pair-delete wins (see base list).
+ */
+export function closeBracketsExtension(on: boolean): Extension {
+  return on ? [keymap.of(closeBracketsKeymap), closeBrackets()] : [];
+}
+
+/**
  * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
  * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
  * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
@@ -579,13 +589,15 @@ export function buildEditorExtensions(opts: {
   lineNumberCompartment: Compartment;
   /** R92: owned by EditorPane — tabIndentSize / indentUsingTabs reconfigure it in place */
   indentCompartment: Compartment;
+  /** R153: owned by EditorPane — autoPairBrackets toggle reconfigures it in place */
+  closeBracketsCompartment: Compartment;
   /** R115: owned by EditorPane — plugin-contributed CM6 extensions
    *  (Plugin.registerEditorExtension); editorExtensionsRevision reconfigures it */
   compatExtensionCompartment: Compartment;
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, compatExtensionCompartment } =
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, compatExtensionCompartment } =
     opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
@@ -640,7 +652,8 @@ export function buildEditorExtensions(opts: {
     crosshairCursor(),
     // R35 — Backspace over an empty auto-pair (e.g. `(|)`) deletes BOTH brackets.
     // Above defaultKeymap so the pair-delete wins over the plain backspace.
-    keymap.of(closeBracketsKeymap),
+    // R153: closeBrackets() + its keymap live in this compartment (autoPairBrackets toggle).
+    closeBracketsCompartment.of(closeBracketsExtension(autoPairBrackets.get())),
     keymap.of([...defaultKeymap, indentWithTab]),
     // R34 — in-editor find/replace. The panel UI + state; searchKeymap provides
     // in-panel keys (Enter=next, Shift-Enter=prev, Escape=close, F3, Mod-d). The
@@ -652,14 +665,13 @@ export function buildEditorExtensions(opts: {
     search({ top: true }),
     keymap.of(searchKeymap),
     EditorState.phrases.of(editorSearchPhrases()),
-    // R35 — auto-pair brackets/quotes (`( [ { " '`): auto-close, selection-wrap,
-    // type-over, plus the keymap above for Backspace-delete-pair. CM's default
-    // bracket set is exactly Obsidian's "Auto pair brackets". markdownWrapHandler
-    // (Prec.high) covers the disjoint markdown emphasis chars `* _ ` ~ = $` for
-    // selection-wrap only. `[` pairing coordinates with the wikilink `]]` completion
-    // via that source's `sliceDoc(to,to+2)==="]]"` guard (no double `]]`).
+    // R35 — auto-pair brackets/quotes (`( [ { " '`): auto-close, selection-wrap, type-over.
+    // R153: closeBrackets() itself moved UP into closeBracketsCompartment (autoPairBrackets toggle);
+    // markdownWrapHandler (Prec.high) still covers the disjoint markdown emphasis chars
+    // `* _ ` ~ = $` for selection-wrap only (NOT gated by the toggle — Obsidian's "Auto pair
+    // Markdown syntax" is a separate setting, deferred). `[` pairing coordinates with the wikilink
+    // `]]` completion via that source's `sliceDoc(to,to+2)==="]]"` guard (no double `]]`).
     markdownWrapHandler,
-    closeBrackets(),
     autocompletion({
       override: [wikilinkCompletionSource(app, getPath), slashCommandSource(app), tagCompletionSource(app)],
       icons: false,

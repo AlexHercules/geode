@@ -9,6 +9,7 @@ import {
   showLineNumbers,
   tabIndentSize,
   indentUsingTabs,
+  autoPairBrackets,
   showInlineTitle,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
@@ -25,6 +26,7 @@ import { Icon } from "@app/icons";
 import {
   buildEditorExtensions,
   clearRevealFlash,
+  closeBracketsExtension,
   editorModeExtensions,
   indentExtensions,
   refreshProperties,
@@ -145,6 +147,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const strict = useStore(strictLineBreaks);
   /* R88: line-number gutter preference — reconfigure CM compartment reactively */
   const showLineNo = useStore(showLineNumbers);
+  /* R153: auto-pair-brackets preference — reconfigure CM compartment reactively */
+  const autoPair = useStore(autoPairBrackets);
   /* R92: indentation preferences — reconfigure CM compartment reactively */
   const indentSize = useStore(tabIndentSize);
   const useTabs = useStore(indentUsingTabs);
@@ -173,6 +177,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const lineNumberCompartmentRef = useRef<Compartment | null>(null);
   /** R92: compartment for indentation (tab width + unit) — settings reconfigure it */
   const indentCompartmentRef = useRef<Compartment | null>(null);
+  /** R153: compartment for auto-pair brackets — autoPairBrackets reconfigures it */
+  const closeBracketsCompartmentRef = useRef<Compartment | null>(null);
   /** R115: compartment for plugin-contributed CM6 extensions (registerEditorExtension) */
   const compatExtensionCompartmentRef = useRef<Compartment | null>(null);
   /** the editor mode the current view's compartment is configured with */
@@ -315,6 +321,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     lineNumberCompartmentRef.current = lineNumberCompartment;
     const indentCompartment = new Compartment();
     indentCompartmentRef.current = indentCompartment;
+    const closeBracketsCompartment = new Compartment();
+    closeBracketsCompartmentRef.current = closeBracketsCompartment;
     const compatExtensionCompartment = new Compartment();
     compatExtensionCompartmentRef.current = compatExtensionCompartment;
     appliedModeRef.current = mode;
@@ -330,6 +338,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           modeCompartment,
           lineNumberCompartment,
           indentCompartment,
+          closeBracketsCompartment,
           compatExtensionCompartment,
           // R22: portal target for the live-mode PropertiesPanel
           propertiesHost: propertiesHostRef.current ?? undefined,
@@ -398,6 +407,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       modeCompartmentRef.current = null;
       lineNumberCompartmentRef.current = null;
       indentCompartmentRef.current = null;
+      closeBracketsCompartmentRef.current = null;
       compatExtensionCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
@@ -436,6 +446,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(showLineNo ? [lineNumbers()] : []) });
   }, [showLineNo]);
+
+  /* ---------- R153: auto-pair-brackets preference → CM compartment ---------- */
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = closeBracketsCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(closeBracketsExtension(autoPair)) });
+  }, [autoPair]);
 
   /* ---------- indentation preference → CM compartment (R92) ---------- */
 

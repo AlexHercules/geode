@@ -10,6 +10,8 @@ import {
   setStrictLineBreaks,
   showLineNumbers,
   setShowLineNumbers,
+  autoPairBrackets,
+  setAutoPairBrackets,
   defaultNewTabMode,
   setDefaultNewTabMode,
   tabIndentSize,
@@ -98,7 +100,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.149.0";
+const APP_VERSION = "0.150.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -211,6 +213,7 @@ function AppearanceSection() {
   const spell = useStore(spellcheckEnabled);
   const strict = useStore(strictLineBreaks);
   const lineNo = useStore(showLineNumbers);
+  const autoPair = useStore(autoPairBrackets);
   const newTabMode = useStore(defaultNewTabMode);
   /* R92: editor indentation — indent using tabs + tab indent size */
   const useTabs = useStore(indentUsingTabs);
@@ -533,6 +536,24 @@ function AppearanceSection() {
           aria-label={t("settings.showLineNumbers")}
           data-testid="settings-line-numbers-toggle"
           onClick={() => setShowLineNumbers(!lineNo)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R153: auto-pair brackets while typing (Obsidian "Auto pair brackets", default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.autoPairBrackets")}</div>
+          <div className="setting-desc">{t("settings.autoPairBracketsDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${autoPair ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={autoPair}
+          aria-label={t("settings.autoPairBrackets")}
+          data-testid="settings-autopair-toggle"
+          onClick={() => setAutoPairBrackets(!autoPair)}
         >
           <span className="settings-toggle-thumb" />
         </button>
