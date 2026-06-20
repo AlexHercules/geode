@@ -242,8 +242,10 @@ function parseItems(raw: unknown): BookmarkItem[] {
 
 /** Serialize one BookmarkItem back to a plain JSON object: spread `_extra`
  *  first, then canonical fields overwrite. Omits undefined fields. Recurses
- *  into groups. Unknown-type carriers re-emit their original object verbatim. */
-function serializeItem(item: BookmarkItem): Record<string, unknown> {
+ *  into groups. Unknown-type carriers re-emit their original object verbatim.
+ *  Exported (R158) so the compat bookmarks instance can hand plugins the canonical
+ *  Obsidian wire shape (and never leak the UNKNOWN_TYPE_MARKER carrier). */
+export function serializeItem(item: BookmarkItem): Record<string, unknown> {
   const extra = item._extra;
   if ((item.type as string) === UNKNOWN_TYPE_MARKER) {
     // Carrier: the entire original object lives in _extra — restore it

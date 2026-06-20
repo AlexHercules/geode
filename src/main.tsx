@@ -1426,6 +1426,12 @@ async function bootstrap() {
     workspace.closeMissingFileTabs((p) => vault.fileExists(p));
   }
 
+  // R158: bookmarks store (.obsidian/bookmarks.json) is initialized BEFORE plugins load so the
+  // compat `app.internalPlugins.getPluginById("bookmarks").instance` API (getBookmarks/addItem)
+  // already reflects the saved bookmarks during a plugin's onload (Obsidian has it ready too).
+  // Awaited here; the vault:changed re-read below keeps it fresh on a vault-root switch.
+  await bookmarks.init(vault);
+
   for (const plugin of BUILTIN_PLUGINS) {
     try {
       await plugins.register(plugin);
@@ -1463,11 +1469,9 @@ async function bootstrap() {
     if (reason === "load") void propertyTypes.init(vault);
   });
 
-  // R27: bookmarks (.obsidian/bookmarks.json) — same lifecycle as property
-  // types (load on boot, re-read when the vault ROOT switches). NOTE: the
-  // __geodeBookmarks probe host is assigned EARLIER (before loadExternal) so an
-  // external plugin's onload can see it — same ordering as the other probes.
-  void bookmarks.init(vault);
+  // R27: bookmarks (.obsidian/bookmarks.json) — initial load is hoisted ABOVE the plugin block
+  // (R158, so the bookmarks instance API is ready in plugin onload); here we only keep it fresh
+  // when the vault ROOT switches (reason "load"), same lifecycle as property types.
   events.on("vault:changed", ({ reason }) => {
     if (reason === "load") void bookmarks.init(vault);
   });

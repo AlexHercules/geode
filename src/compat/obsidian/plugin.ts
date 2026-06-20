@@ -3,8 +3,10 @@
  * (API-REFERENCE area 1).
  */
 import type { Extension } from "@codemirror/state";
+import { bookmarks, type BookmarkItem, serializeItem } from "@core/bookmarks";
 import { getCommandName, type CommandRegistry } from "@core/commands";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
+import { basename, stripExtension } from "@core/vault";
 import {
   registerCodeBlockProcessor as registerCoreCodeBlockProcessor,
   type MarkdownPostProcessor,
@@ -392,9 +394,81 @@ const dragManagerStub = {
   onDragStart: (): void => {},
 };
 
+/* R158: `app.internalPlugins.getPluginById("bookmarks").instance` — the de-facto (non-public,
+ * not in d.ts) programmatic bookmarks API that plugins use to read/mutate bookmarks. Backed by
+ * R27's native bookmark store (same `.obsidian/bookmarks.json`); writes delegate to the vetted,
+ * serialized `bookmarks.add`/`removeAt` (no new write path). Items are already Obsidian-shaped. */
+
+/** Stable identity for an item by its discriminating fields (value-match, not reference — the
+ *  Store rebuilds items on reload). */
+function bookmarkKey(item: BookmarkItem): string {
+  switch (item.type) {
+    case "file":
+    case "folder":
+      return `${item.type}:${item.path}`;
+    case "heading":
+    case "block":
+      return `${item.type}:${item.path}:${item.subpath}`;
+    case "search":
+      return `search:${item.query}`;
+    default: // graph / group — no path; fall back to the (optional) title
+      return `${item.type}:${item.title ?? ""}`;
+  }
+}
+
+/** Index-path of the item matching `key` within the (possibly nested) tree, or null. */
+function bookmarkPath(items: readonly BookmarkItem[], key: string, prefix: number[] = []): number[] | null {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const here = [...prefix, i];
+    if (bookmarkKey(item) === key) return here;
+    if (item.type === "group") {
+      const found = bookmarkPath(item.items, key, here);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/** Obsidian's `instance.getItemTitle(item)` — display label (no i18n; the panel's richer
+ *  localized version is feature-local and can't cross the layering boundary). */
+function bookmarkItemTitle(item: BookmarkItem): string {
+  if (item.title) return item.title;
+  switch (item.type) {
+    case "file":
+      // a note's display title strips the extension (Obsidian TFile.basename / the panel)
+      return stripExtension(basename(item.path)) || item.path;
+    case "folder":
+      return basename(item.path) || item.path;
+    case "heading":
+    case "block":
+      return `${stripExtension(basename(item.path))} ${item.subpath}`;
+    case "search":
+      return item.query;
+    default:
+      return item.type;
+  }
+}
+
+const bookmarksInstance = {
+  // canonical Obsidian wire shape (defensive copies; unknown-type carriers reconstructed)
+  getBookmarks: (): BookmarkItem[] => bookmarks.items.get().map((i) => serializeItem(i) as unknown as BookmarkItem),
+  getItemTitle: (item: BookmarkItem): string => bookmarkItemTitle(item),
+  addItem: (item: BookmarkItem): void => {
+    void bookmarks.add(item);
+  },
+  removeItem: (item: BookmarkItem): void => {
+    const path = bookmarkPath(bookmarks.items.get(), bookmarkKey(item));
+    if (path) void bookmarks.removeAt(path);
+  },
+};
+const bookmarksPlugin = { enabled: true, instance: bookmarksInstance };
+
 const internalPluginsStub = {
-  getEnabledPluginById: (): null => null,
-  getPluginById: (): null => null,
+  getEnabledPluginById: (id: string): typeof bookmarksInstance | null =>
+    id === "bookmarks" ? bookmarksInstance : null,
+  getPluginById: (id: string): typeof bookmarksPlugin | null =>
+    id === "bookmarks" ? bookmarksPlugin : null,
   /** F6: calendar destructures app.internalPlugins.plugins["daily-notes"] */
   plugins: {} as Record<string, unknown>,
 };
@@ -489,7 +563,7 @@ export class App {
   }
 
   get internalPlugins(): typeof internalPluginsStub {
-    reportGap("App", "App.internalPlugins", "warn-stub — lookups always return null");
+    reportGap("App", "App.internalPlugins", 'R158: "bookmarks" returns a real instance (getBookmarks/addItem/removeItem/getItemTitle); other ids warn-stub to null');
     return internalPluginsStub;
   }
 
