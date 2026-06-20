@@ -193,6 +193,16 @@ export interface RenderMarkdownOptions {
    * (markdown-it `breaks: true`). Set per-render on the shared md singleton.
    */
   strictLineBreaks?: boolean;
+  /**
+   * R136: when true, top-level block elements carry `data-line` (0-based start
+   * line) + `data-line-end` (0-based inclusive end line) attributes so the
+   * reading view can map a rendered element back to its source lines
+   * (MarkdownPostProcessorContext.getSectionInfo). OPT-IN: absent (the default,
+   * and what export / hover / slides / embeds / the r26-bytes corpus pass) ⇒
+   * output is byte-identical to the legacy pipeline (the emitter is a no-op
+   * unless this is set). Only the reading view (EditorPane) passes it.
+   */
+  sourcePos?: boolean;
 }
 
 const WIKILINK_RE = /(!?)\[\[([^\[\]]+?)\]\]/g;
@@ -234,6 +244,8 @@ interface PreviewEnv {
    *  relative), so `[text](note.md)` that points at a note renders as an
    *  internal-link anchor instead of a plain external `<a href>`. */
   geodeResolveMdLink?: (href: string) => string | null;
+  /** R136: opt-in — emit data-line/data-line-end on top-level blocks (reading view only). */
+  geodeSourcePos?: boolean;
 }
 
 function footnoteState(env: PreviewEnv): FootnoteState {
@@ -1124,6 +1136,28 @@ md.core.ruler.push("geode-task-lists", (state) => {
   }
 });
 
+// R136: opt-in source-line attrs for reading-view getSectionInfo. Gated on
+// env.geodeSourcePos so the DEFAULT render path stays byte-identical (r26-bytes
+// 0 invariant). Each TOP-LEVEL opening block token (level 0, with a parser line
+// map) carries data-line (0-based start) + data-line-end (0-based inclusive end),
+// rendered by the default renderToken → e.g. <p data-line="2" data-line-end="3">.
+// Custom-rendered blocks (fence/math/callout) ignore token attrs = v1 gap.
+md.core.ruler.push("geode-source-pos", (state) => {
+  if (!(state.env as PreviewEnv).geodeSourcePos) return;
+  const lines = state.src.split("\n");
+  for (const token of state.tokens) {
+    if (token.level === 0 && token.nesting === 1 && token.map) {
+      const start = token.map[0];
+      // markdown-it folds a trailing blank line into some block maps (lists); trim back to the
+      // last content line so the range matches the rendered section (paragraphs already exclude it).
+      let end = token.map[1] - 1;
+      while (end > start && (lines[end] ?? "").trim() === "") end--;
+      token.attrSet("data-line", String(start));
+      token.attrSet("data-line-end", String(end));
+    }
+  }
+});
+
 // #tags → pills
 md.core.ruler.push("geode-tags", (state) => {
   for (const block of state.tokens) {
@@ -1264,6 +1298,7 @@ export function renderMarkdownToHtml(
     geodeLinks: links,
     geodeResolve: resolve,
     geodeResolveMdLink: opts?.resolveMdLink,
+    geodeSourcePos: opts?.sourcePos,
   };
   // R87 (㊶): set per-render on the shared singleton (render is synchronous, so
   // there is no cross-call interleaving). Default (no opt) = breaks:true = a

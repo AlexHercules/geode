@@ -583,6 +583,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
         noteEmbeds: true,
         resolveMdLink: (href) => app.metadata.resolveMarkdownLink(href, handle.path),
         strictLineBreaks: strict,
+        sourcePos: true, // R136: emit data-line on blocks so getSectionInfo can map el→source
       },
     );
     // metaRevision/previewBump are render triggers, not direct inputs
@@ -597,7 +598,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!el) return;
     void hydrateEmbeds(el, app, handle.path);
     hydrateCodeCopy(el); // R95: code-fence copy buttons (post-render, byte-neutral)
-    const owner = runMarkdownPostProcessors(el, app, handle.path); // R132: plugin reading-view post-processors
+    // R132 plugin reading-view post-processors; R136 passes the render-time source so getSectionInfo
+    // (data-line DOM-walk) can return the note text the data-line numbers index into.
+    const owner = runMarkdownPostProcessors(el, app, handle.path, handle.getText());
     // R135: unload any children the processors added when this render is torn down — React replaces the
     // dangerouslySetInnerHTML subtree on previewHtml change, so onunload fires before the next render's
     // children mount (and on unmount / leaving preview). Matches Obsidian's per-render child lifecycle.
