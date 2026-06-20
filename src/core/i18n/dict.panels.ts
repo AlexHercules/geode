@@ -151,6 +151,8 @@ export const en = {
   "tags.renameSkipped": " {skip} file(s) skipped.",
   "tags.renameNoop": "No occurrences renamed.",
   "tags.renameInvalid": "Invalid tag name.",
+  "tags.collapse": "Collapse",
+  "tags.expand": "Expand",
 
   // ---- calendar ----
   "calendar.today": "Today",
@@ -320,6 +322,8 @@ export const zh: Record<keyof typeof en, string> = {
   "tags.renameSkipped": " 跳过 {skip} 个文件。",
   "tags.renameNoop": "没有可重命名的标签。",
   "tags.renameInvalid": "标签名不合法。",
+  "tags.collapse": "折叠",
+  "tags.expand": "展开",
 
   // ---- calendar ----
   "calendar.today": "今天",

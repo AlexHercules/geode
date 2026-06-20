@@ -78,16 +78,16 @@ console.log("B. Tags pane (render + count + click→search)");
 await app(() => window.__app.workspace.setRightPanel("tags"));
 await page.waitForSelector("[data-testid=tags-panel]", { timeout: 4000 });
 await wait(80);
-const rows = await app(() => [...document.querySelectorAll(".tags-panel .tag-row")].map((e) => ({
-  name: e.querySelector(".tag-row-name")?.textContent, count: e.querySelector(".tag-row-count")?.textContent,
-})));
-// the seeded vault contributes its own tags too — assert my tags present + sort invariant
-ok("tags pane lists my tags (alpha/beta/gamma/alpha/sub present)",
-  rows.length >= 4 && ["alpha", "beta", "gamma", "alpha/sub"].every((n) => rows.some((r) => r.name === n)), JSON.stringify(rows.map((r) => r.name)));
-const counts = rows.map((r) => Number(r.count));
-const byCountDesc = counts.every((c, i) => i === 0 || counts[i - 1] >= c);
-ok("tags sorted by count desc; #alpha shows count 2", byCountDesc && rows.find((r) => r.name === "alpha")?.count === "2", JSON.stringify(rows.slice(0, 3)));
-ok("nested tag 'alpha/sub' present", rows.some((r) => r.name === "alpha/sub"), JSON.stringify(rows.map((r) => r.name)));
+// R150: the tags pane now renders a nested TREE — #alpha/sub is a CHILD of #alpha showing the
+// leaf segment "sub" (full path stays in the data-testid). Tree specifics are covered by r150-e2e.
+const node = (full) => app(([f]) => {
+  const el = document.querySelector(`[data-testid='tag-row-${f}']`);
+  return el ? { name: el.querySelector(".tag-row-name")?.textContent, count: el.querySelector(".tag-row-count")?.textContent } : null;
+}, [full]);
+ok("tags pane lists my tags (alpha/beta/gamma top-level + alpha/sub nested)",
+  !!((await node("alpha")) && (await node("beta")) && (await node("gamma")) && (await node("alpha/sub"))));
+ok("#alpha shows its exact count 2", (await node("alpha"))?.count === "2");
+ok("nested tag #alpha/sub renders under #alpha as leaf 'sub'", (await node("alpha/sub"))?.name === "sub");
 // click #alpha → requestSearch → left search panel seeded
 await page.click("[data-testid=tags-panel] [data-testid='tag-row-alpha']");
 await wait(120);

@@ -1,6 +1,7 @@
 // Tags right-sidebar panel (R41): every vault tag + file count; click to search.
 // R69: right-click a tag → vault-wide rename via @core/tagRewrite.
-// Contract: docs/ARCHITECTURE.md "Round 41 additions" / "Round 69 additions".
+// R150 (㊻): nested tags (#a/b) render as a collapsible hierarchy tree, like Obsidian's tag pane.
+// Contract: docs/ARCHITECTURE.md "Round 41/69/150 additions".
 // Layering: features/ may import only @core/*, @app/AppContext, @app/icons.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "@app/AppContext";
@@ -16,21 +17,83 @@ interface MenuState {
   tag: string;
 }
 
+/** A node in the tag hierarchy. `segment` is the last path part (shown), `fullPath`
+ *  the whole tag (searched/renamed). `count` is the exact note count for a real tag,
+ *  or the subtree's distinct-note aggregate for a phantom parent (a path segment that
+ *  is never a tag on its own). */
+interface TagTreeNode {
+  segment: string;
+  fullPath: string;
+  count: number;
+  children: TagTreeNode[];
+}
+
+/** Build the `/`-nested tag tree from the tag→notes map. Pure; exported for the probe. */
+export function buildTagTree(map: Map<string, ReadonlySet<string>>): TagTreeNode[] {
+  interface Build {
+    segment: string;
+    fullPath: string;
+    own: ReadonlySet<string> | null; // exact note set when this path is itself a tag
+    children: Map<string, Build>;
+  }
+  const roots = new Map<string, Build>();
+  for (const [tag, notes] of map) {
+    // skip empty segments so a malformed tag (leading/trailing/double "/") never makes
+    // an empty-named row or drops a leading-slash into a sibling's path (R150 review)
+    const segs = tag.split("/").filter((s) => s !== "");
+    if (segs.length === 0) continue;
+    let level = roots;
+    let path = "";
+    let node: Build | null = null;
+    for (const seg of segs) {
+      path = path ? `${path}/${seg}` : seg;
+      node = level.get(seg) ?? null;
+      if (!node) {
+        node = { segment: seg, fullPath: path, own: null, children: new Map() };
+        level.set(seg, node);
+      }
+      level = node.children;
+    }
+    if (node) node.own = notes; // the whole tag is a real tag
+  }
+  const subtreeNotes = (n: Build): Set<string> => {
+    const acc = new Set<string>(n.own ?? []);
+    for (const c of n.children.values()) for (const p of subtreeNotes(c)) acc.add(p);
+    return acc;
+  };
+  const cmp = (a: TagTreeNode, b: TagTreeNode) => b.count - a.count || a.segment.localeCompare(b.segment);
+  const finalize = (n: Build): TagTreeNode => ({
+    segment: n.segment,
+    fullPath: n.fullPath,
+    count: n.own !== null ? n.own.size : subtreeNotes(n).size,
+    children: [...n.children.values()].map(finalize).sort(cmp),
+  });
+  return [...roots.values()].map(finalize).sort(cmp);
+}
+
 export function TagsPanel() {
   const app = useApp();
   const t = useI18n();
   const rev = useStore(app.metadata.revision); // re-render on index change
-  const tags = useMemo(() => {
-    const map = app.metadata.getTagMap();
-    return [...map.entries()]
-      .map(([tag, files]) => ({ tag, count: files.size }))
-      .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  const tree = useMemo(
+    () => buildTagTree(app.metadata.getTagMap()),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app.metadata, rev]);
+    [app.metadata, rev],
+  );
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  // R150: per-session collapse state (fullPaths that are collapsed); default expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const toggleFold = (fullPath: string): void =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(fullPath)) next.delete(fullPath);
+      else next.add(fullPath);
+      return next;
+    });
 
   /* close context menu on click-elsewhere / Escape (mirrors AllProperties) */
   useEffect(() => {
@@ -81,6 +144,53 @@ export function TagsPanel() {
     });
   };
 
+  /* depth-first render of one node + (if expanded) its children */
+  const renderNode = (node: TagTreeNode, depth: number) => {
+    const hasChildren = node.children.length > 0;
+    const isCollapsed = collapsed.has(node.fullPath);
+    return (
+      <div key={node.fullPath} className="tag-node">
+        <div
+          className="tag-row-wrap"
+          role="treeitem"
+          aria-level={depth + 1}
+          aria-expanded={hasChildren ? !isCollapsed : undefined}
+          style={{ paddingLeft: depth * 14 }}
+        >
+          {hasChildren ? (
+            <button
+              className="tag-chevron"
+              data-testid={`tag-chevron-${node.fullPath}`}
+              aria-label={t(isCollapsed ? "tags.expand" : "tags.collapse")}
+              onClick={() => toggleFold(node.fullPath)}
+            >
+              <Icon name={isCollapsed ? "chevron-right" : "chevron-down"} size={12} />
+            </button>
+          ) : (
+            <span className="tag-chevron-spacer" />
+          )}
+          <button
+            className="tag-row"
+            data-testid={`tag-row-${node.fullPath}`}
+            title={t("tags.count", { count: node.count })}
+            onClick={() => app.workspace.requestSearch(`#${node.fullPath}`)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({ x: e.clientX, y: e.clientY, tag: node.fullPath });
+            }}
+          >
+            <span className="tag-row-icon"><Icon name="hash" size={13} /></span>
+            <span className="tag-row-name">{node.segment}</span>
+            <span className="tag-row-count">{node.count}</span>
+          </button>
+        </div>
+        {hasChildren && !isCollapsed && (
+          <div role="group">{node.children.map((c) => renderNode(c, depth + 1))}</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="tags-panel" data-testid="tags-panel">
       <div className="tags-panel-header">{t("tags.title")}</div>
@@ -89,28 +199,11 @@ export function TagsPanel() {
           {result}
         </div>
       )}
-      {tags.length === 0 ? (
+      {tree.length === 0 ? (
         <div className="tags-empty">{t("tags.empty")}</div>
       ) : (
-        <div className="tags-list" role="list">
-          {tags.map(({ tag, count }) => (
-            <button
-              key={tag}
-              className="tag-row"
-              role="listitem"
-              data-testid={`tag-row-${tag}`}
-              title={t("tags.count", { count })}
-              onClick={() => app.workspace.requestSearch(`#${tag}`)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                setMenu({ x: e.clientX, y: e.clientY, tag });
-              }}
-            >
-              <span className="tag-row-icon"><Icon name="hash" size={13} /></span>
-              <span className="tag-row-name">{tag}</span>
-              <span className="tag-row-count">{count}</span>
-            </button>
-          ))}
+        <div className="tags-list" role="tree">
+          {tree.map((node) => renderNode(node, 0))}
         </div>
       )}
 
