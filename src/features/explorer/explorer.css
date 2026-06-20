@@ -187,6 +187,14 @@
   margin: 4px 6px;
 }
 
+/* R139: header on the multi-file (files-menu) context menu */
+.explorer-menu-info {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
 /* ---- link update notice (R16, transient warning toast) ---- */
 
 .link-update-notice {

@@ -219,6 +219,21 @@ export function createCompatContext(
     }),
   );
 
+  /* ----- R139: files-menu — the MULTI-file analogue. Right-clicking a multi-selection fires
+   * Obsidian's 'files-menu' with a TAbstractFile[]. Mirrors the file-menu bridge (CollectorMenu +
+   * trigger); paths resolve to folders-or-files for mixed selections. ----- */
+  disposers.push(
+    plugins.registerFilesMenuProvider((ctx) => {
+      const files = ctx.paths
+        .map((p) => registry.getFolder(p) ?? registry.getFile(p))
+        .filter((f): f is NonNullable<typeof f> => f !== null);
+      if (files.length === 0) return [];
+      const menu = new CollectorMenu();
+      workspace.trigger("files-menu", menu, files, ctx.source, undefined);
+      return menu.items;
+    }),
+  );
+
   /* ----- R131: editor-menu — an always-on CM contextmenu extension (via the R115 core registry)
    * turns an editor right-click into the 'editor-menu' event + shows the plugin items. Compat-only:
    * the editor feature applies it without importing compat. ----- */

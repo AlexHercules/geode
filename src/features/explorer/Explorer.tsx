@@ -33,8 +33,10 @@ interface MenuState {
   y: number;
   /** R93: null = empty-area right-click → root New note / New folder menu */
   node: VaultNode | null;
-  /** R130: plugin-contributed file-menu items (collected once at open; [] for empty-area) */
+  /** R130: plugin-contributed file/files-menu items (collected once at open; [] for empty-area) */
   contributed: MenuContribution[];
+  /** R139: present → a MULTI-file menu (right-clicked a multi-selection); the selected paths. */
+  files?: string[];
 }
 
 /* ---------------- pure helpers ---------------- */
@@ -682,10 +684,24 @@ export function Explorer() {
           // R93: don't bubble to the tree-container handler (which opens the
           // empty-area root menu) — a row click owns its own node menu
           e.stopPropagation();
-          // R138: right-click INSIDE a multi-selection keeps it (so a future files-menu acts on all);
-          // right-click outside collapses to this node (Obsidian behavior)
+          // R138: right-click INSIDE a multi-selection keeps it (files-menu acts on all); right-click
+          // outside collapses to this node (Obsidian behavior)
+          const multi = selection.size > 1 && selection.has(node.path);
           if (selection.has(node.path)) setSelected(node.path);
           else selectOnly(node.path);
+          // R139: right-click inside a multi-selection → fire the 'files-menu' event with all paths.
+          // If a plugin contributed items, show the multi-file menu; otherwise fall back to the
+          // single-file menu on the right-clicked node (v1 has no built-in bulk items to show).
+          if (multi) {
+            const filesItems = app.plugins.collectFilesMenu({
+              paths: [...selection],
+              source: "file-explorer-context-menu",
+            });
+            if (filesItems.length > 0) {
+              setMenu({ x: e.clientX, y: e.clientY, node, contributed: filesItems, files: [...selection] });
+              return;
+            }
+          }
           // R130: collect plugin file-menu items ONCE here (fires the 'file-menu' event via the
           // core provider), so re-renders don't re-run plugin handlers
           const contributed = app.plugins.collectFileMenu({
@@ -844,7 +860,11 @@ export function Explorer() {
             top: Math.max(0, Math.min(menu.y, window.innerHeight - 240)),
           }}
         >
-          {menu.node === null ? (
+          {menu.files ? (
+            <div className="explorer-menu-info" data-testid="explorerctx-files-count">
+              {t("explorer.filesSelected", { count: menu.files.length })}
+            </div>
+          ) : menu.node === null ? (
             <>
               <button
                 data-testid="explorerctx-new-note"
@@ -961,32 +981,35 @@ export function Explorer() {
                   <Icon name="x" size={14} />
                   {t("explorer.delete")}
                 </button>
-                {/* R130: plugin-contributed file-menu items, after the native items behind a sep */}
-                {menu.contributed.length > 0 && <div className="explorer-menu-sep" />}
-                {menu.contributed.map((item, i) => (
-                  <button
-                    key={`contrib-${i}`}
-                    data-testid="explorerctx-contributed"
-                    className={item.warning ? "is-danger" : undefined}
-                    disabled={item.disabled}
-                    onClick={() => {
-                      setMenu(null);
-                      // R130: swallow+log a throwing plugin onClick (parity with compat MenuItem,
-                      // ui.ts) so it never propagates into React's event system
-                      try {
-                        item.onClick();
-                      } catch (err) {
-                        console.error("[file-menu] contributed item onClick threw", err);
-                      }
-                    }}
-                  >
-                    {item.icon && <Icon name={item.icon} size={14} />}
-                    {item.title}
-                  </button>
-                ))}
               </>
             ))(menu.node)
           )}
+          {/* R130/R139: plugin-contributed items, shared by the single-file (file-menu) and
+              multi-file (files-menu) menus — after the native/header items behind a sep */}
+          {menu.contributed.length > 0 && (menu.node !== null || menu.files) && (
+            <div className="explorer-menu-sep" />
+          )}
+          {menu.contributed.map((item, i) => (
+            <button
+              key={`contrib-${i}`}
+              data-testid="explorerctx-contributed"
+              className={item.warning ? "is-danger" : undefined}
+              disabled={item.disabled}
+              onClick={() => {
+                setMenu(null);
+                // R130: swallow+log a throwing plugin onClick (parity with compat MenuItem, ui.ts)
+                // so it never propagates into React's event system
+                try {
+                  item.onClick();
+                } catch (err) {
+                  console.error("[file-menu] contributed item onClick threw", err);
+                }
+              }}
+            >
+              {item.icon && <Icon name={item.icon} size={14} />}
+              {item.title}
+            </button>
+          ))}
         </div>
       )}
 

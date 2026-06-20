@@ -115,6 +115,13 @@ export interface FileMenuContext {
   source: string;
 }
 
+/** R139: context for the MULTI-file menu (right-click on a multi-selection → Obsidian's files-menu). */
+export interface FilesMenuContext {
+  paths: string[];
+  /** e.g. "file-explorer-context-menu" */
+  source: string;
+}
+
 interface PluginRecord {
   plugin: GeodePlugin;
   enabled: boolean;
@@ -172,6 +179,7 @@ export class PluginManager {
   /** R130: the single compat file-menu provider (set per loader run, cleared on reload). Not a
    *  Store — collection is a synchronous call when a context menu opens, not a reactive render. */
   private fileMenuProvider: ((ctx: FileMenuContext) => MenuContribution[]) | null = null;
+  private filesMenuProvider: ((ctx: FilesMenuContext) => MenuContribution[]) | null = null;
 
   private records = new Map<string, PluginRecord>();
   /** ids of plugins loaded from <vault>/.geode/plugins — unloaded on every reload */
@@ -449,6 +457,26 @@ export class PluginManager {
       return this.fileMenuProvider?.(ctx) ?? [];
     } catch (err) {
       console.warn("[menus] file-menu provider threw", err);
+      return [];
+    }
+  }
+
+  /** R139: register the compat files-menu (multi-file) provider — independent of the single-file one,
+   *  mirroring Obsidian's separate file-menu / files-menu events. */
+  registerFilesMenuProvider(fn: (ctx: FilesMenuContext) => MenuContribution[]): () => void {
+    this.filesMenuProvider = fn;
+    return () => {
+      if (this.filesMenuProvider === fn) this.filesMenuProvider = null;
+    };
+  }
+
+  /** R139: collect plugin-contributed items for a MULTI-file context menu (synchronous; [] on no
+   *  provider / throw). The Explorer calls this when right-clicking inside a multi-selection. */
+  collectFilesMenu(ctx: FilesMenuContext): MenuContribution[] {
+    try {
+      return this.filesMenuProvider?.(ctx) ?? [];
+    } catch (err) {
+      console.warn("[menus] files-menu provider threw", err);
       return [];
     }
   }

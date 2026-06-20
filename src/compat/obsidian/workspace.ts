@@ -522,6 +522,13 @@ export class Workspace extends Events {
     callback: (menu: Menu, file: TAbstractFile, source: string, leaf?: WorkspaceLeaf) => unknown,
     ctx?: unknown,
   ): EventRef;
+  /** R139: a MULTI-file context menu is opening (right-click on a file-explorer multi-selection) —
+   *  add items via `menu.addItem(...)` to act on all `files`. Mirrors file-menu but with an array. */
+  on(
+    name: "files-menu",
+    callback: (menu: Menu, files: TAbstractFile[], source: string, leaf?: WorkspaceLeaf) => unknown,
+    ctx?: unknown,
+  ): EventRef;
   /** R131: an editor right-click context menu is opening — add items via `menu.addItem(...)`. Geode
    *  shows the menu only if a plugin contributed an item (else the browser default menu shows;
    *  native cut/copy/paste items in the menu are deferred). `info` is the active MarkdownView. */

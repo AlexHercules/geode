@@ -8,6 +8,7 @@ export const en = {
   // ---- explorer ----
   "explorer.newNote": "New note",
   "explorer.newFolder": "New folder",
+  "explorer.filesSelected": "{count} files selected",
   "explorer.collapseAll": "Collapse all",
   "explorer.expandAll": "Expand all",
   "explorer.sortToggle": "Change sort order",
@@ -176,6 +177,7 @@ export const zh: Record<keyof typeof en, string> = {
   // ---- explorer ----
   "explorer.newNote": "新建笔记",
   "explorer.newFolder": "新建文件夹",
+  "explorer.filesSelected": "已选 {count} 个文件",
   "explorer.collapseAll": "全部折叠",
   "explorer.expandAll": "全部展开",
   "explorer.sortToggle": "切换排序方式",
