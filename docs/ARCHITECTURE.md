@@ -71,6 +71,30 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 154 additions — 反链笔记底部内嵌「Backlinks in document」（㊷ · 阅读视图 DOM 追加不动 markdown.ts · 零 data-safety）【As-built v0.151】
+
+> **状态：As-built（已交付）。** ㊷ 反链增强（换子系统，编辑器设置后转反链）。**Gate**：WebFetch obsidian.md/help/plugins/backlinks 确认 Obsidian「Backlink in document」设置=「show the backlinks at the bottom of your note」（默认 OFF=opt-in）；grep 确认 `getBacklinks(path):BacklinkEntry[]`（core、含 `{sourcePath, contexts:[{snippet, from}]}`=snippet 已在）→ 用**纯 core 数据**渲一个反链区在阅读视图底部、**不 import features/backlinks（分层）、不改 markdown.ts（避 §C）**。**纯读 click→openFile 零 data-safety**。验收：r154-e2e 13/13、r26-bytes 0 violation、r152 12/12、r41 21/21、typecheck/cargo/build 全绿、双端=浏览器实测+截图（桌面 probe N/A：阅读视图 DOM、平台无关、WKWebView App-Nap-不可靠，同 R152/R29）。
+>
+> **As-built 根因（reviewer D1，已修）**：`.embedded-backlinks` 初版作 `.preview-content` 同级兄弟却**没复制阅读列几何** → 阅读列由 `.preview-content` 自身承载（`max-width: var(--readable-line-width,46em); margin:0 auto; padding:28px 32px 120px`），而 `.editor-preview` 滚动容器无内边距 → 反链区**满宽贴边、与正文 46em 居中列错位**；且 `.preview-content` 的 `padding-bottom:120px` 变成正文与反链分隔线间的 ~120px 空洞。**修**：照既有 `.editor-preview > .properties-panel` 先例（同 `--readable-line-width` 列对齐）把规则收窄为 `.editor-preview > .embedded-backlinks { max-width: var(--readable-line-width,46em); margin:0 auto; padding:16px 32px 120px }`（反链区现为末元素 → 承接底部滚动留白）+ `.preview-content:has(+ .embedded-backlinks){ padding-bottom:24px }`（有反链时收紧正文底边、引擎不支持 `:has` 则优雅退化回 120px 间距）。**教训**：阅读视图新增 `.editor-preview` 直接子节点必须照 properties-panel 先例对齐 `--readable-line-width` 列，否则满宽错位——`.preview-content` 自己扛列几何、滚动容器不扛。
+
+**契约（加性；阅读视图底部反链区）**：
+- **`core/appearance.ts`**：`showBacklinksInDocument` Store（默认 `false`=Obsidian opt-in）+ `geode.backlinksInDocument` 持久 + setter（镜像 showLineNumbers）。
+- **`features/editor/BacklinksInDocument.tsx`**（新）：`useStore(metadata.revision)` + `getBacklinks(path)` → 渲「Linked mentions {总数}」header + 每 source（basename 标题 click→openFile + 每 context snippet click→openFile）；**0 反链→返 null**（v1 不显空区、文档化）；纯 core+app import（无 features/backlinks 跨 feature import）。
+- **`EditorPane.tsx`**：阅读视图 `.editor-preview` 内、`.preview-content` 后渲 `<BacklinksInDocument path={tab.filePath}/>`（`useStore(showBacklinksInDocument)` gate + reading mode only）。
+- **`editor.css`**：`.embedded-backlinks` 区样式（顶 border 分隔、source/snippet 行）。
+- **`SettingsModal.tsx`**：编辑器/外观节加 `showBacklinksInDocument` toggle。
+- **dict.views.ts**：`settings.backlinksInDocument` + desc EN+ZH（header 复用既有 `backlinks.linkedMentions`）。
+
+**数据安全**：纯读 `getBacklinks`（已索引数据）+ click→openFile，**零 vault/.md 写**、不动 markdown.ts 渲染管线（独立 React 组件追加在 `.preview-content` **后**=§C 不触、r26-bytes 不变）=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r154-e2e）= 设置 ON → 阅读视图底部显反链区（有反链的笔记）+ header 计数 + source basename + snippet + click source/snippet→openFile + 设置 OFF→无区 + 0 反链笔记→无区 + live 模式不显（reading only）。桌面 probe = N/A（阅读视图 DOM、WKWebView 渲染 App-Nap-不可靠 §D、逻辑平台无关；同 R152/R29 阅读视图轮）。
+
+**data-testid**：`embedded-backlinks` + `ebl-source-<path>` + `settings-backlinks-indoc-toggle`。
+
+**v1 defer（文档化）**：unlinked mentions（未链接提及）/ live preview 模式底部反链 / more-context 富片段（buildParagraph，需读源文件，本轮用 getBacklinks 一行 snippet）。
+
+---
+
 ## Round 153 additions — 编辑器「Auto pair brackets」开关（㊶ · CM compartment · 复用 R88 模式 · 零 data-safety）【As-built v0.150】
 
 > **状态：As-built（v0.150 交付，2026-06-21）。对抗评审 9 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean。** **换子系统**（㊻ 标签面板 3 轮收官）→ ㊶ 编辑器设置。**Gate**：① grep 确认 Geode `closeBrackets()` **always-on**（cmExtensions.ts:662、注释自承「CM's default bracket set is exactly Obsidian's "Auto pair brackets"」）但**无 toggle**；② Obsidian「Auto pair brackets」是 ubiquitous Editor 设置（默认 ON、长期存在=非 phantom）。**复用 R88 lineNumbers compartment 模式**：把 always-on 的 closeBrackets 移进可重配 compartment、加设置 toggle（默认 ON=零回归）。**纯 input-assist 开关、零 data-safety**（closeBrackets 是输入辅助、不写文件/不触 autosave；toggle 是 localStorage）。
