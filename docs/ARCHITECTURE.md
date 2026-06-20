@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 143 additions — 搜索「Match case」全局开关（Aa toggle · 续 R68 case 运算符 · 零 data-safety）【As-built v0.140】
+
+> **状态：As-built（v0.140 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** ㊸ 搜索 UI breather——R68 已实现 `match-case:`/`ignore-case:` 逐词运算符 + `CaseMode="default"|"sensitive"|"insensitive"`（default 现等于 insensitive）；R143 补 Obsidian 搜索栏的**全局「Match case」开关**（`Aa` 按钮）。**faithfulness（WebFetch obsidian.md/help/plugins/search 确认）**：Obsidian 全局搜索栏有「Match case」开关、**默认 OFF（不区分大小写）**、ON=整条查询区分大小写；在搜索栏内。**关键设计=开关只翻转 `default`-mode 词的解释，显式 `match-case:`/`ignore-case:` 运算符永远胜出**（explicit beats global default）；**regex 词不受全局开关影响**（regex 用自己的 `/i` flag + R68 运算符，已有明确机制；全局开关只管纯文本/tag/property 词=bounded、不重编译 regex）。**零 data-safety**（纯只读搜索 + localStorage pref，同 R80 sort/context）。
+
+**契约（加性；eval 入参 + 面板开关）**：
+- **`core/search.ts`**（R21 冻结模块，**加性向后兼容**）：`evaluateSearch(expr, input, defaultCaseSensitive = false)` 新增可选第三参（缺省 false=逐字节同旧）。EvalCtx 加 `defaultSensitive: boolean`。新私有 `caseSensitive(mode: CaseMode, ctx): boolean = mode==="sensitive" || (mode==="default" && ctx.defaultSensitive)`，替换 4 处 `caseMode==="sensitive"` 判断（matchContent / matchName / matchTags / property eval）。regex 路径不动（getRegex 仍用 matcher.flags）。
+- **`main.tsx`**：`__geodeSearchQuery(query, input, defaultCaseSensitive?)` 探针加可选第三参，透传 evaluateSearch（r68 2-arg 调用逐字节不变）。
+- **`SearchPanel.tsx`**：① `matchCase` state（持久化 `readSearchPref("geode.searchCase","")==="1"`，镜像 R80 moreContext pref）；② `search-input-wrap` 内（输入右侧、clear 前）加 `Aa` 文本按钮（`.search-case-toggle`，`is-active`+`aria-pressed`、`title=search.matchCase`、**始终可见**=Obsidian 搜索栏常驻、不 gate 结果）；③ 全文 eval `useEffect` 调 `evaluateSearch(expr, input, matchCase)`、deps 加 `matchCase`（切换即重扫）。**无新图标**（`Aa` 是文本，同 Obsidian）。
+- **dict.panels.ts**：新 `search.matchCase`（EN "Match case" / ZH "区分大小写"）。
+- **search.css**：`.search-case-toggle`（文本按钮 `Aa`、`is-active` 高亮 var(--accent)）。
+
+**数据安全**：纯只读搜索求值 + 单 localStorage pref 字符串，**零 vault/.md/markdown.ts 写**=零 data-safety 面（同 R80）。
+
+**双端**：浏览器 e2e（新 r143-e2e）= core 层 `__geodeSearchQuery(q, input, true/false)` 验全局开关翻转 default 词 + 显式 `match-case:`/`ignore-case:` 运算符仍胜出 + tag/property/default 词都受开关 + regex 不受开关 + UI 层 `Aa` 按钮切换→重扫结果变 + pref 持久（reload）。桌面 probe = 复用 `__geodeSearchQuery` 三参真 WKWebView 验 core 层全局开关（§D-safe 同步纯函数）。
+
+**data-testid**：`search-case-toggle`。
+
+**`evaluateSearch` 双消费者（加性参数对两者都安全）**：① `SearchPanel.tsx`（传 `matchCase` toggle）；② `core/queryEmbed.ts:60`（R75 query 嵌入块，调 2-arg→`defaultCaseSensitive` 缺省 false→**逐字节同旧、永远 insensitive**）。faithful：Obsidian 嵌入 query 代码块无 per-block Match-case UI、独立于搜索面板开关；块内 `match-case:` 仍可用。**教训**：Step 0 grep 漏了 queryEmbed 消费者（zsh `--include` flag 被吞→grep 静默失败、误判「单消费者」），简化门 agent 揪出。加性可选参恰好对漏掉的消费者也安全（缺省 = 旧行为），但**判据：改公共函数签名前，consumer 普查必须用【确认跑通】的 grep（核对命中数、别让 shell 静默失败冒充「零其它消费者」）**——加性兜底了这次，非加性改动会炸。
+
+**对抗评审（reviewer 8 维全证伪 → 0 confirmed）：** 大小写逻辑（`caseSensitive` 6 组合×toggle 全对、default+OFF 逐字节同旧、explicit 永远胜）· 4 替换点全为 text/property matcher 非 regex（各自 kind 守卫内）· regex 独立（getRegex/regexScan 仅用 flags、global toggle 够不到=defensible 文档化偏离）· lowering 缓存按 EvalCtx 隔离（matcher caseMode + defaultSensitive 全 call 固定→无跨模式污染）· 面板重扫（matchCase 进 eval deps、Aa 常驻不 gate 结果、functional updater 无 stale closure、不清 allResults 故不闪空）· CSS 布局（Aa right:16 + clear right:44 + 输入 pad-right:58 无重叠、色走 var）· data-safety 零面 · 边角（空查询/U+0130 变长 lowering 在 sensitive 分支走 raw text starts/ends=null 正确/regex 零长 surrogate stepping 不受影响）。**2 minor nit（非 actionable）**：Aa↔clear 2px 间隙偏紧但不重叠；`Aa` 按钮无 `type="button"`（无外层 form + 既有 search 按钮同惯例=非 R143 回归）。
+
+**套件**：typecheck 0 · 生产 dist build + cargo release build exit 0 · **r143-e2e 23/23**（core：default 词跟随 flag + explicit match-case:/ignore-case: 永远胜 + tag/property/basename 跟随 + regex 不受 flag + /i 仍工作；UI：Aa 切换重扫 2→1 结果 + aria-pressed + pref 持久 reload）· **r143-probe 14/14**（真 WKWebView 3-arg `__geodeSearchQuery` core 层全局开关 §D-safe 同步纯函数）· 回归 r68 40/40·r80 17/17·r75 16/16（query 嵌入消费者）· 简化门 clean（0 编辑）。
+
+---
+
 ## Round 142 additions — 命令面板固定命令（pinned commands · Settings>Command palette · 续 R141 · 零 data-safety）【As-built v0.139】
 
 > **状态：As-built（v0.139 交付，2026-06-20）。对抗评审 7 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑、diff 已最小）。** 续 R141 命令面板故事——R141 做 recent（defer pinned 因需设置 UI），R142 补 pinned。**faithfulness（WebFetch obsidian.md/help 确认）**：Obsidian「Settings → Command palette」核心插件设置页=「New pinned command」→「Select a command」picker + 「Pinned commands」列表（每项叉号移除）；**pinned 仅在空查询置顶**（文档「shorter commands will be prioritized over recently used ones」when filtering begins=输入后 fuzzy 主导，pinned/recent 都让位，同 R141 模型）；**空查询排序 = pinned → recent（去 pinned）→ rest**（pinned 占 recent 之上的独立 tier）。**零 data-safety**（纯 UI 排序 + localStorage 命令 id 列表，同 R141/R129）。
