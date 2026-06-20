@@ -32,6 +32,7 @@ import {
 } from "./cmExtensions";
 import { hydrateEmbeds } from "./embeds";
 import { hydrateCodeCopy } from "./codeCopy";
+import { runMarkdownPostProcessors } from "./markdownPostProcess";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { openWikilink } from "./wikilinks";
@@ -579,7 +580,11 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (el) {
       void hydrateEmbeds(el, app, handle.path);
       hydrateCodeCopy(el); // R95: code-fence copy buttons (post-render, byte-neutral)
+      runMarkdownPostProcessors(el, app, handle.path); // R132: plugin reading-view post-processors
     }
+    // R132 review: previewHtml-driven only — a registry change must NOT re-run on the un-wiped DOM
+    // (would duplicate non-idempotent processors / linger disposed output). Like Obsidian, processors
+    // apply to SUBSEQUENT renders, not retroactively to an already-open view.
   }, [app, tab.mode, handle, previewHtml]);
 
   /* ---------- one-shot reveal consumption (R14 editor / R15 preview) ---------- */

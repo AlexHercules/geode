@@ -5,6 +5,10 @@
 import type { Extension } from "@codemirror/state";
 import { getCommandName, type CommandRegistry } from "@core/commands";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
+import {
+  type MarkdownPostProcessor,
+  registerMarkdownPostProcessor as registerCoreMarkdownPostProcessor,
+} from "@core/markdownPostProcessors";
 import { encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import type { AppHandle, PluginManager } from "@core/plugins";
@@ -750,8 +754,17 @@ export abstract class Plugin extends Component {
     reportGap(this.manifest.id, "Plugin.registerExtensions");
   }
 
-  registerMarkdownPostProcessor<T>(postProcessor: T, _sortOrder?: number): T {
-    reportGap(this.manifest.id, "Plugin.registerMarkdownPostProcessor");
+  /**
+   * R132: real — register a READING-VIEW markdown post-processor. Routes through the core
+   * markdownPostProcessors registry (compat cannot import features/editor, so the registry is the
+   * bridge: the reading view reads it + applies each processor to the freshly-rendered DOM). The
+   * disposer is registered for plugin-unload cleanup. Live preview + code-block processors deferred.
+   */
+  registerMarkdownPostProcessor(
+    postProcessor: MarkdownPostProcessor,
+    sortOrder?: number,
+  ): MarkdownPostProcessor {
+    this.register(registerCoreMarkdownPostProcessor(postProcessor, sortOrder));
     return postProcessor;
   }
 

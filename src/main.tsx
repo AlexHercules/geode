@@ -31,6 +31,10 @@ import {
   type LinkPathFormat,
 } from "@core/linkFormat";
 import { editorExtensionsRevision, getEditorExtensions, registerEditorExtension } from "@core/editorExtensions";
+import {
+  type MarkdownPostProcessor,
+  registerMarkdownPostProcessor as registerCoreMdPostProcessor,
+} from "@core/markdownPostProcessors";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -250,6 +254,14 @@ async function bootstrap() {
     registerEditorExtension(EditorView.editorAttributes.of({ [attr]: value }));
   // sync registry observer for the desktop probe (view integration is browser-E2E only, §D)
   editorExtHost.__geodeEditorExtState = () => ({ count: getEditorExtensions().length, rev: editorExtensionsRevision.get() });
+
+  // R132: always-on hook for the reading-view markdown-post-processor registry (the path
+  // Plugin.registerMarkdownPostProcessor routes through), so E2E can register a processor + assert
+  // it runs on the freshly-rendered .preview-content and the disposer removes it.
+  const mdPpHost = globalThis as unknown as {
+    __geodeRegisterMarkdownPostProcessor?: (fn: MarkdownPostProcessor, sortOrder?: number) => () => void;
+  };
+  mdPpHost.__geodeRegisterMarkdownPostProcessor = registerCoreMdPostProcessor;
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).
