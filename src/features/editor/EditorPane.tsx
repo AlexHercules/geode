@@ -13,6 +13,7 @@ import {
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { editorExtensionsRevision, getEditorExtensions } from "@core/editorExtensions";
+import { codeBlockProcessorsRevision } from "@core/markdownPostProcessors";
 import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
 import type { PropertyEdit } from "@core/properties";
@@ -151,6 +152,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const inlineTitleOn = useStore(showInlineTitle);
   /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
   const compatExtRev = useStore(editorExtensionsRevision);
+  const cbProcRev = useStore(codeBlockProcessorsRevision);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -452,6 +454,21 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(getEditorExtensions()) });
   }, [compatExtRev]);
+
+  /* ---------- plugin code-block registry change → rebuild live-preview slice (R134) ---------- */
+
+  // A code-block lang (un)registered while a live editor is already open → reconfigure the mode slice
+  // so its fences render/revert without needing a mode toggle or an edit (mirrors compatExtRev). The
+  // liveBlockWidgets StateField also rebuilds on doc/selection change, so this only covers the
+  // no-interaction case; in source/preview mode it's a harmless no-op reconfigure.
+  useEffect(() => {
+    if (tab.mode === "preview" || !handle) return;
+    const view = viewRef.current;
+    const modeCompartment = modeCompartmentRef.current;
+    if (!view || !modeCompartment) return;
+    const mode = tab.mode === "source" ? "source" : "live";
+    view.dispatch({ effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode)) });
+  }, [cbProcRev]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

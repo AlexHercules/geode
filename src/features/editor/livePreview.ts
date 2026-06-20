@@ -55,6 +55,7 @@ import { parseFrontmatter } from "@core/metadata";
 import { getEmbedUrl } from "./embeds";
 import { liveMath } from "./liveMath";
 import { liveMermaid } from "./liveMermaid";
+import { livePluginCodeBlocks } from "./livePluginCodeBlocks";
 import { liveQuery } from "./liveQuery";
 import { liveTables } from "./liveTables";
 import { openWikilink, wikilinkTarget } from "./wikilinks";
@@ -1420,6 +1421,10 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
     // R75 — render ```query fences as live search result lists (same machinery;
     // renderMarkdownToHtml placeholder + hydrateEmbeds query pass).
     liveQuery(app, getPath),
+    // R134 — render PLUGIN-registered ```<lang> fences (Dataview/Tasks) as live widgets
+    // (same machinery; calls the registered handler into a fresh div). 5th parallel live-block
+    // extension — gated by the core lang→handler registry so only registered langs render.
+    livePluginCodeBlocks(app, getPath),
     liveTheme,
   ];
 }

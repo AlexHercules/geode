@@ -6,7 +6,7 @@ import type { Extension } from "@codemirror/state";
 import { getCommandName, type CommandRegistry } from "@core/commands";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import {
-  makeCodeBlockPostProcessor,
+  registerCodeBlockProcessor as registerCoreCodeBlockProcessor,
   type MarkdownPostProcessor,
   type MarkdownPostProcessorContext,
   registerMarkdownPostProcessor as registerCoreMarkdownPostProcessor,
@@ -771,20 +771,20 @@ export abstract class Plugin extends Component {
   }
 
   /**
-   * R133: real — register a fenced-code-block handler for ```<language> blocks in the reading view.
-   * Obsidian口径: this is sugar over a post-processor that removes the rendered `<pre><code>` and
-   * hands the handler a fresh `<div>` to fill. We register exactly such a post-processor through the
-   * R132 core registry (no core/feature change): on each render it finds `pre > code.language-<lang>`,
-   * replaces the `<pre>` with a div, and calls handler(source, div, ctx). Reading view only (phase 1);
-   * built-in mermaid/query fences render as `.geode-*` divs, so they never match `code.language-*`.
+   * R133/R134: real — register a fenced-code-block handler for ```<language> blocks. Obsidian口径:
+   * sugar over a post-processor that removes the rendered `<pre><code>` and hands the handler a fresh
+   * `<div>` to fill. R134 routes through the core dual-registration point: it registers ONE handler
+   * into both the reading-view post-processor list AND the lang→handler map the live-preview CM widget
+   * reads — so `​```dataview`/`​```tasks` render in BOTH reading view and live preview. The disposer
+   * tears down both. built-in mermaid/query fences render as `.geode-*` divs, never matching this lang.
    */
   registerMarkdownCodeBlockProcessor(
     language: string,
     handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => void | Promise<void>,
     sortOrder?: number,
   ): MarkdownPostProcessor {
-    const processor = makeCodeBlockPostProcessor(language, handler);
-    this.register(registerCoreMarkdownPostProcessor(processor, sortOrder));
+    const { processor, dispose } = registerCoreCodeBlockProcessor(language, handler, sortOrder);
+    this.register(dispose);
     return processor;
   }
 

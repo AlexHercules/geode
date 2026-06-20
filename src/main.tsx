@@ -32,7 +32,8 @@ import {
 } from "@core/linkFormat";
 import { editorExtensionsRevision, getEditorExtensions, registerEditorExtension } from "@core/editorExtensions";
 import {
-  makeCodeBlockPostProcessor,
+  hasCodeBlockProcessor,
+  registerCodeBlockProcessor as registerCoreCodeBlockProcessor,
   type MarkdownPostProcessor,
   registerMarkdownPostProcessor as registerCoreMdPostProcessor,
 } from "@core/markdownPostProcessors";
@@ -266,11 +267,17 @@ async function bootstrap() {
       handler: (source: string, el: HTMLElement, ctx: unknown) => void | Promise<void>,
       sortOrder?: number,
     ) => () => void;
+    __geodeHasCodeBlockProcessor?: (lang: string) => boolean;
   };
   mdPpHost.__geodeRegisterMarkdownPostProcessor = registerCoreMdPostProcessor;
-  // R133: same path Plugin.registerMarkdownCodeBlockProcessor routes through (core wrapper helper)
+  // R133/R134: same core dual-registration Plugin.registerMarkdownCodeBlockProcessor routes through —
+  // populates BOTH the reading-view post-processor AND the live-preview lang→handler map, so E2E
+  // exercises both. Returns the disposer (removes both).
   mdPpHost.__geodeRegisterMarkdownCodeBlockProcessor = (lang, handler, sortOrder) =>
-    registerCoreMdPostProcessor(makeCodeBlockPostProcessor(lang, handler), sortOrder);
+    registerCoreCodeBlockProcessor(lang, handler, sortOrder).dispose;
+  // R134: the live-preview lang→handler registry lookup — a §D-safe (synchronous, App-Nap-immune)
+  // desktop probe of whether the registration actually populated the live map on the real binary.
+  mdPpHost.__geodeHasCodeBlockProcessor = hasCodeBlockProcessor;
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

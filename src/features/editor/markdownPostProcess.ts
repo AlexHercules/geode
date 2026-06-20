@@ -8,20 +8,17 @@
 import type { GeodeApp } from "@app/AppContext";
 import {
   getMarkdownPostProcessors,
-  type MarkdownPostProcessorContext,
+  makeMarkdownPostProcessorContext,
 } from "@core/markdownPostProcessors";
 
 export function runMarkdownPostProcessors(el: HTMLElement, app: GeodeApp, sourcePath: string): void {
   const procs = getMarkdownPostProcessors();
   if (procs.length === 0) return;
-  const ctx: MarkdownPostProcessorContext = {
-    docId: sourcePath,
+  const ctx = makeMarkdownPostProcessorContext(
     sourcePath,
-    frontmatter: app.metadata.getMetadata(sourcePath)?.frontmatter?.fields ?? null,
-    containerEl: el,
-    getSectionInfo: () => null,
-    addChild: () => {},
-  };
+    el,
+    app.metadata.getMetadata(sourcePath)?.frontmatter?.fields ?? null,
+  );
   for (const proc of procs) {
     try {
       // a processor may be async (Dataview queries are) — the try/catch handles a SYNC throw; the

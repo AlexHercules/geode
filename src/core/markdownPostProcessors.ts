@@ -96,3 +96,76 @@ export function makeCodeBlockPostProcessor(
     });
   };
 }
+
+export type CodeBlockProcessor = (
+  source: string,
+  el: HTMLElement,
+  ctx: MarkdownPostProcessorContext,
+) => void | Promise<void>;
+
+/**
+ * R134: a lang→handler map for code-block processors, so the LIVE PREVIEW (CM widget) side can ask
+ * "is there a handler for fence lang X" — R133 only stored handlers as opaque post-processors (lang
+ * closed over, invisible to the registry), which the live-preview fence detector can't query. Both
+ * paths now read one source of truth: reading view via the post-processor (unchanged), live preview
+ * via this map. last-writer-wins per lang (Obsidian renders one processor per fence lang).
+ */
+const codeBlockProcessors = new Map<string, CodeBlockProcessor>();
+
+/** Bumped on every (un)register so open live editors re-evaluate which fences become widgets. */
+export const codeBlockProcessorsRevision = new Store(0);
+
+export function getCodeBlockProcessor(language: string): CodeBlockProcessor | undefined {
+  return codeBlockProcessors.get(language);
+}
+
+export function hasCodeBlockProcessor(language: string): boolean {
+  return codeBlockProcessors.has(language);
+}
+
+/**
+ * R134: the single dual-registration point behind `Plugin.registerMarkdownCodeBlockProcessor`.
+ * Registers ONE (lang, handler) into BOTH the reading-view post-processor list (R133, via
+ * makeCodeBlockPostProcessor) AND the lang→handler map (live preview), returning the
+ * Obsidian-shaped `processor` plus a `dispose` that tears down both. compat + the E2E hook both
+ * call this so the dual bookkeeping lives in exactly one place.
+ */
+export function registerCodeBlockProcessor(
+  language: string,
+  handler: CodeBlockProcessor,
+  sortOrder = 0,
+): { processor: MarkdownPostProcessor; dispose: () => void } {
+  const processor = makeCodeBlockPostProcessor(language, handler);
+  const disposePost = registerMarkdownPostProcessor(processor, sortOrder);
+  codeBlockProcessors.set(language, handler);
+  codeBlockProcessorsRevision.update((n) => n + 1);
+  const dispose = () => {
+    disposePost();
+    // identity guard: a later register of the same lang must not be clobbered by an old disposer
+    if (codeBlockProcessors.get(language) === handler) {
+      codeBlockProcessors.delete(language);
+      codeBlockProcessorsRevision.update((n) => n + 1);
+    }
+  };
+  return { processor, dispose };
+}
+
+/**
+ * R134: build the context handed to a markdown post-processor / code-block handler. One factory for
+ * both the reading-view path (markdownPostProcess) and the live-preview widget, so the phase-1 stubs
+ * (getSectionInfo / addChild) have a single definition to upgrade in phase 2.
+ */
+export function makeMarkdownPostProcessorContext(
+  sourcePath: string,
+  containerEl: HTMLElement,
+  frontmatter: unknown,
+): MarkdownPostProcessorContext {
+  return {
+    docId: sourcePath,
+    sourcePath,
+    frontmatter,
+    containerEl,
+    getSectionInfo: () => null,
+    addChild: () => {},
+  };
+}
