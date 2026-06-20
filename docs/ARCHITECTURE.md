@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 132 additions — compat Plugin.registerMarkdownPostProcessor（阅读视图后处理器 · 插件 API 商业主轴 · Dataview/Tasks 旗舰 · phase 1）【As-built v0.129】
+
+> **状态：As-built（v0.129 交付，2026-06-20）。** Obsidian `Plugin.registerMarkdownPostProcessor((el, ctx) => …)`（插件变换渲染后的阅读视图 DOM）现真实现——**Dataview/Tasks 旗舰、迁移叙事最重一项，phase 1 = 阅读视图**。**第二个主线大头**。**gate 拐点决策**：HANDOFF 默认 editor-menu 原生项（i18n/剪贴板复杂、低价值）+ files-menu（Explorer 无多选不可行）皆受阻；gate 揭露 registerMarkdownPostProcessor **phase 1 可做成「渲染后 DOM 后处理」**（跑在 innerHTML 之后的 `.preview-content` 上、**不动 `core/markdown.ts` 字节渲染**）→ **§C 字节级 r18-diff 前置门不触发、无 vault 写**（display-only）→ 清除了「宜拍板」的 data-safety 顾虑 → 自主启动。
+
+**架构契约（跨层在 core 会合 · 同 R115 范式 · 加性 display-only）**：
+- `core/markdownPostProcessors.ts`（新）：Store 注册表（镜像 R115 editorExtensions）——`registerMarkdownPostProcessor(processor, sortOrder=0): ()=>void`（push {processor,sortOrder}、bump revision、幂等 disposer）+ `getMarkdownPostProcessors()`（按 sortOrder 稳定排序）+ 类型 `MarkdownPostProcessor=(el,ctx)=>void|Promise` + `MarkdownPostProcessorContext {docId, sourcePath, frontmatter, containerEl, getSectionInfo()=>null, addChild()=>{}}`（后两者 phase-1 桩）。
+- `compat/obsidian/plugin.ts`：registerMarkdownPostProcessor 桩→真（`this.register(registerCore...)` 卸载清理）。
+- `features/editor/markdownPostProcess.ts`（新）：`runMarkdownPostProcessors(el, app, path)`——建 ctx（frontmatter 取 `app.metadata.getMetadata(path).frontmatter.fields`）+ 逐个 try/catch `void proc(el, ctx)`（async fire-and-forget）。
+- `features/editor/EditorPane.tsx`：在**既有**阅读视图 hydration effect（embeds/codeCopy 之后、同 `.preview-content` el）加一行调用 + `ppRevision` 入 effect deps（插件 mid-session (un)register 时重应用）。**关键：不动 `core/markdown.ts`**——后处理器跑在渲染输出 DOM 上，每次 re-render innerHTML 被替换（fresh el、不累积）；源 markdown 永不被读回写盘。
+
+**对抗评审（reviewer 多维 · data-safety 优先 → data-safety PASS；2 缺陷评审修[1 MAJOR+1 MINOR]+ e2e 锁）：**
+- **data-safety 全证伪（旗舰安全属性成立）**：`core/markdown.ts` 不在 diff（未改字节渲染，r26-bytes 0 invariant 坐实）；后处理器只动渲染 DOM（display），该 DOM 是渲染输出、永不读回写盘；唯一的 preview-DOM→盘路径是既有 task-checkbox toggle（行校验 + 规范源字节，插件注入无 data-line 的 checkbox→NaN→handler 写前抛、不损坏）。**§C 字节门正确未触发**。分层/sortOrder/disposer 幂等均 PASS。
+- **MAJOR 评审修（Defect 1：ppRevision 在已渲染 DOM 上重跑→重复/残留，已修+e2e 锁）**：首版把 `ppRevision` 入 hydration effect deps，本意「插件 mid-session 注册时重应用」——但注册表 revision bump **不改 previewHtml**，React 不替换 innerHTML → 后处理器在**未擦除的旧 DOM** 上重跑 → (a) 非幂等处理器重复追加（Dataview/Tasks 正是非幂等 append）、(b) dispose 后输出残留。**修=去掉 `ppRevision`**（Obsidian 口径：后处理器只应用于**后续** render，不回溯已开视图）→ 同时消除重复+残留。「fresh el 每 render 不累积」不变量**现成立**（previewHtml 驱动的 render 擦 innerHTML）。e2e 补「preview 开着时注册另一处理器→不重复」用例。
+- **MINOR 评审修（Defect 2：async 拒绝逃逸，已修）**：`void proc(el, ctx)` 的 try/catch 只接 sync 抛；async 处理器（Dataview 查询是 async）reject → unhandled rejection → 改 `Promise.resolve(proc(...)).catch(...)` 接 async 拒绝、try/catch 接 sync 抛。
+- **phase-1 文档化偏离**：getSectionInfo→null / addChild→no-op（插件依赖子组件生命周期静默降级）· async 跨文件装饰（容器 el 跨文件持久，慢 async 处理器在切文件后用旧 ctx 装饰新 DOM，display-only 无字节害）——均 phase-1 可接受、待 addChild/MarkdownRenderChild 真实现。
+
+**套件**：typecheck 0 · cargo build exit 0 · r132-e2e **9/9**（后处理器跑在渲染 DOM + ctx sourcePath/frontmatter/containerEl + sortOrder B[-10]先于A + disposer 卸载不再跑）· r132-probe **3/3**（真 WKWebView：markdownPostProcessors 干净加载 + hook registerable；**preview headless 不渲染**[App-Nap §D，同 editor 不挂载]→后处理器语义由 e2e 覆盖）· 回归 r115 7/7·r23 22/22·r130 12/12·r131 7/7·r26 12/12·**r26-bytes 0 invariant**（阅读视图字节不退）· 简化门 clean（删 1 转发包装）。**剩余缺口（compat 商业主轴）**：**registerMarkdownPostProcessor 续 phase**（live preview CM widget · `registerMarkdownCodeBlockProcessor` · getSectionInfo/addChild 真实现）· file-menu 续 phase（files-menu 需 Explorer 多选 · 其它 source · editor-menu 原生项）· `MenuItem.setSubmenu`/`referenceLinks`（低优）。
+
 ## Round 131 additions — compat workspace.on('editor-menu')（编辑器右键菜单 · 插件 API 商业主轴 · file-menu 大头 phase 2）【As-built v0.128】
 
 > **状态：As-built（v0.128 交付，2026-06-20）。** Obsidian `workspace.on('editor-menu', (menu, editor, info) => menu.addItem(...))`（插件给编辑器右键菜单加项）现真实现——file-menu 大头 phase 2。**与 phase 1 架构不同**：editor-menu 是**独立 popup**（非并入既有菜单），compat 的真 Menu（`ui.ts` `showAtMouseEvent`）已能渲染 → 用**真 Menu 而非 CollectorMenu**；且 Geode 编辑器无原生右键菜单（用浏览器默认）→ **compat-only**（无需改 editor feature、无 core 改动）。
