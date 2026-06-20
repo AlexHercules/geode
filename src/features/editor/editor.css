@@ -1839,6 +1839,20 @@ mark {
   gap: 8px;
 }
 
+/* R157: the unlinked-mentions section sits below the linked one, with a faint divider when
+   both are present (it has no divider as the sole section — :first-child drops the border). */
+.embedded-unlinked {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.embedded-unlinked:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
 .ebl-source-title {
   width: 100%;
   padding: 4px 6px;
