@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 148 additions — compat `Keymap.isModifier`（static · 插件 API 商业主轴 · 零 data-safety）【As-built v0.145】
+
+> **状态：As-built（v0.145 交付，2026-06-21）。对抗评审 8 维全证伪 + gate 决策（pushScope/popScope 不做）经核验 SOUND → 0 confirmed defect（clean）+ 简化门 clean（2 文件跳过条件）。** 续 R146/R147 compat surface 审计。**Gate（d.ts + Geode 现状 + 范围裁剪）**：`awk` 提 Keymap 类确认四方法——`static isModifier(evt, modifier): boolean`(@0.12.17)、`pushScope(scope)`(@0.13.9)、`popScope(scope)`(@0.13.9)、`static isModEvent`(@0.16.0，Geode 已有)。**只做 `isModifier`**——它是 static、plugins 直接经类调（`Keymap.isModifier(evt,"Mod")`）、缺它即崩=**真 crash-gap**；**pushScope/popScope 故意不做**（已是 `app.keymap` 上的 no-op[plugin.ts:386，「host never dispatches scopes」文档化]，且 Keymap **类**的 instance 方法 plugins 够不到=加了也无调用路径=completionism padding，弃）。**零 data-safety**（纯 static helper 读 event 修饰键 flag，无写）。
+
+**契约（加性；compat Keymap 一 static 方法）**：
+- **`compat/obsidian/ui.ts` Keymap 类**：`static isModifier(evt: MouseEvent | TouchEvent | KeyboardEvent, modifier: Modifier): boolean`——switch modifier：`"Mod"`→`Platform.isMacOS ? evt.metaKey : evt.ctrlKey`（Obsidian Mod=mac Cmd/其它 Ctrl）、`"Ctrl"`→ctrlKey、`"Meta"`→metaKey、`"Shift"`→shiftKey、`"Alt"`→altKey。`Modifier` 已 import（ui.ts:11）；加 `Platform` 到既有 `import { moment } from "./util"`（util 不 import ui=无循环）。**不复用 `normalizeModifiers`**（它把 Mod→Ctrl 无条件=scope 匹配简化、非平台感知；isModifier 要忠实平台）。
+- **`main.tsx`**：`__geodeKeymapIsModifier(modifier, flags)` 测试钩子（镜像 `__geodeMenuProbe` 先例，import `Keymap` from `@compat/obsidian/ui`）——合成 KeyboardEvent(flags) → `Keymap.isModifier`，e2e + desktop probe 共用、§D-safe 同步。
+
+**数据安全**：纯 static 读 event flag，**零 vault/.md 写**=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r148-e2e）= `__geodeKeymapIsModifier` 验 Ctrl/Meta/Shift/Alt 各自 flag→true、非对应 flag→false（含 cross：isModifier("Ctrl",{meta})→false）+ **Mod=平台键 XOR**（isModifier("Mod",{meta}) 与 isModifier("Mod",{ctrl}) 恰一真=映射到平台 mod 键、平台无关断言）。桌面 probe（新 r148-probe）= 真 WKWebView（真 mac UA→Platform.isMacOS=true→Mod=metaKey）§D-safe 同步纯函数。
+
+**data-testid**：N/A（probe-hook 驱动）。
+
+**对抗评审（reviewer 8 维全证伪 → 0 confirmed + 采纳 1 nit）：** modifier 映射忠实（每 case 读对应 flag、`"Mod"`=mac metaKey/其它 ctrlKey、`"Meta"`=metaKey 平台无关因 evt.metaKey 已反映物理键）· Platform.isMacOS 可靠（真 WKWebView UA 含 Macintosh、probe 验 isMac=true+Mod=meta、Geode isDesktop 硬编码故无 iPad-UA 顾虑）· TouchEvent 有 modifier 属性（typecheck 绿无 any/cast）· 穷尽（Modifier 闭 union 5 case）· normalizeModifiers vs isModifier「Mod」不一致=正确（scope 匹配规范串 vs live event 测试两不同关注、JSDoc 文档化、无 host 注册 Mod scope）· **gate 决策 pushScope/popScope 不做经核验 SOUND**（`app.keymap`=`keymapStub` 独立对象非 Keymap 类实例、类无 instance 方法、plugins 经 app.keymap no-op 不崩、`new Keymap()` 无此方法且无真插件这么做=无调用路径=加了即死代码）· data-safety 零写 · 探针无泄漏。**采纳 1 nit（已修+锁）**：未知 modifier 串（untyped JS plugin 可传）原 fall-through 返 `undefined` 违反 `:boolean` 契约→加 `default: return false`（plugins 是 untyped JS、保证总返 boolean）+ e2e 锁（`isModifier("Cmd",...)`→false）。**informational（非本轮）**：`isModEvent` 只返 `"tab"|false`、d.ts 是 `"tab"|"split"|"window"`+中键=R51 既有、未来审计候选。
+
+**套件**：typecheck 0 · cargo check + 生产 build exit 0 · **r148-e2e 14/14**（Ctrl/Meta/Shift/Alt 各 flag→true + 非对应→false + cross + **Mod 平台键 XOR** + Mod neither/shift→false + **未知 modifier→false 不 undefined**）· **r148-probe 10/10**（真 WKWebView：各 modifier + 真 mac UA→isMac=true→Mod=Cmd(metaKey) §D-safe）· 回归 r51 10/10（isModEvent）· 简化门 clean（2 文件）。
+
+---
+
 ## Round 147 additions — compat `MarkdownView.showSearch(replace?)`（插件 API 商业主轴 · 复用 R34 editor find · 零 data-safety）【As-built v0.144】
 
 > **状态：As-built（v0.144 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（1 文件跳过条件）。** 续 R146 compat surface 审计。**Gate（两道核查）**：① d.ts——`awk` 提 MarkdownView 类体确认 `showSearch(replace?: boolean): void` 是 `@public`（d.ts:4233）；② Geode 现状——grep 确认 Geode 有 R34 editor find/replace（`searchCommands.ts` 用 CM `openSearchPanel(view)` + replace-field focus）+ compat `MarkdownView.editor: Editor`（`Editor.cm: EditorView` public readonly），但 MarkdownView 没 showSearch→插件调 `view.showSearch()` 即崩。**clean 映射**：`showSearch(replace)`→`openSearchPanel(this.editor.cm)`（CM 库、R34 同机制）+ replace 时聚焦 replace 字段。**零 data-safety**（开搜索面板=纯 display UI，不写文档）。**零新依赖**（`@codemirror/search` 已是 R34 依赖）。

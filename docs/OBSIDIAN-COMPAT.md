@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R148 套件回归（2026-06-21，macOS release 二进制 v0.145.0 实测 `r148-probe-vault`）
+
+R148 = compat **`Keymap.isModifier`（static）**（插件 API 商业主轴，续 R146/R147 surface 审计）。**Gate（d.ts + 范围裁剪）**：`awk` 提 Keymap 类确认四方法（`static isModifier`@0.12.17 / `pushScope`/`popScope`@0.13.9 / `static isModEvent` Geode 已有）。**只做 `isModifier`**——static、plugins 直接经类调、缺它即崩=真 crash-gap；**pushScope/popScope 故意不做**（已 no-op on `app.keymap`=keymapStub、Keymap 类 instance 方法 plugins 够不到=无调用路径=死代码，**reviewer 核验 SOUND**）。`ui.ts` Keymap 加 `static isModifier(evt,modifier):boolean`（switch Mod/Ctrl/Meta/Shift/Alt[Mod=`Platform.isMacOS?metaKey:ctrlKey`]+`default:return false` 防 untyped JS 传非法串返 undefined）+ `Platform` import；`main.tsx` `__geodeKeymapIsModifier` 测试钩子。**零 data-safety**（纯 static 读 event flag）。**对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 采纳 1 nit（default-case）** + 简化门 clean（2 文件）。
+
+新增套件：`r148-e2e.mjs` **14/14**（Ctrl/Meta/Shift/Alt 各 flag→true + 非对应→false + cross + **Mod 平台键 XOR** + Mod neither/shift→false + **未知 modifier→false 不 undefined**）+ `r148-probe.mjs` **10/10**（真 WKWebView：各 modifier + **真 mac UA→isMac=true→Mod=Cmd(metaKey)** §D-safe 同步纯函数）。**套件矩阵不回退**：r51 10/10（Keymap isModEvent）。**informational（非本轮，未来审计候选）**：`isModEvent` 只返 `"tab"|false`、d.ts 是 `"tab"|"split"|"window"`+中键。
+
 ### R147 套件回归（2026-06-20，委托 R34 openSearchPanel · 桌面 probe N/A）
 
 R147 = compat **`MarkdownView.showSearch(replace?)`**（插件 API 商业主轴，续 R146 surface 审计）。**Gate**：① d.ts `awk` 提 MarkdownView 类确认 `showSearch(replace?:boolean):void` 是 `@public`（d.ts:4233）；② Geode 现状——R34 有 editor find（CM `openSearchPanel`）+ compat `MarkdownView.editor.cm: EditorView`（public readonly），但 MarkdownView 没 showSearch→插件调即崩。compat MarkdownView 加 `showSearch(replace)`→`openSearchPanel(this.editor.cm)`（R34 同机制、同一 EditorView 实例）+ replace 时聚焦 replace 字段（5 行内联镜像 features `focusReplaceField`——compat 不能 import features、分层强制小 dup；**scope 到 `view.dom` 非 `document`**=split 内不抓兄弟编辑器面板）。`import openSearchPanel from @codemirror/search`（R34 既有 dep、**零新依赖**）。**零 data-safety**（开搜索面板=纯 display UI、不写文档；replace 实际替换走 R34 vetted CM 路径）。**对抗评审 8 维全证伪 → 0 confirmed defect（clean）** + 简化门 clean（1 文件）。
