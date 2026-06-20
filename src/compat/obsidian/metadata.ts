@@ -66,11 +66,21 @@ export interface FrontMatterCache {
   [key: string]: unknown;
 }
 
+export interface SectionCache extends CacheItem {
+  /** Block id of this section (without the leading '^'), if it carries one. */
+  id?: string;
+  /** Parser-generated type. Geode produces a TOP-LEVEL block segmentation:
+   *  yaml / heading / code / blockquote / list / table / html / thematicBreak /
+   *  paragraph. Obsidian's typing is explicitly non-exhaustive; Geode classifies
+   *  each block by its first line, not a full CommonMark parse. */
+  type: string;
+}
+
 /**
  * embeds is real since R119 (`![[..]]` wikilink embeds, split out of links).
- * sections / listItems / frontmatterLinks are NOT produced by Geode's parser yet
- * (all optional fields — recorded gap). blocks is real since R13 (`^id` markers
- * indexed by core's parseNote).
+ * sections is real since R124 (top-level block segmentation, see buildSections).
+ * listItems / frontmatterLinks are NOT produced by Geode's parser yet (optional
+ * fields — recorded gap). blocks is real since R13 (`^id` markers, core parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
@@ -79,6 +89,7 @@ export interface CachedMetadata {
   headings?: HeadingCache[];
   /** id (without '^') -> block cache; omitted when the note has no blocks. */
   blocks?: Record<string, BlockCache>;
+  sections?: SectionCache[];
   frontmatter?: FrontMatterCache;
   frontmatterPosition?: Pos;
 }
@@ -104,6 +115,100 @@ function offsetToLoc(offset: number, starts: number[] | null): Loc {
     else hi = mid - 1;
   }
   return { line: lo, col: offset - starts[lo], offset };
+}
+
+/* R124: top-level block classification by the block's FIRST line (Obsidian's section typing
+ * is explicitly non-exhaustive — Geode segments at the top level, not a full CommonMark parse). */
+const SEC_HEADING = /^#{1,6}\s/;
+const SEC_THEMATIC = /^ {0,3}([-*_])[ \t]*(\1[ \t]*){2,}$/;
+const SEC_BLOCKQUOTE = /^ {0,3}>/;
+const SEC_LIST = /^ {0,3}([-*+][ \t]|\d{1,9}[.)][ \t])/;
+const SEC_HTML = /^ {0,3}</;
+const SEC_FENCE_OPEN = /^ {0,3}(`{3,}|~{3,})/;
+const SEC_TABLE_SEP = /^ {0,3}\|?[ \t]*:?-+:?([ \t]*\|[ \t]*:?-+:?)*[ \t]*\|?[ \t]*$/;
+
+// classifies the BLANK-LINE-delimited blocks; heading / thematicBreak are NOT here — they are
+// single-line blocks handled inline by buildSections (so they break a block even with no blank line)
+function classifySection(firstLine: string, blockText: string): string {
+  if (SEC_BLOCKQUOTE.test(firstLine)) return "blockquote";
+  if (SEC_LIST.test(firstLine)) return "list";
+  if (SEC_HTML.test(firstLine)) return "html";
+  if (firstLine.includes("|")) {
+    const second = blockText.split("\n", 2)[1];
+    if (second !== undefined && SEC_TABLE_SEP.test(second)) return "table";
+  }
+  return "paragraph";
+}
+
+/**
+ * R124: segment `content` into top-level SectionCache blocks. Frontmatter → one `yaml` section;
+ * fenced code (``` / ~~~) is an ATOMIC `code` block (its internal blank lines never split it);
+ * everything else is split into blocks by blank lines and classified by its first line. A section
+ * inherits a block id when a `^id` anchor (from meta.blocks) falls inside its range.
+ */
+function buildSections(
+  content: string,
+  fmEnd: number,
+  blocks: readonly { id: string; from: number }[],
+  pos: (from: number, to: number) => Pos,
+): SectionCache[] {
+  const secs: SectionCache[] = [];
+  const push = (type: string, from: number, to: number): void => {
+    if (content.slice(from, to).trim() === "") return;
+    const sec: SectionCache = { type, position: pos(from, to) };
+    const blk = blocks.find((b) => b.from >= from && b.from < to);
+    if (blk) sec.id = blk.id;
+    secs.push(sec);
+  };
+  if (fmEnd > 0) push("yaml", 0, fmEnd);
+
+  // split into lines: each = [start, end) excluding the trailing newline
+  const lines: Array<{ start: number; end: number; text: string }> = [];
+  for (let p = 0; p <= content.length; ) {
+    let nl = content.indexOf("\n", p);
+    if (nl === -1) nl = content.length;
+    lines.push({ start: p, end: nl, text: content.slice(p, nl) });
+    if (nl === content.length) break;
+    p = nl + 1;
+  }
+
+  let bStart = -1;
+  let bEnd = -1;
+  let bFirst = "";
+  const flush = (): void => {
+    if (bStart < 0) return;
+    push(classifySection(bFirst, content.slice(bStart, bEnd)), bStart, bEnd);
+    bStart = -1;
+  };
+  for (let li = 0; li < lines.length; li++) {
+    const ln = lines[li];
+    if (ln.start < fmEnd) continue; // inside the frontmatter block
+    const open = ln.text.match(SEC_FENCE_OPEN);
+    if (open) {
+      flush();
+      const marker = open[1]; // run of ` or ~
+      const close = new RegExp(`^ {0,3}${marker[0]}{${marker.length},}[ \\t]*$`);
+      let end = ln.end;
+      let lj = li + 1;
+      for (; lj < lines.length; lj++) {
+        end = lines[lj].end;
+        if (close.test(lines[lj].text)) break;
+      }
+      push("code", ln.start, end);
+      li = lj;
+      continue;
+    }
+    // R124 review (D1): an ATX heading / thematic break is its own SINGLE-line block even with no
+    // blank line around it (Obsidian behavior), so it always breaks the current paragraph block
+    if (SEC_HEADING.test(ln.text)) { flush(); push("heading", ln.start, ln.end); continue; }
+    if (SEC_THEMATIC.test(ln.text)) { flush(); push("thematicBreak", ln.start, ln.end); continue; }
+    if (ln.text.trim() === "") { flush(); continue; }
+    if (bStart < 0) { bStart = ln.start; bFirst = ln.text; }
+    bEnd = ln.end;
+  }
+  flush();
+  secs.sort((a, b) => a.position.start.offset - b.position.start.offset);
+  return secs;
 }
 
 /** Aliases are the only modify-mutable input that can flip OTHER files' link resolution. */
@@ -304,6 +409,12 @@ export class MetadataCache extends Events {
     if (meta.frontmatter) {
       out.frontmatter = { ...meta.frontmatter.fields };
       out.frontmatterPosition = pos(meta.frontmatter.from, meta.frontmatter.to);
+    }
+    // R124: top-level block segmentation (needs the real text; the no-content warm-up
+    // transient — not cached — simply omits sections and heals on the next call)
+    if (content !== undefined) {
+      const sections = buildSections(content, fmEnd, meta.blocks, pos);
+      if (sections.length > 0) out.sections = sections;
     }
     return out;
   }
