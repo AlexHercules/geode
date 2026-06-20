@@ -98,7 +98,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.141.0";
+const APP_VERSION = "0.142.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -1363,6 +1363,9 @@ function HotkeysSection() {
   const t = useI18n();
   useStore(app.commands.revision); // re-render on (un)register and override changes
   const [filter, setFilter] = useState("");
+  // R145: Obsidian's "filter icon" — show only commands with an assigned hotkey.
+  // Per-mount session state (resets on reopen), like the text filter above it.
+  const [assignedOnly, setAssignedOnly] = useState(false);
   const [capturingId, setCapturingId] = useState<string | null>(null);
 
   const q = filter.trim().toLowerCase();
@@ -1370,9 +1373,10 @@ function HotkeysSection() {
     .list()
     .filter(
       (cmd) =>
-        !q ||
-        getCommandName(cmd).toLowerCase().includes(q) ||
-        cmd.id.toLowerCase().includes(q),
+        (!q ||
+          getCommandName(cmd).toLowerCase().includes(q) ||
+          cmd.id.toLowerCase().includes(q)) &&
+        (!assignedOnly || app.commands.getEffectiveHotkey(cmd.id) !== null),
     );
 
   /* CAPTURE mode: a window-level capture-phase listener grabs the next keydown
@@ -1425,16 +1429,28 @@ function HotkeysSection() {
         {t("settings.hotkeysNote6")}
       </p>
 
-      <input
-        className="hotkeys-filter"
-        type="text"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder={t("settings.hotkeysFilter")}
-        spellCheck={false}
-        aria-label={t("settings.hotkeysFilter")}
-        data-testid="settings-hotkeys-filter"
-      />
+      <div className="hotkeys-filter-row">
+        <input
+          className="hotkeys-filter"
+          type="text"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder={t("settings.hotkeysFilter")}
+          spellCheck={false}
+          aria-label={t("settings.hotkeysFilter")}
+          data-testid="settings-hotkeys-filter"
+        />
+        <button
+          className={"hotkeys-filter-toggle" + (assignedOnly ? " is-active" : "")}
+          onClick={() => setAssignedOnly((v) => !v)}
+          aria-pressed={assignedOnly}
+          aria-label={t("settings.hotkeysAssignedOnly")}
+          title={t("settings.hotkeysAssignedOnly")}
+          data-testid="settings-hotkeys-assigned-toggle"
+        >
+          <Icon name="filter" size={15} />
+        </button>
+      </div>
 
       {rows.length === 0 ? (
         <div className="settings-empty" data-testid="settings-hotkeys-empty">

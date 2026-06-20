@@ -532,10 +532,16 @@
 
 /* ---------- hotkeys ---------- */
 
-.hotkeys-filter {
-  width: 100%;
-  padding: 7px 10px;
+.hotkeys-filter-row {
+  display: flex;
+  gap: 8px;
   margin-bottom: 10px;
+}
+
+.hotkeys-filter {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg-input);
@@ -550,6 +556,29 @@
 
 .hotkeys-filter::placeholder {
   color: var(--text-faint);
+}
+
+/* R145: "show assigned hotkeys only" funnel toggle, beside the text filter */
+.hotkeys-filter-toggle {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.hotkeys-filter-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.hotkeys-filter-toggle.is-active {
+  background: var(--accent-muted);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .hotkey-list {
