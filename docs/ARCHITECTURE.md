@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 131 additions — compat workspace.on('editor-menu')（编辑器右键菜单 · 插件 API 商业主轴 · file-menu 大头 phase 2）【As-built v0.128】
+
+> **状态：As-built（v0.128 交付，2026-06-20）。** Obsidian `workspace.on('editor-menu', (menu, editor, info) => menu.addItem(...))`（插件给编辑器右键菜单加项）现真实现——file-menu 大头 phase 2。**与 phase 1 架构不同**：editor-menu 是**独立 popup**（非并入既有菜单），compat 的真 Menu（`ui.ts` `showAtMouseEvent`）已能渲染 → 用**真 Menu 而非 CollectorMenu**；且 Geode 编辑器无原生右键菜单（用浏览器默认）→ **compat-only**（无需改 editor feature、无 core 改动）。
+
+**契约（加性；纯 compat ~35 行）**：
+- `compat/obsidian/editorMenu.ts`（新）：`editorContextMenuExtension(workspace): Extension` = 一个 always-on CM `domEventHandlers({ contextmenu })`：取 `workspace.activeEditor`（活动 MarkdownView，null 则放行浏览器菜单）→ 建真 `Menu` → fire `workspace.trigger('editor-menu', menu, info.editor, info)` → **仅当插件真加了项（`menu.dom.querySelector('.menu-item')`）才 preventDefault + showAtMouseEvent**，否则 `return false` 放行浏览器默认菜单。
+- `compat/obsidian/workspace.ts`：`on('editor-menu', (menu, editor, info: MarkdownView))` overload。
+- `compat/obsidian/context.ts`：`registerCoreEditorExtension(editorContextMenuExtension(workspace))`（经 **R115 core editorExtensions 注册表**注入——editor feature 应用它而不 import compat，与 R115 插件扩展同范式）+ disposer。
+
+**对抗评审（reviewer 7 维 · 分层+data-safety 优先 → 0 confirmed 缺陷，"the round is clean"）：**
+- **分层证伪**：editorMenu.ts 只 import `@codemirror/*`+`./ui`+`./workspace`，无 features/app；经 R115 core 注册表过界（compat→core→feature 应用，与 R115 插件扩展同范式，editor feature 不 import compat）。
+- **data-safety 证伪**：注册的是纯 `domEventHandlers`（无 StateField/facet/doc 改事务）；R115 revision bump→`compartment.reconfigure`（无 doc 事务）；菜单不写 vault。
+- **reviewer 证伪全维**：activeEditor 时序稳健（右键 mousedown 先聚焦→activeEditor=被右键编辑器，Chromium+WKWebView 皆然）· 空菜单检测正确（每 addItem 追加 `.menu-item`，无 submenu API 选择器不漏；仅 separator→无 item→放行；未显的 Menu 不 append body 无泄漏）· CM 语义正确（显式 preventDefault+return true 可靠抑制原生菜单，无其它 contextmenu handler 冲突）· lifecycle 无双触（disposer 幂等、reload 先 dispose 再注册新扩展对象；tryTrigger 隔离抛错插件）· faithfulness（签名/info=MarkdownView 超集/editor===info.editor）。
+- **可选硬化（reviewer 给、未采纳）**：绑 `view` 参数而非 `workspace.activeEditor` 可让 split 编辑器精确-by-construction——但 reviewer 无法复现 focus 不跟随右键的情形（无 manifest defect），且从任意 view 建 MarkdownView 非平凡 → 维持现状 + split 边角已文档化（偏离 ②）。
+- **文档化偏离（v1 scope）**：① **plugin items only**——Geode editor-menu 无原生 cut/copy/paste（插件加项时菜单替换浏览器默认、只显插件项→右键失去 cut/copy/paste[键盘仍可]；无插件项时浏览器默认菜单；native 编辑项**延后**）· ② 右键非活动 split 编辑器时 `activeEditor` 可能给到另一编辑器（罕见，contextmenu 通常先聚焦）· ③ 仅加 separator 无 item→不显（放行浏览器默认）。
+
+**套件**：typecheck 0 · cargo build exit 0 · r131-e2e **7/7**（右键→editor-menu fire（editor/info 正确）→插件项显示→点击 onClick fire→菜单关；无项→不显菜单/浏览器默认）· r131-probe **3/3** 真 WKWebView（editorMenu 扩展干净加载 + on registerable；editor headless 不挂载→完整 fire 由 e2e 覆盖，与 R128 同限制）· 回归 r115 7/7（editorExtensions）·r23 22/22（编辑器）·r128 19/19·r130 12/12（file-menu）· 简化门 clean。**剩余缺口（compat 商业主轴）**：**file-menu 续 phase**（files-menu[多选] · 其它 source[tab/link/more-options] · editor-menu 原生编辑项 · section 排序）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· `MenuItem.setSubmenu`/`referenceLinks`（低优）。
+
 ## Round 130 additions — compat workspace.on('file-menu')（右键菜单钩子 · 插件 API 商业主轴 · 主线大头 phase 1）【As-built v0.127】
 
 > **状态：As-built（v0.127 交付，2026-06-20）。** Obsidian `workspace.on('file-menu', (menu, file, source, leaf?) => menu.addItem(...))`（插件给文件/文件夹右键菜单加项）现真实现——**插件迁移阻塞面最大的两大头之一，本轮 phase 1 = Explorer 文件/文件夹菜单**。小项耗尽后（R119–R129 连做 11 项）自主启动该大头（§自主契约「决定并往前」，不做 busywork）。editor-menu 延后（Geode 编辑器用浏览器原生右键菜单、无宿主菜单可并入，需另建）。
