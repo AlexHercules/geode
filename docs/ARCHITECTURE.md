@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 133 additions — compat Plugin.registerMarkdownCodeBlockProcessor（阅读视图代码块处理器 · 插件 API 商业主轴 · Dataview/Tasks 主要机制）【As-built v0.130】
+
+> **状态：As-built（v0.130 交付，2026-06-20）。** Obsidian `Plugin.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) => …)`（插件把 ```` ```lang ```` 渲染成自定义内容）现真实现——这是 **Dataview 的 `dataview` 块、Tasks 的 `tasks` 块的【主要】机制**，比 R132 通用 postProcessor 更直接命中旗舰插件。**Obsidian口径**：它是 post-processor 的语法糖（移除渲染后的 `<pre><code>`、给 handler 一个新 `<div>` 填）→ **复用 R132 注册表、compat-mostly、加性 display-only**（不动 `core/markdown.ts`、无 vault 写）。
+
+**契约（加性；core wrapper helper + 真方法 + 测试钩子）**：
+- `core/markdownPostProcessors.ts`：新 `makeCodeBlockPostProcessor(lang, handler): MarkdownPostProcessor`——返回一个 post-processor：扫渲染后 `el` 里 `pre > code.language-<lang>`（markdown-it 默认 langPrefix），对每个：取 `code.textContent`（去尾 `\n`）作 source、`pre.replaceWith(新 div)`、调 `handler(source, div, ctx)`（async 用 `Promise.resolve().catch` 兜）。**放 core 因为它认渲染结构**（同 core/embeds.ts）；内置 mermaid/query 渲为 `.geode-*` div 故永不匹配 `code.language-mermaid`（无冲突）。
+- `compat/obsidian/plugin.ts`：registerMarkdownCodeBlockProcessor 桩→真（`makeCodeBlockPostProcessor` + `registerCoreMarkdownPostProcessor` + `this.register` 卸载）。
+- `main.tsx`：`__geodeRegisterMarkdownCodeBlockProcessor` 测试钩子（同 helper）。
+
+**对抗评审（reviewer 多维 → 1 MINOR 评审修 + e2e 锁；余全证伪）：**
+- **MINOR 评审修（sync 抛错跨块级联失败，已修+e2e 锁）**：`void Promise.resolve(handler(...)).catch()` 的 handler 作为参数**急切调用**——sync 抛错发生在 Promise.resolve 之前、`.catch` 接不到 → 逃出 forEach 回调中止 forEach → 同 lang 的后续块全不处理（重新引入 R132 在 processor 级守住的级联失败）。**修**：handler 调用外加 try/catch（.catch 接 async 拒绝、try/catch 接 sync 抛）每块隔离。e2e 补两 `​```throwblock` + sync 抛 handler → 两块都替换。
+- **reviewer 证伪全维**：**data-safety PASS**（display-only 替换渲染 DOM、不动源 markdown/`.md` 字节，继承 R132；`core/markdown.ts` 未改，r26-bytes 0 invariant）· scan/replace 正确（`pre>code` 排除 inline code、`replaceWith` 移除整 `<pre>` 同 Obsidian）· 怪 lang 健壮（`classList.contains` token 成员非选择器、`"language-foo bar"`/含空格不抛）· source 解码正确（`code.textContent` 解 entity、去单尾 `\n`、CRLF 上游 LF 化）· **内置冲突无**（mermaid/query=`.geode-*` div 内 `<code>` 无 `language-mermaid` class、内置胜）· 多块静态 NodeList 不漏 · 同 lang 两处理器 first-by-sortOrder 胜（极端边角，phase-1 可接受）· 分层（core helper 用 DOM 同 embeds、compat 薄、hook 同 helper）· faithfulness 签名对齐。
+
+**套件**：typecheck 0 · cargo build exit 0 · r133-e2e **8/8**（注册块替换+source/div/ctx + 未注册 ```` ```js ```` 不动 + disposer 卸载不替换）· r133-probe **3/3**（真 WKWebView helper 干净加载 + hook registerable；preview headless 不渲染 §D→替换语义由 e2e 覆盖）· 回归 r132 11/11·r26-bytes 0 invariant·r115 7/7·r23 22/22 · 简化门 clean。**剩余缺口（compat 商业主轴）**：**registerMarkdownPostProcessor/CodeBlockProcessor 续 phase**（live preview CM widget · getSectionInfo/addChild 真实现）· file-menu 续 phase（files-menu 需 Explorer 多选 · 其它 source · editor-menu 原生项）· `MenuItem.setSubmenu`/`referenceLinks`（低优）。
+
 ## Round 132 additions — compat Plugin.registerMarkdownPostProcessor（阅读视图后处理器 · 插件 API 商业主轴 · Dataview/Tasks 旗舰 · phase 1）【As-built v0.129】
 
 > **状态：As-built（v0.129 交付，2026-06-20）。** Obsidian `Plugin.registerMarkdownPostProcessor((el, ctx) => …)`（插件变换渲染后的阅读视图 DOM）现真实现——**Dataview/Tasks 旗舰、迁移叙事最重一项，phase 1 = 阅读视图**。**第二个主线大头**。**gate 拐点决策**：HANDOFF 默认 editor-menu 原生项（i18n/剪贴板复杂、低价值）+ files-menu（Explorer 无多选不可行）皆受阻；gate 揭露 registerMarkdownPostProcessor **phase 1 可做成「渲染后 DOM 后处理」**（跑在 innerHTML 之后的 `.preview-content` 上、**不动 `core/markdown.ts` 字节渲染**）→ **§C 字节级 r18-diff 前置门不触发、无 vault 写**（display-only）→ 清除了「宜拍板」的 data-safety 顾虑 → 自主启动。
