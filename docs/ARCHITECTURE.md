@@ -71,6 +71,32 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 138 additions — Explorer 多选（Cmd/Ctrl-click 切换 + Shift-click 范围 · 原生 UX · 解锁 files-menu 前置）【As-built v0.135】
+
+> **状态：As-built（v0.135 交付，2026-06-20）。** 转向原生（㊵ graph 嵌套标签经 gate **WebFetch 判 Obsidian graph 不画 tag→tag 层级边=反 faithful 弃**）。Explorer 多选 = Obsidian 文件树 Cmd/Ctrl-click 切换选择 + Shift-click 范围选——**faithful 无疑**（Obsidian 必有）+ **解锁 compat `files-menu`**（R130 单文件 file-menu 已做，files-menu 需多选才 fire）。**自包含单文件**（仅 `Explorer.tsx`，`.is-selected` CSS 既有样式自动应用到每个选中行→无 CSS 改）、**纯 UI 选择态零写盘=无 data-safety 面**。
+
+**契约（加性 single-file；selection Set + 修饰键点击）**：
+- `Explorer.tsx`：
+  - 既有 `selected: string|null`（lead/anchor，留作 keyboard/F2/rename 目标 + Shift anchor + scroll-into-view）；新 `selection: Set<string>`（**多选真源**，`isSelected = selection.has(path)`）。
+  - 协调 helper：`selectOnly(path)`（lead+Set={path}，**塌缩到单选**）/`clearSelection()`（lead=null+Set 空）。既有 ~11 个 `setSelected(path)` 单选点全funnel 经 `selectOnly`（newNote/newFolder/startRename/makeCopy/commitRename/moveNode/activateNode/keyboard nav/contextmenu）、`setSelected(null)`→`clearSelection`（empty-area），deleteNode 删 Set 内该 path + lead 是它则清。
+  - 行 `onClick(e)`：`metaKey||ctrlKey`→`toggleSelect(path)`（Set 切换 + lead=path 作新 anchor、**不开文件/不展开文件夹**）；`shiftKey`→`rangeSelect(path)`（flat `rows` 数组 anchorIdx..clickIdx inclusive 入 Set、**保 anchor 不动**让连续 shift 从同 anchor 重算 = Obsidian；anchor 不在 rows→塌缩 selectOnly）；plain→`activateNode`（selectOnly + 开/展开 = 既有）。
+  - contextmenu：右键在多选内→保选（仅 set lead）、在选外→`selectOnly`（塌缩到该节点 = Obsidian；前向兼容 files-menu 轮）。
+  - Escape（onTreeKeyDown）→`clearSelection`。
+
+**v1 scope（gate 划界）**：**仅选择模型 + UX**（Set + Cmd/Shift-click + 高亮 + 清除）。**显式 defer**：批量操作（bulk delete/move=多笔写盘 data-safety 面）+ compat `files-menu` 事件（需 core `collectFilesMenu(paths[])` + compat files-menu 事件 + Explorer 传选区）= 各自后续轮。
+
+**数据安全**：选择态纯本地 UI、零 vault 写 → **不触发 data-safety skill**。Shift 范围用既有 `flattenVisible` flat `rows`（keyboard nav 已 `findIndex` 用之）。
+
+**双端**：浏览器 e2e（新 r138-e2e）= Cmd-click 切换多选 + Shift-click 范围 + plain-click 塌缩 + Escape/empty 清除 + 右键在选内保选/选外塌缩；桌面 probe = N/A（纯前端选择态、无 fs 写、无核心注册表）→ 浏览器 e2e 全覆盖（沿 R93/R94/R99 等纯前端 UX 轮先例）。
+
+**对抗评审（reviewer 追每个 `selected`/`selection` reader → funnel 证明行为保持 + 1 MINOR 确认修 + 1 MINOR 文档化）：**
+- **funnel 行为保持（最高风险，证伪）**：枚举 `selected` 的全部 reader（scroll-into-view/targetFolder/keyboard Arrow/Enter/F2）——全**未改、全只读 `selected`**；funnel 后 `selectOnly` 仍 `setSelected(path)` 逐字节同旧 + 加 `setSelection({path})`；`isSelected=selection.has(path)` 在单选时 = 恰一行（同旧 `===selected`）→ r93/r130/r28/r91/r96/r97 绿因 lead 仍处处被设 + 高亮是同一行。
+- **MINOR-1 fix（deleteNode Set-prune 对文件夹删除是 descendant-blind，已修）**：删文件夹时仅 `n.delete(node.path)` 不剪子孙 → 选中的 `folder/a.md` 残留 Set → 若该路径后被重建（undo/watcher/手建）则 `selection.has` 复活**幽灵 is-selected 高亮**。根因=未镜像 `remapPaths` 的 prefix 逻辑（既有 lead-clear `if(selected===node.path)` 同病、R138 前就有=parity 非回归）。**修**：descendant-aware 剪枝（`p===node.path || p.startsWith(node.path+"/")` 同时剪 Set + lead）。
+- **MINOR-2（文档化偏离，契约 intended）**：toggleSelect 切到空集时仍 `setSelected(path)`（lead 非 null 但不可见）→ 不可见 lead 仍驱动 targetFolder/Enter/F2/Arrow。**刻意**（契约：clicked 项成新 anchor 即便 toggle off，让后续 Shift 从它重算 range）；代价=lead/高亮分歧（Enter/new-note 作用于不可见 lead，罕见微 surprise）。保留。
+- **reviewer 证伪全维**：无 TDZ（helper 在 deferred 闭包后调用，同 activateNode 既有模式）· rangeSelect off-by-one 正确（`slice(lo,hi+1)` inclusive、anchor===click→1 项、swap 处理 anchor 在下、**REPLACE 非 merge**、anchor 不动让连续 shift 重算）· anchor 在折叠文件夹→`findIndex -1`→selectOnly fallback · rename/move `selectOnly(newPath)` 全替换无残留 · 外部删多选文件→stale path `Set.has` 字符串总返 false 无崩 · 修饰键点文件夹不展开（onClick 分支 return 在 activateNode 前）· **零 vault 写**（选择态纯 setState、deleteNode 剪枝在 `await trash` 后不 gate 删除）=零 data-safety 面 · functional update 无 stale 闭包 · Escape vs menu-close window handler 不冲突（菜单开时 capture+stopPropagation 先吃、tree Escape gated `selection.size>0` 仅 preventDefault 不 stop）。
+
+**套件**：typecheck 0 · npm build + cargo check exit 0 · **r138-e2e 11/11**（Cmd-click 切换/toggle-off + Shift 范围从 anchor REPLACE + 连续 shift 重锚 + plain-click 塌缩 + Escape 清除 + 右键选内保选/选外塌缩 + Cmd-click 不开文件）· 回归 r93 22/22·r130 12/12·r28 23/23·r91 10/10·r96 17/17·r97 15/15 · 简化门 clean（0 编辑）。**桌面 probe N/A**（纯前端选择态）。**解锁 compat `files-menu`**（下一项：core `collectFilesMenu(paths[])` + compat files-menu 事件 + Explorer 右键传 selection）。**v1 defer**：批量操作（bulk delete/move=data-safety 面）。
+
 ## Round 137 additions — compat `WorkspaceLeaf.setViewState` 程序化模式切换（mode-only · 插件 API 商业主轴 · 收 R116/R126 留口）【As-built v0.134】
 
 > **状态：As-built（v0.134 交付，2026-06-20）。** 收 HANDOFF 默认项「MarkdownView.setMode」——但 **gate 揭示 Obsidian `MarkdownView` 根本无 public `setMode`**（`obsidian.d.ts` MarkdownView 公开面=getViewType/getMode/getViewData/clear/setViewData/showSearch；`currentMode` 是内部 sub-view 属性非字符串方法）→ R126 标的「setMode 非干净 API」**根因=它不是 public API**。**真·faithful 的程序化模式切换路径 = `WorkspaceLeaf.setViewState({type:"markdown", state:{mode:"source"|"preview", source?}})`**（Obsidian 官方文档 workspace.ts:65 已记此口径）。Geode 现状：`WorkspaceLeaf.openFile` 已 honor `openState.state.mode`→`setTabMode`，但 `setViewState` 只处理 `state.file`（重开）、对 mode-only 变更 `reportGap`。R137 = **补 `setViewState` 让它 honor mode 变更**（已开 tab 上切阅读/源码/live，无 file），= 插件切模式的真 API。**不造假 `setMode`**（Obsidian 无此 public 方法，造它=反 faithful，R128 教训）。
