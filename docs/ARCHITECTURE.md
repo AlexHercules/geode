@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 156 additions — 编辑器「Fold heading」开关（㊶ · foldService compartment · 复用 R153 模式 · 零 data-safety）【As-built v0.153】
+
+> **状态：As-built（已交付）。** ㊶ 续编辑器设置（R153 auto-pair → R156 Fold heading）。**Gate**：① Obsidian Editor 两设置「Fold heading」「Fold indent」均默认 ON；② grep Geode 现状=`folding.ts markdownFoldRange` 是**单一 foldService**，含两分支——heading section（ATX+Setext, R54）+ multi-line ListItem。→ 初拟 gate 两分支放 compartment 反应式重配（复用 R153 closeBracketsExtension(on) + R88/R92 模式）。**零新依赖**（CM6 既有 `@codemirror/language` foldService；**indentation guides 因需新 CM 依赖=硬边界#5 而弃、改做 fold 设置**）。
+>
+> **🛑 实现中 gate 发现硬约束 → 只交付 Fold heading、defer Fold indent（As-built 根因）**：写 foldIndent gate 后 e2e 揭露——`@codemirror/language` 的 `foldable()`（dist:1275）**先试所有 `foldService` facet、全返 null 才 fallback 到内置 `syntaxFolding`（读 `foldNodeProp`）**；而 lang-markdown 给「除 heading/list/Document 外的多行 Block」挂了 `foldNodeProp`（dist:13）→ **list item 内的多行 Paragraph 经 syntaxFolding 仍折叠**，即使我们的 list foldService gated off。`foldService` 无法「否决」fallback（返 null = 不处理、不是 veto），要禁掉须改 parser 的 foldNodeProp=动冻结 R17 fold 语言=出本轮范围且风险高。**heading 不受此影响**（foldNodeProp 显式排除 heading：`isHeading(type)!=null?undefined`），故 **Fold heading 完全可 gate、Fold indent 不行** → 只做 Fold heading。
+
+**契约（加性；复用 R153 compartment 模式）**：
+- **`core/appearance.ts`**：`foldHeading` Store（默认 `true`=Obsidian）+ `setFoldHeading` + 持久 `geode.foldHeading`。
+- **`folding.ts`**：① `markdownFoldRange(state, lineStart, lineEnd, foldHeadingOn = true)`——heading 分支 gated by `foldHeadingOn`、ListItem 分支**不 gate**（默认 true → 3-arg 既有 probe/调用者零回归）；② 新 `markdownFoldService(foldHeadingOn): Extension = Prec.high(foldService.of((s,f,t)=>markdownFoldRange(s,f,t,foldHeadingOn)))`（镜像 `closeBracketsExtension(on)`）；③ `markdownFolding()` 改为只返静态部分（codeFolding/foldGutter/keymap），foldService 移出到 compartment；④ `foldAllInView` 读 `foldHeading.get()` 传入。
+- **`cmExtensions.ts`**：opts 加 `foldServiceCompartment: Compartment`；base list += `markdownFolding()`（静态）+ `foldServiceCompartment.of(markdownFoldService(foldHeading.get()))`（**仍在 base list、活过 live↔source**）。
+- **`EditorPane.tsx`**：`foldServiceCompartmentRef` + 建 + 传入 buildEditorExtensions + reconfigure effect（`useStore(foldHeading)` → `compartment.reconfigure(markdownFoldService(foldHeadingOn))`，镜像 R153 closeBrackets effect；reconfigure 触发 gutter 重查=即时刷新 chevron）。
+- **`SettingsModal.tsx`**：Editor 节加 toggle（data-testid `settings-fold-heading-toggle`）。
+- **dict.views.ts**：`settings.foldHeading` + desc EN+ZH。
+
+**数据安全**：fold 纯视图态（codeFolding 隐藏行、**不改文档字节**、save 写 `handle.getText()` 全文与 fold 无关、foldPersistence localStorage 不变），toggle=localStorage + compartment reconfigure（无 doc changes）= 零 data-safety 面、不触 markdown.ts/r26-bytes。**默认 ON=逐字节同旧=零回归**。
+
+**双端**：浏览器 e2e（新 r156-e2e 12/12）= 默认 ON 标题折叠 → Fold heading OFF→标题无 fold/**列表仍可折叠（证 toggle 仅针对标题）** → 回 ON 恢复 → reload 持久。回归 r54 11/11·r29 19/19·r24 12/12·r153 8/8。桌面 probe = 设置本身 N/A（CM/localStorage、同 R153）；**fold 几何已由 r54-probe 真 WKWebView 覆盖**（3-arg 默认 true 不变=零回归）。
+
+**v1 nuance**：toggle OFF 只停止「提供新 fold 点」+ 隐藏 gutter chevron；已折叠范围仍在 codeFolding 字段（foldedRanges 仍渲 folded marker、可 unfold、不 trap）。**defer**：Fold indent（受 CM syntaxFolding/foldNodeProp fallback 缠绕，见上根因）/ indentation guides（需新依赖）。
+
+---
+
 ## Round 155 additions — Explorer「Detect all file extensions」开关（㊽ · 复用既有 .explorer-ext 徽章 · 零 data-safety）【As-built v0.152】
 
 > **状态：As-built（已交付）。** 对抗评审 6 维全证伪 → **0 confirmed defect（clean）** + 简化门 clean。reviewer 逐 case 真值表证 OFF 分支 `ext!=="" && (false||ext!=="md")` 与旧 `ext!=="md" && ext!==""` 代数等价=零回归、extensionless/dotfile（ext=`""`）两态都无徽章、renderRow 是纯函数非 memo→toggle 即时刷新全行。验收：r155-e2e 11/11、r91 10/10、r96 17/17、typecheck/cargo 全绿、截图实证（ON 时 Ideas[MD]/diagram[PNG]/config[JSON] 全显徽章、文件夹无）。**桌面 probe N/A**（Explorer DOM 显示、平台无关，同 R150/R151）。
