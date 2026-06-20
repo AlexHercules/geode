@@ -32,6 +32,7 @@ import {
 } from "@core/linkFormat";
 import { editorExtensionsRevision, getEditorExtensions, registerEditorExtension } from "@core/editorExtensions";
 import {
+  makeCodeBlockPostProcessor,
   type MarkdownPostProcessor,
   registerMarkdownPostProcessor as registerCoreMdPostProcessor,
 } from "@core/markdownPostProcessors";
@@ -260,8 +261,16 @@ async function bootstrap() {
   // it runs on the freshly-rendered .preview-content and the disposer removes it.
   const mdPpHost = globalThis as unknown as {
     __geodeRegisterMarkdownPostProcessor?: (fn: MarkdownPostProcessor, sortOrder?: number) => () => void;
+    __geodeRegisterMarkdownCodeBlockProcessor?: (
+      lang: string,
+      handler: (source: string, el: HTMLElement, ctx: unknown) => void | Promise<void>,
+      sortOrder?: number,
+    ) => () => void;
   };
   mdPpHost.__geodeRegisterMarkdownPostProcessor = registerCoreMdPostProcessor;
+  // R133: same path Plugin.registerMarkdownCodeBlockProcessor routes through (core wrapper helper)
+  mdPpHost.__geodeRegisterMarkdownCodeBlockProcessor = (lang, handler, sortOrder) =>
+    registerCoreMdPostProcessor(makeCodeBlockPostProcessor(lang, handler), sortOrder);
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

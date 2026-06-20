@@ -6,7 +6,9 @@ import type { Extension } from "@codemirror/state";
 import { getCommandName, type CommandRegistry } from "@core/commands";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import {
+  makeCodeBlockPostProcessor,
   type MarkdownPostProcessor,
+  type MarkdownPostProcessorContext,
   registerMarkdownPostProcessor as registerCoreMarkdownPostProcessor,
 } from "@core/markdownPostProcessors";
 import { encodeMdHref, formatLink, linkUseMarkdown } from "@core/linkFormat";
@@ -768,9 +770,22 @@ export abstract class Plugin extends Component {
     return postProcessor;
   }
 
-  registerMarkdownCodeBlockProcessor(language: string, _handler: unknown, _sortOrder?: number): unknown {
-    reportGap(this.manifest.id, "Plugin.registerMarkdownCodeBlockProcessor", `language "${language}"`);
-    return null;
+  /**
+   * R133: real — register a fenced-code-block handler for ```<language> blocks in the reading view.
+   * Obsidian口径: this is sugar over a post-processor that removes the rendered `<pre><code>` and
+   * hands the handler a fresh `<div>` to fill. We register exactly such a post-processor through the
+   * R132 core registry (no core/feature change): on each render it finds `pre > code.language-<lang>`,
+   * replaces the `<pre>` with a div, and calls handler(source, div, ctx). Reading view only (phase 1);
+   * built-in mermaid/query fences render as `.geode-*` divs, so they never match `code.language-*`.
+   */
+  registerMarkdownCodeBlockProcessor(
+    language: string,
+    handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => void | Promise<void>,
+    sortOrder?: number,
+  ): MarkdownPostProcessor {
+    const processor = makeCodeBlockPostProcessor(language, handler);
+    this.register(registerCoreMarkdownPostProcessor(processor, sortOrder));
+    return processor;
   }
 
   registerObsidianProtocolHandler(_action: string, _handler: unknown): void {

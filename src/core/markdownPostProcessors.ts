@@ -64,3 +64,35 @@ export function getMarkdownPostProcessors(): MarkdownPostProcessor[] {
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((e) => e.processor);
 }
+
+/**
+ * R133: build the post-processor that backs Obsidian's `registerMarkdownCodeBlockProcessor` — for
+ * each rendered ```<language> fence (`pre > code.language-<lang>`, the markdown-it default class)
+ * it removes the `<pre>`, inserts a fresh `<div>`, and calls `handler(source, div, ctx)`. Lives in
+ * core because it knows the reading-view render structure (like core/embeds.ts); built-in mermaid/
+ * query fences render as `.geode-*` divs so they never match `code.language-*` (no conflict).
+ */
+export function makeCodeBlockPostProcessor(
+  language: string,
+  handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => void | Promise<void>,
+): MarkdownPostProcessor {
+  return (el, ctx) => {
+    el.querySelectorAll("pre > code").forEach((code) => {
+      if (!code.classList.contains(`language-${language}`)) return;
+      const pre = code.parentElement;
+      if (!pre) return;
+      const source = (code.textContent ?? "").replace(/\n$/, ""); // drop markdown-it's trailing \n
+      const div = document.createElement("div");
+      pre.replaceWith(div);
+      // isolate per block (R133 review): the .catch handles an async rejection, the try/catch a SYNC
+      // throw — without it a sync-throwing handler would abort the forEach + skip sibling blocks
+      try {
+        void Promise.resolve(handler(source, div, ctx)).catch((err) =>
+          console.error(`[code-block-processor:${language}] handler rejected`, err),
+        );
+      } catch (err) {
+        console.error(`[code-block-processor:${language}] handler threw`, err);
+      }
+    });
+  };
+}
