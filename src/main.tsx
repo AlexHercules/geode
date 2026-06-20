@@ -39,7 +39,7 @@ import {
   RenderChildOwner,
 } from "@core/markdownPostProcessors";
 import { MarkdownRenderChild } from "@compat/obsidian/component";
-import { Menu } from "@compat/obsidian/ui";
+import { Menu, Keymap } from "@compat/obsidian/ui";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -330,6 +330,26 @@ async function bootstrap() {
     }
     return { isMenu, chainable, shown, fired };
   };
+
+  // R148: §D-safe synchronous probe of compat Keymap.isModifier — builds a synthetic
+  // KeyboardEvent with the given modifier flags and reports the static helper's result
+  // (platform-dependent "Mod" branch is exercised on the real WKWebView UA via the probe).
+  const kmHost = globalThis as unknown as {
+    __geodeKeymapIsModifier?: (
+      modifier: "Mod" | "Ctrl" | "Meta" | "Shift" | "Alt",
+      flags: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean },
+    ) => boolean;
+  };
+  kmHost.__geodeKeymapIsModifier = (modifier, flags) =>
+    Keymap.isModifier(
+      new KeyboardEvent("keydown", {
+        ctrlKey: !!flags.ctrl,
+        metaKey: !!flags.meta,
+        shiftKey: !!flags.shift,
+        altKey: !!flags.alt,
+      }),
+      modifier,
+    );
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

@@ -9,7 +9,7 @@ import { Component } from "./component";
 import { reportGap } from "./gaps";
 import { setIcon, type IconName } from "./icons";
 import type { App, Modifier } from "./plugin";
-import { moment } from "./util";
+import { moment, Platform } from "./util";
 import type { PaneType } from "./workspace";
 
 /* ---------------- Scope (real since R6 — EditorSuggest popup dispatch) ---------------- */
@@ -109,6 +109,26 @@ export class Keymap {
   /** 'Translates an event into the type of pane that should open': mod -> "tab". */
   static isModEvent(evt?: UserEvent | null): PaneType | boolean {
     return evt && (evt.ctrlKey || evt.metaKey) ? "tab" : false;
+  }
+
+  /** R148: Obsidian `Keymap.isModifier(evt, modifier)` — whether `modifier` is held
+   *  during `evt`. "Mod" = Cmd on macOS, Ctrl elsewhere (platform-aware, unlike the
+   *  scope-matching normalizeModifiers which collapses Mod→Ctrl). @since 0.12.17 */
+  static isModifier(evt: MouseEvent | TouchEvent | KeyboardEvent, modifier: Modifier): boolean {
+    switch (modifier) {
+      case "Mod":
+        return Platform.isMacOS ? evt.metaKey : evt.ctrlKey;
+      case "Ctrl":
+        return evt.ctrlKey;
+      case "Meta":
+        return evt.metaKey;
+      case "Shift":
+        return evt.shiftKey;
+      case "Alt":
+        return evt.altKey;
+      default:
+        return false; // untyped plugins may pass a non-Modifier string — stay boolean
+    }
   }
 }
 
