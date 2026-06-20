@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 127 additions — compat CachedMetadata.footnotes + footnoteRefs（脚注定义+引用 · 插件 API 商业主轴）【As-built v0.124】
+
+> **状态：As-built（v0.124 交付，2026-06-20）。** Obsidian `getFileCache(file).footnotes: FootnoteCache[]`（`[^id]: content` **定义**）+ `footnoteRefs: FootnoteRefCache[]`（正文 `[^id]` **引用**）现真实现。脚注感知类插件用。**本轮触 core**（index parser）——脚注定义早在 core（R65）、本轮在 core 补**引用**捕获 + 桥接两者进 compat。
+
+**契约（加性；core 补 footnoteRefs + compat 桥接两者）**：
+- `core/types.ts`：`FootnoteRef`（定义类型，R65）加 `to`（定义行末，给 compat position）；新 `FootnoteRefMark {id, from, to}`（引用标记）；`NoteMetadata.footnoteRefs: FootnoteRefMark[]`。
+- `core/metadata.ts`：新 `FOOTNOTE_REF_RE = /\[\^([^\s[\]]+)\](?!:)/g`（同定义 id 字符集，但 `(?!:)` 排除定义自身的 `[^id]:` 标记）。**关键：引用扫描与定义扫描同跑在 `masked` 上**（frontmatter blanked + `maskCodeRegions`）→ fenced/inline code + frontmatter 里的 `[^id]` 自动排除（**复用 core 久经考验的 masking，绕开 R125 式 fence 误判风险**——这正是本轮选择动 core 而非 compat 自扫的根因）。定义 push 加 `to`；引用 push `{id, from, to}`（document order，重复保留）。
+- `compat/obsidian/metadata.ts`：新 `FootnoteCache extends CacheItem {id}` + `FootnoteRefCache extends CacheItem {id}`（id 无 caret，同 BlockCache 约定）+ `CachedMetadata.footnotes?`/`footnoteRefs?`。buildCache 直接从 `meta.footnotes`/`meta.footnoteRefs` 投影（offset 已由 core parseNote 算好）→ **不需 content、跨过 no-content transient**（同 frontmatterLinks）。
+
+**对抗评审（reviewer 多维，core 回归优先 → 1 confirmed MINOR[F1]，评审修 + e2e 锁；余全证伪）：**
+- **F1 评审修（已修+e2e 锁）——`(?!:)` 误吞 mid-line `[^id]:` 引用**：首版用 `FOOTNOTE_REF_RE = /\[\^(..)\](?!:)/g`，`(?!:)` 本意「排除定义自身 marker」，但它排除**任何** `[^id]` 后跟冒号者——包括 mid-line 的真引用 `word[^1]: ...`（非 col-0 定义，FOOTNOTE_DEF_RE 是 `^` 锚定 col-0）→ 该引用既非定义也不入 footnoteRefs、静默丢失。**根因**：`(?!:)` 把「后跟冒号」当「是定义」，真判据是 **col-0 行首**（定义已编码于此）。**修**：正则去掉 `(?!:)`、改为循环里只跳过 col-0 的 `[^id]:`（`atLineStart && masked[to]===":"`，镜像 FOOTNOTE_DEF_RE 锚点）→ mid-line `[^id]:` 正确入引用。e2e 补例 `word[^9]: midline` → ref @line0、col-0 `[^9]: def` → 仅定义。
+- **faithfulness 校准（自做 WebFetch）**：`FootnoteCache`/`FootnoteRefCache` 官方均 `extends CacheItem {id}`（即 `{id, position}`）；`footnotes`=定义、`footnoteRefs`=引用映射正确。**文档化偏离**：内联脚注 `^[text]`（无 id 语法）不捕获（罕见、待后续）。
+- **reviewer 证伪全维（core 回归优先）**：def-scan 仅加 `to`、`id`/`content`/`from` 逐字节不变 · 引用循环只读 `masked`、`matchAll` 无 lastIndex 泄漏、后续 block scan 用独立 `BLOCK_MARKER_RE.exec` 无干扰 · 反双计正确（`[^1]:` 定义 + 正文 `[^1]` → defs=[1] refs=[1] 非 2）· 边界（空 id 不匹配/相邻/CJK/EOF/脚注内脚注 `[^1]: see [^2]`→refs=[2,1]）+ 40k `[^` 0.1ms 无回溯 · masking 字节对齐 · no-content transient 安全 · 纯读不改 meta · 分层零跨界。
+- **设计要点**：① 动 core 是**正确选择**——引用与定义同源（同 masking、同 id 字符集），放 core 既复用 proven masking（防 fence 误判）又惠及 core 消费者；② `to` 加进 FootnoteRef 是加性（R65 footnote panel 只读 id/content/from，忽略 to）；③ 两 compat 字段纯从 meta 投影、跨过 no-content transient。
+
+**套件**：typecheck 0 · cargo build exit 0 · r127-e2e **13/13**（定义/引用/重复保留/orphan/masking[fenced+inline+frontmatter `[^id]` 排除]/无脚注缺省/引用 position 跨 `[^id]` marker/定义自身 marker 不计为引用）· r127-probe **7/7** 真 WKWebView 原生 fs index（defIds/defLines/refIds/refLines + masking 不泄漏）· **core 回归**：r126 11/11 · r125 16/16 · r124 10/10 · r119 10/10 · r70 23/23（links）· r27 22/22（tags）全绿（动 index parser 零回归）· 简化门 clean（~45 行加性桥接、无 ≥8 行重复）。**剩余缺口（compat 商业主轴）**：`CachedMetadata.referenceLinks`（reference-style `[t][ref]`，需 core 支持、价值低）· `MarkdownView.setMode`（非干净 API，建议跳过）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· **`file-menu`/`editor-menu` 钩子**（**阻塞面最大、宜单独拍板**）——**小项至此基本清空，余主线大头宜用户拍板**。
+
 ## Round 126 additions — compat CachedMetadata.frontmatterLinks（属性内 wikilink · 插件 API 商业主轴）【As-built v0.123】
 
 > **状态：As-built（v0.123 交付，2026-06-20）。** Obsidian `getFileCache(file).frontmatterLinks: FrontmatterLinkCache[]` 现真实现——frontmatter 属性值里的 `[[wikilink]]`（如 `related: "[[Note]]"`）。Dataview / 图谱 / 链接感知类插件读属性链接的命脉。纯读、零改 core。**选项说明**：HANDOFF 默认下一项是 `MarkdownView.setMode`，但 gate 发现 setMode 非干净公共 API（代码库注释已记「插件改用 leaf.setViewState」），而 frontmatterLinks 是真实 CachedMetadata 字段、延续 R119/R124/R125 parser 家族、价值更高 → 自主改取 frontmatterLinks（§自主契约授权择最贴近 Obsidian 的方案）。
