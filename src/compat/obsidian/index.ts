@@ -43,7 +43,16 @@ export {
   type EditorSuggestContext,
   type EditorSuggestTriggerInfo,
 } from "./suggest";
-export { Editor, type EditorPosition } from "./editor";
+export {
+  Editor,
+  type EditorChange,
+  type EditorCommandName,
+  type EditorPosition,
+  type EditorRange,
+  type EditorSelection,
+  type EditorSelectionOrCaret,
+  type EditorTransaction,
+} from "./editor";
 export {
   App,
   Plugin,
