@@ -20,6 +20,22 @@ type Handle = Omit<AppHandle, "ui">;
 export type PaneType = "tab" | "split" | "window";
 export type SplitDirection = "vertical" | "horizontal";
 
+/**
+ * R137: map an Obsidian markdown view-state mode to a Geode ViewMode and apply it to the active tab —
+ * the shared path behind openFile's `openState.mode` and setViewState's `state.mode` (Obsidian's
+ * programmatic mode switch; there is no public MarkdownView.setMode). Obsidian's `source` boolean
+ * distinguishes live-preview (false) from raw source (true); absent ⇒ raw, matching the legacy
+ * openFile collapse. Unrecognized mode ⇒ no-op.
+ */
+function applyViewStateMode(handle: Handle, mode: string | undefined, source: boolean | undefined): void {
+  const vm = mode === "preview" ? "preview" : mode === "source" ? (source === false ? "live" : "source") : null;
+  if (!vm) return;
+  const tab = findActiveTab(handle.workspace.state.get());
+  // R137 review: only markdown tabs have a reading/source/live mode — guard like the Ctrl+E toggles
+  // (toggleActiveTabMode), so a mode-only setViewState on a graph/attachment tab doesn't stamp it.
+  if (tab && tab.viewType === "markdown") handle.workspace.setTabMode(tab.id, vm);
+}
+
 /** 'export type ViewCreator = (leaf: WorkspaceLeaf) => View;' (official d.ts) */
 export type ViewCreator = (leaf: WorkspaceLeaf) => View;
 
@@ -109,15 +125,11 @@ export class WorkspaceLeaf {
 
   async openFile(
     file: TFile,
-    openState?: { mode?: string; state?: { mode?: string } },
+    openState?: { mode?: string; state?: { mode?: string; source?: boolean } },
   ): Promise<void> {
     this.handle.workspace.openFile(file.path, { newTab: this.newTab });
     // F10: honor an explicit source/preview mode (live stays the default)
-    const m = openState?.state?.mode ?? openState?.mode;
-    if (m === "source" || m === "preview") {
-      const tab = findActiveTab(this.handle.workspace.state.get());
-      if (tab) this.handle.workspace.setTabMode(tab.id, m);
-    }
+    applyViewStateMode(this.handle, openState?.state?.mode ?? openState?.mode, openState?.state?.source);
   }
 
   getViewState(): { type: string } {
@@ -126,14 +138,24 @@ export class WorkspaceLeaf {
   }
 
   /**
-   * Active-pane facade: a markdown state with a file opens that file; custom
-   * view types belong on SidebarViewLeaf (below), so anything else is a
-   * recorded no-op.
+   * Active-pane facade: a markdown state opens its file (and applies any mode), and a mode-ONLY state
+   * (no file) switches the open tab's mode — Obsidian's programmatic mode switch (R137). Custom view
+   * types belong on SidebarViewLeaf (below), so anything else is a recorded no-op.
    */
-  async setViewState(state: { type?: string; active?: boolean; state?: { file?: string } }): Promise<void> {
-    const file = state?.state?.file;
-    if (state?.type === "markdown" && typeof file === "string") {
-      this.handle.workspace.openFile(file, { newTab: this.newTab });
+  async setViewState(state: {
+    type?: string;
+    active?: boolean;
+    state?: { file?: string; mode?: string; source?: boolean };
+  }): Promise<void> {
+    const s = state?.state;
+    if (state?.type === "markdown" && typeof s?.file === "string") {
+      this.handle.workspace.openFile(s.file, { newTab: this.newTab });
+      applyViewStateMode(this.handle, s.mode, s.source); // R137: honor a mode given alongside the file
+      return;
+    }
+    // R137: a mode-only markdown state switches the already-open tab (reading ↔ source ↔ live)
+    if (state?.type === "markdown" && (s?.mode === "source" || s?.mode === "preview")) {
+      applyViewStateMode(this.handle, s.mode, s.source);
       return;
     }
     reportGap("WorkspaceLeaf", "setViewState", `view type "${state?.type ?? "?"}" not mounted`);
@@ -263,15 +285,11 @@ export class SidebarViewLeaf extends WorkspaceLeaf {
 
   override async openFile(
     file: TFile,
-    openState?: { mode?: string; state?: { mode?: string } },
+    openState?: { mode?: string; state?: { mode?: string; source?: boolean } },
   ): Promise<void> {
     this.handle.workspace.openFile(file.path, { newTab: false });
     // F10: honor an explicit source/preview mode (live stays the default)
-    const m = openState?.state?.mode ?? openState?.mode;
-    if (m === "source" || m === "preview") {
-      const tab = findActiveTab(this.handle.workspace.state.get());
-      if (tab) this.handle.workspace.setTabMode(tab.id, m);
-    }
+    applyViewStateMode(this.handle, openState?.state?.mode ?? openState?.mode, openState?.state?.source);
   }
 }
 
