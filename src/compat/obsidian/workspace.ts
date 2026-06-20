@@ -169,6 +169,20 @@ export class WorkspaceLeaf {
     const tab = findActiveTab(this.handle.workspace.state.get());
     if (tab) this.handle.workspace.closeTab(tab.id);
   }
+
+  /** R146: pin/unpin the tab this leaf represents (the active tab — same facade
+   *  semantics as getViewState/getDisplayText/detach). Reuses the R39 tab-pin. */
+  togglePinned(): void {
+    const tab = findActiveTab(this.handle.workspace.state.get());
+    if (tab) this.handle.workspace.toggleTabPin(tab.id);
+  }
+
+  /** R146: set the pin state to a specific value (idempotent — toggles only when
+   *  the current state differs, so setPinned(true) twice stays pinned). */
+  setPinned(pinned: boolean): void {
+    const tab = findActiveTab(this.handle.workspace.state.get());
+    if (tab && !!tab.pinned !== pinned) this.handle.workspace.toggleTabPin(tab.id);
+  }
 }
 
 /**
@@ -278,6 +292,12 @@ export class SidebarViewLeaf extends WorkspaceLeaf {
   override getDisplayText(): string {
     return this.mountedView?.getDisplayText() ?? "";
   }
+
+  /** R146: a sidebar-view leaf is not a pinnable main-area tab — no-op (the base
+   *  methods would findActiveTab in the editor area and pin an unrelated tab).
+   *  Mirrors how this subclass overrides every other findActiveTab-based method. */
+  override togglePinned(): void {}
+  override setPinned(_pinned: boolean): void {}
 
   getIcon(): string {
     return this.mountedView?.getIcon() ?? "";
