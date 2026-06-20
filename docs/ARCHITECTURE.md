@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 150 additions — 标签面板嵌套层级树 + 折叠（㊻ · 原生功能 · 脱离 compat 审计 · 零 data-safety）【As-built v0.147】
+
+> **状态：As-built（v0.147 交付，2026-06-21）。对抗评审 9 维 → 2 MINOR 确认修 + 2 nit 采纳 + 余全证伪 + 简化门 clean。** **转向原生**——R144–R149 连六轮 compat 审计、边际递减；本轮回原生候选池 ㊻（TagsPanel 现 48 行扁平）。**Gate（faithfulness）**：WebFetch obsidian.md/help/plugins/tags 确认 Obsidian 标签面板「display nested tags as a tree」（折叠树、chevron「clicking the arrow」）+ 排序菜单「Change sort order: Tag name / Frequency」；R138 gate 已确认层级**在 tag pane**（非 graph）。**纯读显示、零 data-safety**（reads getTagMap、click→search、rename 菜单不变）。
+
+**契约（加性；TagsPanel 扁平→树）**：
+- **`features/tags/TagsPanel.tsx`**：纯函数 `buildTagTree(map)` 从 `getTagMap():Map<tag,Set<path>>` 按 `/` 拆段建树——node `{segment, fullPath, count, exact, children}`；**phantom 父**（仅经子使用的中间段、map 无此 exact 条目）作 group 节点。**count 口径（文档化决策，docs 未规定 parent 语义）**：real tag node=exact `map.get(fullPath).size`（**与旧扁平列表逐字不变=低风险**）；phantom 父=子树**distinct 笔记并集**大小（无 exact 可显、且对齐 click→prefix-search 行为）。递归渲染 `TagTreeRow`（按 depth 缩进、有子显 chevron 折叠、显 leaf segment 非全路径、count、click→`requestSearch("#"+fullPath)`、右键 rename 菜单复用全路径）。每层 siblings 按 count desc→name 排序（保留旧序口径）。
+- **折叠态**：per-session in-memory `Set<string>`（collapsed fullPaths、默认展开），chevron toggle。**v1 不持久化**（Obsidian 持久、v1 session-only=文档化偏离）。
+- **`tags.css`**：树缩进 + chevron 样式。
+- **v1 defer（文档化）**：排序菜单（name/frequency toggle，Obsidian 有）/「tree vs flat list」toggle（Obsidian 有、v1 always-tree=补上「无树」的缺口）/ 折叠持久化。
+
+**数据安全**：纯读 getTagMap + UI 树 + click→search，**零 vault/.md 写**=零 data-safety 面（rename 菜单走既有 R69 vetted `renameTagAcrossVault` 不变）。
+
+**双端**：浏览器 e2e（新 r150-e2e）= 嵌套标签渲为树（父有 chevron、子缩进）+ 折叠隐藏子/展开显子 + leaf 无 chevron + click 父→search 全路径 + phantom 父 aggregate count + real tag exact count + 扁平标签零回归（r41）。桌面 probe = N/A（纯前端树渲染、无 fs/WKWebView 特异行为，浏览器 e2e 全覆盖；同 R142/R143 纯前端轮）。
+
+**data-testid**：复用 `tag-row-<fullPath>` / `.tag-row-name` / `.tag-row-count`（r41 保持）+ 新 `tag-chevron-<fullPath>`。
+
+**对抗评审（reviewer 9 维 → 2 MINOR 确认修 + 2 nit 采纳）：** **F1 MINOR（已修+e2e 锁）**：malformed tag（leading/trailing/double `/`，metadata TAG_RE 允许 `/`）→ buildTagTree split 出空段→空名行 + **leading-slash 折叠成兄弟 fullPath 撞 testid**（`/malr`→`["","malr"]`→fullPath 丢首斜杠成 "malr" 撞真 `#malr`）→**修**=`tag.split("/").filter(s=>s!=="")` 跳空段 + 全空则 skip（malformed 规范化、无空名无撞）。**F2 MINOR（已修）**：`role="tree"` 无 `role="treeitem"` 后代=无效 ARIA（旧 list/listitem）→修=`.tag-row-wrap` 加 `role="treeitem"`+`aria-level`+`aria-expanded`、children 包 `role="group"`。**采纳 2 nit**：删未读 `exact` 字段（与 count 逻辑 `n.own!==null` 重复）；补 sibling sort e2e（hi count2 排 lo count1 前）。**证伪**：buildTagTree 结构正确（well-formed）· count（real exact / phantom subtree distinct union、Set dedupe、中间真 tag own 计入）· subtreeNotes 仅 phantom 调（real short-circuit）无 O(n²) 热路径回归（useMemo per-rev）· 折叠（陈旧 collapsed path 忽略不崩、塌缩隐全子树非仅直接子）· chevron/row 兄弟按钮不冒泡互扰 · r41 更新合法（flat→tree contract、仍测渲染/count/click）· data-safety 零写（rename 走 R69 vetted）· 分层/色变量/i18n 全证伪。**count 口径**（real=exact / phantom=aggregate）= 文档化决策（Obsidian parent 语义未文档化、real 保持旧扁平 exact 零回归）。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r150-e2e 20/20**（树渲 leaf segment + 父 chevron/叶无 + phantom aggregate + 折叠隐展子树 + click→search + **sibling sort** + **malformed 无空名无撞**）· 回归 r41 21/21（tags-pane section flat→tree 更新）· 简化门 clean。**桌面 probe N/A**（纯前端树渲染）。**v1 defer**：排序菜单（name/freq）/ flat-list toggle / 折叠持久化。
+
+---
+
 ## Round 149 additions — compat `Keymap.isModEvent` 补全（static · tab/split/window/中键 · 插件 API 商业主轴 · 零 data-safety）【As-built v0.146】
 
 > **状态：As-built（v0.146 交付，2026-06-21）。对抗评审 9 维 → 1 MINOR 确认修（mod 平台感知）+ 余全证伪 + 简化门 clean（2 文件）。** 续 R148——R148 reviewer 实证 informational：Geode `isModEvent` 只返 `"tab"|false`，d.ts 是 `"tab"|"split"|"window"`+中键。**Gate**：d.ts 注释逐字——「Returns 'tab' if Cmd/Ctrl pressed OR middle-click MouseEvent；'split' if Cmd/Ctrl+Alt；'window' if Cmd/Ctrl+Alt+Shift」（@since 0.16.0）。**grep 确认 isModEvent 无内部调用者**（仅 compat 定义）→ 纯 compat API 补全、**零内部行为改动**（只影响调 `Keymap.isModEvent` 的 plugins）。`PaneType="tab"|"split"|"window"` 已是类型、Geode 有 `splitActivePane`（"window" 仅作分类返回值、不实际开窗）。**零 data-safety**（纯 static 读 event flag）。

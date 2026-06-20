@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R150 套件回归（2026-06-21，原生标签树 · 桌面 probe N/A）
+
+R150 = **标签面板嵌套层级树 + 折叠**（㊻ 原生功能，**脱离 R144–R149 六轮 compat 审计、转回原生候选池**）。**Gate**：WebFetch obsidian.md/help/plugins/tags 确认 Obsidian 标签面板「display nested tags as a tree」（折叠树 chevron + 排序菜单 name/freq）。TagsPanel 扁平→树：纯函数 `buildTagTree(getTagMap)` 按 `/` 拆段建树（phantom 父 + `split.filter(空段)` 防 malformed slash）+ 递归 `renderNode`（chevron 折叠 / leaf segment / click→search / ARIA role=tree+treeitem+group）+ per-session collapsed。**count**：real=exact / phantom=子树 distinct 并集（文档化）。**纯读零 data-safety**（rename 走 R69 vetted）。**对抗评审 9 维 → 2 MINOR 修+2 nit 采纳 + 余证伪 + 简化门 clean**。
+
+新增套件：`r150-e2e.mjs` **20/20**（树渲 leaf segment + 父 chevron/叶无 + phantom aggregate count + 折叠隐展子树 + click→search + sibling sort + **malformed tag 无空名无撞键**）。**套件矩阵不回退**：r41 21/21（tags-pane section flat→tree 合法更新、仍测渲染/count/click→search）。**桌面 probe N/A**（纯前端树渲染、无 fs/WKWebView 特异行为，浏览器 e2e 全覆盖；同 R142/R143）。
+
 ### R149 套件回归（2026-06-21，平台分支委托 isModifier · 桌面 probe N/A）
 
 R149 = compat **`Keymap.isModEvent` 补全**（续 R148——R148 reviewer 标的真缺口）。**Gate**：d.ts 注释逐字（'tab' if Mod OR 中键；'split' if Mod+Alt；'window' if Mod+Alt+Shift @0.16.0）+ grep 确认 **无内部调用者**（纯 compat API 补全、零内部行为改）。`ui.ts` isModEvent 重写：`mod=Keymap.isModifier(evt,"Mod")`（**复用 R148 平台感知 Mod**）→ most-specific first（Mod+Alt+Shift→window / Mod+Alt→split / Mod→tab / `evt instanceof MouseEvent && button===1` 中键→tab / else false）；`main.tsx` `__geodeKeymapIsModEvent` 钩子。**零 data-safety**（纯 static 读 event flag）。**对抗评审 9 维 → 1 MINOR 确认修+e2e 锁**：原 `mod=ctrlKey||metaKey`（跨平台 either-mod）与同类 R148 isModifier 平台感知不一致（mac Ctrl+click=OS context-menu 不该当 mod）→修=复用 `isModifier(evt,"Mod")`（平台感知+DRY+类内一致）、e2e 改平台无关 XOR；余全证伪 + 简化门 clean。
