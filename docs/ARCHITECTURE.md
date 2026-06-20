@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 124 additions — compat CachedMetadata.sections（顶层块文档结构 parser · 插件 API 商业主轴）【As-built v0.121】
+
+> **状态：As-built（v0.121 交付，2026-06-20）。** Obsidian `getFileCache(file).sections: SectionCache[]`（文档块结构）现真实现——**顶层块分段近似**（按块首行分类，非完整 CommonMark parse；Obsidian section typing 明言 non-exhaustive）。Dataview 等结构分析类插件用。纯读、零改 core。
+
+**契约（加性；新 SectionCache 类型 + segmenter）**：
+- `compat/obsidian/metadata.ts`：`SectionCache extends CacheItem {type: string, id?, position}` + `CachedMetadata.sections?`。新 `buildSections(content, fmEnd, blocks, pos)`：frontmatter→1 个 `yaml` section；**fenced code（```/~~~）原子块**（内部空行不切——close 正则 `marker[0]{len,}`，未闭合→消到 EOF）；**heading（ATX）/thematicBreak 是单行块**（即使无空行包围也强制断段——D1 评审修）；其余按空行分块、`classifySection` 按首行分类 blockquote/list/html/table（首行含`|`+次行分隔行）/paragraph 兜底；block id（meta.blocks 的 `^id` 落 section 范围内）挂 `section.id`；按 offset 排序。buildCache `if (content!==undefined)` 才算（no-content transient 不缓存→自愈，同 R119）。
+
+**对抗评审（reviewer 6 维 + 独立复刻实测 → 0 confirmed 代码缺陷 + D1 评审修 + D2-D6 文档化偏离）：**
+- **证伪**：纯读无 fs 写；**CRLF 安全**（content 在唯一读入 choke point Vault.normalizeContent CRLF→LF+去 BOM，`\r` 不可达，`$` 锚点安全）；未闭合 fence 消到 EOF 不崩；THEMATIC 先于 LIST 判序正确（`---`/`***`/`- - -`→thematicBreak、`- x`→list）；block id 挂载正确（core block.from 与 section 同为空行块起点，yaml/code 段不误挂）；空/CJK/超长不崩；分层合规、perf 有界、no-content 自愈。
+- **D1 评审修（已修+e2e 锁）**：ATX heading/thematicBreak 不被空行隔开时原会与相邻文本合并成一块（`# H\ntext`→一个 heading 吞下文）——改为 heading/thematic 行强制单行断段（Obsidian 行为）；e2e 测 `# H\nbody\n# H2\nafter`→heading/paragraph/paragraph/heading/paragraph。
+- **D2-D6 文档化偏离（顶层近似的设计结果、非缺陷）**：D2 `^<` 过宽（autolink/散文 `< 3`→html，仅 type 标签偏 position 准）· D3 setext heading→paragraph（首行看不到下划线，`---` 下划线非块首行不误判 thematic）· D4 4-空格缩进 code→paragraph（只测 fenced）· D5 一 section 多 `^id` 只挂 first · D6 yaml position.end 含闭合 `---` 后换行（与 frontmatterPosition 自洽、差 Obsidian 1 字符）。
+
+**套件**：typecheck 0 · cargo check 0 · r124-e2e **10/10**（type 序列/fence 原子内部空行不切/position 字节准/block id 挂载/plain 双段/**D1 heading 无空行断段**）· r124-probe **4/4** 真 WKWebView 原生 fs index（type 序列 + fence 原子；metadata 级桌面全验）· 回归 r119 10/10（embeds 同 buildCache）·r27 22/22·r70 23/23·r23 22/22·r46 18/18 · build exit 0（两次）· 简化门 clean（simplifier 复用 fmEnd 减一处重复 + D1 修移除 classifySection 死分支）。**剩余缺口（compat 商业主轴）**：`CachedMetadata.listItems`（list item parser，类同）· `MarkdownView.setMode`（MarkdownSubView 内部参数）· `registerMarkdownPostProcessor`（Dataview 命脉，**工程大、宜单独拍板**）· `file-menu`/`editor-menu` 钩子（**阻塞面最大、宜单独拍板**）。
+
 ## Round 123 additions — compat MarkdownView.setViewData（编辑器全文替换 · data-safety · 插件 API 商业主轴）【As-built v0.120】
 
 > **状态：As-built（v0.120 交付，2026-06-20）。** Obsidian `MarkdownView.setViewData(data, clear)`（替换编辑器全文）现真实现。模式控制/全文写类插件用。**动 editor 写路径 → data-safety**：经 `editor.setValue` → **一笔 undoable CM 事务 → doc-change listener → autosave**（正常保存周期），落盘安全、像一次大粘贴。`setMode` 留 gap（其真实参数是内部 MarkdownSubView，插件改用 leaf.setViewState）。
