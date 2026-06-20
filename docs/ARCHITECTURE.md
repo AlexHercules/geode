@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 121 additions — compat app.commands.removeCommand（收 R113/R118 余项 · 插件 API 商业主轴）【As-built v0.118】
+
+> **状态：As-built（v0.118 交付，2026-06-20）。** Obsidian `app.commands.removeCommand(id): void`（按 id 从注册表移除命令）现真实现——**收掉 R113/R118 app.commands 的最后一个余项**（executeCommandById/listCommands/commands R113 + findCommand/executeCommand/editorCommands R118）。命令管理类插件用。纯逻辑、零 Rust。
+
+**契约（加性；2 文件）**：
+- `core/commands.ts`：CommandRegistry 加 `removeById(id): boolean`——`commands.delete(id)` + `parsedCache=null` + `revision.update(+1)`，**与 register() 返回的 disposer 删除逻辑逐字段一致**；未知 id → delete 返 false → 提前 return **不 bump**（无变化不重渲染）。
+- `compat/obsidian/plugin.ts`：makeCommands（R113+R118 工厂）加 `removeCommand(id): void` = `registry.removeById(id)`（丢弃 boolean，Obsidian 返 void）。
+- 与 `Plugin.removeCommand`（经 _commandDisposers 移除插件自身命令）区分——本轮是 app 级按 id 移除任意命令。
+
+**对抗评审（reviewer 6 维 + obsidian-typings 核签名 → 0 confirmed 代码缺陷）：**
+- **证伪**：①removeById 与 disposer 逐字段一致（含 `parsedCache=null`——漏了会让删掉的命令快捷键在 hotkey 热路径缓存里陈旧仍触发；本轮没漏）+ 未知 id 不 bump 正确；②签名 `removeCommand(id: string): void` 经 obsidian-typings 核实（**是 string id 不是 Command 对象**）；③revision bump → palette/slashCommands/compat 响应式反映移除（live 实测）；④纯内存 Map、无 fs/无 .md、删命令非数据丢失（重载恢复）、与 disposer 删同 id 幂等无害；⑤core 仅加方法不动 register/execute/list（R113/R118 逐字节不变）、compat 只 import core；⑥空串/未知 id no-op 安全、删后立即 re-register 同 id 正常（live 实测）。
+- **已知行为（非缺陷）**：删 native 命令（app:new-note）会破 Geode palette/hotkey——Obsidian 同样允许、插件担责、非数据丢失、重载恢复。
+
+**套件**：typecheck 0 · cargo check 0 · r121-e2e **10/10**（removeCommand 返 void/findCommand/exec/list/commands 全移除·kept 命令存活·未知 no-op·删后 re-register）· r121-probe **9/9** 真 WKWebView 共享 registry（registry 级桌面全验）· 回归 r113 10/10·r118 13/13·r23 22/22 · build exit 0 · 简化门 clean（removeById 镜像 disposer 不可抽，纯加方法）。**剩余缺口（compat 商业主轴，渐重）**：`CachedMetadata.sections/listItems`（需文档结构 parser，中）· `MarkdownView.setViewData/setMode`（写=data-safety）· `DataAdapter.writeBinary` create-or-overwrite（需消解 check-then-act）· `registerMarkdownPostProcessor`（Dataview 命脉，**工程大、宜单独拍板**）· `file-menu`/`editor-menu` 钩子（**阻塞面最大、宜单独拍板**）。**小项已基本清空。**
+
 ## Round 120 additions — compat Vault.modifyBinary（二进制原子覆盖写 · 插件 API 商业主轴 · 收 R111 显式 gap）【As-built v0.117】
 
 > **状态：As-built（v0.117 交付，2026-06-20）。** Obsidian `Vault.modifyBinary(file, ArrayBuffer)`（覆盖已存在二进制）现真实现——**收掉 R111 显式留的 gap**。R111 做了 readBinary/createBinary（create-only），modifyBinary 当时缺一条**原子覆盖写**路径。本轮加新 Rust `vault_modify_binary`（**tmp + rename**，镜像既有 text `vault_write`）→ 既覆盖又无截断竞态（crash 中途只丢 throwaway tmp、原文件完好）。图片/PDF/Excalidraw 类插件可改写附件。**动 Rust + core/vault（data-safety 第一底线）。**
