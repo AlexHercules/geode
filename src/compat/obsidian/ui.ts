@@ -586,12 +586,32 @@ export class Menu extends Component {
   private hideCallback: (() => unknown) | null = null;
   private visible = false;
   private detachListeners: (() => void) | null = null;
+  /** R144: the element this menu is parented to (Obsidian setParentElement). In
+   *  single-window Geode its only effect is the append target's ownerDocument,
+   *  which is always `document` — so it is stored and honored but behaviorally a
+   *  no-op here (the showAtPosition clamp still uses the main window's viewport). */
+  private parentEl: HTMLElement | null = null;
 
   constructor() {
     super();
     this.dom = document.createElement("div");
     this.dom.className = "menu geode-compat-menu";
     this.dom.setAttribute("data-testid", "compat-menu");
+  }
+
+  /** R144: create a menu associated with an event — the modern Obsidian idiom
+   *  (`Menu.forEvent(evt).addItem(…).showAtMouseEvent(evt)`). Parents to the
+   *  event target so it opens in that target's document/window. @since 1.6.0 */
+  static forEvent(evt: PointerEvent | MouseEvent): Menu {
+    const menu = new Menu();
+    if (evt.target instanceof HTMLElement) menu.setParentElement(evt.target);
+    return menu;
+  }
+
+  /** R144: set the element this menu belongs to. @since 0.16.0 */
+  setParentElement(el: HTMLElement): this {
+    this.parentEl = el;
+    return this;
   }
 
   setNoIcon(): this {
@@ -625,7 +645,8 @@ export class Menu extends Component {
   showAtPosition(position: { x: number; y: number }, _doc?: Document): this {
     if (this.visible) this.hide();
     this.visible = true;
-    document.body.appendChild(this.dom);
+    // R144: honor setParentElement's ownerDocument (= document in single-window Geode)
+    (this.parentEl?.ownerDocument ?? document).body.appendChild(this.dom);
     // clamp into the viewport once the size is known
     const rect = this.dom.getBoundingClientRect();
     const x = Math.min(position.x, window.innerWidth - rect.width - 4);

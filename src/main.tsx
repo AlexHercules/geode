@@ -39,6 +39,7 @@ import {
   RenderChildOwner,
 } from "@core/markdownPostProcessors";
 import { MarkdownRenderChild } from "@compat/obsidian/component";
+import { Menu } from "@compat/obsidian/ui";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -297,6 +298,37 @@ async function bootstrap() {
     const afterAdd = [...log];
     owner.unload(); // → "unload"
     return { afterAdd, afterUnload: [...log] };
+  };
+
+  // R144: §D-safe synchronous probe of the new compat Menu methods (static forEvent +
+  // setParentElement). Exercises the modern context-menu idiom end-to-end on the shipped
+  // binary: Menu.forEvent(evt) → addItem/onClick → show → click the item → callback fires.
+  const menuHost = globalThis as unknown as {
+    __geodeMenuProbe?: () => { isMenu: boolean; chainable: boolean; shown: boolean; fired: boolean };
+  };
+  menuHost.__geodeMenuProbe = () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const evt = new MouseEvent("contextmenu", { clientX: 12, clientY: 12 });
+    Object.defineProperty(evt, "target", { value: host, configurable: true });
+    let fired = false;
+    let isMenu = false;
+    let chainable = false;
+    let shown = false;
+    try {
+      const menu = Menu.forEvent(evt); // parents to host (an HTMLElement)
+      isMenu = menu instanceof Menu;
+      chainable = menu.setParentElement(host) === menu;
+      menu.addItem((item) => item.setTitle("R144 Probe").onClick(() => { fired = true; }));
+      menu.showAtMouseEvent(evt);
+      const item = menu.dom.querySelector<HTMLElement>("[data-testid='compat-menu-item']");
+      shown = item !== null && document.body.contains(menu.dom);
+      item?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      menu.hide();
+    } finally {
+      host.remove();
+    }
+    return { isMenu, chainable, shown, fired };
   };
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
