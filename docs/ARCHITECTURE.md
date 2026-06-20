@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 155 additions — Explorer「Detect all file extensions」开关（㊽ · 复用既有 .explorer-ext 徽章 · 零 data-safety）【As-built v0.152】
+
+> **状态：As-built（已交付）。** 对抗评审 6 维全证伪 → **0 confirmed defect（clean）** + 简化门 clean。reviewer 逐 case 真值表证 OFF 分支 `ext!=="" && (false||ext!=="md")` 与旧 `ext!=="md" && ext!==""` 代数等价=零回归、extensionless/dotfile（ext=`""`）两态都无徽章、renderRow 是纯函数非 memo→toggle 即时刷新全行。验收：r155-e2e 11/11、r91 10/10、r96 17/17、typecheck/cargo 全绿、截图实证（ON 时 Ideas[MD]/diagram[PNG]/config[JSON] 全显徽章、文件夹无）。**桌面 probe N/A**（Explorer DOM 显示、平台无关，同 R150/R151）。
+>
+> ㊽ Explorer/Files 设置。**Gate**：① Obsidian「Detect all file extensions」=Files & Links 设置，默认 OFF；文档化效果「show all file types in the file explorer」+ 观察效果=ON 时 markdown 笔记也显 `.md` 扩展名（OFF 时笔记隐 `.md`）。② grep Geode 现状：`vault.ts listTree` 已含 `files`+`binaryFiles`（**Explorer 已显示所有文件、不按扩展名过滤** → Obsidian「显示未识别类型」效果在 Geode 已恒为真）；`Explorer.tsx:804` 已把**非 md 扩展名**渲为独立 `.explorer-ext` 徽章（dimmed 小写转大写 pill、`var(--text-faint)`/`var(--code-bg)`），gate=`node.extension !== "md"`。→ 唯一缺口 = ON 时让 `.md` 也显徽章。**结论：放宽一个 gate 即可**（`.explorer-name`=basename 与 rename `initial`=label **完全不动** → 零回归、零 rename 影响）。
+
+**契约（加性；最小改）**：
+- **`core/appearance.ts`**：`detectAllExtensions` Store（默认 `false`=Obsidian default）+ `geode.detectAllExtensions` 持久 + `setDetectAllExtensions`（镜像 showLineNumbers）。
+- **`Explorer.tsx`**：`const detectAll = useStore(detectAllExtensions)`；`.explorer-ext` 徽章 gate 从 `!isFolder && node.extension !== "md" && node.extension !== ""` 改为 `!isFolder && node.extension !== "" && (detectAll || node.extension !== "md")`；徽章 span 加 `data-testid="explorer-ext"`。**`.explorer-name`（=basename）+ RenameInput `initial`（=label）逐字不动**。
+- **`SettingsModal.tsx`**：Files/Explorer 节加 toggle（data-testid `settings-detect-extensions-toggle`）。
+- **dict.views.ts**：`settings.detectAllExtensions` + desc EN+ZH。
+
+**数据安全**：纯显示 toggle（localStorage flag + 放宽渲染 gate），**零 vault/.md 写**、不动 markdown.ts、不动 rename/vault 路径逻辑 = 零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r155-e2e）= 默认 OFF → `.md` 行无 `.explorer-ext` 徽章 + `.png` 行有「PNG」徽章；toggle ON → `.md` 行显「MD」徽章；OFF 回退隐 md 徽章；reload 持久。桌面 probe N/A（Explorer DOM 显示、平台无关逻辑，同 R150/R151 纯前端轮）。
+
+**v1 nuance（文档化）**：Obsidian ON 时把扩展名**附加进文件名文本**（"Note.md"）；Geode 沿用自身既有设计=**独立 dimmed 徽章**（"Note" + [MD] pill），与 Geode 渲染所有非 md 扩展名的方式**内部一致**——观察效果（md 扩展名现可见）已交付。rename `initial` 仍=basename（不随设置变，rename 语义出本轮范围）。
+
+---
+
 ## Round 154 additions — 反链笔记底部内嵌「Backlinks in document」（㊷ · 阅读视图 DOM 追加不动 markdown.ts · 零 data-safety）【As-built v0.151】
 
 > **状态：As-built（已交付）。** ㊷ 反链增强（换子系统，编辑器设置后转反链）。**Gate**：WebFetch obsidian.md/help/plugins/backlinks 确认 Obsidian「Backlink in document」设置=「show the backlinks at the bottom of your note」（默认 OFF=opt-in）；grep 确认 `getBacklinks(path):BacklinkEntry[]`（core、含 `{sourcePath, contexts:[{snippet, from}]}`=snippet 已在）→ 用**纯 core 数据**渲一个反链区在阅读视图底部、**不 import features/backlinks（分层）、不改 markdown.ts（避 §C）**。**纯读 click→openFile 零 data-safety**。验收：r154-e2e 13/13、r26-bytes 0 violation、r152 12/12、r41 21/21、typecheck/cargo/build 全绿、双端=浏览器实测+截图（桌面 probe N/A：阅读视图 DOM、平台无关、WKWebView App-Nap-不可靠，同 R152/R29）。
