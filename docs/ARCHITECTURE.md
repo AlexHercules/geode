@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 126 additions — compat CachedMetadata.frontmatterLinks（属性内 wikilink · 插件 API 商业主轴）【As-built v0.123】
+
+> **状态：As-built（v0.123 交付，2026-06-20）。** Obsidian `getFileCache(file).frontmatterLinks: FrontmatterLinkCache[]` 现真实现——frontmatter 属性值里的 `[[wikilink]]`（如 `related: "[[Note]]"`）。Dataview / 图谱 / 链接感知类插件读属性链接的命脉。纯读、零改 core。**选项说明**：HANDOFF 默认下一项是 `MarkdownView.setMode`，但 gate 发现 setMode 非干净公共 API（代码库注释已记「插件改用 leaf.setViewState」），而 frontmatterLinks 是真实 CachedMetadata 字段、延续 R119/R124/R125 parser 家族、价值更高 → 自主改取 frontmatterLinks（§自主契约授权择最贴近 Obsidian 的方案）。
+
+**契约（加性；新 FrontmatterLinkCache 类型 + 属性扫描器）**：
+- `compat/obsidian/metadata.ts`：`FrontmatterLinkCache extends Reference {key: string}`（**无 position**——Obsidian 用 `key`=属性路径标识，区别于 LinkCache）+ `CachedMetadata.frontmatterLinks?`。新 `buildFrontmatterLinks(fields)`：遍历 core `frontmatter.fields`（`Record<string, string|string[]>`），string 值在自身 `key` 下扫描、list 值第 N 元素在 `key.N` 下扫描（Obsidian 编码）；每个 `[[..]]` → `{key, link: m[1].trim()（无 #subpath）, original: m[0], displayText?: m[2]?.trim()}`。`FM_WIKILINK_RE` **逐字镜像 core `WIKILINK_RE`**（`metadata.ts:19`，target 排除 `#subpath`）→ frontmatterLinks.link 与 body LinkCache.link 报告口径一致。wire 在 buildCache 的 `if (meta.frontmatter)` 块——**只需 fields、不需 content**，故**跨过 no-content warm-up transient**（不像 sections/listItems 受 content 门控，是改进）。
+
+**对抗评审（reviewer 6 维 + 独立校准 → 0 confirmed 代码缺陷，"ship it"）：**
+- **reviewer 实证证伪全维**：key 编码（`key.N` 对交错非链接元素仍保索引对齐——块列表 `["[[A]]","plain","[[B]]"]`→`key.0`+`key.2`）· 正则安全（`g`-flag + `matchAll` 实证无状态泄漏、`lastIndex` 恒 0、`[[[[[[`/未闭合/10万字符/CJK/`[[a]]b]]` 均 <0.15ms 线性无回溯）· 与 body link 口径一致（`link` 去 subpath、`displayText` 仅 alias、`original` 裸 `[[..]]`）· no-content transient 安全且是改进（`FrontmatterData.fields` 非可选恒在）· 纯读不改入参 · 分层加性零回归。**唯一理论隐患落在 core 上游**（inline 列表 `.filter(Boolean)` 对空元素会移位索引——非本轮 diff、规范引号/块列表形不可达）。
+- **faithfulness 校准（自做 WebFetch，reviewer 无 WebFetch）**：`FrontmatterLinkCache extends Reference {link, original, displayText?} + key`，官方 `CachedMetadata.frontmatterLinks: FrontmatterLinkCache[]` 确认（无 position）。官方文档**未说明** frontmatter 是否含 markdown 式 `[text](url)` 链接 → Geode **只捕获 `[[wikilink]]`**（Properties UI 产出的规范形式）；**markdown 式属性链接 = 文档化偏离**（待后续）。
+- **文档化偏离（设计结果、非缺陷）**：① `link` 去 `#subpath`（与 body LinkCache.link 一致、Geode 内部自洽，差 Obsidian 的「含 subpath」）· ② `displayText` 仅在有 `|alias` 时设（沿用本文件 line 483 既有约定，Obsidian 可能恒设）· ③ core frontmatter parser 对**未引号** `k: [[X]]` 的 inline-array 启发式误判为列表（`["[X]"]`）——规范的引号形式 `k: "[[X]]"` 正常，未引号 = core 上游限制、文档化 · ④ `original` = 裸 `[[..]]`（不含 YAML 引号，正确）。
+- **元教训（pool 拐点的自主决策）**：HANDOFF「下一项」是计划快照——gate 揭露其默认项（setMode）实为非干净 API，自主改取真实高价值字段。**§两道前置门第一道（grep 现状）再次救场**（同 R93/R103/R73）：不只「确认真缺口」，也「揭露计划项本身不该做」。
+
+**套件**：typecheck 0 · cargo build exit 0 · r126-e2e **11/11**（string/alias/subpath/一值两链/inline-array/block-list key 编码 + 无链接 + 无 frontmatter 缺省）· r126-probe **7/7** 真 WKWebView 原生 fs index（keys/links/originals/displayText + body 链接排除）· 回归 r125 16/16 · r124 10/10 · r119 10/10 · 简化门 clean（diff ~40 行单文件、无 ≥8 行 token 重复——FM_WIKILINK_RE 镜像 core 但跨模块不可共享、`displayText` spread 为 1 行）。**剩余缺口（compat 商业主轴）**：`MarkdownView.setMode`（非干净 API，价值低）· `CachedMetadata.footnotes`/`footnoteRefs`/`referenceLinks`（getFileCache 形状余项，core 已有 footnotes 数据可桥接）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· **`file-menu`/`editor-menu` 钩子**（**阻塞面最大、宜单独拍板**）。
+
 ## Round 125 additions — compat CachedMetadata.listItems（列表项 parser · 插件 API 商业主轴）【As-built v0.122】
 
 > **状态：As-built（v0.122 交付，2026-06-20）。** Obsidian `getFileCache(file).listItems: ListItemCache[]`（每个列表项一条）现真实现——**顶层块近似**（缩进栈解析 parent，非完整 CommonMark parse）。Tasks / Dataview 等任务·列表分析类插件的命脉。纯读、零改 core（与 R124 sections 同 buildCache choke point）。
