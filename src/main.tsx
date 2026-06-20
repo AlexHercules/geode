@@ -351,6 +351,28 @@ async function bootstrap() {
       modifier,
     );
 
+  // R149: §D-safe synchronous probe of compat Keymap.isModEvent — builds a synthetic mouse or
+  // keyboard event with the given modifier flags (+ mouse button) and reports the pane-type result.
+  const kmeHost = globalThis as unknown as {
+    __geodeKeymapIsModEvent?: (
+      kind: "mouse" | "keyboard",
+      flags: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean; button?: number },
+    ) => string | boolean;
+  };
+  kmeHost.__geodeKeymapIsModEvent = (kind, flags) => {
+    const init = {
+      ctrlKey: !!flags.ctrl,
+      metaKey: !!flags.meta,
+      shiftKey: !!flags.shift,
+      altKey: !!flags.alt,
+    };
+    const evt =
+      kind === "mouse"
+        ? new MouseEvent("mousedown", { ...init, button: flags.button ?? 0 })
+        : new KeyboardEvent("keydown", init);
+    return Keymap.isModEvent(evt);
+  };
+
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).
   // Distinct key from __geodeRename (file rename) and __geodeTag (R-?? tag

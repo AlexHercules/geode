@@ -106,9 +106,19 @@ export class Scope {
 export type UserEvent = MouseEvent | KeyboardEvent | TouchEvent | PointerEvent;
 
 export class Keymap {
-  /** 'Translates an event into the type of pane that should open': mod -> "tab". */
+  /** R149: 'Translates an event into the type of pane that should open'. "tab" if
+   *  Cmd/Ctrl held OR middle-click; "split" if Cmd/Ctrl+Alt; "window" if
+   *  Cmd/Ctrl+Alt+Shift (most-specific first). @since 0.16.0 */
   static isModEvent(evt?: UserEvent | null): PaneType | boolean {
-    return evt && (evt.ctrlKey || evt.metaKey) ? "tab" : false;
+    if (!evt) return false;
+    // the platform mod key (Cmd on macOS, Ctrl elsewhere) — reuse isModifier so the
+    // two Keymap helpers stay consistent (R149 review: not the cross-platform either-mod).
+    const mod = Keymap.isModifier(evt, "Mod");
+    if (mod && evt.altKey && evt.shiftKey) return "window";
+    if (mod && evt.altKey) return "split";
+    if (mod) return "tab";
+    if (evt instanceof MouseEvent && evt.button === 1) return "tab"; // middle-click
+    return false;
   }
 
   /** R148: Obsidian `Keymap.isModifier(evt, modifier)` — whether `modifier` is held
