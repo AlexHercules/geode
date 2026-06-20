@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 146 additions — compat `WorkspaceLeaf.setPinned` + `togglePinned`（插件 API 商业主轴 · 复用 R39 tab-pin · 零 data-safety）【As-built v0.143】
+
+> **状态：As-built（v0.143 交付，2026-06-20）。对抗评审 7 维 → 1 MINOR 确认修+e2e 锁 + 余全证伪 + 简化门 clean（1 文件跳过条件）。** compat surface 审计轮（R144 方法复用）。**Gate 路径（两道核查，R138/R144 教训）**：① **stale-gap 核查**——HANDOFF 默认项 Properties 增强续经 grep 揭示**全已实现**：tags chip 点击搜索=R83（`PropertiesPanel.searchTag`）、File properties 右栏=R86（`FilePropertiesPanel`）→ Properties 候选**已枯竭/或非 faithful（date→日记 Obsidian 无此行为）**，弃。② **compat surface 审计**——`curl` 全量 obsidian.d.ts，比对 Vault/Notice/MetadataCache/Component/Workspace/WorkspaceLeaf 等类的 `@public` 方法 vs Geode compat：多数已全（R111–R144 填过），**真·缺失且 bounded+faithful 的**=`WorkspaceLeaf.setPinned(pinned:boolean)` + `togglePinned()`（均 `@public`）——Geode 有 R39 tab-pin（`core/workspace.toggleTabPin` + `TabState.pinned`）但 compat 的 WorkspaceLeaf facade 没暴露→插件调 `leaf.setPinned(true)` 即 `is not a function` 崩。**零 data-safety**（纯 tab UI 态，复用 vetted `toggleTabPin`，无 vault/.md 写）。
+
+**契约（加性；compat WorkspaceLeaf 两方法）**：
+- **`compat/obsidian/workspace.ts` WorkspaceLeaf 类**：`togglePinned(): void`（`const tab=findActiveTab(handle.workspace.state.get()); if(tab) handle.workspace.toggleTabPin(tab.id)`）；`setPinned(pinned): void`（同上但 **toggle-if-differs**：`if(tab && !!tab.pinned !== pinned) toggleTabPin(tab.id)`——幂等设具体值、复用 toggleTabPin 不加 core 方法）。**facade 口径**=操作 `findActiveTab`（与既有 getViewState/getDisplayText/detach **同一 facade 语义**=Geode WorkspaceLeaf 是活动 tab 的薄 facade、文档化）。`findActiveTab`/`toggleTabPin` 均已 import/可达。
+- **不动 core**（toggle-if-differs 复用既有 `toggleTabPin`，零核心改）。
+
+**数据安全**：纯 tab pin 状态（React + core workspace state），复用 R39 vetted `toggleTabPin`（pin 不动文档内容/不触 autosave）=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r146-e2e）= 开文件→活动 tab；`window.app.workspace.activeLeaf.setPinned(true)`→活动 tab `.is-pinned` + setPinned(false)→去 pin + setPinned 幂等（重复设同值不抖）+ togglePinned 翻转。桌面 probe = **N/A**（纯 React/core tab 状态、无 WKWebView 特异 DOM/fs 行为，同 R142/R143 纯态轮；浏览器 e2e 用真开 tab 全覆盖）。
+
+**data-testid**：复用既有 tab `.is-pinned` class（`.tab-pin` 指示）。
+
+**对抗评审（reviewer 7 维 → 1 MINOR 确认修+e2e 锁 + 余证伪）：** **F1 MINOR（已修+锁）**：`SidebarViewLeaf extends WorkspaceLeaf` **继承**新 setPinned/togglePinned 但无 override——而该子类 override 了**每一个** findActiveTab-based 方法（view/openFile/getViewState/setViewState/getDisplayText/detach）正是为了「侧栏 leaf 不该操作主区活动 tab」。我新增两方法破了这条不变量→插件调 `getRightLeaf(false).setPinned(true)` 会 findActiveTab 在**主编辑区**、pin 一个无关主区 tab（R39 nav 副作用）。**修**=`SidebarViewLeaf` 加 `override togglePinned(){}` + `override setPinned(_){}` no-op（faithful=Geode 侧栏面板非可固定 tab），镜像子类既有 override 纪律 + 补 3 e2e 锁（侧栏 leaf pin 不动主区 tab）。**证伪**：setPinned 幂等 4 组合全对（`!!tab.pinned !== pinned`、`!!` 必需因 R39 omit-false→undefined）· togglePinned 翻转正确 · facade 操作 findActiveTab 与既有方法同语义 · toggleTabPin 复用 data-safety（仅改 pinned flag、零 .md/autosave 写）· `handle.workspace.toggleTabPin` 真方法非 any · 边角（无活动 tab→null guard no-op、split 内 findTabLeaf 重定位、连续调幂等）。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r146-e2e 12/12**（setPinned true/false + 幂等双设 + togglePinned 翻转 + 方法 shape + **侧栏 leaf pin no-op 不动主区 tab**=F1 锁）· 回归 r39 17/17（tab-pin）·r137 13/13（WorkspaceLeaf setViewState）·r117 9/9 · 简化门 clean（1 文件、≤2 跳过条件）。**桌面 probe N/A**（纯 React/core tab 状态、无 WKWebView 特异行为，同 R142/R143）。
+
+---
+
 ## Round 145 additions — 快捷键面板「只显已分配」过滤 toggle（funnel · 续 R142 设置面 · 零 data-safety）【As-built v0.142】
 
 > **状态：As-built（v0.142 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** ㊾ 续 快捷键面板增强。**Gate 确认真实（防 phantom，R144 教训）**：WebFetch obsidian.md/help/User+interface/Hotkeys 逐字证实——「To show only commands that have assigned hotkeys, select the **filter icon** in Settings → Hotkeys」→ Obsidian 真有此 funnel filter（ON=只显已绑定快捷键的命令）。HotkeysSection 现有文本 filter（R 早轮），R145 加一个 funnel toggle 与之并排。**纯前端 UI 过滤态、零 data-safety**（同 R143/R142 设置面）。
