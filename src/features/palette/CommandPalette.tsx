@@ -6,7 +6,7 @@ import { locale, useI18n } from "@core/i18n";
 import { getCommandName, formatHotkey } from "@core/commands";
 import type { Command } from "@core/types";
 import { fuzzyMatch, toSegments, type FuzzyMatch } from "@core/fuzzy";
-import { loadRecentCommands, recordRecentCommand } from "./commandMru";
+import { loadRecentCommands, recordRecentCommand, loadPinnedCommands } from "@core/commandMru";
 import "./palette.css";
 
 interface Row {
@@ -32,16 +32,19 @@ export function CommandPalette() {
     const hotkey = (cmd: Command) => app.commands.getEffectiveHotkey(cmd.id);
     const q = query.trim();
     if (!q) {
-      // R141: empty query → recently-used commands first (MRU order), then the rest (alpha). Recent
-      // ids are filtered against `all`, so unregistered/unavailable recents are skipped. Once the user
-      // types, fuzzy score takes over (Obsidian: recents are subject to fuzzy matching when filtering).
+      // Empty query → pinned commands first (R142, pin order), then recently-used (R141, MRU order),
+      // then the rest (alpha). Stored ids are resolved against `all`, so unregistered/unavailable ones
+      // are skipped; recent excludes anything already pinned. Once the user types, fuzzy score takes
+      // over (Obsidian: both pinned and recents give way to fuzzy matching when filtering).
       const byId = new Map(all.map((cmd) => [cmd.id, cmd]));
-      const recent = loadRecentCommands(app.vault.vaultName)
-        .map((id) => byId.get(id))
-        .filter((cmd): cmd is Command => cmd !== undefined);
-      const recentIds = new Set(recent.map((cmd) => cmd.id));
-      const rest = all.filter((cmd) => !recentIds.has(cmd.id));
-      return [...recent, ...rest].map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
+      const resolve = (ids: string[]) =>
+        ids.map((id) => byId.get(id)).filter((cmd): cmd is Command => cmd !== undefined);
+      const pinned = resolve(loadPinnedCommands(app.vault.vaultName));
+      const pinnedIds = new Set(pinned.map((cmd) => cmd.id));
+      const recent = resolve(loadRecentCommands(app.vault.vaultName)).filter((cmd) => !pinnedIds.has(cmd.id));
+      const placed = new Set([...pinnedIds, ...recent.map((cmd) => cmd.id)]);
+      const rest = all.filter((cmd) => !placed.has(cmd.id));
+      return [...pinned, ...recent, ...rest].map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
     }
     return all
       .map((cmd) => ({ cmd, match: fuzzyMatch(q, getCommandName(cmd)), hotkey: hotkey(cmd) }))

@@ -663,6 +663,123 @@
   color: var(--text-normal);
 }
 
+/* ---- Command palette section (R142 pinned commands) ---- */
+.cmdpalette-add {
+  position: relative;
+  margin-bottom: 18px;
+}
+
+.cmdpalette-add-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text-normal);
+}
+
+.cmdpalette-add-input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-input);
+  color: var(--text-normal);
+  font-size: 13px;
+  outline: none;
+}
+
+.cmdpalette-add-input:focus {
+  border-color: var(--accent);
+}
+
+.cmdpalette-add-input::placeholder {
+  color: var(--text-faint);
+}
+
+.cmdpalette-add-list {
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-input);
+  padding: 4px;
+}
+
+.cmdpalette-add-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-normal);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cmdpalette-add-item:hover {
+  background: var(--bg-hover);
+}
+
+.cmdpalette-add-empty {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.cmdpalette-pinned-heading {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.cmdpalette-pinned-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.cmdpalette-pinned-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cmdpalette-pinned-row:last-child {
+  border-bottom: none;
+}
+
+.cmdpalette-pinned-name {
+  font-size: 13px;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cmdpalette-unpin {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+.cmdpalette-unpin:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
+
 .hotkey-edit.is-capturing {
   border-color: var(--accent);
   color: var(--accent);

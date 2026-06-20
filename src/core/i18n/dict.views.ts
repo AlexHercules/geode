@@ -11,6 +11,7 @@ export const en = {
   "settings.section.appearance": "Appearance",
   "settings.section.plugins": "Plugins",
   "settings.section.hotkeys": "Hotkeys",
+  "settings.section.commandPalette": "Command palette",
   "settings.section.about": "About",
 
   // ---- settings: appearance ----
@@ -180,6 +181,15 @@ export const en = {
   "settings.customize": "Customize",
   "settings.cancel": "Cancel",
 
+  // ---- settings: command palette (R142) ----
+  "settings.cmdPalette.note": "Pinned commands appear at the top of the command palette.",
+  "settings.cmdPalette.newPinned": "New pinned command",
+  "settings.cmdPalette.selectCommand": "Select a command…",
+  "settings.cmdPalette.pinnedHeading": "Pinned commands",
+  "settings.cmdPalette.empty": "No pinned commands yet.",
+  "settings.cmdPalette.unpin": "Remove from pinned commands",
+  "settings.cmdPalette.noMatch": "No matching commands.",
+
   // ---- settings: about ----
   "settings.aboutDesc":
     "Geode is a local-first markdown knowledge base. Your notes are plain files on your own disk — link them with wikilinks, follow backlinks, and explore the connections between ideas in an interactive graph.",
@@ -315,6 +325,7 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.section.appearance": "外观",
   "settings.section.plugins": "插件",
   "settings.section.hotkeys": "快捷键",
+  "settings.section.commandPalette": "命令面板",
   "settings.section.about": "关于",
 
   // ---- settings: appearance ----
@@ -471,6 +482,15 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.hotkeyResetAria": "恢复 {name} 的默认快捷键",
   "settings.customize": "自定义",
   "settings.cancel": "取消",
+
+  // ---- settings: command palette (R142) ----
+  "settings.cmdPalette.note": "固定的命令会显示在命令面板顶部。",
+  "settings.cmdPalette.newPinned": "新增固定命令",
+  "settings.cmdPalette.selectCommand": "选择命令…",
+  "settings.cmdPalette.pinnedHeading": "已固定命令",
+  "settings.cmdPalette.empty": "暂无固定命令。",
+  "settings.cmdPalette.unpin": "从固定命令中移除",
+  "settings.cmdPalette.noMatch": "没有匹配的命令。",
 
   // ---- settings: about ----
   "settings.aboutDesc":

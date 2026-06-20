@@ -58,6 +58,7 @@ import {
   setUniqueNoteTemplate,
 } from "@core/uniqueNote";
 import { getCommandName, hotkeyFromEvent, formatHotkey, isMacPlatform } from "@core/commands";
+import { loadPinnedCommands, setPinnedCommands } from "@core/commandMru";
 import {
   pagePreviewEnabled,
   pagePreviewRequireModifier,
@@ -97,9 +98,9 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.138.0";
+const APP_VERSION = "0.139.0";
 
-type SectionId = "appearance" | "plugins" | "hotkeys" | "about";
+type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
 /**
  * Set by the `app:check-updates` command right before it opens the settings
@@ -118,6 +119,7 @@ const SECTIONS: Array<{ id: SectionId; labelKey: I18nKey; icon: string }> = [
   { id: "appearance", labelKey: "settings.section.appearance", icon: "sun" },
   { id: "plugins", labelKey: "settings.section.plugins", icon: "puzzle" },
   { id: "hotkeys", labelKey: "settings.section.hotkeys", icon: "command" },
+  { id: "command-palette", labelKey: "settings.section.commandPalette", icon: "pin" },
   { id: "about", labelKey: "settings.section.about", icon: "book-open" },
 ];
 
@@ -178,6 +180,7 @@ export function SettingsModal() {
           {section === "appearance" && <AppearanceSection />}
           {section === "plugins" && <PluginsSection />}
           {section === "hotkeys" && <HotkeysSection />}
+          {section === "command-palette" && <CommandPaletteSection />}
           {section === "about" && <AboutSection />}
         </div>
       </div>
@@ -1489,6 +1492,118 @@ function HotkeysSection() {
               </div>
             );
           })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------------- Command palette ---------------- */
+
+/** Faithful to Obsidian's "Settings → Command palette": pin commands (shown at the top of the
+ *  palette on an empty query) via a "Select a command" picker, and unpin them from a list. Pure
+ *  per-vault localStorage UI (R142) — no vault writes. */
+function CommandPaletteSection() {
+  const app = useApp();
+  const t = useI18n();
+  useStore(app.commands.revision); // re-render on (un)register so the picker stays current
+  const vault = app.vault.vaultName;
+  const [pins, setPins] = useState<string[]>(() => loadPinnedCommands(vault));
+  const [addQuery, setAddQuery] = useState("");
+
+  const writePins = (next: string[]) => {
+    setPins(next);
+    setPinnedCommands(vault, next);
+  };
+  const pin = (id: string) => {
+    if (!pins.includes(id)) writePins([...pins, id]);
+    setAddQuery("");
+  };
+  const unpin = (id: string) => writePins(pins.filter((p) => p !== id));
+
+  const pinnedSet = new Set(pins);
+  /* pinned rows in pin order, resolving each id to its live command (skip unregistered ids) */
+  const pinnedRows = pins
+    .map((id) => app.commands.list().find((cmd) => cmd.id === id))
+    .filter((cmd): cmd is NonNullable<typeof cmd> => cmd !== undefined);
+
+  /* picker: unpinned commands matching the query (substring, capped) — only while typing */
+  const q = addQuery.trim().toLowerCase();
+  const candidates = q
+    ? app.commands
+        .list()
+        .filter(
+          (cmd) =>
+            !pinnedSet.has(cmd.id) &&
+            (getCommandName(cmd).toLowerCase().includes(q) || cmd.id.toLowerCase().includes(q)),
+        )
+        .slice(0, 50)
+    : [];
+
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.section.commandPalette")}</h2>
+      <p className="settings-note">{t("settings.cmdPalette.note")}</p>
+
+      <div className="cmdpalette-add">
+        <label className="cmdpalette-add-label">{t("settings.cmdPalette.newPinned")}</label>
+        <input
+          className="cmdpalette-add-input"
+          type="text"
+          value={addQuery}
+          onChange={(e) => setAddQuery(e.target.value)}
+          placeholder={t("settings.cmdPalette.selectCommand")}
+          spellCheck={false}
+          aria-label={t("settings.cmdPalette.selectCommand")}
+          data-testid="cmdpalette-add-input"
+        />
+        {q && (
+          <div className="cmdpalette-add-list" role="listbox">
+            {candidates.length === 0 ? (
+              <div className="cmdpalette-add-empty">{t("settings.cmdPalette.noMatch")}</div>
+            ) : (
+              candidates.map((cmd) => (
+                <button
+                  key={cmd.id}
+                  className="cmdpalette-add-item"
+                  role="option"
+                  data-id={cmd.id}
+                  data-testid="cmdpalette-add-item"
+                  onClick={() => pin(cmd.id)}
+                >
+                  {getCommandName(cmd)}
+                </button>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      <h3 className="cmdpalette-pinned-heading">{t("settings.cmdPalette.pinnedHeading")}</h3>
+      {pinnedRows.length === 0 ? (
+        <div className="settings-empty" data-testid="cmdpalette-pinned-empty">
+          {t("settings.cmdPalette.empty")}
+        </div>
+      ) : (
+        <div className="cmdpalette-pinned-list">
+          {pinnedRows.map((cmd) => (
+            <div
+              className="cmdpalette-pinned-row"
+              key={cmd.id}
+              data-testid={`cmdpalette-pinned-row-${cmd.id}`}
+            >
+              <span className="cmdpalette-pinned-name">{getCommandName(cmd)}</span>
+              <button
+                className="cmdpalette-unpin"
+                title={t("settings.cmdPalette.unpin")}
+                aria-label={t("settings.cmdPalette.unpin")}
+                data-testid={`cmdpalette-unpin-${cmd.id}`}
+                onClick={() => unpin(cmd.id)}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </section>
