@@ -182,7 +182,10 @@ export function Explorer() {
   }, [ws]);
 
   const [expanded, setExpanded] = useState<Set<string>>(loadExpanded);
+  // `selected` is the single lead/anchor (keyboard / F2 / rename target + Shift-range anchor +
+  // scroll-into-view). R138 adds `selection` = the multi-selection Set that drives `is-selected`.
   const [selected, setSelected] = useState<string | null>(null);
+  const [selection, setSelection] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<string | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   /* R97: path being moved via the "Move to…" folder picker (null = closed) */
@@ -331,7 +334,7 @@ export function Explorer() {
     }
     if (dest) expandAncestors(path);
     app.workspace.openFile(path);
-    setSelected(path);
+    selectOnly(path);
     setRenaming(path);
   };
 
@@ -346,12 +349,12 @@ export function Explorer() {
       return;
     }
     if (dest) expandAncestors(path);
-    setSelected(path);
+    selectOnly(path);
     setRenaming(path);
   };
 
   const startRename = (node: VaultNode) => {
-    setSelected(node.path);
+    selectOnly(node.path);
     setRenaming(node.path);
   };
 
@@ -379,7 +382,16 @@ export function Explorer() {
       console.error("[explorer] delete failed", err);
       return;
     }
-    if (selected === node.path) setSelected(null);
+    // R138 review: prune the deleted node AND its descendants (folder delete) from the selection +
+    // lead, mirroring remapPaths' prefix logic — else a selected `folder/a.md` lingers and would
+    // phantom-highlight a file later recreated at that path.
+    const isUnder = (p: string) => p === node.path || p.startsWith(node.path + "/");
+    setSelection((s) => {
+      const n = new Set<string>();
+      for (const p of s) if (!isUnder(p)) n.add(p);
+      return n;
+    });
+    if (selected !== null && isUnder(selected)) setSelected(null);
   };
 
   /* ---------------- R93 context-menu open / copy ---------------- */
@@ -411,7 +423,7 @@ export function Explorer() {
       return;
     }
     expandAncestors(dest);
-    setSelected(dest);
+    selectOnly(dest);
     if (node.extension === "md") app.workspace.openFile(dest);
   };
 
@@ -454,7 +466,7 @@ export function Explorer() {
       return;
     }
     if (node.kind === "folder") setExpanded((prev) => remapPaths(prev, node.path, newPath));
-    setSelected(newPath);
+    selectOnly(newPath);
   };
 
   /* ---------------- R28 drag-to-move ---------------- */
@@ -498,7 +510,7 @@ export function Explorer() {
     }
     if (isFolder) setExpanded((prev) => remapPaths(prev, fromPath, newPath));
     expandAncestors(newPath); // open the destination folder so the item is visible
-    setSelected(newPath);
+    selectOnly(newPath);
   };
 
   const isExplorerDrag = (e: React.DragEvent) => e.dataTransfer.types.includes(EXPLORER_MIME);
@@ -541,8 +553,43 @@ export function Explorer() {
     setExpanded(anyExpanded ? new Set() : new Set(allFolders));
   };
 
+  /* ---------------- selection (R138 multi-select) ---------------- */
+
+  /** collapse the selection to a single path (the lead) — every plain-click / single-target op. */
+  const selectOnly = (path: string) => {
+    setSelected(path);
+    setSelection(new Set([path]));
+  };
+  const clearSelection = () => {
+    setSelected(null);
+    setSelection(new Set());
+  };
+  /** Cmd/Ctrl-click: toggle this path in/out of the selection; it becomes the new anchor. */
+  const toggleSelect = (path: string) => {
+    setSelected(path);
+    setSelection((s) => {
+      const next = new Set(s);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+  /** Shift-click: select the contiguous range anchor→clicked in render order. The anchor (`selected`)
+   *  stays fixed so successive Shift-clicks re-range from it (Obsidian). No anchor → plain select. */
+  const rangeSelect = (path: string) => {
+    const clickIdx = rows.findIndex((r) => r.node.path === path);
+    if (clickIdx === -1) return;
+    const anchorIdx = rows.findIndex((r) => r.node.path === selected);
+    if (anchorIdx === -1) {
+      selectOnly(path);
+      return;
+    }
+    const [lo, hi] = anchorIdx <= clickIdx ? [anchorIdx, clickIdx] : [clickIdx, anchorIdx];
+    setSelection(new Set(rows.slice(lo, hi + 1).map((r) => r.node.path)));
+  };
+
   const activateNode = (node: VaultNode) => {
-    setSelected(node.path);
+    selectOnly(node.path);
     if (node.kind === "folder") toggleFolder(node.path);
     else app.workspace.openFile(node.path);
   };
@@ -559,7 +606,12 @@ export function Explorer() {
       if (idx === -1) next = e.key === "ArrowDown" ? 0 : rows.length - 1;
       else next = e.key === "ArrowDown" ? Math.min(idx + 1, rows.length - 1) : Math.max(idx - 1, 0);
       const row = rows[next];
-      if (row) setSelected(row.node.path);
+      if (row) selectOnly(row.node.path);
+    } else if (e.key === "Escape") {
+      if (selection.size > 0) {
+        e.preventDefault();
+        clearSelection();
+      }
     } else if (e.key === "Enter") {
       const row = rows.find((r) => r.node.path === selected);
       if (row) {
@@ -589,7 +641,7 @@ export function Explorer() {
     const isFolder = node.kind === "folder";
     const isOpen = isFolder && expanded.has(node.path);
     const isActive = !isFolder && node.path === activeFile;
-    const isSelected = node.path === selected;
+    const isSelected = selection.has(node.path);
     const isRenaming = node.path === renaming;
     const isDragging = node.path === draggingPath;
     const isDropTarget = dropTarget !== null && dropTarget !== "" && node.path === dropTarget;
@@ -617,15 +669,23 @@ export function Explorer() {
           setDraggingPath(null);
           setDropTarget(null);
         }}
-        onClick={() => {
-          if (!isRenaming) activateNode(node);
+        onClick={(e) => {
+          if (isRenaming) return;
+          // R138: Cmd/Ctrl-click toggles the path in the selection; Shift-click selects the range
+          // from the anchor; either modifier suppresses open/expand (the gesture is selection, not nav)
+          if (e.metaKey || e.ctrlKey) toggleSelect(node.path);
+          else if (e.shiftKey) rangeSelect(node.path);
+          else activateNode(node);
         }}
         onContextMenu={(e) => {
           e.preventDefault();
           // R93: don't bubble to the tree-container handler (which opens the
           // empty-area root menu) — a row click owns its own node menu
           e.stopPropagation();
-          setSelected(node.path);
+          // R138: right-click INSIDE a multi-selection keeps it (so a future files-menu acts on all);
+          // right-click outside collapses to this node (Obsidian behavior)
+          if (selection.has(node.path)) setSelected(node.path);
+          else selectOnly(node.path);
           // R130: collect plugin file-menu items ONCE here (fires the 'file-menu' event via the
           // core provider), so re-renders don't re-run plugin handlers
           const contributed = app.plugins.collectFileMenu({
@@ -722,7 +782,7 @@ export function Explorer() {
           // R93: right-click on empty tree area → root New note / New folder menu
           // (rows stopPropagation, so this only fires for genuine empty-area clicks)
           e.preventDefault();
-          setSelected(null);
+          clearSelection();
           setMenu({ x: e.clientX, y: e.clientY, node: null, contributed: [] });
         }}
         onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
