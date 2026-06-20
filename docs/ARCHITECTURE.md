@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 144 additions — compat Menu API 补全（`static forEvent` + `setParentElement` · 插件 API 商业主轴 · 零 data-safety）【As-built v0.141】
+
+> **状态：As-built（v0.141 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** 换口味 compat 小项。**Gate 否决 setSubmenu（R128/R137/R138 反 completionism 又一次）**：HANDOFF 默认项 `MenuItem.setSubmenu`——`curl` 拉全量 obsidian.d.ts（8482 行）`grep setSubmenu` = **0 命中**；官方 docs `MenuItem` 页只列 8 方法（onClick/setChecked/setDisabled/setIcon/setIsLabel/setSection/setTitle/setWarning）Geode **已全有**；`setSubmenu` dedicated docs 页「does not exist」→ **setSubmenu 不是 public API、不实现**（造它=发明 Obsidian 没有的方法=反 faithful）。**但同次 d.ts 比对揪出两个【真·缺失】public Menu 方法**：`setParentElement(el: HTMLElement): this`(@0.16.0) + `static forEvent(evt: PointerEvent|MouseEvent): Menu`(@1.6.0)——后者是 Obsidian 1.6+ 插件建右键菜单的**现代惯用法**（`Menu.forEvent(evt).addItem(…).showAtMouseEvent(evt)`），Geode 缺它→插件调用即 `Menu.forEvent is not a function` 崩。**零 data-safety**（纯菜单 DOM UI，零 vault/.md 写）。
+
+**契约（加性；compat Menu 两方法）**：
+- **`compat/obsidian/ui.ts` Menu 类**：① 新私有 `parentEl: HTMLElement | null = null`；② `setParentElement(el): this`（存 `parentEl`、返回 this 可链）；③ `static forEvent(evt): Menu`（`const m=new Menu(); if(evt.target instanceof HTMLElement) m.setParentElement(evt.target); return m;`）；④ `showAtPosition` 的 append 从 `document.body` 改 `(this.parentEl?.ownerDocument ?? document).body`——**单窗口 Geode 恒等于 document.body=逐字节零回归**（菜单 `position:fixed` 视口定位、与父无关），但忠实存 parentElement（多窗口 ready）。**不动 showAtPosition 的 `{x,y}` 窄类型**（d.ts 是 `MenuPositionDef{x,y,width?,overlap?,left?}`——present-but-narrow 是另一类 gap、非本轮）。
+- **`main.tsx`**：新 `__geodeMenuProbe()` 测试钩子（镜像 `__geodeProbeRenderChild` 等先例，import `Menu` from `@compat/obsidian/ui`，app 层 bootstrap 可 import compat）——合成 `MouseEvent`（`Object.defineProperty(evt,"target",{value:host})`）→ `Menu.forEvent(evt)` → addItem+onClick → showAtMouseEvent → 点击 item → 返 `{isMenu, chainable, shown, fired}`，e2e + desktop probe 共用、§D-safe 同步。
+
+**数据安全**：纯菜单 DOM 构造/显示，**零 vault/documents/markdown.ts 写**=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r144-e2e）= `__geodeMenuProbe()` 验 forEvent 返 Menu 实例 + setParentElement 可链 + 菜单显示 DOM + item 点击 fire + forEvent 从 evt.target 设 parent；桌面 probe（新 r144-probe）= 真 WKWebView 同 `__geodeMenuProbe` §D-safe。
+
+**data-testid**：复用既有 `compat-menu` / `compat-menu-item`。
+
+**对抗评审（reviewer 8 维全证伪 → 0 confirmed）：** setSubmenu gate-rejection 正确（d.ts 0 命中、phantom API）· forEvent/setParentElement 均 `@public` 真实（d.ts:4280/4307）· showAtPosition 单窗口逐字节等价（parentEl 默认 null→document.body、CollectorMenu 是独立类非 Menu 子类不受影响、editorMenu `new Menu()` 走 null 路径、r130/r131/r139 全绿）· forEvent 永不抛（`evt.target instanceof HTMLElement` 守卫 null/SVG/text-node→跳过仍返 usable Menu）· setParentElement 单窗口忠实 no-op（ownerDocument 恒 document）· position:fixed 视口定位不受 parent 变换祖先影响 · 探针无 DOM/listener 泄漏（host.remove finally + menu.hide detach + shown 在 click 前读）· 分层（app bootstrap 可 import compat、`__geodeMenuProbe` 同 `__geodeProbeRenderChild` 先例）· data-safety 零面。**1 cosmetic（已修）**：parentEl 注释「multi-window stays correct」过度承诺（clamp 仍用主窗口 viewport）→ 改为「单窗口 no-op、clamp 用主窗口视口」。**文档化 out-of-scope**（present-but-narrow，非本轮）：Menu 未 `implements HistoryHandler` + showAtPosition `{x,y}` 窄类型 vs `MenuPositionDef`（运行时无害，插件是 untyped JS、多余字段被忽略）。
+
+**套件**：typecheck 0 · 生产 dist build + cargo release build exit 0 · **r144-e2e 7/7**（forEvent 返 Menu 实例 + setParentElement 可链 + 菜单显示 + item 点击 fire + 二次调用稳定 + 无残留菜单 DOM）· **r144-probe 7/7**（真 WKWebView `__geodeMenuProbe` §D-safe 同步）· 回归 r130 12/12·r131 7/7·r139 14/14（file/editor/files-menu 用 Menu 类零回归）· 简化门 clean（0 编辑）。
+
+---
+
 ## Round 143 additions — 搜索「Match case」全局开关（Aa toggle · 续 R68 case 运算符 · 零 data-safety）【As-built v0.140】
 
 > **状态：As-built（v0.140 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** ㊸ 搜索 UI breather——R68 已实现 `match-case:`/`ignore-case:` 逐词运算符 + `CaseMode="default"|"sensitive"|"insensitive"`（default 现等于 insensitive）；R143 补 Obsidian 搜索栏的**全局「Match case」开关**（`Aa` 按钮）。**faithfulness（WebFetch obsidian.md/help/plugins/search 确认）**：Obsidian 全局搜索栏有「Match case」开关、**默认 OFF（不区分大小写）**、ON=整条查询区分大小写；在搜索栏内。**关键设计=开关只翻转 `default`-mode 词的解释，显式 `match-case:`/`ignore-case:` 运算符永远胜出**（explicit beats global default）；**regex 词不受全局开关影响**（regex 用自己的 `/i` flag + R68 运算符，已有明确机制；全局开关只管纯文本/tag/property 词=bounded、不重编译 regex）。**零 data-safety**（纯只读搜索 + localStorage pref，同 R80 sort/context）。
