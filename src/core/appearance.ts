@@ -112,6 +112,18 @@ export function setShowBacklinksInDocument(on: boolean): void {
   persistBool(BACKLINKS_IN_DOC_KEY, on);
 }
 
+/** R155 (㊽): Obsidian's "Detect all file extensions" — show every file's extension in the
+ *  explorer, including the `.md` on markdown notes. Default OFF (Obsidian default + zero
+ *  regression — Geode already shows non-md extensions as a badge; this just relaxes the gate
+ *  so `.md` notes show their badge too). Consumed by Explorer's `.explorer-ext` render. */
+const DETECT_ALL_EXT_KEY = "geode.detectAllExtensions";
+export const detectAllExtensions = new Store<boolean>(readBool(DETECT_ALL_EXT_KEY, false));
+
+export function setDetectAllExtensions(on: boolean): void {
+  detectAllExtensions.set(on);
+  persistBool(DETECT_ALL_EXT_KEY, on);
+}
+
 /** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
  *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
  *  (zero regression). Consumed by workspace.openFile. */

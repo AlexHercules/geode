@@ -14,6 +14,8 @@ import {
   setAutoPairBrackets,
   showBacklinksInDocument,
   setShowBacklinksInDocument,
+  detectAllExtensions,
+  setDetectAllExtensions,
   defaultNewTabMode,
   setDefaultNewTabMode,
   tabIndentSize,
@@ -102,7 +104,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.151.0";
+const APP_VERSION = "0.152.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -238,6 +240,7 @@ function AppearanceSection() {
   const tFont = useStore(textFont);
   const mFont = useStore(monospaceFont);
   const autoUpdate = useStore(autoUpdateLinks);
+  const detectExt = useStore(detectAllExtensions);
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
   const attachFolder = useStore(attachmentFolder);
@@ -828,6 +831,25 @@ function AppearanceSection() {
       </div>
 
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
+
+      {/* R155: show every file's extension in the explorer, incl .md (Obsidian "Detect all
+          file extensions", default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.detectAllExtensions")}</div>
+          <div className="setting-desc">{t("settings.detectAllExtensionsDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${detectExt ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={detectExt}
+          aria-label={t("settings.detectAllExtensions")}
+          data-testid="settings-detect-extensions-toggle"
+          onClick={() => setDetectAllExtensions(!detectExt)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
 
       <div className="setting-item">
         <div className="setting-info">

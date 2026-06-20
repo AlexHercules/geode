@@ -4,7 +4,7 @@ import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
-import { explorerSort, setExplorerSort } from "@core/appearance";
+import { explorerSort, setExplorerSort, detectAllExtensions } from "@core/appearance";
 import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
@@ -221,6 +221,8 @@ export function Explorer() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const sortKey = useStore(explorerSort);
+  // R155: when ON, show the extension badge on .md notes too (Obsidian "Detect all file extensions")
+  const detectAll = useStore(detectAllExtensions);
   // R96: subscribe so the tree re-renders (re-applying the dim via renderRow's
   // isExcluded) whenever the excluded-files patterns change
   useStore(excludedRaw);
@@ -801,8 +803,10 @@ export function Explorer() {
         ) : (
           <>
             <span className="explorer-name">{label}</span>
-            {!isFolder && node.extension !== "md" && node.extension !== "" && (
-              <span className="explorer-ext">{node.extension}</span>
+            {!isFolder && node.extension !== "" && (detectAll || node.extension !== "md") && (
+              <span className="explorer-ext" data-testid="explorer-ext">
+                {node.extension}
+              </span>
             )}
           </>
         )}
