@@ -35,13 +35,13 @@ await page.waitForSelector(row("m-a"), { timeout: 5000 });
 const clearSel = () => page.locator(".explorer-tree").press("Escape");
 const multiSelect = async (...names) => { for (const n of names) await page.click(row(n), { modifiers: ["ControlOrMeta"] }); };
 
-console.log("— fallback: right-click a multi-selection with NO files-menu handler → single-file menu —");
+console.log("— a multi-selection right-click ALWAYS opens the multi-file menu (R140 built-in Delete/Move) —");
 await clearSel();
 await multiSelect("m-a", "m-b");
 await page.click(row("m-a"), { button: "right" });
 await page.waitForSelector('[data-testid="explorer-menu"]', { timeout: 3000 });
-ok("no files-menu items → falls back to single-file menu (Rename present)", await page.evaluate(() => !!document.querySelector('[data-testid="explorerctx-rename"]')));
-ok("no multi-file header in the fallback menu", await page.evaluate(() => !document.querySelector('[data-testid="explorerctx-files-count"]')));
+ok("multi-file menu opens even with no plugin handler (R140 built-in Delete N present)", await page.evaluate(() => !!document.querySelector('[data-testid="explorerctx-bulk-delete"]')));
+ok("the multi-file {count} header is shown (not the single-file menu)", await page.evaluate(() => !!document.querySelector('[data-testid="explorerctx-files-count"]') && !document.querySelector('[data-testid="explorerctx-rename"]')));
 await page.keyboard.press("Escape");
 
 console.log("— register on('files-menu') + the data path (collectFilesMenu fires the event) —");

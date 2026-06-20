@@ -104,6 +104,23 @@ function showLinkUpdateNotice(message: string): void {
   window.setTimeout(() => el.remove(), 4000);
 }
 
+/** R140: reduce a set of paths to its "roots" — drop any path that has an ancestor also in the set.
+ *  Bulk delete/move only need to act on roots: trashing/moving a folder takes its descendants with
+ *  it, so acting on a descendant too would double-act (→ "already gone" throw) or mis-count. */
+function toRoots(paths: string[]): string[] {
+  return paths.filter((p) => !paths.some((q) => q !== p && p.startsWith(q + "/")));
+}
+
+/** R140: the delete confirmation idiom shared by deleteNode + bulkDelete (native dialog in Tauri —
+ *  window.confirm is unreliable in wry webviews — else the browser confirm). */
+async function confirmDelete(message: string, title: string): Promise<boolean> {
+  if (isTauri()) {
+    const { ask } = await import("@tauri-apps/plugin-dialog");
+    return ask(message, { title, kind: "warning" });
+  }
+  return window.confirm(message);
+}
+
 function loadExpanded(): Set<string> {
   try {
     const raw = localStorage.getItem(EXPANDED_KEY);
@@ -192,6 +209,9 @@ export function Explorer() {
   const [menu, setMenu] = useState<MenuState | null>(null);
   /* R97: path being moved via the "Move to…" folder picker (null = closed) */
   const [movePath, setMovePath] = useState<string | null>(null);
+  /* R140: paths being bulk-moved via the "Move to…" picker (null = closed); separate from the
+     single-file `movePath` so the two flows don't overload one state. */
+  const [bulkMovePaths, setBulkMovePaths] = useState<string[] | null>(null);
   /* R28 drag-to-move: source path being dragged; current drop folder
      (null = none/illegal, "" = vault root, "a/b" = that folder) */
   const [draggingPath, setDraggingPath] = useState<string | null>(null);
@@ -365,15 +385,7 @@ export function Explorer() {
       node.kind === "folder"
         ? t("explorer.deleteConfirmFolder", { name: node.name })
         : t("explorer.deleteConfirmFile", { name: node.name });
-    let ok: boolean;
-    if (isTauri()) {
-      // window.confirm is unreliable in wry webviews — use the native dialog
-      const { ask } = await import("@tauri-apps/plugin-dialog");
-      ok = await ask(message, { title: t("explorer.delete"), kind: "warning" });
-    } else {
-      ok = window.confirm(message);
-    }
-    if (!ok) return;
+    if (!(await confirmDelete(message, t("explorer.delete")))) return;
     try {
       // R42: flush pending editor saves BEFORE trashing so the recoverable copy
       // in .trash holds the user's latest edits (review: trash-before-flush =
@@ -514,6 +526,60 @@ export function Explorer() {
     expandAncestors(newPath); // open the destination folder so the item is visible
     selectOnly(newPath);
   };
+
+  /* ---------------- R140 bulk operations (multi-selection) ---------------- */
+
+  /** Bulk delete: confirm once, flush once, then trash each ROOT (descendants go with their folder).
+   *  Reuses the R42 trash-after-flush lossless path per file; best-effort (trash is recoverable). */
+  const bulkDelete = async (paths: string[]) => {
+    const roots = toRoots(paths);
+    if (roots.length === 0) return;
+    if (!(await confirmDelete(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
+    await app.workspace.flushAll(); // R42: once before the loop (flushAll is vault-global)
+    for (const path of roots) {
+      try {
+        await app.vault.trash(path); // emits file:deleted → open tabs close reactively
+      } catch (err) {
+        console.error("[explorer] bulk delete failed", path, err);
+      }
+    }
+    clearSelection();
+  };
+
+  /** Bulk move every ROOT into `target` via the vetted single-move guards + renameWithLinkUpdate.
+   *  Re-reads the live tree per iteration (the closure tree is stale across moves); same-basename
+   *  collisions are caught by the adapter's "target exists → throw" backstop. Best-effort. */
+  const bulkMove = async (paths: string[], target: string | null) => {
+    const roots = toRoots(paths);
+    let moved = 0;
+    let skipped = 0;
+    for (const from of roots) {
+      const curTree = app.vault.tree.get();
+      if (!curTree) break;
+      const isFolder = app.vault.folderExists(from);
+      if (!isFolder && !app.vault.fileExists(from)) { skipped++; continue; }
+      const dest = resolveDropTarget(curTree, from, target);
+      if (dest === null || wouldCollide(curTree, from, dest)) { skipped++; continue; }
+      const newPath = dest ? `${dest}/${basename(from)}` : basename(from);
+      try {
+        await renameWithLinkUpdate({ vault: app.vault, metadata: app.metadata, documents: app.documents }, from, newPath);
+        if (isFolder) setExpanded((prev) => remapPaths(prev, from, newPath)); // parity with single moveNode
+        moved++;
+      } catch (err) {
+        console.error("[explorer] bulk move failed", from, err);
+        skipped++;
+      }
+    }
+    clearSelection();
+    if (skipped > 0) showLinkUpdateNotice(t("explorer.bulkMovePartial", { moved, skipped }));
+  };
+
+  /** Folders eligible as a bulk-move target: exclude the moved roots themselves + their descendants. */
+  const bulkMoveCandidates = useMemo(() => {
+    if (bulkMovePaths === null) return [];
+    const roots = toRoots(bulkMovePaths);
+    return allFolders.filter((f) => !roots.some((r) => f === r || f.startsWith(r + "/")));
+  }, [bulkMovePaths, allFolders]);
 
   const isExplorerDrag = (e: React.DragEvent) => e.dataTransfer.types.includes(EXPLORER_MIME);
 
@@ -693,14 +759,14 @@ export function Explorer() {
           // If a plugin contributed items, show the multi-file menu; otherwise fall back to the
           // single-file menu on the right-clicked node (v1 has no built-in bulk items to show).
           if (multi) {
+            // R140: a multi-selection always opens the multi-file menu (it now has built-in
+            // Delete N / Move N) + any plugin files-menu items collected here.
             const filesItems = app.plugins.collectFilesMenu({
               paths: [...selection],
               source: "file-explorer-context-menu",
             });
-            if (filesItems.length > 0) {
-              setMenu({ x: e.clientX, y: e.clientY, node, contributed: filesItems, files: [...selection] });
-              return;
-            }
+            setMenu({ x: e.clientX, y: e.clientY, node, contributed: filesItems, files: [...selection] });
+            return;
           }
           // R130: collect plugin file-menu items ONCE here (fires the 'file-menu' event via the
           // core provider), so re-renders don't re-run plugin handlers
@@ -861,9 +927,34 @@ export function Explorer() {
           }}
         >
           {menu.files ? (
-            <div className="explorer-menu-info" data-testid="explorerctx-files-count">
-              {t("explorer.filesSelected", { count: menu.files.length })}
-            </div>
+            ((files: string[]) => (
+              <>
+                <div className="explorer-menu-info" data-testid="explorerctx-files-count">
+                  {t("explorer.filesSelected", { count: files.length })}
+                </div>
+                <button
+                  data-testid="explorerctx-bulk-move"
+                  onClick={() => {
+                    setMenu(null);
+                    setBulkMovePaths(files);
+                  }}
+                >
+                  <Icon name="folder-plus" size={14} />
+                  {t("explorer.moveTo")}
+                </button>
+                <button
+                  className="is-danger"
+                  data-testid="explorerctx-bulk-delete"
+                  onClick={() => {
+                    setMenu(null);
+                    void bulkDelete(files);
+                  }}
+                >
+                  <Icon name="x" size={14} />
+                  {t("explorer.delete")}
+                </button>
+              </>
+            ))(menu.files)
           ) : menu.node === null ? (
             <>
               <button
@@ -1025,6 +1116,21 @@ export function Explorer() {
             void moveNode(from, target);
           }}
           onClose={() => setMovePath(null)}
+        />
+      )}
+
+      {/* R140: bulk "Move to…" picker — moves the whole multi-selection into the chosen folder */}
+      {bulkMovePaths !== null && tree && (
+        <MoveToModal
+          fromPath={t("explorer.filesSelected", { count: bulkMovePaths.length })}
+          folders={bulkMoveCandidates}
+          allowRoot
+          onSelect={(target) => {
+            const ps = bulkMovePaths;
+            setBulkMovePaths(null);
+            void bulkMove(ps, target);
+          }}
+          onClose={() => setBulkMovePaths(null)}
         />
       )}
     </div>
