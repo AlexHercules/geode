@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 142 additions — 命令面板固定命令（pinned commands · Settings>Command palette · 续 R141 · 零 data-safety）【As-built v0.139】
+
+> **状态：As-built（v0.139 交付，2026-06-20）。对抗评审 7 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑、diff 已最小）。** 续 R141 命令面板故事——R141 做 recent（defer pinned 因需设置 UI），R142 补 pinned。**faithfulness（WebFetch obsidian.md/help 确认）**：Obsidian「Settings → Command palette」核心插件设置页=「New pinned command」→「Select a command」picker + 「Pinned commands」列表（每项叉号移除）；**pinned 仅在空查询置顶**（文档「shorter commands will be prioritized over recently used ones」when filtering begins=输入后 fuzzy 主导，pinned/recent 都让位，同 R141 模型）；**空查询排序 = pinned → recent（去 pinned）→ rest**（pinned 占 recent 之上的独立 tier）。**零 data-safety**（纯 UI 排序 + localStorage 命令 id 列表，同 R141/R129）。
+>
+> **分层根因（R141→R142 把 commandMru 从 feature 上移 core）**：R141 把 `commandMru.ts` 放 `features/palette/`（当时仅 palette 一个消费者）。R142 的 pinned 由**两个 feature 消费**——palette 显示（排序）+ settings 管理（pin/unpin UI）。分层铁律「features 绝不 import 别的 feature」→ `features/settings/SettingsModal.tsx` 不能 import `features/palette/commandMru`。**两 feature 共享态属 core** → 把 `commandMru.ts` 移到 `core/commandMru.ts`（纯 localStorage helper、以 vaultName 入参参数化、core 不持 `app` 故 caller 传 `app.vault.vaultName`，先例不变）。R141 行为不变（recent e2e 测行为非路径）。
+
+**契约（加性；pinned helper + 空查询三段排序 + 设置 UI）**：
+- **移动**：`features/palette/commandMru.ts` → `core/commandMru.ts`（CommandPalette import `./commandMru`→`@core/commandMru`）。
+- **core/commandMru.ts 扩展**：私有 `loadIds(key): string[]`（defensive parse：`JSON.parse` try/catch → `Array.isArray` → filter 非字符串 → `[...new Set]` dedupe → `[]`，**R141 dedupe 教训集中到此**，recent+pinned 共用）；recent/pinned 各自 key helper（`geode.cmdRecent:<vaultName>` / `geode.cmdPinned:<vaultName>`）。新增 `loadPinnedCommands(vaultName): string[]`（有序、`loadIds(pinnedKey)`）+ `setPinnedCommands(vaultName, ids: string[]): void`（best-effort 写、dedupe-on-write）。`loadRecentCommands`/`recordRecentCommand` 语义不变（改走 `loadIds`）。
+- **CommandPalette.tsx 空查询分支**（`if(!q)`）：本地 `resolve(ids)`（byId map → filter undefined，pinned+recent 共用）；`pinned = resolve(loadPinnedCommands)`、`recent = resolve(loadRecentCommands).filter(!pinnedIds.has)`、`rest = all.filter(!pinnedIds && !recentIds)`；`[...pinned, ...recent, ...rest]`。**fuzzy（非空查询）分支不动**。
+- **SettingsModal.tsx**：新 SectionId `command-palette`（nav `pin` 图标——hotkeys 用 `command`、`pin` 视觉区分且贴「固定」语义）；新 `CommandPaletteSection`——「New pinned command」可搜索 picker（input filter unpinned 命令子串、下拉点击 pin、空查询不显下拉、cap ~50 显示）+「Pinned commands」有序列表（每项名 + `x` 叉号 unpin，空态文案）；state `pins`（initial `loadPinnedCommands`）+ `addQuery`；pin/unpin 改 `pins` state 并 `setPinnedCommands` 持久。
+- **dict.views.ts**：新 `settings.section.commandPalette` + `settings.cmdPalette.*`（note / newPinned / selectCommand / pinnedHeading / empty / unpin / noMatch）EN+ZH。
+
+**数据安全**：纯 UI 排序 + localStorage id 字符串列表，**零 vault/documents/markdown.ts 写**=零 data-safety 面（同 R141/R129）；唯一卫生=localStorage try/catch + dedupe + cap。
+
+**双端**：浏览器 e2e（新 r142-e2e）= pin 命令 → 重开面板空查询置顶（pinned 在 recent 之上）+ 输入 fuzzy 仍主导（pinned 不破坏 search）+ unpin 恢复 + pinned∩recent 去重不渲两次 + ghost/unavailable pinned id 跳过不崩 + localStorage 持久（reload）+ 设置 UI pin/unpin 往返。桌面 probe = N/A（纯前端 localStorage UI，同 R141）。
+
+**data-testid**：`settings-nav-command-palette` / `settings-section-command-palette` / `cmdpalette-add-input` / `cmdpalette-add-item`（data-id）/ `cmdpalette-pinned-row-<id>` / `cmdpalette-unpin-<id>` / `cmdpalette-pinned-empty`。
+
+**对抗评审（reviewer 7 维全证伪 → 0 confirmed）：** 分层正确（core/commandMru 零 import、palette+settings 均只 import @core/commandMru、settings 不再需 import palette、旧 features/palette/commandMru 已删无悬挂引用）· 排序无重复 key（三段 tier `pinned`/`recent\pinned`/`rest=all\(pinned∪recent)` 两两不交且各自 `[...new Set]` 去重 → `key={cmd.id}` 不可能撞、resolve filter undefined 跳过未注册/不可用）· 存储健壮（loadIds 集中 dedupe 防外部/损坏重复、setPinnedCommands dedupe-on-write、key 格式与 R141 一致、读写全 try/catch best-effort）· 设置 UI（writePins 同步 state+localStorage、pin 防重 unpin 防空、picker 排除已固定且空查询不显、pinnedRows 跳未注册、`useStore(commands.revision)` 重渲）· data-safety 零面（grep 确认零 vault/.md/markdown.ts/autosave 写）· faithfulness 匹配 WebFetch 基线 · 边角全覆盖（空 pins 空态、pinned∩recent 渲一次、reload 持久、CJK/特殊字符名子串过滤、三处版本对齐）。**唯一 minor 观察（非本轮 actionable）**：`pinnedRows` 在 `pins.map` 内调 `app.commands.list()`（每 pin 复制+排序一次）——冷设置路径 + 微小 pin 列表、非面板热路径，无可测回归，简化门「无实测数字不做性能改写」故留置。
+
+**套件**：typecheck 0 · npm build + cargo check exit 0 · **r142-e2e 18/18**（设置 pin→列表显+localStorage 写 + 空查询置顶 + pinned 在 recent 之上 + 输入 fuzzy 仍主导 pinned 不破坏 + pinned∩recent 渲一次 + ghost pinned id 跳过不崩 + 设置 unpin→列表删+localStorage 删+面板不再首位 + reload 持久）· 回归 r141 13/13·r32 24/24·r41 21/21·r38 19/19（palette 开/渲染）· 简化门 clean（0 编辑）。**桌面 probe N/A**（纯前端 localStorage UI，同 R141）。**命令面板故事收官**（R141 recent + R142 pinned = Obsidian「Settings>Command palette」全功能）。
+
+---
+
 ## Round 141 additions — 命令面板最近用命令置顶（recent commands · 原生 breather · 零 data-safety）【As-built v0.138】
 
 > **状态：As-built（v0.138 交付，2026-06-20）。** 原生池 ㊾——data-safety 轮后的纯前端 breather。**faithfulness（WebFetch 确认）**：Obsidian 1.8.3+「recently used commands appear at the top of the Command palette」（空查询时最近用置顶；**一旦输入，fuzzy 仍主导**=recent 只影响空查询无过滤态）。**RECENT-only 本轮**；**PINNED defer**（Obsidian「Settings > Command palette」独立设置 UI=较大 lift，需 HotkeysSection 扩展+面板分组）。**自包含**（仅 `CommandPalette.tsx` + 新小 helper），**零 data-safety**（纯 UI 排序 + localStorage 命令 id 列表，同 R129/graphPrefs）。
