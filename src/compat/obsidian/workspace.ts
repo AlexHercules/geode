@@ -55,6 +55,17 @@ export class MarkdownView extends FileView {
   getViewData(): string {
     return this.editor.getValue();
   }
+
+  /** R123: Obsidian `MarkdownView.setViewData(data, clear)` — replace the editor's full
+   *  content. Routes through editor.setValue → ONE undoable CM transaction → the doc-change
+   *  listener → autosave (the normal save cycle), so the replacement persists safely, exactly
+   *  like a large paste. `clear` (Obsidian resets the undo history on a fresh file load) is
+   *  IGNORED: the replacement stays a normal undoable edit, strictly safer than dropping
+   *  history (documented deviation). `setMode` stays a gap — its real arg is an internal
+   *  MarkdownSubView; plugins switch mode via leaf.setViewState instead. */
+  setViewData(data: string, _clear?: boolean): void {
+    this.editor.setValue(data);
+  }
 }
 
 /**
