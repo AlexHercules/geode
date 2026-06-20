@@ -45,6 +45,13 @@ export interface ReferenceCache extends Reference, CacheItem {}
 export interface LinkCache extends ReferenceCache {}
 export interface EmbedCache extends ReferenceCache {}
 
+/** R126: a `[[wikilink]]` found inside a frontmatter property value. Unlike LinkCache it has
+ *  NO position (Obsidian identifies it by `key`, the property path); `key` is the field name,
+ *  or `field.N` for the Nth element of a list-valued property. */
+export interface FrontmatterLinkCache extends Reference {
+  key: string;
+}
+
 export interface TagCache extends CacheItem {
   /** Includes the leading '#'. */
   tag: string;
@@ -90,8 +97,9 @@ export interface ListItemCache extends CacheItem {
 /**
  * embeds is real since R119 (`![[..]]` wikilink embeds, split out of links).
  * sections is real since R124 (top-level block segmentation, see buildSections) and
- * listItems since R125 (see buildListItems). frontmatterLinks is NOT produced yet
- * (optional field — recorded gap). blocks is real since R13 (`^id`, core parseNote).
+ * listItems since R125 (see buildListItems). frontmatterLinks is real since R126
+ * (`[[wikilink]]` inside property values, see buildFrontmatterLinks). blocks is real
+ * since R13 (`^id`, core parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
@@ -104,6 +112,7 @@ export interface CachedMetadata {
   listItems?: ListItemCache[];
   frontmatter?: FrontMatterCache;
   frontmatterPosition?: Pos;
+  frontmatterLinks?: FrontmatterLinkCache[];
 }
 
 type Handle = Omit<AppHandle, "ui">;
@@ -240,6 +249,40 @@ function buildListItems(
     }
   }
   return items;
+}
+
+// `[[target#sub|alias]]` inside a frontmatter value — mirrors core WIKILINK_RE (target excludes the
+// `#subpath`, so frontmatterLinks.link matches how body LinkCache.link is reported, R126).
+const FM_WIKILINK_RE = /\[\[([^[\]|#]+)(?:#[^[\]|]*)?(?:\|([^[\]]*))?\]\]/g;
+
+/**
+ * R126: scan parsed frontmatter `fields` for `[[wikilinks]]` → FrontmatterLinkCache[]. A string
+ * value is scanned under its own key; a list value's Nth element under `key.N` (Obsidian encoding).
+ * `link` = target (no subpath, trimmed), `original` = the written `[[..]]`, `displayText` = the
+ * `|alias` if any. Needs no content (only the parsed fields) so it survives the no-content transient.
+ * Note: core's frontmatter parser only yields string | string[] values, and an UNQUOTED `k: [[X]]`
+ * is mis-read as an inline list by core upstream — the canonical quoted `k: "[[X]]"` works.
+ */
+function buildFrontmatterLinks(fields: Record<string, string | string[]>): FrontmatterLinkCache[] {
+  const out: FrontmatterLinkCache[] = [];
+  const scan = (text: string, key: string): void => {
+    for (const m of text.matchAll(FM_WIKILINK_RE)) {
+      const target = m[1].trim();
+      if (target === "") continue;
+      const alias = m[2]?.trim() || undefined;
+      out.push({
+        key,
+        link: target,
+        original: m[0],
+        ...(alias !== undefined ? { displayText: alias } : {}),
+      });
+    }
+  };
+  for (const [key, value] of Object.entries(fields)) {
+    if (typeof value === "string") scan(value, key);
+    else for (let i = 0; i < value.length; i++) scan(value[i], `${key}.${i}`);
+  }
+  return out;
 }
 
 /**
@@ -502,6 +545,8 @@ export class MetadataCache extends Events {
     if (meta.frontmatter) {
       out.frontmatter = { ...meta.frontmatter.fields };
       out.frontmatterPosition = pos(meta.frontmatter.from, meta.frontmatter.to);
+      const fmLinks = buildFrontmatterLinks(meta.frontmatter.fields);
+      if (fmLinks.length > 0) out.frontmatterLinks = fmLinks;
     }
     // R124/R125: top-level block segmentation + list items (need the real text; the no-content
     // warm-up transient — not cached — simply omits them and heals on the next call)
