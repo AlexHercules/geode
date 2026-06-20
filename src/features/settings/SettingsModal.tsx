@@ -16,6 +16,8 @@ import {
   setShowBacklinksInDocument,
   detectAllExtensions,
   setDetectAllExtensions,
+  foldHeading,
+  setFoldHeading,
   defaultNewTabMode,
   setDefaultNewTabMode,
   tabIndentSize,
@@ -104,7 +106,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.152.0";
+const APP_VERSION = "0.153.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -219,6 +221,7 @@ function AppearanceSection() {
   const lineNo = useStore(showLineNumbers);
   const autoPair = useStore(autoPairBrackets);
   const backlinksInDoc = useStore(showBacklinksInDocument);
+  const foldH = useStore(foldHeading);
   const newTabMode = useStore(defaultNewTabMode);
   /* R92: editor indentation — indent using tabs + tab indent size */
   const useTabs = useStore(indentUsingTabs);
@@ -579,6 +582,24 @@ function AppearanceSection() {
           aria-label={t("settings.backlinksInDocument")}
           data-testid="settings-backlinks-indoc-toggle"
           onClick={() => setShowBacklinksInDocument(!backlinksInDoc)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R156: allow folding heading sections (Obsidian "Fold heading", default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.foldHeading")}</div>
+          <div className="setting-desc">{t("settings.foldHeadingDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${foldH ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={foldH}
+          aria-label={t("settings.foldHeading")}
+          data-testid="settings-fold-heading-toggle"
+          onClick={() => setFoldHeading(!foldH)}
         >
           <span className="settings-toggle-thumb" />
         </button>

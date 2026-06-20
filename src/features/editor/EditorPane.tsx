@@ -12,6 +12,7 @@ import {
   autoPairBrackets,
   showInlineTitle,
   showBacklinksInDocument,
+  foldHeading,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { editorExtensionsRevision, getEditorExtensions } from "@core/editorExtensions";
@@ -38,6 +39,7 @@ import { hydrateEmbeds } from "./embeds";
 import { hydrateCodeCopy } from "./codeCopy";
 import { runMarkdownPostProcessors } from "./markdownPostProcess";
 import { renderPreview, toggleTaskOnLine } from "./preview";
+import { markdownFoldService } from "./folding";
 import { PropertiesPanel } from "./PropertiesPanel";
 import { BacklinksInDocument } from "./BacklinksInDocument";
 import { openWikilink } from "./wikilinks";
@@ -151,6 +153,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const showLineNo = useStore(showLineNumbers);
   /* R153: auto-pair-brackets preference — reconfigure CM compartment reactively */
   const autoPair = useStore(autoPairBrackets);
+  // R156: Fold heading — reconfigure the fold-service compartment on change
+  const foldHeadingOn = useStore(foldHeading);
   /* R92: indentation preferences — reconfigure CM compartment reactively */
   const indentSize = useStore(tabIndentSize);
   const useTabs = useStore(indentUsingTabs);
@@ -183,6 +187,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const indentCompartmentRef = useRef<Compartment | null>(null);
   /** R153: compartment for auto-pair brackets — autoPairBrackets reconfigures it */
   const closeBracketsCompartmentRef = useRef<Compartment | null>(null);
+  /** R156: compartment for the fold service — the foldHeading toggle reconfigures it */
+  const foldServiceCompartmentRef = useRef<Compartment | null>(null);
   /** R115: compartment for plugin-contributed CM6 extensions (registerEditorExtension) */
   const compatExtensionCompartmentRef = useRef<Compartment | null>(null);
   /** the editor mode the current view's compartment is configured with */
@@ -327,6 +333,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     indentCompartmentRef.current = indentCompartment;
     const closeBracketsCompartment = new Compartment();
     closeBracketsCompartmentRef.current = closeBracketsCompartment;
+    const foldServiceCompartment = new Compartment();
+    foldServiceCompartmentRef.current = foldServiceCompartment;
     const compatExtensionCompartment = new Compartment();
     compatExtensionCompartmentRef.current = compatExtensionCompartment;
     appliedModeRef.current = mode;
@@ -343,6 +351,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           lineNumberCompartment,
           indentCompartment,
           closeBracketsCompartment,
+          foldServiceCompartment,
           compatExtensionCompartment,
           // R22: portal target for the live-mode PropertiesPanel
           propertiesHost: propertiesHostRef.current ?? undefined,
@@ -412,6 +421,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       lineNumberCompartmentRef.current = null;
       indentCompartmentRef.current = null;
       closeBracketsCompartmentRef.current = null;
+      foldServiceCompartmentRef.current = null;
       compatExtensionCompartmentRef.current = null;
       view.destroy();
       // no flush here: pending saves belong to the handle, which outlives the
@@ -458,6 +468,15 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(closeBracketsExtension(autoPair)) });
   }, [autoPair]);
+
+  /* ---------- R156: fold heading preference → CM compartment ---------- */
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = foldServiceCompartmentRef.current;
+    if (!view || !compartment) return;
+    // reconfiguring the foldService also forces the gutter to re-query → chevrons refresh
+    view.dispatch({ effects: compartment.reconfigure(markdownFoldService(foldHeadingOn)) });
+  }, [foldHeadingOn]);
 
   /* ---------- indentation preference → CM compartment (R92) ---------- */
 

@@ -124,6 +124,23 @@ export function setDetectAllExtensions(on: boolean): void {
   persistBool(DETECT_ALL_EXT_KEY, on);
 }
 
+/** R156 (㊶): Obsidian's "Fold heading" Editor setting — whether the editor offers fold points
+ *  for heading sections. Default ON (Obsidian default + zero regression — Geode's foldService
+ *  offered heading folds unconditionally). Gates the heading branch of markdownFoldRange; the
+ *  foldService lives in a Compartment that EditorPane reconfigures (mirrors R153's closeBrackets).
+ *  NOTE: Obsidian's sibling "Fold indent" is deferred — CM's foldable() falls back to the built-in
+ *  syntaxFolding (foldNodeProp) for multi-line blocks, which folds a list item's inner paragraph
+ *  even when our list foldService is gated off; suppressing it needs parser surgery on the frozen
+ *  R17 fold language (out of scope). Heading folds are NOT subject to that fallback (foldNodeProp
+ *  excludes headings), so "Fold heading" is fully gateable here. */
+const FOLD_HEADING_KEY = "geode.foldHeading";
+export const foldHeading = new Store<boolean>(readBool(FOLD_HEADING_KEY, true));
+
+export function setFoldHeading(on: boolean): void {
+  foldHeading.set(on);
+  persistBool(FOLD_HEADING_KEY, on);
+}
+
 /** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
  *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
  *  (zero regression). Consumed by workspace.openFile. */

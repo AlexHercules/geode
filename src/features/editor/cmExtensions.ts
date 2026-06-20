@@ -48,11 +48,11 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { autoPairBrackets, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, foldHeading, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
-import { markdownFolding } from "./folding";
+import { markdownFolding, markdownFoldService } from "./folding";
 import { foldPersistence } from "./foldPersistence";
 import { livePreview, propertiesHostFacet } from "./livePreview";
 import { editorSearchPhrases } from "./searchCommands";
@@ -591,13 +591,15 @@ export function buildEditorExtensions(opts: {
   indentCompartment: Compartment;
   /** R153: owned by EditorPane — autoPairBrackets toggle reconfigures it in place */
   closeBracketsCompartment: Compartment;
+  /** R156: owned by EditorPane — the foldHeading toggle reconfigures it in place */
+  foldServiceCompartment: Compartment;
   /** R115: owned by EditorPane — plugin-contributed CM6 extensions
    *  (Plugin.registerEditorExtension); editorExtensionsRevision reconfigures it */
   compatExtensionCompartment: Compartment;
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, compatExtensionCompartment } =
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, foldServiceCompartment, compatExtensionCompartment } =
     opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
@@ -683,6 +685,9 @@ export function buildEditorExtensions(opts: {
     // EditorState and must survive live<->source reconfigures
     attachmentIngest(app, getPath),
     markdownFolding(),
+    // R156: the foldService (gated by Fold heading / Fold indent settings) — base list like
+    // markdownFolding so it survives live↔source; EditorPane reconfigures it on toggle.
+    foldServiceCompartment.of(markdownFoldService(foldHeading.get())),
     // R29 — capture fold state to localStorage (base list like markdownFolding:
     // must survive live<->source reconfigures); restore happens in EditorPane
     foldPersistence(getPath),

@@ -31,6 +31,7 @@ import {
 } from "@codemirror/language";
 import { type EditorState, type Extension, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
+import { foldHeading } from "@core/appearance";
 
 const ATX_HEADING_RE = /^ATXHeading([1-6])$/;
 // R54: SetextHeading1/2 = a text line underlined by `===` (h1) / `---` (h2). The
@@ -120,8 +121,16 @@ function trimTrailingNewline(state: EditorState, to: number): number {
 }
 
 /** The frozen foldService: heading sections (ATX + Setext, R54) + multi-line list
- *  items. Exported so the always-on probe can assert the pure fold-range geometry. */
-export function markdownFoldRange(state: EditorState, lineStart: number, lineEnd: number): FoldRange {
+ *  items. Exported so the always-on probe can assert the pure fold-range geometry.
+ *  R156: `foldHeadingOn` gates the heading branch (Obsidian "Fold heading"); default true →
+ *  3-arg callers (probe) keep the original behavior. (The list branch is NOT gated — see
+ *  the foldHeading note in appearance.ts for why "Fold indent" can't be done here.) */
+export function markdownFoldRange(
+  state: EditorState,
+  lineStart: number,
+  lineEnd: number,
+  foldHeadingOn = true,
+): FoldRange {
   // frontmatter lines never fold — the parser sees YAML as markdown
   if (lineStart < frontmatterEnd(state)) return null;
   let result: FoldRange = null;
@@ -134,7 +143,7 @@ export function markdownFoldRange(state: EditorState, lineStart: number, lineEnd
       // but its `from` is on the (first) text line, so the same ownsLine + lineEnd
       // fold-from point works for both. Section end walks ATX *and* Setext terminators.
       const level = headingLevel(n.name);
-      if (level !== null && ownsLine(state, lineStart, n.from)) {
+      if (foldHeadingOn && level !== null && ownsLine(state, lineStart, n.from)) {
         const end = headingSectionEnd(state, level, lineEnd);
         if (end > lineEnd) result = { from: lineEnd, to: end };
         // a heading line folds as a section or not at all
@@ -164,17 +173,30 @@ function foldMarker(open: boolean): HTMLElement {
   return el;
 }
 
-/** codeFolding + foldGutter + the frozen foldService + fold keymap. The
- *  standard foldKeymap is NOT used: its Ctrl-Alt-[ binding calls the library
- *  foldAll, which would also fold fences/blockquotes/tables via the built-in
- *  foldNodeProp sources — the keyboard path must match editor:fold-all
+/** R156: the frozen foldService, with the heading branch gated (Obsidian "Fold heading").
+ *  Lives in a Compartment (EditorPane reconfigures it on setting change), separate from
+ *  markdownFolding()'s static parts — mirrors R153's closeBracketsExtension(on). */
+export function markdownFoldService(foldHeadingOn: boolean): Extension {
+  // high precedence: consulted before any other foldService
+  return Prec.high(foldService.of((state, from, to) => markdownFoldRange(state, from, to, foldHeadingOn)));
+}
+
+/** codeFolding + foldGutter + fold keymap — the static parts (the foldService itself moved to
+ *  markdownFoldService() / its compartment in R156). The standard foldKeymap is NOT used: its
+ *  Ctrl-Alt-[ binding calls the library foldAll, which would also fold fences/blockquotes/tables
+ *  via the built-in foldNodeProp sources — the keyboard path must match editor:fold-all
  *  (frozen semantics only, review fix). */
 export function markdownFolding(): Extension {
   return [
     codeFolding(),
-    // high precedence: consulted before any other foldService
-    Prec.high(foldService.of(markdownFoldRange)),
-    foldGutter({ markerDOM: foldMarker }),
+    foldGutter({
+      markerDOM: foldMarker,
+      // R156: the foldService lives in a Compartment (the foldHeading toggle reconfigures it).
+      // foldGutter's default only recomputes its chevrons on fold-STATE changes, so when the
+      // service reconfigures (foldability of heading lines flips) the gutter would show stale
+      // chevrons — recompute whenever the foldService facet itself changes.
+      foldingChanged: (update) => update.startState.facet(foldService) !== update.state.facet(foldService),
+    }),
     keymap.of([
       { key: "Ctrl-Shift-[", mac: "Cmd-Alt-[", run: foldCode },
       { key: "Ctrl-Shift-]", mac: "Cmd-Alt-]", run: unfoldCode },
@@ -206,11 +228,13 @@ export function foldAllInView(view: EditorView): void {
   // the full-document scan needs a complete parse — syntaxTree() alone may
   // stop at the viewport on large documents (review fix; bounded at 500ms)
   ensureSyntaxTree(state, state.doc.length, 500);
+  // R156: fold-all respects the Fold heading setting too
+  const headingOn = foldHeading.get();
   const folded = foldedRanges(state);
   const effects = [];
   for (let pos = 0; pos < state.doc.length; ) {
     const line = state.doc.lineAt(pos);
-    const range = markdownFoldRange(state, line.from, line.to);
+    const range = markdownFoldRange(state, line.from, line.to, headingOn);
     if (range) {
       let already = false;
       folded.between(range.from, range.to, (f, t) => {
