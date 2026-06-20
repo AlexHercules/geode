@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 128 additions — compat Editor 方法补全（multi-sel / 批量编辑 / exec / undo·redo · 插件 API 商业主轴）【As-built v0.125】
+
+> **状态：As-built（v0.125 交付，2026-06-20）。** Obsidian `Editor` 余下的 CM6-可直接映射方法现真实现——编辑器操作类插件的高频面。**纯 compat（仅 `editor.ts`）、零改 core、零新依赖**（@codemirror/commands `^6.8.0` + @codemirror/language `^6.10.0` 早是依赖，loader.ts/core 已用）。**写方法（setLine/transaction）走 `cm.dispatch` → doc-change listener → autosave**（与既有 replaceRange 同一 proven-safe 路径，非 handle.setText 静默丢数据陷阱[R123]）。**gate 拐点决策**：HANDOFF 默认 referenceLinks（getFileCache 最后字段），但 gate WebFetch 揭露其 `@since 1.8.7`（极新，多数插件不用）+ 官方 d.ts(`extends Reference {}`)与 docs 页(`extends CacheItem{id,link}`)**shape 互相矛盾**（faithfulness 无法定）+ 价值低；同时 gate 扫 compat 缺口表(line 154)发现 **Editor 余项「可直接映射 CM6」** = 清晰+高价值+faithful → 自主改取（§两道前置门 grep/survey 第五次救场，redirect 到更优项）。
+
+**契约（加性；7 新类型 + 13 方法，仅 editor.ts）**：
+- 类型：`EditorSelection {anchor,head}`（区别 CM6 同名类——CM6 import 别名为 `CMSelection`）/ `EditorRange {from,to?}` / `EditorSelectionOrCaret {anchor,head?}` / `EditorChange {from,to?,text}` / `EditorTransaction {replaceSelection?,changes?,selection?}` / `EditorCommandName`（17 名 union）。
+- 方法：`listSelections`/`setSelections`（多光标——**Geode CM 无 `allowMultipleSelections` → 多选折叠为主选，文档化偏离[R57]**，单选忠实）· `setLine`/`transaction`（写，CM dispatch→autosave；transaction 的 change offset 相对原始 doc、升序排序满足 CM6「有序不重叠」要求）· `wordAt`（`cm.state.wordAt`）· `scrollIntoView`/`scrollTo`/`getScrollInfo`（scrollDOM）· `exec`（`EXEC_COMMANDS` 表把 EditorCommandName 映射到 @codemirror/commands + @codemirror/language 命令）· `undo`/`redo`（裸 `undo`/`redo` 解析到 import 非方法递归）· `blur`/`refresh`(CM6 自管布局=no-op)。
+
+**对抗评审（reviewer 多维 + data-safety 优先 → 1 MAJOR 评审修 + e2e 锁；余全证伪）：**
+- **MAJOR 评审修（transaction 选区坐标，已修+e2e 锁）**：`transaction({changes, selection})` 同时给 changes + selection 时，首版把 selection offset 在**原始 doc** 算好直接交 `cm.dispatch`——但 **CM6 把 spec 的 `selection` 当 NEW-doc 坐标、且不替你 map 过 changes**（`newSelection` 原样返回 + Transaction 构造按 `changes.newLength` 校验）→ 轻则光标漂移一个 change delta、重则原始 offset 超出新 doc 长度时**抛 "Selection points outside of document" 整个事务（含 changes）被中止**。**修**：先 `ChangeSet.of(specs, doc.length)` 建 changeset，再 `changes.mapPos(off, 1)` 把原始 selection offset 映射到新 doc 坐标（越界自动夹紧、不再抛）。e2e 补 CASE A（大删除+越界 selection 不抛）+ CASE B（+5 插入后光标随内容到 new ch11）。
+- **reviewer 证伪全维**：**data-safety SAFE**——setLine/transaction 与既有 replaceRange 逐字同路径（非 annotated `cm.dispatch({changes})` → documents.ts updateListener 见 docChanged + 无 syncAnnotation → local=true → scheduleSave；非 handle.setText 陷阱[R123]）；e2e 持久化断言读 MemoryVaultAdapter post-debounce = 真 save-fired 证明 · transaction changes 原始-doc 相对正确（ChangeSet.of 自处理排序）· setSelections 多光标折叠优雅（CM `asSingle()` 不抛）· undo/redo 无递归（裸名解析到 import）· CMSelection 别名无破坏 · exec 17 命令全映射 + fold 无扩展 no-op · 分层/依赖干净（@codemirror/commands+language 预存依赖）。
+- **faithfulness**：类型 shape 对齐 Obsidian；多光标折叠=文档化偏离（Geode CM 无 allowMultipleSelections，非本轮 bug）。新类型补 barrel re-export（对齐 EditorPosition 先例）。
+
+**套件**：typecheck 0 · cargo build exit 0 · r128-e2e **15/15**（listSelections/setSelections 单选/setLine/transaction/wordAt/exec goDown+goEnd/undo·redo 往返/getScrollInfo/scroll no-throw/blur/**+ setLine 落盘持久化**）· r128-probe **3/3** 真 WKWebView（editor.ts+新 CM imports 干净加载 + activeEditor null-guard；编辑器 headless 不挂载[R115/§D]→方法语义由 e2e 全覆盖）· 回归 r23 22/22（编辑器）· 简化门 clean（单文件加性公共 API、无 ≥8 行重复）。**剩余缺口（compat 商业主轴）**：`Editor` 仍可补 listSelection 余项 / `MenuItem.setSubmenu` / `app.loadLocalStorage`·`isDarkMode`（小项，gap 表 line 154）· `CachedMetadata.referenceLinks`（@since 1.8.7、shape 存疑、低价值）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· **`file-menu`/`editor-menu` 钩子**（**阻塞面最大、宜单独拍板**）。
+
 ## Round 127 additions — compat CachedMetadata.footnotes + footnoteRefs（脚注定义+引用 · 插件 API 商业主轴）【As-built v0.124】
 
 > **状态：As-built（v0.124 交付，2026-06-20）。** Obsidian `getFileCache(file).footnotes: FootnoteCache[]`（`[^id]: content` **定义**）+ `footnoteRefs: FootnoteRefCache[]`（正文 `[^id]` **引用**）现真实现。脚注感知类插件用。**本轮触 core**（index parser）——脚注定义早在 core（R65）、本轮在 core 补**引用**捕获 + 桥接两者进 compat。
