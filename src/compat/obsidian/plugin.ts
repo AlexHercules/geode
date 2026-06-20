@@ -418,6 +418,42 @@ export class App {
     this.metadataCache = metadataCache;
   }
 
+  /* ----- per-vault localStorage + theme (R129) — real, not stubs ----- */
+
+  /** R129: vault-namespaced localStorage key. Obsidian scopes these per vault so two vaults never
+   *  clobber each other's UI state; we key on the vault name (geode.vaultName). Both parts are
+   *  encodeURIComponent'd so a `:` inside the name or the plugin key can't blur the delimiter.
+   *  Known limitation (UI-state-only, benign): two vaults that share a basename, or a renamed vault
+   *  folder, share/orphan this store — Geode has no stable per-vault id (real plugin data goes
+   *  through saveData→data.json, unaffected). */
+  private localStorageKey(key: string): string {
+    return `geode-ls:${encodeURIComponent(this.vault.getName())}:${encodeURIComponent(key)}`;
+  }
+
+  /** Retrieve a vault-specific value previously stored with saveLocalStorage (JSON round-trip);
+   *  null when absent. A non-JSON legacy value is returned verbatim. */
+  loadLocalStorage(key: string): unknown {
+    const raw = localStorage.getItem(this.localStorageKey(key));
+    if (raw === null) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  /** Save a vault-specific value (JSON-serialized). null/undefined clears the entry (Obsidian口径:
+   *  "if data is null, the entry will be cleared"). */
+  saveLocalStorage(key: string, value: unknown): void {
+    if (value === null || value === undefined) localStorage.removeItem(this.localStorageKey(key));
+    else localStorage.setItem(this.localStorageKey(key), JSON.stringify(value));
+  }
+
+  /** Whether the active theme is dark — reads the resident body class themes.ts keeps in sync. */
+  isDarkMode(): boolean {
+    return document.body.classList.contains("theme-dark");
+  }
+
   /* ----- out-of-tier App members: warn-stubs, never a crash (T2 gaps) ----- */
 
   /** renameFile (R16) + processFrontMatter (R22) are real; other methods gap per access. */
