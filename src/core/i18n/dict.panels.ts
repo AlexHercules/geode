@@ -153,6 +153,11 @@ export const en = {
   "tags.renameInvalid": "Invalid tag name.",
   "tags.collapse": "Collapse",
   "tags.expand": "Expand",
+  "tags.sortBy": "Change sort order",
+  "tags.sortFreqDesc": "Frequency (high to low)",
+  "tags.sortFreqAsc": "Frequency (low to high)",
+  "tags.sortNameAsc": "Tag name (A to Z)",
+  "tags.sortNameDesc": "Tag name (Z to A)",
 
   // ---- calendar ----
   "calendar.today": "Today",
@@ -324,6 +329,11 @@ export const zh: Record<keyof typeof en, string> = {
   "tags.renameInvalid": "标签名不合法。",
   "tags.collapse": "折叠",
   "tags.expand": "展开",
+  "tags.sortBy": "更改排序方式",
+  "tags.sortFreqDesc": "频率（高到低）",
+  "tags.sortFreqAsc": "频率（低到高）",
+  "tags.sortNameAsc": "标签名 (A→Z)",
+  "tags.sortNameDesc": "标签名 (Z→A)",
 
   // ---- calendar ----
   "calendar.today": "今天",

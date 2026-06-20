@@ -28,8 +28,21 @@ interface TagTreeNode {
   children: TagTreeNode[];
 }
 
-/** Build the `/`-nested tag tree from the tag→notes map. Pure; exported for the probe. */
-export function buildTagTree(map: Map<string, ReadonlySet<string>>): TagTreeNode[] {
+/** R151: sort order for the tag tree (Obsidian: Frequency / Tag name, each asc/desc). */
+export type TagSortKey = "freq-desc" | "freq-asc" | "name-asc" | "name-desc";
+
+const TAG_CMP: Record<TagSortKey, (a: TagTreeNode, b: TagTreeNode) => number> = {
+  "freq-desc": (a, b) => b.count - a.count || a.segment.localeCompare(b.segment),
+  "freq-asc": (a, b) => a.count - b.count || a.segment.localeCompare(b.segment),
+  "name-asc": (a, b) => a.segment.localeCompare(b.segment),
+  "name-desc": (a, b) => b.segment.localeCompare(a.segment),
+};
+
+/** Build the `/`-nested tag tree from the tag→notes map, sorted at every level. Pure. */
+export function buildTagTree(
+  map: Map<string, ReadonlySet<string>>,
+  sortKey: TagSortKey = "freq-desc",
+): TagTreeNode[] {
   interface Build {
     segment: string;
     fullPath: string;
@@ -61,7 +74,7 @@ export function buildTagTree(map: Map<string, ReadonlySet<string>>): TagTreeNode
     for (const c of n.children.values()) for (const p of subtreeNotes(c)) acc.add(p);
     return acc;
   };
-  const cmp = (a: TagTreeNode, b: TagTreeNode) => b.count - a.count || a.segment.localeCompare(b.segment);
+  const cmp = TAG_CMP[sortKey];
   const finalize = (n: Build): TagTreeNode => ({
     segment: n.segment,
     fullPath: n.fullPath,
@@ -71,15 +84,39 @@ export function buildTagTree(map: Map<string, ReadonlySet<string>>): TagTreeNode
   return [...roots.values()].map(finalize).sort(cmp);
 }
 
+const SORT_KEY_PREF = "geode.tagsSort";
+const isTagSortKey = (v: string): v is TagSortKey =>
+  v === "freq-desc" || v === "freq-asc" || v === "name-asc" || v === "name-desc";
+/** R151: persisted sort pref (raw localStorage — a feature can't import SearchPanel's helper;
+ *  precedent: R141 commandMru). Best-effort: any failure falls back to the default. */
+function readTagSort(): TagSortKey {
+  try {
+    const v = localStorage.getItem(SORT_KEY_PREF);
+    return v !== null && isTagSortKey(v) ? v : "freq-desc";
+  } catch {
+    return "freq-desc";
+  }
+}
+
 export function TagsPanel() {
   const app = useApp();
   const t = useI18n();
   const rev = useStore(app.metadata.revision); // re-render on index change
+  const [sortKey, setSortKey] = useState<TagSortKey>(readTagSort);
   const tree = useMemo(
-    () => buildTagTree(app.metadata.getTagMap()),
+    () => buildTagTree(app.metadata.getTagMap(), sortKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [app.metadata, rev],
+    [app.metadata, rev, sortKey],
   );
+
+  const changeSort = (key: TagSortKey): void => {
+    setSortKey(key);
+    try {
+      localStorage.setItem(SORT_KEY_PREF, key);
+    } catch {
+      /* storage unavailable — session-only */
+    }
+  };
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [result, setResult] = useState<string | null>(null);
@@ -193,7 +230,21 @@ export function TagsPanel() {
 
   return (
     <div className="tags-panel" data-testid="tags-panel">
-      <div className="tags-panel-header">{t("tags.title")}</div>
+      <div className="tags-panel-header">
+        <span className="tags-panel-title">{t("tags.title")}</span>
+        <select
+          className="tags-sort"
+          data-testid="tags-sort"
+          value={sortKey}
+          aria-label={t("tags.sortBy")}
+          onChange={(e) => changeSort(e.target.value as TagSortKey)}
+        >
+          <option value="freq-desc">{t("tags.sortFreqDesc")}</option>
+          <option value="freq-asc">{t("tags.sortFreqAsc")}</option>
+          <option value="name-asc">{t("tags.sortNameAsc")}</option>
+          <option value="name-desc">{t("tags.sortNameDesc")}</option>
+        </select>
+      </div>
       {result !== null && (
         <div className="tags-result" data-testid="tags-result" role="status">
           {result}
