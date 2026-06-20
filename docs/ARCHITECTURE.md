@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 158 additions — compat `app.internalPlugins.getPluginById("bookmarks").instance` 程序化 API（商业主轴 · 复用 R27 原生书签库 · 写走 vetted opChain）【As-built v0.155】
+
+> **状态：As-built（已交付）。** 对抗评审 6 维 → **3 确认修+e2e 锁**：**D1 MAJOR（init 序）**=`main.tsx` `bookmarks.init(vault)` 在插件 load 之后→插件 onload 期书签库空（regVault null、addItem 丢失被 init clobber）→**修=hoist `await bookmarks.init(vault)` 到 BUILTIN_PLUGINS/loadExternal 之前**（书签 API 在 onload 即可用，同 Obsidian）；**D2 MINOR（getItemTitle 扩展名）**=file case 返 basename **带 .md**，偏离 Obsidian TFile.basename / 自身 BookmarksPanel（strip ext）→修=file/heading/block 用 `stripExtension(basename())`、folder 不变 + e2e 断言改 "Ideas"；**D3 MINOR（内部 sentinel 泄漏）**=R27 把未知类型存为 carrier `{type:"__geode_unknown_type__", _extra}`，getBookmarks 原样暴露+getItemTitle 返 sentinel 字面量→修=**export `serializeItem`、getBookmarks 经它 map**（重建 carrier 成 canonical Obsidian wire 形 + defensive copy）。验收：r158-e2e 13/13、r27 22/22（书签持久化未回退）、r113 10/10（插件 boot 未扰）、typecheck/cargo。**桌面 probe N/A**（纯 JS API shim、平台无关，同 R113/R116/R130）。
+>
+> 🛑 **赛道枯竭信号（记给后续轮）**：本轮 gate 横扫确认 Geode 已达**近乎完整的 Obsidian 平价**——㊺ 外观全 done、CSS snippets[R20 compat 已含发现+设置 toggle]、Outline[features/outline]、Random note[plugins]、Note composer[R44]、Workspaces[saved layouts]、以及 R60 列的「最大插件迁移阻塞项」全已实现（registerMarkdownPostProcessor R115 / editor-menu R131 / file-menu R130 / generateMarkdownLink R112 / app.commands R113 / getMode R116）。**bounded 候选池实质枯竭**；剩余=大工程（Canvas/Sync/pop-out 需用户拍板或新依赖）或 niche compat 边角。**Gate**：OBSIDIAN-COMPAT 缺口表 line 145 显式列 `app.internalPlugins.getPluginById("bookmarks").instance`（getBookmarks/addItem/removeItem）**仍为缺口**——R27 已让 `.obsidian/bookmarks.json` 双向保真 + 原生 `BookmarksApi`（`items` Store/`add`/`removeAt`/`isFileBookmarked` 等）完整，只差把这层程序化 API 暴露给插件。`internalPluginsStub.getPluginById:()=>null` 现让插件 `.instance` 崩。**非公开 API**（`app.internalPlugins` 不在 d.ts）→ 按 de-facto 社区用法实现 best-effort 形状，note 之。
+
+**契约（加性；只动 `compat/obsidian/plugin.ts` + `main.tsx` 测试钩子）**：
+- **`compat/obsidian/plugin.ts`**：`internalPluginsStub` 替换——`getPluginById(id)`：`id==="bookmarks"`→`{ enabled:true, instance }`、否则 `null`；`getEnabledPluginById(id)`：`"bookmarks"`→instance、否则 null；`plugins` 保持空 record（calendar `plugins["daily-notes"]` 不动）。`instance`（de-facto 形状）：`getBookmarks():BookmarkItem[]`=`[...bookmarks.items.get()]`（读）+ `getItemTitle(item):string`=shim 内纯 helper（`item.title ?? basename(path) ?? subpath ?? query ?? type`，无 i18n）+ `addItem(item)`→`void bookmarks.add(item)`（写、delegate vetted）+ `removeItem(item)`→纯递归 `bookmarkPath(items,item)` value-match 找 index-path → `void bookmarks.removeAt(path)`（写、delegate）。`reportGap` 文案改「bookmarks 真实现，其余 warn-stub」。import `bookmarks`+`BookmarkItem` from `@core/bookmarks`。
+- **`main.tsx`**：无需新钩子——e2e 经注册插件 onload 拿 `app` 直接调 `app.internalPlugins`（同既有 compat e2e）。
+
+**数据安全**：`getBookmarks`/`getItemTitle` 纯读；`addItem`/`removeItem` **delegate 到 R27 vetted 原生 `bookmarks.add`/`removeAt`**（单 promise 链 opChain 序列化、未知键 `_extra` round-trip 保真）=**非新写路径**、复用已验证写。改 bookmark 写面 → 跑 r27 回归。
+
+**双端**：浏览器 e2e（新 r158-e2e）= 注册插件取 `getPluginById("bookmarks")` → `{enabled,instance}` + getBookmarks 反映 addItem + `isFileBookmarked` 真 + removeItem 移除 + getItemTitle + `getPluginById("other")===null` + getEnabledPluginById。桌面 probe N/A（纯 JS API shim、平台无关，同历轮 compat API）。
+
+**v1 nuance / defer**：非公开 API best-effort 形状（无 d.ts 验证）；instance 不实现 Events（`on('changed')`）/`editItem`/`bookmarkLookup`（defer，记缺口）；removeItem value-match（type+path+subpath/query）非引用相等（reload 后 Store 重建仍可匹配）。
+
+---
+
 ## Round 157 additions — 笔记内嵌反链补「Unlinked mentions」（㊷ · 完成 R154 · 复用 core 扫描器 · 零 data-safety）【As-built v0.154】
 
 > **状态：As-built（已交付）。** 对抗评审 6 维全 REFUTED → **0 confirmed defect（clean）** + 简化门 clean。reviewer 逐 await 点证 cancellation 无 stale-path 泄漏（唯一 await=vault.read 后即 `if(cancelled)return`、终态 setUnlinked 亦 guard）+ 证 `metadata.revision` 仅 per-debounced-save bump（非 per-keystroke，且组件仅阅读视图挂载=编辑期不扫）= perf 与 panel 同 + lineSnippet 边界（from=0/行首/无尾换行）全对 + `:first-child` 去边逻辑成立（linked 空 Fragment 不出 DOM 节点）。验收：r157-e2e 12/12、r154 13/13、r98 15/15（panel unlinked 未碰）、r26-bytes 0、typecheck/cargo、截图实证（in-document 与右栏 panel 数据一致：Linked 1 + Unlinked 3）。**桌面 probe N/A**（阅读视图 DOM + 扫描逻辑平台无关，同 R154）。
