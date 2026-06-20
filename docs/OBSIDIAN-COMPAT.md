@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R153 套件回归（2026-06-21，编辑器 Auto pair brackets toggle · CM compartment · 桌面 probe N/A）
+
+R153 = 编辑器**「Auto pair brackets」开关**（㊶，换子系统：㊻ 标签面板 3 轮收官→㊶ 编辑器设置）。**Gate**：grep 确认 Geode `closeBrackets()` always-on 但无 toggle；Obsidian「Auto pair brackets」是 ubiquitous Editor 设置（默认 ON、非 phantom）。**复用 R88 lineNumbers / R92 indent 的 CM Compartment 模式**：closeBrackets 移进 `closeBracketsCompartment` + `autoPairBrackets` Store（持久 `geode.autoPairBrackets`、默认 ON=零回归）+ `closeBracketsExtension(on)` helper（init+reconfigure DRY）+ EditorPane reconfigure effect + SettingsModal toggle。**纯 input-assist 零 data-safety**（toggle=localStorage、reconfigure 无 changes 不触 autosave）。**对抗评审 9 维全证伪 → 0 confirmed defect（clean）**（reviewer 查 CM 源码证 closeBrackets 位置上移行为中性=markdownWrap Prec.high 永先评估+字符集 disjoint）+ 简化门 clean。
+
+新增套件：`r153-e2e.mjs` **8/8**（默认 ON 键入 `(`→`()` + `[`→`[]` + toggle OFF→`(` 不补 + 回 ON 恢复 + pref reload 持久）。**套件矩阵不回退**：**r35 25/25**（bracket-pair + backspace-delete + type-over，closeBrackets 移 compartment 行为保持）·**r24 12/12**（autosave/data-safety）·r88 13/13（lineNumber compartment parity）·r34 15/15·r92 21/21。**桌面 probe N/A**（CM 输入行为 + 设置 UI、浏览器 e2e 全覆盖，同 R88/R92）。
+
 ### R152 套件回归（2026-06-21，阅读视图 tag pill 点击 · 事件委托不动 markdown.ts · 桌面 probe N/A）
 
 R152 = **阅读视图 `#tag` pill 点击→搜索**（㊻ 收官：R150 树 + R151 排序 + R152 pill 点击）。**Gate（§C 规避）**：grep `markdown.ts:1185` 确认阅读视图 #tag 已渲 `<span class="tag-pill" data-tag="<tag>">`（已有 class+data）→ EditorPane `onPreviewClick` **事件委托**加 `.tag-pill` 分支即可、**不改 markdown.ts 字节=不触 §C/r26-bytes**。分支早置（让 #tag in heading 搜索而非折叠）+ `!el.closest("a")` 守卫（pill 作 link 显示文本时 fall through 导航、匹配 heading/callout 同守卫）。`.tag-pill` 加 cursor:pointer+hover。**纯 click→requestSearch 零 data-safety**（同 TagsPanel sink）。**对抗评审 9 维 → 1 MINOR 确认修+e2e 锁**（F4=`[#tag](url)` pill 嵌 `<a>` 内、分支漏 `!closest("a")` 守卫吞 link 导航→加守卫）+ 余证伪 + 简化门 clean。

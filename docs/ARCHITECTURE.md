@@ -71,6 +71,29 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 153 additions — 编辑器「Auto pair brackets」开关（㊶ · CM compartment · 复用 R88 模式 · 零 data-safety）【As-built v0.150】
+
+> **状态：As-built（v0.150 交付，2026-06-21）。对抗评审 9 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean。** **换子系统**（㊻ 标签面板 3 轮收官）→ ㊶ 编辑器设置。**Gate**：① grep 确认 Geode `closeBrackets()` **always-on**（cmExtensions.ts:662、注释自承「CM's default bracket set is exactly Obsidian's "Auto pair brackets"」）但**无 toggle**；② Obsidian「Auto pair brackets」是 ubiquitous Editor 设置（默认 ON、长期存在=非 phantom）。**复用 R88 lineNumbers compartment 模式**：把 always-on 的 closeBrackets 移进可重配 compartment、加设置 toggle（默认 ON=零回归）。**纯 input-assist 开关、零 data-safety**（closeBrackets 是输入辅助、不写文件/不触 autosave；toggle 是 localStorage）。
+
+**契约（加性；复用 R88 compartment 模式）**：
+- **`core/appearance.ts`**：`autoPairBrackets` Store（默认 `true`=R 现状）+ `geode.autoPairBrackets` localStorage 持久 + setter（镜像 showLineNumbers）。
+- **`cmExtensions.ts`**：新 exported `closeBracketsExtension(on: boolean)` = `on ? [keymap.of(closeBracketsKeymap), closeBrackets()] : []`（DRY，init+reconfigure 共用）；`buildEditorExtensions` opts 加 `closeBracketsCompartment`；**移除静态 `closeBrackets()` + `keymap.of(closeBracketsKeymap)`**、改 `closeBracketsCompartment.of(closeBracketsExtension(autoPairBrackets.get()))`（置于原 closeBracketsKeymap 位=defaultKeymap 上，保 Backspace-delete-pair 优先）。
+- **`EditorPane.tsx`**：`closeBracketsCompartmentRef` + `useStore(autoPairBrackets)` + 视图建时 init compartment + 传 buildEditorExtensions + reconfigure effect（镜像 lineNumber effect：`compartment.reconfigure(closeBracketsExtension(autoPair))`、deps `[autoPair]`）。
+- **`SettingsModal.tsx`**：编辑器节加 `autoPairBrackets` toggle（镜像 showLineNumbers toggle）。
+- **dict.views.ts**：`settings.autoPairBrackets` + desc EN+ZH。
+
+**数据安全**：closeBrackets 是 live-view 输入辅助（键入 `(`→补 `)`），**不写 .md/不触 autosave/不改文档内容**；compartment reconfigure 是 CM config 事务非内容改；toggle 是 localStorage=零 data-safety 面。**改 editor→跑 data-safety 回归确认 autosave 不受影响**。
+
+**双端**：浏览器 e2e（新 r153-e2e）= 默认 ON（键入 `(`→`()` 自动补、`[`→`[]`）+ toggle OFF→键入 `(` 不补 `)` + toggle 回 ON→恢复 + pref 持久（reload）+ 既有编辑/保存不受影响。桌面 probe = N/A（CM 输入行为 + 设置 UI、浏览器 e2e 全覆盖；同既有编辑器 toggle 轮 R88/R92 口径）。
+
+**data-testid**：`settings-autopair-toggle`。
+
+**对抗评审（reviewer 9 维全证伪 → 0 confirmed）：** **closeBrackets 位置上移行为中性**（reviewer 查 CM 源码：closeBrackets 的 inputHandler 是 default Prec、markdownWrapHandler 是 Prec.high→facet 按 precedence 先解析故 markdownWrap 永远先评估、与数组位置无关；且字符集 disjoint `( [ { " '` vs `* _ \` ~ = $`→序无关）· keymap 优先级保持（closeBracketsKeymap 仅 `Backspace→deleteBracketPair`、在 compartment 内仍居 defaultKeymap 上、OFF 移除 moot 因 deleteBracketPair 非配对处返 false 落回普通 backspace）· reconfigure 镜像 R88（仅 dispatch effects 无 changes→不重建/不丢光标/不改文档）· 默认 ON 逐字节同旧· markdownWrapHandler 不 gate（「Auto pair Markdown syntax」另设置 defer、文档化）· data-safety 零面（toggle=localStorage、reconfigure 无 changes→autosave listener 不 fire）· init 读 store（OFF 时建的 pane 启 OFF、reload localStorage→store→build honor）· 分层（appearance core、SettingsModal 从 @core/appearance 取 setter 不跨 feature import）· type-over 边角（随 closeBrackets 一起 OFF=faithful all-off 无半态）。**1 nit（已修）**：r153-e2e persist 断言死 `"0"` 分支（persistBool 只写 "false"）→删。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r153-e2e 8/8**（默认 ON 键入 `(`→`()` + `[`→`[]` + toggle OFF→`(` 不补 + 回 ON 恢复 + pref reload 持久）· 回归 **r35 25/25**（bracket-pair + backspace-delete + type-over，**closeBrackets 移 compartment 行为保持**）·r88 13/13（lineNumber compartment parity）·**r24 12/12**（autosave/data-safety）·r34 15/15·r92 21/21 · 简化门 clean。**桌面 probe N/A**（CM 输入行为 + 设置 UI，浏览器 e2e 全覆盖，同 R88/R92）。**v1 defer**：「Auto pair Markdown syntax」开关（markdownWrapHandler）。
+
+---
+
 ## Round 152 additions — 阅读视图 `#tag` pill 点击搜索（㊻ 收官 · 事件委托不动 markdown.ts · 零 data-safety）【As-built v0.149】
 
 > **状态：As-built（v0.149 交付，2026-06-21）。对抗评审 9 维 → 1 MINOR 确认修（pill-in-link 加 `!closest("a")` 守卫）+ 余全证伪 + 简化门 clean。** ㊻ 收官（R150 树 + R151 排序 + R152 pill 点击）。**Gate（§C 规避）**：grep `markdown.ts:1185` 确认阅读视图 #tag 渲为 `<span class="tag-pill" data-tag="<tag>">`——**已有 class+data 属性** → EditorPane 阅读视图容器**事件委托**（onPreviewClick 加 `.tag-pill` 分支）即可、**不改 markdown.ts HTML 字节 = 不触发 §C/r18-diff/r26-bytes**。faithful=Obsidian 阅读视图 #tag 可点搜该 tag。**纯读 click→search 零 data-safety**。
