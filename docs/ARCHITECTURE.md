@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 141 additions — 命令面板最近用命令置顶（recent commands · 原生 breather · 零 data-safety）【As-built v0.138】
+
+> **状态：As-built（v0.138 交付，2026-06-20）。** 原生池 ㊾——data-safety 轮后的纯前端 breather。**faithfulness（WebFetch 确认）**：Obsidian 1.8.3+「recently used commands appear at the top of the Command palette」（空查询时最近用置顶；**一旦输入，fuzzy 仍主导**=recent 只影响空查询无过滤态）。**RECENT-only 本轮**；**PINNED defer**（Obsidian「Settings > Command palette」独立设置 UI=较大 lift，需 HotkeysSection 扩展+面板分组）。**自包含**（仅 `CommandPalette.tsx` + 新小 helper），**零 data-safety**（纯 UI 排序 + localStorage 命令 id 列表，同 R129/graphPrefs）。
+
+**契约（加性；MRU helper + 空查询排序）**：
+- 新 `features/palette/commandMru.ts`：per-vault 最近用命令 id 的 MRU——`loadRecentCommands(vaultName): string[]` + `recordRecentCommand(vaultName, id)`（dedupe→unshift→cap 50）。**raw `localStorage`**（feature 不能 import compat 的 R129 loadLocalStorage→直用 localStorage，per-vault key `geode.cmdRecent:<vaultName>`、`app.vault.vaultName` 核心可达，先例 graphPrefs/Explorer）；get/set 全 try/catch（quota/corrupt 兜底，recency best-effort）。
+- `CommandPalette.tsx`：① `run(cmd)` 加 `recordRecentCommand(app.vault.vaultName, cmd.id)`（执行点记录，hotkey/compat 直调 callback 旁路 execute 故仅记面板用=v1 可接受）；② **空查询分支**（`if(!q)`）改：recent ids（loadRecentCommands，按 MRU 序、**filter 到 available 的 `all` 集**=跳过未注册/不可用）置顶、其余按既有 alpha 序，`[...recentCmds, ...rest]`。**fuzzy（非空查询）分支不动**（Obsidian：输入后 fuzzy 主导）。
+
+**数据安全**：纯 UI 排序 + localStorage id 字符串列表，**零 vault/documents/markdown.ts 写**、无 editor autosave 路径=零 data-safety 面（同 R129 风险类）；唯一卫生=localStorage try/catch + cap 长度。
+
+**双端**：浏览器 e2e（新 r141-e2e）= 执行命令 → 重开面板空查询该命令置顶 + MRU 序（后执行的更靠前）+ 输入查询 fuzzy 仍主导（recent 不破坏 fuzzy）+ 不可用/未注册 recent id 跳过不崩 + localStorage 持久（reload）；桌面 probe = N/A（纯前端 localStorage UI、命令面板渲染 §D headless 不可靠）→ 浏览器 e2e 全覆盖（同 R129/纯前端轮先例）。
+
+**对抗评审（reviewer 7 维 + 边角 → 1 MINOR 确认修 + 证伪全维）：**
+- **D1 MINOR（loadRecentCommands 漏 dedupe → 损坏/外部 localStorage 重复 id 渲两次=React key 撞，已修+e2e 锁）**：loader 已为 corruption-resilient（filter 非字符串、throw→[]），但没 dedupe——`recordRecentCommand` 写时 dedupe 故 app 自身不产重复，但外部/损坏值 `["x","x"]` 过 loader → recent 块映同一 Command 两次 → `key={cmd.id}` 重复 React key 警告 + 重复行。**修**：loader 加 `[...new Set(...)]`（一行、惠及所有调用者）。e2e 补三重 id 注入→Beta 渲染恰一次。
+- **reviewer 证伪全维**：recent-first 排序正确（recent ids filter 到 `all`[已 available 过滤]→未注册/不可用跳过不崩、ghost-id e2e 证；`rest=all.filter(!recentIds.has)` 保 alpha 序；recentIds Set 保单次出现跨 recent/rest 边界）· MRU 存储健壮（dedupe→unshift 移前不重、slice 50 限长、JSON.parse 损坏→[]、非字符串丢、双 try/catch private-mode/quota 退化无 recency 不抛进 render/run）· run() 记录在 closeModal/execute 前（execute 抛仍记=Obsidian 记 run、记选中 cmd、hotkey/compat 直调 callback 旁路=文档化 v1 偏离）· memo 读 localStorage 幂等（run 后 closeModal 卸载面板→下次开 fresh mount memo 重算读 fresh、无陈旧窗口；vaultName 稳定）· 分层（commandMru 纯 import 无、feature 用 raw localStorage 非 compat R129=正确、零 vault/doc/markdown 写=零 data-safety）· faithfulness（recent 仅 `!q` 分支、fuzzy 分支不动、availability 过滤匹配 Obsidian）· 边角（空 recent→纯 alpha 零回归、palette-open 命令自记无害、长/unicode id round-trip）。
+
+**套件**：typecheck 0 · npm build + cargo check exit 0 · **r141-e2e 13/13**（执行→重开置顶 + MRU 序 Beta>Alpha + fuzzy 仍主导 recent 不破坏 + ghost-id 跳过不崩 + reload 持久 + **D1 重复 id 去重渲一次**）· 回归 r32 24/24·r41 21/21·r38 19/19（palette 开/渲染）· 简化门 clean（0 编辑）。**桌面 probe N/A**（纯前端 localStorage UI）。**PINNED defer**（需 Settings>Command palette 独立 UI=较大、HotkeysSection 扩展+面板分组）。
+
 ## Round 140 additions — Explorer 多选批量操作（bulk delete + move · 完成多选弧 · data-safety 轮）【As-built v0.137】
 
 > **状态：As-built（v0.137 交付，2026-06-20）。** 完成 R138 多选 / R139 files-menu 弧的最后一片——让多选对**终端用户**可用：右键多选 → **Delete N / Move N**。**data-safety 轮**（N 笔 trash/rename）：**完全复用既有 vetted 单节点 throat**（R42 `trash`、R16/R70 `renameWithLinkUpdate`），不新增写路径。gate 揭示的 4 道 data-safety 守则：① **flush 一次**（`flushAll` 是 vault-global，循环前调一次非每文件）；② **dedup-to-roots**（选区含 `folder/` + `folder/a.md` 时只 trash 根=`folder/`，子孙随之消失；剪掉有祖先在选区内的 path，复用 deleteNode 的 `isUnder` prefix 逻辑→防「已消失」抛错+正确计数）；③ **best-effort partial-failure**（trash/rename 可恢复，每次 try/catch + 计数 + 单条 notice，**不**因单失败中止全循环、**不**求事务性）；④ **active/open 文件免处理**（`trash` emit `file:deleted`→`handleDeleted` 按 prefix 关 tab，循环自动逐个关）。同名撞车靠 **adapter `rename` 「target exists→throw」backstop**（MemoryAdapter + Rust 双侧守卫，绝不弱化）。
