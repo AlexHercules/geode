@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 125 additions — compat CachedMetadata.listItems（列表项 parser · 插件 API 商业主轴）【As-built v0.122】
+
+> **状态：As-built（v0.122 交付，2026-06-20）。** Obsidian `getFileCache(file).listItems: ListItemCache[]`（每个列表项一条）现真实现——**顶层块近似**（缩进栈解析 parent，非完整 CommonMark parse）。Tasks / Dataview 等任务·列表分析类插件的命脉。纯读、零改 core（与 R124 sections 同 buildCache choke point）。
+
+**契约（加性；新 ListItemCache 类型 + 行级 parser）**：
+- `compat/obsidian/metadata.ts`：`ListItemCache extends CacheItem {position, parent: number, task?: string, id?: string}` + `CachedMetadata.listItems?`。新 `buildListItems(content, pos)`：每个列表项（`LIST_ITEM_RE` = 任意缩进 `-*+`/`1.` + 可选 `[ ]`）→ 一条。**parent 编码忠实复刻 Obsidian**：嵌套项 = 直接父项的行号（缩进栈 pop 解析）、ROOT 项 = 列表首项行号的**负值**（`-firstLine`；行 0 → `-0===0` quirk 也复刻）。`task` = `[ ]` 内字符（`' '`=未完成、`x`=完成）。`id` = 项**自身行**尾部 `^id`（`LIST_ITEM_ID_RE`，见下 fix b）。`position` = 项**单行**（顶层近似——Obsidian 节点跨整个子树+续行；消费者如 Tasks 只读 `start.line`，文档化）。一个列表从首项跑到首个非空·非缩进·非项行（空行/缩进续行/嵌套围栏保持列表开启）。共享 `splitLines(content)`（R124 抽出，buildSections+buildListItems 同用）。buildCache `if (content!==undefined)` 才算（no-content transient 不缓存→自愈）。
+
+**对抗评审（reviewer 6 维对抗 → 揪出 2 个 MAJOR，均评审后修 + 回归锁；1 顶层近似偏离文档化）：**
+- **MAJOR (a) 评审修——fence 不感知（已修+e2e+probe 锁）**：原 `buildListItems` 对每行裸跑 `LIST_ITEM_RE`、**无围栏状态**，fenced code 内 `- x` / `- [ ] x` 被当真列表项（task 类插件把代码块里的示例 `- [ ]` 计入真任务数）。**根因**：与**同文件**的 `buildSections`（已正确用 `SEC_FENCE_OPEN` 识别围栏整块跳过）对围栏处理不一致。**修**：buildListItems 加前置扫描标记 fenced 行（镜像 buildSections 的 open + 动态 close 正则），外层「起始列表」与内层「走列表」两循环均跳过 fenced 行（围栏嵌在列表内 → 续行、保持列表开启；未闭合围栏消到 EOF）。
+- **MAJOR (b) 评审修——`^id` 挂错项（已修+e2e+probe 锁）**：原用 `blocks.find((b)=>b.to>ln.start && b.to<=ln.end)` 把 `^id` 归给 core block run 的**最后一非空行**。但 core（`metadata.ts:277`）把 block run 向下扩到**整段连续非空行末行**，对连续列表项即扩到**最后一个兄弟项** → `- a ^x / - b / - c` 把 id "x" 错挂到 c、真项 a 反而丢 id（双重错）。**修**：不依赖 core `block.to`，直接在项**自身行**尾正则取 id（`LIST_ITEM_ID_RE = /\s\^([A-Za-z0-9-]+)\s*$/`，**逐字镜像 core `BLOCK_MARKER_RE`**[`metadata.ts:34`]→ 解析出的 id 必等于 core 登记的 block id）；连带删除 `blocks` 形参 + buildCache 不再传 `meta.blocks`（净减一参 + 一处 `.find`）。
+- **顶层近似偏离（设计结果、非缺陷，文档化）**：`position` 为项单行（Obsidian 的 CommonMark 节点跨子树+续行）；多数消费者只读 `start.line`。与 sections「不做完整 CommonMark parse」同性质。tab=1 字符 vs 列宽（相对比较保序，仅同级混 tab+space 偏）· 行尾无空格的 `- [ ]`→task undefined（罕见）。其余 5 维（parent 编码对照官方 `obsidian.d.ts:3760-3769` 全满足 · task 字符 · 边界 loose list · 数据安全纯读无 fs 写 · 分层/回归）评审证伪。
+- **元教训复现**：compat shim 桥接/委托 core 时，新输入分布会**暴露原本约定不同的语义边界**——这里是 core 的「block run = 连续非空行段」模型本为段落/引用设计，套到「连续列表项」上 block.to 不再指向 `^id` 行。审「桥接/委托」改动必须沿调用链追到 core 落点、在新输入分布下复核（同 R111 createBinary 缺 assertSafeRelPath、R122 共享-tmp 撕裂写）。
+
+**套件**：typecheck 0 · cargo check/build exit 0 · r125-e2e **14/14**（item 全捕获/嵌套 parent/root 负行/loose 续行/task/有序列表/no-list 缺省 + **(a) fence 内 `- x` 零幻影** + **(b) `- a ^x/- b/- c` → id 仅挂 a**）· r125-probe **6/6** 真 WKWebView 原生 fs index（lines/parents/tasks/ids + fence 排除 + `^x` 挂 a 不挂 b；metadata 级桌面全验）· 回归 r124 10/10（sections 同 buildCache）·r119 10/10（embeds）· 简化门 clean（diff 小、fence 前置扫描与 buildSections 输出不同非 token 重复、不抽共享 helper）。**剩余缺口（compat 商业主轴）**：`MarkdownView.setMode`（MarkdownSubView 内部参数，**别扭、价值低**）· `registerMarkdownPostProcessor`（Dataview 命脉，**工程大、宜单独拍板**）· `file-menu`/`editor-menu` 钩子（**阻塞面最大、宜单独拍板**）——小项已基本耗尽，余项均**宜单独拍板**。
+
 ## Round 124 additions — compat CachedMetadata.sections（顶层块文档结构 parser · 插件 API 商业主轴）【As-built v0.121】
 
 > **状态：As-built（v0.121 交付，2026-06-20）。** Obsidian `getFileCache(file).sections: SectionCache[]`（文档块结构）现真实现——**顶层块分段近似**（按块首行分类，非完整 CommonMark parse；Obsidian section typing 明言 non-exhaustive）。Dataview 等结构分析类插件用。纯读、零改 core。
