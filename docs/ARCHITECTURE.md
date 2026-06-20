@@ -71,6 +71,19 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 123 additions — compat MarkdownView.setViewData（编辑器全文替换 · data-safety · 插件 API 商业主轴）【As-built v0.120】
+
+> **状态：As-built（v0.120 交付，2026-06-20）。** Obsidian `MarkdownView.setViewData(data, clear)`（替换编辑器全文）现真实现。模式控制/全文写类插件用。**动 editor 写路径 → data-safety**：经 `editor.setValue` → **一笔 undoable CM 事务 → doc-change listener → autosave**（正常保存周期），落盘安全、像一次大粘贴。`setMode` 留 gap（其真实参数是内部 MarkdownSubView，插件改用 leaf.setViewState）。
+
+**契约（加性；1 只读方法 → 安全写路径）**：
+- `compat/obsidian/workspace.ts`：MarkdownView 加 `setViewData(data: string, _clear?: boolean): void` = `this.editor.setValue(data)`（compat Editor.setValue = `cm.dispatch({changes:{from:0,to:doc.length,insert:data}})`，全文替换一笔事务）。`clear`（Obsidian 清 undo 历史）**忽略**——替换保持普通 undoable edit，比清历史更安全（文档化偏差）。
+
+**对抗评审（reviewer data-safety 优先全维 → 0 confirmed 代码缺陷）：**
+- **数据安全（确凿）**：setViewData 走 editor.setValue→CM dispatch→**本地编辑 autosave 路径**（非绕过 autosave 直写）——e2e 实测「setViewData 后 vault.read=新内容」证真落盘不丢；shorter 替换 disk 精确无残留；替换后用户继续编辑仍 autosave。**关键正确决策**：用 `editor.setValue`（CM dispatch，标脏+调度保存）而非 HANDOFF 曾建议的 `handle.setText`——**后者会是静默丢数据 bug**（setText 不标脏、永不调度保存，reviewer 点明）。
+- **证伪**：一笔事务=一个 undo step；stale view（切 preview 后 dispatch 已卸载 cm）边角=抛/no-op、非新数据风险；clear 忽略=更安全无依赖问题；autosave 不破（r24 12/12）；签名对齐 Obsidian、setMode gap 合理（vs 强接 string）；分层合规、仅加方法不动 R116/R117。
+
+**套件**：typecheck 0 · cargo check 0 · r123-e2e **7/7**（setViewData 替换/CM doc 全替换/**autosave 落盘[数据安全]**/shorter 无残留/clear 忽略/替换后仍可编辑）· r123-probe **3/3** 真 WKWebView（表面 + makeActiveMarkdownView null-guard；editor-mount headless 不可达 R115→write 语义归 browser-E2E 平台同码）· 回归 **r24 12/12（autosave 数据安全）**·r116 9/9·r117 9/9·r23 22/22·r46 18/18 · build exit 0 · 简化门 clean（thin 委托 editor.setValue）。**剩余缺口（compat 商业主轴，均中等以上）**：`MarkdownView.setMode`（内部 MarkdownSubView 参数）· `CachedMetadata.sections/listItems`（文档结构 parser）· `registerMarkdownPostProcessor`（Dataview 命脉，**工程大、宜单独拍板**）· `file-menu`/`editor-menu` 钩子（**阻塞面最大、宜单独拍板**）。
+
 ## Round 122 additions — compat DataAdapter.writeBinary create-or-overwrite + 并发原子写修复（插件 API 商业主轴）【As-built v0.119】
 
 > **状态：As-built（v0.119 交付，2026-06-20）。** Obsidian `DataAdapter.writeBinary` **创建或覆盖**——R111 起 Geode 是 create-only（gap），本轮接上覆盖。**对抗评审在覆盖路径揪出一条 MAJOR 并发数据安全隐患（R120 的共享 tmp，R122 高频入口放大），连带修复。** 从原计划的 `CachedMetadata.sections`（文档结构 parser，过重）按 HANDOFF 备选 pivot 到本项。
