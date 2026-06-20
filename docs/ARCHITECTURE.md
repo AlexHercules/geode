@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 157 additions — 笔记内嵌反链补「Unlinked mentions」（㊷ · 完成 R154 · 复用 core 扫描器 · 零 data-safety）【As-built v0.154】
+
+> **状态：As-built（已交付）。** 对抗评审 6 维全 REFUTED → **0 confirmed defect（clean）** + 简化门 clean。reviewer 逐 await 点证 cancellation 无 stale-path 泄漏（唯一 await=vault.read 后即 `if(cancelled)return`、终态 setUnlinked 亦 guard）+ 证 `metadata.revision` 仅 per-debounced-save bump（非 per-keystroke，且组件仅阅读视图挂载=编辑期不扫）= perf 与 panel 同 + lineSnippet 边界（from=0/行首/无尾换行）全对 + `:first-child` 去边逻辑成立（linked 空 Fragment 不出 DOM 节点）。验收：r157-e2e 12/12、r154 13/13、r98 15/15（panel unlinked 未碰）、r26-bytes 0、typecheck/cargo、截图实证（in-document 与右栏 panel 数据一致：Linked 1 + Unlinked 3）。**桌面 probe N/A**（阅读视图 DOM + 扫描逻辑平台无关，同 R154）。
+>
+> ㊷ 收官——R154 笔记底部内嵌只做了 linked mentions，Obsidian「Backlink in document」还显**未链接提及（unlinked mentions）**=全库扫笔记标题/别名的纯文本出现（非已链接）。**Gate**：grep 排除多个「缺口实为已完成」（㊺ 外观=theme[R79 含 watchSystemTheme live-follow]/accent/fonts/font-size/readable-line/inline-title/ribbon/tab-bar/status-bar 全done；properties-in-document[R22]done；unlinked mentions **在 BacklinksPanel 已 done**[R82/R98]）→ 真缺口=**把 unlinked mentions 接进 R154 的 in-document 区**。`core/unlinkedMentions.ts` 已有纯函数 `deriveMentionTerms(meta)`[标题+aliases]+`findUnlinkedMentions(content, sourceMeta, terms):MentionSpan[]`（**core、features/editor 可 import**）；`buildSnippet` 是 BacklinksPanel **feature-local**（跨 feature 不可 import）→ 自写极简行级 snippet。
+
+**契约（加性；只动 `features/editor/BacklinksInDocument.tsx`）**：
+- **eager async 扫描**（镜像 BacklinksPanel 模式、不 import 它）：`deriveMentionTerms(getMetadata(path))` → terms；`useEffect([app,path,rev])` 里 `let cancelled=false`，遍历 `metadata.getAll().filter(≠path).sort(path)` → `await vault.read` →（cancelled 早退）`findUnlinkedMentions(content,meta,terms)` → spans → 自写 `lineSnippet(content,from)`（含 mention 的那行 trim）→ 按 sourcePath 分组；`!cancelled && setUnlinked(groups)`；cleanup `cancelled=true`（path/rev 变即取消重扫）。
+- **渲染**：linked 段（原样、`getBacklinks` sync）+ 新 unlinked 段在其下；段标题 `t("backlinks.unlinkedMentions")`+count（i18n 键已存）；每 source basename + 每 lineSnippet click→`openFile`（复用 navProps）。**组件 render 条件改为 linked.length>0 ‖ unlinked.length>0**（原 `groups.length===0 return null` 改成两者皆空才 null——unlinked 可在 0 linked 时存在）。
+- **data-testid**：`embedded-unlinked` + `eul-source-<path>`。CSS 复用 `.embedded-backlinks*`/`.ebl-*`（unlinked 段加一条上边框分隔）。
+
+**数据安全**：纯读（`vault.read` 只读 + `findUnlinkedMentions` 纯函数 + click→`openFile`），**零 vault/.md 写**、不动 markdown.ts、节点仍在 `.preview-content` 后=§C/r26-bytes 不触 = 零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r157-e2e）= 设置 ON 阅读视图 → 一笔记纯文本提及目标标题（无链接）→ 显「Unlinked mentions」段+source+snippet + click→openFile + 改成 `[[wikilink]]` 后该提及移出 unlinked（进 linked）+ 0 提及笔记→无 unlinked 段。桌面 probe N/A（阅读视图 DOM + 扫描逻辑平台无关，同 R154）。
+
+**v1 nuance / defer**：eager 扫描（每次阅读视图开笔记扫全库，**与 BacklinksPanel 同成本**、setting 默认 OFF；lazy-on-expand 是未来 perf 优化，文档化）；unlinked 段不做 collapse（v1 直显，Obsidian 默认折叠=defer）；click 不跳 position（同 R154 linked，defer）；不做「Link」按钮（panel 有、in-document v1 只读导航）。
+
+---
+
 ## Round 156 additions — 编辑器「Fold heading」开关（㊶ · foldService compartment · 复用 R153 模式 · 零 data-safety）【As-built v0.153】
 
 > **状态：As-built（已交付）。** ㊶ 续编辑器设置（R153 auto-pair → R156 Fold heading）。**Gate**：① Obsidian Editor 两设置「Fold heading」「Fold indent」均默认 ON；② grep Geode 现状=`folding.ts markdownFoldRange` 是**单一 foldService**，含两分支——heading section（ATX+Setext, R54）+ multi-line ListItem。→ 初拟 gate 两分支放 compartment 反应式重配（复用 R153 closeBracketsExtension(on) + R88/R92 模式）。**零新依赖**（CM6 既有 `@codemirror/language` foldService；**indentation guides 因需新 CM 依赖=硬边界#5 而弃、改做 fold 设置**）。
