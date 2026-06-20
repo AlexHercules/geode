@@ -69,6 +69,18 @@ export interface BlockCache extends CacheItem {
   id: string;
 }
 
+/** R127: a `[^id]: content` footnote DEFINITION. */
+export interface FootnoteCache extends CacheItem {
+  /** footnote id WITHOUT the leading '^'. */
+  id: string;
+}
+
+/** R127: an inline `[^id]` footnote REFERENCE in the body. */
+export interface FootnoteRefCache extends CacheItem {
+  /** footnote id WITHOUT the leading '^'. */
+  id: string;
+}
+
 export interface FrontMatterCache {
   [key: string]: unknown;
 }
@@ -98,8 +110,9 @@ export interface ListItemCache extends CacheItem {
  * embeds is real since R119 (`![[..]]` wikilink embeds, split out of links).
  * sections is real since R124 (top-level block segmentation, see buildSections) and
  * listItems since R125 (see buildListItems). frontmatterLinks is real since R126
- * (`[[wikilink]]` inside property values, see buildFrontmatterLinks). blocks is real
- * since R13 (`^id`, core parseNote).
+ * (`[[wikilink]]` inside property values, see buildFrontmatterLinks). footnotes +
+ * footnoteRefs are real since R127 (core parseNote: `[^id]:` definitions + `[^id]`
+ * references). blocks is real since R13 (`^id`, core parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
@@ -110,6 +123,10 @@ export interface CachedMetadata {
   blocks?: Record<string, BlockCache>;
   sections?: SectionCache[];
   listItems?: ListItemCache[];
+  /** `[^id]: content` footnote definitions. */
+  footnotes?: FootnoteCache[];
+  /** inline `[^id]` footnote references in the body. */
+  footnoteRefs?: FootnoteRefCache[];
   frontmatter?: FrontMatterCache;
   frontmatterPosition?: Pos;
   frontmatterLinks?: FrontmatterLinkCache[];
@@ -500,6 +517,15 @@ export class MetadataCache extends Events {
         blocks[b.id] = { id: b.id, position: pos(b.from, b.to) };
       }
       out.blocks = blocks;
+    }
+    // R127: footnote definitions + inline references, projected straight from core meta
+    // (offsets already resolved by parseNote) — no `content` needed, so they survive the
+    // no-content warm-up transient, like frontmatterLinks.
+    if (meta.footnotes.length > 0) {
+      out.footnotes = meta.footnotes.map((f) => ({ id: f.id, position: pos(f.from, f.to) }));
+    }
+    if (meta.footnoteRefs.length > 0) {
+      out.footnoteRefs = meta.footnoteRefs.map((r) => ({ id: r.id, position: pos(r.from, r.to) }));
     }
     if (meta.links.length > 0) {
       // R119: split `![[..]]` embeds out of links (Obsidian files them separately).

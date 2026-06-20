@@ -3,6 +3,7 @@ import type {
   BlockRef,
   FileNode,
   FootnoteRef,
+  FootnoteRefMark,
   FrontmatterData,
   GraphData,
   GraphEdge,
@@ -38,6 +39,11 @@ const BLOCK_MARKER_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
  *  like HEADING_RE / TAG_RE / BLOCK_MARKER_RE (the codebase convention — indented
  *  defs are out of scope, same as indented headings for the outline pane). */
 const FOOTNOTE_DEF_RE = /^\[\^([^\s[\]]+)\]:.*$/gm;
+/** R127: an inline `[^id]` footnote REFERENCE marker — same id charset as the definition.
+ *  Scanned on `masked` so refs inside code / frontmatter are excluded; matchAll yields every
+ *  occurrence (duplicate ids kept). The loop drops only a definition's OWN marker (col-0 `[^id]:`,
+ *  matching FOOTNOTE_DEF_RE's anchor) — a mid-line `[^id]:` is a genuine ref (R127 review F1). */
+const FOOTNOTE_REF_RE = /\[\^([^\s[\]]+)\]/g;
 
 /**
  * Blank out code-fence and inline-code regions with same-length runs of spaces
@@ -242,7 +248,19 @@ export function parseNote(path: string, content: string): NoteMetadata {
       id: m[1],
       content: content.slice(afterColon, m.index! + m[0].length).trim(),
       from: m.index!,
+      to: m.index! + m[0].length,
     });
+  }
+  // R127: inline `[^id]` references in the body (footnoteRefs). Scanned on `masked` (so refs
+  // inside fenced/inline code + frontmatter are excluded, like the definitions above). A
+  // definition's own marker is a col-0 `[^id]:` (FOOTNOTE_DEF_RE's anchor) — skip exactly those,
+  // NOT every `[^id]:` (a mid-line one is a real ref, R127 review F1). Document order; dups kept.
+  const footnoteRefs: FootnoteRefMark[] = [];
+  for (const m of masked.matchAll(FOOTNOTE_REF_RE)) {
+    const to = m.index! + m[0].length;
+    const atLineStart = m.index === 0 || masked[m.index! - 1] === "\n";
+    if (atLineStart && masked[to] === ":") continue; // this `[^id]:` is a definition, not a ref
+    footnoteRefs.push({ id: m[1], from: m.index!, to });
   }
 
   // `^block-id` markers at line ends (R13). Scanned against `masked` (all
@@ -303,6 +321,7 @@ export function parseNote(path: string, content: string): NoteMetadata {
     headings,
     blocks,
     footnotes,
+    footnoteRefs,
     frontmatter,
     aliases,
     contentLength: content.length,

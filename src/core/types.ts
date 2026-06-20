@@ -72,6 +72,19 @@ export interface FootnoteRef {
   content: string;
   /** char offset of the definition line start */
   from: number;
+  /** char offset of the definition line end (R127, for compat FootnoteCache.position) */
+  to: number;
+}
+
+/** An inline `[^id]` footnote reference marker in the body (R127). Distinct from the
+ *  definition: references are scanned on the masked content (code/frontmatter excluded). */
+export interface FootnoteRefMark {
+  /** footnote id WITHOUT the '^' */
+  id: string;
+  /** char offset of the `[` */
+  from: number;
+  /** char offset just past the `]` */
+  to: number;
 }
 
 /** Parsed metadata for a single markdown file. */
@@ -84,6 +97,8 @@ export interface NoteMetadata {
   blocks: BlockRef[];
   /** R65: `[^id]: content` footnote definitions, document order */
   footnotes: FootnoteRef[];
+  /** R127: inline `[^id]` footnote reference markers in the body, document order */
+  footnoteRefs: FootnoteRefMark[];
   /** YAML frontmatter, if the file starts with a --- block */
   frontmatter?: FrontmatterData;
   /** alternative names from frontmatter `aliases:` — participate in link resolution */
