@@ -71,6 +71,27 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 151 additions — 标签面板排序菜单（㊻ 续 R150 · freq/name × asc/desc · 零 data-safety）【As-built v0.148】
+
+> **状态：As-built（v0.148 交付，2026-06-21）。对抗评审 9 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean。** 续 R150 标签树。**Gate（faithfulness）**：WebFetch obsidian.md/help/plugins/tags 已确认 Obsidian 标签面板「Change sort order: Tag name / Frequency」（2 轴×2 向=4 选项，与 Geode 自家 SearchPanel sort 同形）。R150 在 `buildTagTree` cmp 硬编码 count desc；R151 加排序 toggle（每层 siblings 重排）。**纯 UI 排序、零 data-safety**（同 R150）。
+
+**契约（加性；TagsPanel 排序参数化 + select）**：
+- **`features/tags/TagsPanel.tsx`**：`TagSortKey = "freq-desc"|"freq-asc"|"name-asc"|"name-desc"`；`buildTagTree(map, sortKey="freq-desc")` 加可选参（向后兼容），cmp 由 `TAG_CMP[sortKey]` 选（freq=count±+name tiebreak；name=segment localeCompare±）；递归 finalize 用同 cmp（每层重排）。`sortKey` state 持久化 `geode.tagsSort`（**inline raw localStorage** try/catch、feature 不 import SearchPanel 的 readSearchPref、先例 R141 commandMru）默认 `freq-desc`（=R150 行为零回归）。panel-header 改 flex 行：title + `<select class="tags-sort">` 4 option。
+- **dict.panels.ts**：`tags.sortBy` + `tags.sortFreqDesc/FreqAsc/NameAsc/NameDesc` EN+ZH。
+- **tags.css**：header flex 行（title 不 uppercase 冲突）+ `.tags-sort` select 样式（镜像 `.search-sort`）。
+
+**数据安全**：纯排序 + localStorage pref 字符串，**零 vault/.md 写**=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r151-e2e）= 默认 freq-desc（=R150 顺序）+ 切 name-asc→字母序 + name-desc→逆字母 + freq-asc→count 升序 + 每层（含子树内 siblings）都按所选序 + pref 持久（reload）+ 切排序保留树结构/折叠。桌面 probe = N/A（纯前端排序 UI，同 R150）。
+
+**data-testid**：`tags-sort`（select）+ 复用 R150 `tag-row-<fullPath>`。
+
+**对抗评审（reviewer 9 维全证伪 → 0 confirmed）：** comparator 正确（4 模式、freq 带 name tiebreak、name 模式无 tiebreak 但 siblings 按 segment Map-key 唯一不可能 tie）· 每层重排（finalize 同 cmp、子树 siblings 翻转 e2e 锁）· readTagSort 健壮（**显式 4 值 isTagSortKey 非 `in TAG_CMP`**=避原型键、corrupt/missing/throw→freq-desc 不崩、旧 key 格式 count-desc 被拒）· **默认 freq-desc 与 R150 硬编码 cmp 逐字符同**=零回归· useMemo deps 含 sortKey 重建全树（非热路径）+ **collapsed 按 fullPath 独立、跨排序保留**（e2e 锁）· faithfulness（4 选项匹配 Obsidian、`<select>` vs icon-menu 是与 Geode SearchPanel 一致的偏离、文档化）· 持久化（sort 持久 vs collapse per-session=set-once-pref vs transient、文档化）· data-safety 零写 · 分层（inline localStorage 强制 dup R141 先例）/a11y（select aria-label）/header 重构不破 R150 树。**采纳 1 coverage nit**：补「collapse 跨排序变更存活」e2e。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r151-e2e 13/13**（4 排序序 top-level + 子树 siblings 翻转 + **collapse 跨排序存活** + pref reload 持久 + 默认 freq-desc=R150 序）· 回归 r150 20/20·r41 21/21 · 简化门 clean。**桌面 probe N/A**（纯前端排序 UI）。**v1 defer 续**：flat-list toggle / 折叠持久化。
+
+---
+
 ## Round 150 additions — 标签面板嵌套层级树 + 折叠（㊻ · 原生功能 · 脱离 compat 审计 · 零 data-safety）【As-built v0.147】
 
 > **状态：As-built（v0.147 交付，2026-06-21）。对抗评审 9 维 → 2 MINOR 确认修 + 2 nit 采纳 + 余全证伪 + 简化门 clean。** **转向原生**——R144–R149 连六轮 compat 审计、边际递减；本轮回原生候选池 ㊻（TagsPanel 现 48 行扁平）。**Gate（faithfulness）**：WebFetch obsidian.md/help/plugins/tags 确认 Obsidian 标签面板「display nested tags as a tree」（折叠树、chevron「clicking the arrow」）+ 排序菜单「Change sort order: Tag name / Frequency」；R138 gate 已确认层级**在 tag pane**（非 graph）。**纯读显示、零 data-safety**（reads getTagMap、click→search、rename 菜单不变）。
