@@ -4,6 +4,7 @@
  * plugins) and SidebarViewLeaf — a REAL mount point for registerView custom
  * views, hosted as Geode sidebar panels (PluginManager.addSidebarPanel).
  */
+import { openSearchPanel } from "@codemirror/search";
 import type { AppHandle } from "@core/plugins";
 import { findActiveTab } from "@core/workspace";
 import { Editor } from "./editor";
@@ -82,6 +83,22 @@ export class MarkdownView extends FileView {
    *  MarkdownSubView; plugins switch mode via leaf.setViewState instead. */
   setViewData(data: string, _clear?: boolean): void {
     this.editor.setValue(data);
+  }
+
+  /** R147: Obsidian `MarkdownView.showSearch(replace)` — open the editor's find
+   *  (or find&replace) panel. Delegates to CM's openSearchPanel (the R34 search
+   *  mechanism). The replace-field focus mirrors features/editor `focusReplaceField`
+   *  inline — compat cannot import features (layering), a forced 5-line dup. */
+  showSearch(replace?: boolean): void {
+    const view = this.editor.cm;
+    openSearchPanel(view);
+    if (replace) {
+      requestAnimationFrame(() => {
+        const el = view.dom.querySelector<HTMLInputElement>('.cm-search [name="replace"]');
+        el?.focus();
+        el?.select();
+      });
+    }
   }
 }
 
