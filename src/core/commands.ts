@@ -54,6 +54,16 @@ export class CommandRegistry {
     };
   }
 
+  /** Remove a command by id (Obsidian-compat app.commands.removeCommand, R121). Same
+   *  delete + cache-invalidate + revision-bump the register() disposer performs; returns
+   *  false (no bump) when the id is unknown. */
+  removeById(id: string): boolean {
+    if (!this.commands.delete(id)) return false;
+    this.parsedCache = null;
+    this.revision.update((n) => n + 1);
+    return true;
+  }
+
   execute(id: string): boolean {
     const cmd = this.commands.get(id);
     if (!cmd) return false;

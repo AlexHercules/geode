@@ -325,13 +325,14 @@ interface CompatCommand {
  * honors `available` and runs the registered command) rather than invoking a passed-in,
  * possibly-unregistered Command object directly — fine for the normal flow where the
  * object came from findCommand/commands/listCommands.
- * `removeCommand` stays a gap (Plugin.removeCommand already removes a plugin's own
- * commands via its disposer; an app-level remove-by-id needs a core registry method).
+ * R121 adds removeCommand (app-level remove-by-id via core CommandRegistry.removeById);
+ * distinct from Plugin.removeCommand, which removes a plugin's OWN command via its disposer.
  */
 function makeCommands(registry: CommandRegistry): {
   executeCommandById(id: string): boolean;
   executeCommand(command: { id: string }): boolean;
   findCommand(id: string): CompatCommand | undefined;
+  removeCommand(id: string): void;
   listCommands(): CompatCommand[];
   readonly commands: Record<string, CompatCommand>;
   readonly editorCommands: Record<string, CompatCommand>;
@@ -355,6 +356,10 @@ function makeCommands(registry: CommandRegistry): {
     findCommand: (id: string): CompatCommand | undefined => {
       const cmd = find(id);
       return cmd ? toCompat(cmd) : undefined;
+    },
+    // R121: Obsidian returns void; the registry's boolean (unknown id → false) is dropped.
+    removeCommand: (id: string): void => {
+      registry.removeById(id);
     },
     listCommands: (): CompatCommand[] => registry.list().map(toCompat),
     get commands(): Record<string, CompatCommand> {
