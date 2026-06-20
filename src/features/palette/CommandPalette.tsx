@@ -6,6 +6,7 @@ import { locale, useI18n } from "@core/i18n";
 import { getCommandName, formatHotkey } from "@core/commands";
 import type { Command } from "@core/types";
 import { fuzzyMatch, toSegments, type FuzzyMatch } from "@core/fuzzy";
+import { loadRecentCommands, recordRecentCommand } from "./commandMru";
 import "./palette.css";
 
 interface Row {
@@ -30,7 +31,18 @@ export function CommandPalette() {
     const all = app.commands.list().filter((cmd) => cmd.available?.() !== false);
     const hotkey = (cmd: Command) => app.commands.getEffectiveHotkey(cmd.id);
     const q = query.trim();
-    if (!q) return all.map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
+    if (!q) {
+      // R141: empty query → recently-used commands first (MRU order), then the rest (alpha). Recent
+      // ids are filtered against `all`, so unregistered/unavailable recents are skipped. Once the user
+      // types, fuzzy score takes over (Obsidian: recents are subject to fuzzy matching when filtering).
+      const byId = new Map(all.map((cmd) => [cmd.id, cmd]));
+      const recent = loadRecentCommands(app.vault.vaultName)
+        .map((id) => byId.get(id))
+        .filter((cmd): cmd is Command => cmd !== undefined);
+      const recentIds = new Set(recent.map((cmd) => cmd.id));
+      const rest = all.filter((cmd) => !recentIds.has(cmd.id));
+      return [...recent, ...rest].map((cmd) => ({ cmd, match: { score: 0, indices: [] }, hotkey: hotkey(cmd) }));
+    }
     return all
       .map((cmd) => ({ cmd, match: fuzzyMatch(q, getCommandName(cmd)), hotkey: hotkey(cmd) }))
       .filter((r): r is Row => r.match !== null)
@@ -51,6 +63,7 @@ export function CommandPalette() {
   }, [sel, rows]);
 
   const run = (cmd: Command) => {
+    recordRecentCommand(app.vault.vaultName, cmd.id); // R141: bump to the top of the MRU
     app.workspace.closeModal();
     app.commands.execute(cmd.id);
   };
