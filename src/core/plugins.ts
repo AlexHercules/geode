@@ -90,6 +90,31 @@ export interface PluginSettingsSection {
   unmount(): void;
 }
 
+/** R130: a plain-data context-menu item contributed by a plugin's file-menu handler. Core knows
+ *  no compat Menu — compat maps its Menu items down to this shape before they cross into core, so
+ *  the feature that renders the menu (Explorer) never imports compat. */
+export interface MenuContribution {
+  title: string;
+  /** lucide icon name (resolved by the rendering feature's <Icon>) */
+  icon?: string;
+  /** grouping hint; v1 preserves insertion order (full Obsidian section ordering deferred) */
+  section?: string;
+  disabled?: boolean;
+  /** danger styling */
+  warning?: boolean;
+  checked?: boolean;
+  /** runs AFTER the host menu closes */
+  onClick: () => void;
+}
+
+/** R130: context handed to the file-menu provider when a file/folder context menu opens. */
+export interface FileMenuContext {
+  path: string;
+  isFolder: boolean;
+  /** e.g. "file-explorer-context-menu" (Obsidian's `source` arg) */
+  source: string;
+}
+
 interface PluginRecord {
   plugin: GeodePlugin;
   enabled: boolean;
@@ -144,6 +169,9 @@ export class PluginManager {
   readonly settingsSections = new Store<ReadonlyArray<PluginSettingsSection>>([]);
   /** sidebar panels (compat registerView custom views) hosted by the App shell */
   readonly sidebarPanels = new Store<ReadonlyArray<SidebarPanelContribution>>([]);
+  /** R130: the single compat file-menu provider (set per loader run, cleared on reload). Not a
+   *  Store — collection is a synchronous call when a context menu opens, not a reactive render. */
+  private fileMenuProvider: ((ctx: FileMenuContext) => MenuContribution[]) | null = null;
 
   private records = new Map<string, PluginRecord>();
   /** ids of plugins loaded from <vault>/.geode/plugins — unloaded on every reload */
@@ -403,6 +431,26 @@ export class PluginManager {
     // dispose by object identity, so a later same-id registration is not torn
     // down by a stale disposer
     return () => this.sidebarPanels.update((arr) => arr.filter((x) => x !== panel));
+  }
+
+  /** R130: register the compat file-menu provider (one per loader run). The disposer clears it
+   *  only if still current, so a reload's re-register isn't torn down by a stale disposer. */
+  registerFileMenuProvider(fn: (ctx: FileMenuContext) => MenuContribution[]): () => void {
+    this.fileMenuProvider = fn;
+    return () => {
+      if (this.fileMenuProvider === fn) this.fileMenuProvider = null;
+    };
+  }
+
+  /** R130: collect plugin-contributed items for a file/folder context menu (synchronous; [] when
+   *  there is no provider or it throws). The Explorer calls this while opening its R93 menu. */
+  collectFileMenu(ctx: FileMenuContext): MenuContribution[] {
+    try {
+      return this.fileMenuProvider?.(ctx) ?? [];
+    } catch (err) {
+      console.warn("[menus] file-menu provider threw", err);
+      return [];
+    }
   }
 
   addSettingsSection(section: PluginSettingsSection): () => void {

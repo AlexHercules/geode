@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
 import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
@@ -32,6 +33,8 @@ interface MenuState {
   y: number;
   /** R93: null = empty-area right-click → root New note / New folder menu */
   node: VaultNode | null;
+  /** R130: plugin-contributed file-menu items (collected once at open; [] for empty-area) */
+  contributed: MenuContribution[];
 }
 
 /* ---------------- pure helpers ---------------- */
@@ -623,7 +626,14 @@ export function Explorer() {
           // empty-area root menu) — a row click owns its own node menu
           e.stopPropagation();
           setSelected(node.path);
-          setMenu({ x: e.clientX, y: e.clientY, node });
+          // R130: collect plugin file-menu items ONCE here (fires the 'file-menu' event via the
+          // core provider), so re-renders don't re-run plugin handlers
+          const contributed = app.plugins.collectFileMenu({
+            path: node.path,
+            isFolder: node.kind === "folder",
+            source: "file-explorer-context-menu",
+          });
+          setMenu({ x: e.clientX, y: e.clientY, node, contributed });
         }}
         title={node.path}
       >
@@ -713,7 +723,7 @@ export function Explorer() {
           // (rows stopPropagation, so this only fires for genuine empty-area clicks)
           e.preventDefault();
           setSelected(null);
-          setMenu({ x: e.clientX, y: e.clientY, node: null });
+          setMenu({ x: e.clientX, y: e.clientY, node: null, contributed: [] });
         }}
         onScroll={virtual ? (e) => setScrollTop(e.currentTarget.scrollTop) : undefined}
         onDragOver={onTreeDragOver}
@@ -891,6 +901,29 @@ export function Explorer() {
                   <Icon name="x" size={14} />
                   {t("explorer.delete")}
                 </button>
+                {/* R130: plugin-contributed file-menu items, after the native items behind a sep */}
+                {menu.contributed.length > 0 && <div className="explorer-menu-sep" />}
+                {menu.contributed.map((item, i) => (
+                  <button
+                    key={`contrib-${i}`}
+                    data-testid="explorerctx-contributed"
+                    className={item.warning ? "is-danger" : undefined}
+                    disabled={item.disabled}
+                    onClick={() => {
+                      setMenu(null);
+                      // R130: swallow+log a throwing plugin onClick (parity with compat MenuItem,
+                      // ui.ts) so it never propagates into React's event system
+                      try {
+                        item.onClick();
+                      } catch (err) {
+                        console.error("[file-menu] contributed item onClick threw", err);
+                      }
+                    }}
+                  >
+                    {item.icon && <Icon name={item.icon} size={14} />}
+                    {item.title}
+                  </button>
+                ))}
               </>
             ))(menu.node)
           )}

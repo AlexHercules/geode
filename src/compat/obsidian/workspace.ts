@@ -8,10 +8,11 @@ import type { AppHandle } from "@core/plugins";
 import { findActiveTab } from "@core/workspace";
 import { Editor } from "./editor";
 import { Events, type EventRef } from "./events";
-import type { FileRegistry, TFile } from "./files";
+import type { FileRegistry, TAbstractFile, TFile } from "./files";
 import { reportGap } from "./gaps";
 import { getIconSvg } from "./icons";
 import type { App } from "./plugin";
+import type { Menu } from "./ui";
 // value import is safe: view.ts only imports type-only symbols from this file
 import { FileView, type View } from "./view";
 
@@ -493,6 +494,14 @@ export class Workspace extends Events {
   on(
     name: "editor-change",
     callback: (editor: Editor, info: MarkdownView) => unknown,
+    ctx?: unknown,
+  ): EventRef;
+  /** R130: a file/folder context menu is opening — add items via `menu.addItem(...)`. The host
+   *  collects them (CollectorMenu) and renders them into its native menu. `file` is the TFile or
+   *  TFolder; `source` identifies the menu (e.g. "file-explorer-context-menu"). */
+  on(
+    name: "file-menu",
+    callback: (menu: Menu, file: TAbstractFile, source: string, leaf?: WorkspaceLeaf) => unknown,
     ctx?: unknown,
   ): EventRef;
   on(name: string, callback: (...data: never[]) => unknown, ctx?: unknown): EventRef;

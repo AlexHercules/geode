@@ -27,6 +27,7 @@
 import type { AppHandle, PluginManager } from "@core/plugins";
 import type { Vault as GeodeVault } from "@core/vault";
 import { FileRegistry } from "./files";
+import { CollectorMenu } from "./menuCollect";
 import { MetadataCache } from "./metadata";
 import { App } from "./plugin";
 import { EditorSuggestManager } from "./suggest";
@@ -198,6 +199,21 @@ export function createCompatContext(
         prevRoot = root;
         workspace.trigger("layout-change");
       }
+    }),
+  );
+
+  /* ----- R130: file-menu contribution bridge -----
+   * Compat registers ONE provider into the core PluginManager; the Explorer (a feature, which
+   * cannot import compat) calls plugins.collectFileMenu(ctx) while opening its context menu. The
+   * provider builds a CollectorMenu (records plugin items as plain data, no DOM), fires the
+   * 'file-menu' workspace event so every plugin handler contributes, and returns the items. */
+  disposers.push(
+    plugins.registerFileMenuProvider((ctx) => {
+      const file = ctx.isFolder ? registry.getFolder(ctx.path) : registry.getFile(ctx.path);
+      if (!file) return [];
+      const menu = new CollectorMenu();
+      workspace.trigger("file-menu", menu, file, ctx.source, undefined);
+      return menu.items;
     }),
   );
 
