@@ -76,11 +76,22 @@ export interface SectionCache extends CacheItem {
   type: string;
 }
 
+export interface ListItemCache extends CacheItem {
+  /** Block id of this list item (without the leading '^'), if it carries one. */
+  id?: string;
+  /** Parent list item's line number (position.start.line). A ROOT item (no parent)
+   *  carries the NEGATIVE line number of the list's first item (Obsidian encoding). */
+  parent: number;
+  /** The char inside `[ ]` for a task item (' ' = incomplete, any other = done);
+   *  undefined when the item is not a task. */
+  task?: string;
+}
+
 /**
  * embeds is real since R119 (`![[..]]` wikilink embeds, split out of links).
- * sections is real since R124 (top-level block segmentation, see buildSections).
- * listItems / frontmatterLinks are NOT produced by Geode's parser yet (optional
- * fields — recorded gap). blocks is real since R13 (`^id` markers, core parseNote).
+ * sections is real since R124 (top-level block segmentation, see buildSections) and
+ * listItems since R125 (see buildListItems). frontmatterLinks is NOT produced yet
+ * (optional field — recorded gap). blocks is real since R13 (`^id`, core parseNote).
  */
 export interface CachedMetadata {
   links?: LinkCache[];
@@ -90,6 +101,7 @@ export interface CachedMetadata {
   /** id (without '^') -> block cache; omitted when the note has no blocks. */
   blocks?: Record<string, BlockCache>;
   sections?: SectionCache[];
+  listItems?: ListItemCache[];
   frontmatter?: FrontMatterCache;
   frontmatterPosition?: Pos;
 }
@@ -140,6 +152,96 @@ function classifySection(firstLine: string, blockText: string): string {
   return "paragraph";
 }
 
+interface SegLine {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Split `content` into lines: each = [start, end) excluding the trailing newline. Line `i`
+ *  of the array is line `i` (0-based, matching Pos.line). Shared by buildSections/buildListItems. */
+function splitLines(content: string): SegLine[] {
+  const lines: SegLine[] = [];
+  for (let p = 0; p <= content.length; ) {
+    let nl = content.indexOf("\n", p);
+    if (nl === -1) nl = content.length;
+    lines.push({ start: p, end: nl, text: content.slice(p, nl) });
+    if (nl === content.length) break;
+    p = nl + 1;
+  }
+  return lines;
+}
+
+/** A list-item line at ANY indent: captures (1) leading whitespace and (2) the task char inside
+ *  `[ ]`, if any. Distinct from SEC_LIST (≤3-indent, for top-level block typing) — nested items
+ *  are more-indented, so listItems must accept any indent. */
+const LIST_ITEM_RE = /^([ \t]*)(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[(.)\][ \t])?/;
+// trailing `^id` on a list item's own line — mirrors core BLOCK_MARKER_RE charset (R125)
+const LIST_ITEM_ID_RE = /\s\^([A-Za-z0-9-]+)\s*$/;
+
+/**
+ * R125: every list item → a ListItemCache. A list runs from its first item until a non-blank,
+ * NON-indented, non-item line (blank lines and indented continuation lines keep the list open —
+ * a top-level approximation, like sections). `parent` is the line number of the immediate parent
+ * item (resolved by an indent stack); a ROOT item carries the NEGATIVE line of the list's first
+ * item (Obsidian encoding). `task` is the `[ ]` char; `id` comes from a trailing `^id` on the
+ * item's own line. `position` is the item's single line (a top-level approximation — Obsidian's
+ * CommonMark node would span the item's whole subtree; consumers like Tasks read only start.line).
+ */
+function buildListItems(
+  content: string,
+  fmEnd: number,
+  pos: (from: number, to: number) => Pos,
+): ListItemCache[] {
+  const items: ListItemCache[] = [];
+  const lines = splitLines(content);
+  // a `- x` inside a fenced code block is NOT a list item — record each fenced line's OPENING
+  // indent (−1 = not fenced; mirrors buildSections' fence detection). A column-0 fence later breaks
+  // the list like a paragraph; an indented one is a list item's own code block (R125 review).
+  const fenceIndent = new Array<number>(lines.length).fill(-1);
+  for (let i = 0; i < lines.length; i++) {
+    const open = lines[i].text.match(SEC_FENCE_OPEN);
+    if (!open) continue;
+    const openIndent = open[0].length - open[1].length; // leading spaces before the ```/~~~ run
+    const close = new RegExp(`^ {0,3}${open[1][0]}{${open[1].length},}[ \\t]*$`);
+    let j = i;
+    for (; j < lines.length; j++) { fenceIndent[j] = openIndent; if (j > i && close.test(lines[j].text)) break; }
+    i = j;
+  }
+  for (let i = 0; i < lines.length; ) {
+    // skip frontmatter (a YAML `  - a` entry is not a document list item) and fenced lines
+    if (lines[i].start < fmEnd || fenceIndent[i] >= 0 || !LIST_ITEM_RE.test(lines[i].text)) { i++; continue; }
+    const firstLine = i; // 0-based line number of the list's first item
+    const stack: Array<{ indent: number; line: number }> = []; // ancestor items
+    for (; i < lines.length; i++) {
+      // a column-0 fence ends the list (top-level code block); an indented one is the current
+      // item's own code block and keeps the list open
+      if (fenceIndent[i] >= 0) { if (fenceIndent[i] === 0) break; continue; }
+      const ln = lines[i];
+      if (ln.text.trim() === "") continue; // blank line keeps a (loose) list open
+      const m = LIST_ITEM_RE.exec(ln.text);
+      if (!m) {
+        if (/^[ \t]/.test(ln.text)) continue; // indented continuation line of the current item
+        break; // a non-indented non-item line ends the list
+      }
+      const indent = m[1].length;
+      while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
+      const item: ListItemCache = {
+        position: pos(ln.start, ln.end),
+        parent: stack.length > 0 ? stack[stack.length - 1].line : -firstLine,
+      };
+      if (m[2] !== undefined) item.task = m[2];
+      // id comes straight from a trailing `^id` on THIS line: core's block run spans contiguous
+      // siblings so its block.to lands on the last sibling, not the anchored item (R125 review)
+      const idM = LIST_ITEM_ID_RE.exec(ln.text);
+      if (idM) item.id = idM[1];
+      items.push(item);
+      stack.push({ indent, line: i });
+    }
+  }
+  return items;
+}
+
 /**
  * R124: segment `content` into top-level SectionCache blocks. Frontmatter → one `yaml` section;
  * fenced code (``` / ~~~) is an ATOMIC `code` block (its internal blank lines never split it);
@@ -162,16 +264,7 @@ function buildSections(
   };
   if (fmEnd > 0) push("yaml", 0, fmEnd);
 
-  // split into lines: each = [start, end) excluding the trailing newline
-  const lines: Array<{ start: number; end: number; text: string }> = [];
-  for (let p = 0; p <= content.length; ) {
-    let nl = content.indexOf("\n", p);
-    if (nl === -1) nl = content.length;
-    lines.push({ start: p, end: nl, text: content.slice(p, nl) });
-    if (nl === content.length) break;
-    p = nl + 1;
-  }
-
+  const lines = splitLines(content);
   let bStart = -1;
   let bEnd = -1;
   let bFirst = "";
@@ -410,11 +503,13 @@ export class MetadataCache extends Events {
       out.frontmatter = { ...meta.frontmatter.fields };
       out.frontmatterPosition = pos(meta.frontmatter.from, meta.frontmatter.to);
     }
-    // R124: top-level block segmentation (needs the real text; the no-content warm-up
-    // transient — not cached — simply omits sections and heals on the next call)
+    // R124/R125: top-level block segmentation + list items (need the real text; the no-content
+    // warm-up transient — not cached — simply omits them and heals on the next call)
     if (content !== undefined) {
       const sections = buildSections(content, fmEnd, meta.blocks, pos);
       if (sections.length > 0) out.sections = sections;
+      const listItems = buildListItems(content, fmEnd, pos);
+      if (listItems.length > 0) out.listItems = listItems;
     }
     return out;
   }
