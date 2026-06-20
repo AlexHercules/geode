@@ -139,7 +139,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
 | `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**；**R22：`fileManager.processFrontMatter` 真实现**（core/properties 编辑引擎，逐 key diff 字节保留改写；opaque 条目不进 fm 对象且永不被改写、不可序列化值 TypeError reject、options/mtime 忽略——偏差见 ARCHITECTURE R22）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
 | `getFileCache().links` 缺 `[[#h]]` 条目 | 偏差（R16 记录）：同文链接不进 links 索引（官方含 `link: "#h"` 形态条目） |
-| `DataAdapter.readBinary` / `writeBinary` | **R111：桥接 core 原生二进制 IO**（`geode.readBinary`/`createBinary`，返回拷贝防别名）。`writeBinary` create-only（覆盖已存在路径抛，R17/R43 防截断竞态）。`appendBinary`/`stat`/`trash*` 仍 warn-stub + 说明性 throw；append/process/rmdir/copy 用字符串 IO 真实实现 |
+| ~~`DataAdapter.readBinary` / `writeBinary`~~ | **R111+R122：桥接 core 原生二进制 IO**（readBinary 返拷贝防别名）。**R122：writeBinary 创建或覆盖**（try createBinary→catch modifyBinary 原子；连带修 R120 共享-tmp 并发撕裂写 MAJOR=唯一 tmp）。`appendBinary`/`stat`/`trash*` 仍 warn-stub；append/process/rmdir/copy 用字符串 IO 真实实现 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
 | `Plugin.registerHoverLinkSource` / `hoverPopover`·`HoverParent` | **R25：`registerHoverLinkSource` 升真实无操作登记**（记录 source id 返回——Geode 全局悬停预览已覆盖插件渲染的 `a.internal-link`，无需插件参与）；插件自渲染预览 `hoverPopover`/`HoverParent` **仍为缺口**（插件被 Geode 全局 hover 被动覆盖，但其自挂 popover 不生效） |
 | `app.internalPlugins`（书签 instance API） | **R27：书签数据文件 `.obsidian/bookmarks.json` 双向保真**（Geode 原生书签读写同一文件，未知键/类型 round-trip——见 ARCHITECTURE R27），但 `app.internalPlugins.getPluginById("bookmarks").instance`（`getBookmarks()`/`addItem()`/`removeItem()` 等程序化 API）**仍为缺口**（插件无法经 API 操作书签，只能间接经文件） |
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R122 套件回归（2026-06-20，macOS release 二进制 v0.119.0 实测 `r122-probe-vault`）
+
+R122 = compat `DataAdapter.writeBinary` 创建或覆盖（**插件 API 商业主轴**；从 sections parser 过重 pivot 而来）。try createBinary（新文件入树）→ catch modifyBinary（R120 原子覆盖）。**对抗评审揪出 MAJOR 并发数据安全隐患**：R120 `vault_modify_binary` 的 tmp 名确定性 per-path（`.{name}.geode-tmp`），两并发同 path 覆盖共享 tmp → 撕裂 half-A-half-B 写（R17 共享-tmp clobber 在覆盖路径复发），R122 高频 adapter.writeBinary 入口放大。**修**：抽 `atomic_write` 唯一 tmp（`.{name}.{pid}.{seq}.geode-tmp`），vault_write+vault_modify_binary 同改 → 每写者私有 tmp、last-writer-wins 完整文件。+ Memory modifyBinary folder 守卫（minor）。
+
+新增套件：`r122-e2e.mjs` **9/9**（create/overwrite/folder-guard/path-guard）+ `r122-probe.mjs` **9/9**（真 WKWebView——create/overwrite + **16 并发同 path = 单写者完整 buffer 无撕裂 + HOST 带外读盘 + 无 tmp 残留**）。**套件矩阵不回退**：**r24 12/12（vault_write 数据安全，helper 重构零回归）**·r111-e2e 12/12·r111-probe 9/9·r42 17/17·r46 18/18·r23 22/22。
 
 ### R121 套件回归（2026-06-20，macOS release 二进制 v0.118.0 实测 `r121-probe-vault`）
 

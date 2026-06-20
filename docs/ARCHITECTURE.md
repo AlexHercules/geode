@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 122 additions — compat DataAdapter.writeBinary create-or-overwrite + 并发原子写修复（插件 API 商业主轴）【As-built v0.119】
+
+> **状态：As-built（v0.119 交付，2026-06-20）。** Obsidian `DataAdapter.writeBinary` **创建或覆盖**——R111 起 Geode 是 create-only（gap），本轮接上覆盖。**对抗评审在覆盖路径揪出一条 MAJOR 并发数据安全隐患（R120 的共享 tmp，R122 高频入口放大），连带修复。** 从原计划的 `CachedMetadata.sections`（文档结构 parser，过重）按 HANDOFF 备选 pivot 到本项。
+
+**契约（compat 一处 + Rust 数据安全修复）**：
+- `compat/obsidian/vault.ts`：`CompatDataAdapter.writeBinary` 从 create-only 改 **try `createBinary`（create_new+refreshTree，新文件入树）→ catch `modifyBinary`（R120 原子覆盖）**。**非 check-then-act**（无 exists() 预检，两分支各自原子写）；path-guard/IO 错误从 modify 重跑 assertSafeRelPath 传播。
+- **`src-tauri/main.rs`（MAJOR 修复）**：抽 `atomic_write(abs, data)` 共享 helper——**tmp 名唯一**（`.{name}.{pid}.{seq}.geode-tmp`，AtomicU64 seq），`vault_write`(text) + `vault_modify_binary`(R120) 同改。**根因**：原 tmp 名确定性 per-path（`.{name}.geode-tmp`），两并发同 path 覆盖共享 tmp → `fs::write` 交错 → rename 出**撕裂 half-A-half-B** 文件（R17 共享-tmp clobber 在覆盖路径复发）。唯一 tmp → 每写者私有 tmp、各 rename 自己的**完整**文件、last-writer-wins、绝不撕裂。create-only 路径仍 `create_new`（exclusivity 不变）。
+- **`core/vault.ts`（minor 修复）**：MemoryVaultAdapter.modifyBinary 加 folder-collision 守卫（writeBinary 的 create→catch→modify 不能把 EISDIR 变成 Memory 里的 file/folder 碰撞）。
+
+**对抗评审（reviewer data-safety 优先 → 1 MAJOR + 1 minor 已修 + 文档项）：**
+- **MAJOR（已修+并发 probe 锁）**：共享 tmp 并发撕裂写（上）→ 唯一 tmp + 16 并发同 path probe 验「落盘是单写者完整 buffer、非撕裂、无 tmp 残留」。
+- **minor（已修）**：Memory modifyBinary folder 碰撞 → 守卫 + e2e（writeBinary over folder 拒、folder 不被 clobber）。
+- **证伪**：try-catch 非 check-then-act（各分支原子）· catch 过宽在桌面安全（modify 重跑同 guard/IO 约束，非 EEXIST 错误 modify 也失败传播）· create 仍 create-only（r42 17/17）· create→refreshTree+created/overwrite→modified 树事件正确不重复入树 · 双层 path 守（assertSafeRelPath + safe_join）· 分层合规。
+
+**套件**：typecheck 0 · cargo check 0 · r122-e2e **9/9**（create/overwrite shrink+grow/single-entry/**folder-guard**/path-guard）· r122-probe **9/9** 真 WKWebView（create/overwrite + **16 并发同 path = 单写者完整 buffer 无撕裂 + HOST 带外读盘 + 无 tmp 残留**）· 回归 **r24 12/12（autosave/vault_write 数据安全——helper 重构零回归）**·r111-e2e 12/12·r111-probe 9/9·r42 17/17·r46 18/18·r23 22/22 · build exit 0（两次）· 简化门 clean（atomic_write 抽取=减法去重，data-safety 修复连带，2 调用点）。**剩余缺口（compat 商业主轴，均中等以上）**：`CachedMetadata.sections/listItems`（文档结构 parser）· `MarkdownView.setViewData/setMode`（写=data-safety）· `registerMarkdownPostProcessor`（Dataview 命脉，**工程大、宜单独拍板**）· `file-menu`/`editor-menu` 钩子（**阻塞面最大、宜单独拍板**）。
+
 ## Round 121 additions — compat app.commands.removeCommand（收 R113/R118 余项 · 插件 API 商业主轴）【As-built v0.118】
 
 > **状态：As-built（v0.118 交付，2026-06-20）。** Obsidian `app.commands.removeCommand(id): void`（按 id 从注册表移除命令）现真实现——**收掉 R113/R118 app.commands 的最后一个余项**（executeCommandById/listCommands/commands R113 + findCommand/executeCommand/editorCommands R118）。命令管理类插件用。纯逻辑、零 Rust。
