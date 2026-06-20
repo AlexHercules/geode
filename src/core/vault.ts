@@ -992,6 +992,10 @@ export class MemoryVaultAdapter implements VaultAdapter {
   }
 
   async modifyBinary(path: string, data: Uint8Array): Promise<void> {
+    // a folder path can't be a file (real-fs rename-over-a-directory fails; R122 review —
+    // the compat adapter.writeBinary's create→catch→modify must not turn an EISDIR into a
+    // silent file/folder collision in the Memory store)
+    if (this.folders.has(path)) throw new Error(`Cannot write a file over a folder: ${path}`);
     // overwrite (real-fs tmp+rename parity): replace the bytes; one path = one
     // representation, so drop any text twin (mirrors writeFile dropping the binary twin)
     this.binaryFiles.set(path, data);

@@ -30,9 +30,8 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * Geode config IO (the only sanctioned dot-folder access); everything else goes
  * through the vault adapter. R111: binary read/write bridge straight to native binary
  * IO — they do NOT route `.obsidian/` through config IO (config IO is text-only), so a
- * binary under `.obsidian/` resolves via the adapter's own dot-folder handling. stat/trash
- * and DataAdapter binary append/overwrite remain gaps (binary OVERWRITE is available via
- * Vault.modifyBinary, R120 — this lower-level adapter.writeBinary stays create-only).
+ * binary under `.obsidian/` resolves via the adapter's own dot-folder handling. writeBinary
+ * creates-or-overwrites (R122, atomic); stat/trash and binary append remain gaps.
  */
 export class CompatDataAdapter {
   constructor(private geode: GeodeVault) {}
@@ -135,13 +134,19 @@ export class CompatDataAdapter {
   async readBinary(normalizedPath: string): Promise<ArrayBuffer> {
     return toArrayBuffer(await this.geode.readBinary(normalizedPath));
   }
+  // R122: Obsidian DataAdapter.writeBinary creates-or-overwrites. Try create-only first
+  // (create_new exclusivity + tree refresh for a NEW file, R17); if the path already exists,
+  // the create throws and we overwrite atomically via modifyBinary (R120 tmp + rename — no
+  // truncation). This is NOT a check-then-act race (we never exists()-test before writing; each
+  // branch is its own atomic write). A path-guard / IO failure surfaces from the modifyBinary
+  // re-attempt, which re-runs assertSafeRelPath and rejects.
   async writeBinary(normalizedPath: string, data: ArrayBuffer): Promise<void> {
-    // This DataAdapter path stays create-only (create_new — R17/R43 data-safety): overwriting an
-    // existing binary throws "File already exists" (deviation from Obsidian's overwrite). To
-    // OVERWRITE a binary, plugins use Vault.modifyBinary (R120, atomic tmp + rename); routing
-    // create-or-overwrite through here would need a check-then-act exists() test (the race R17
-    // hardened) or create-vs-overwrite tree-refresh handling — out of scope for this stub.
-    await this.geode.createBinary(normalizedPath, new Uint8Array(data));
+    const bytes = new Uint8Array(data);
+    try {
+      await this.geode.createBinary(normalizedPath, bytes);
+    } catch {
+      await this.geode.modifyBinary(normalizedPath, bytes);
+    }
   }
   /* gaps — keep the surface honest instead of silently lying */
   async appendBinary(_p: string, _d: ArrayBuffer): Promise<void> {

@@ -3,7 +3,7 @@
  * WKWebView build against the native filesystem (not the Memory adapter). The compat App
  * (`globalThis.app`, built by the plugin loader) bridges Vault.readBinary/createBinary +
  * DataAdapter.readBinary/writeBinary to Geode's native binary IO. Binary OVERWRITE via
- * Vault.modifyBinary is real since R120 (atomic tmp+rename); adapter.writeBinary stays create-only.
+ * Vault.modifyBinary is real since R120 (atomic tmp+rename); adapter.writeBinary creates-or-overwrites (R122).
  * Run: node .calibration/r111-probe.mjs   (needs src-tauri/target/release/geode)
  *
  * App-Nap discipline (data-safety §D): the round-trip runs immediately in onload, results are
@@ -77,10 +77,9 @@ const probe = `module.exports = {
       try { await v.modifyBinary(v.getFileByPath("r111c.bin"), new Uint8Array([1]).buffer); modOk = true; } catch { modOk = false; }
       rec("modOk", modOk);
 
-      // adapter.writeBinary on an EXISTING path throws (no silent truncation)
-      let ow = false;
-      try { await v.adapter.writeBinary("r111c.bin", new Uint8Array([1]).buffer); } catch { ow = true; }
-      rec("overwriteThrew", ow);
+      // adapter.writeBinary on an EXISTING path OVERWRITES atomically (R122)
+      await v.adapter.writeBinary("r111c.bin", new Uint8Array([42, 43]).buffer);
+      rec("overwriteBytes", [...new Uint8Array(await v.adapter.readBinary("r111c.bin"))]);
 
       // R111 review MAJOR: untrusted plugin path is guarded (core assertSafeRelPath)
       let esc = false;
@@ -123,7 +122,7 @@ ok("compat vault.readBinary round-trips the exact bytes (native fs)", eq(data.rt
 ok("returned ArrayBuffer is a copy (store not corrupted by mutation)", eq(data.copy, [10, 20, 30, 255]), JSON.stringify(data.copy));
 ok("compat adapter.writeBinary creates + readBinary round-trips", eq(data.adapter, [7, 8, 9]), JSON.stringify(data.adapter));
 ok("vault.modifyBinary overwrites an existing binary (R120, no longer a gap)", data.modOk === true);
-ok("adapter.writeBinary on existing path throws (no silent truncation)", data.overwriteThrew === true);
+ok("adapter.writeBinary on existing path OVERWRITES atomically (R122) → [42,43]", JSON.stringify(data.overwriteBytes) === JSON.stringify([42, 43]), JSON.stringify(data.overwriteBytes));
 ok("untrusted plugin `..` path rejected by core assertSafeRelPath (R111 review fix)", data.escapeThrew === true);
 
 console.log(`\nR111 desktop probe: ${passed} passed, ${failed} failed`);

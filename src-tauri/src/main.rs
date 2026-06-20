@@ -198,10 +198,33 @@ fn vault_write_binary(vault: String, path: String, data: String) -> CmdResult<()
     Ok(())
 }
 
+/// Monotonic sequence for unique temp-file names (R122 review). Combined with the process
+/// id it guarantees every writer gets a PRIVATE temp even for the same target path.
+static TMP_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Atomically write `data` to `abs` (create-or-overwrite): write a PRIVATE sibling temp then
+/// rename it over the target. R16: a mid-write crash never truncates the target — only the
+/// throwaway temp can be lost. R122 review fix: the temp name is UNIQUE per writer
+/// (`.{name}.{pid}.{seq}.geode-tmp`), so two concurrent writers to the SAME path never share a
+/// temp — each renames its OWN complete file (last-writer-wins), never a torn half-A-half-B mix
+/// (the shared-temp clobber that was R17's root cause, here on the overwrite path). The temp is
+/// dot-prefixed so the watcher's noise filter (to_vault_relative drops dotfile segments) never
+/// surfaces its create/rename events to the frontend.
+fn atomic_write(abs: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    let seq = TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut tmp_name = std::ffi::OsString::from(".");
+    tmp_name.push(abs.file_name().map(|n| n.to_os_string()).unwrap_or_default());
+    tmp_name.push(format!(".{}.{}.geode-tmp", std::process::id(), seq));
+    let tmp = abs.with_file_name(tmp_name);
+    fs::write(&tmp, data).and_then(|_| fs::rename(&tmp, abs)).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        e
+    })
+}
+
 // async — binary overwrite off the main thread (R6); the bytes can be MBs. Unlike
 // vault_write_binary (create-only, exclusivity via create_new), this REPLACES an existing
-// binary file (Obsidian modifyBinary, R120). Atomic tmp + rename (vault_write precedent) so a
-// mid-write crash never truncates the existing file — only the throwaway tmp can be lost.
+// binary file (Obsidian modifyBinary, R120) via the atomic create-or-overwrite helper.
 #[tauri::command(async)]
 fn vault_modify_binary(vault: String, path: String, data: String) -> CmdResult<()> {
     use base64::Engine as _;
@@ -212,38 +235,13 @@ fn vault_modify_binary(vault: String, path: String, data: String) -> CmdResult<(
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data.as_bytes())
         .map_err(|e| format!("decode {path}: {e}"))?;
-    // dot-prefixed tmp: the watcher's noise filter drops dotfile segments, so the
-    // temp file's create/rename events never reach the frontend (vault_write precedent).
-    let mut tmp_name = std::ffi::OsString::from(".");
-    tmp_name.push(abs.file_name().map(|n| n.to_os_string()).unwrap_or_default());
-    tmp_name.push(".geode-tmp");
-    let tmp = abs.with_file_name(tmp_name);
-    fs::write(&tmp, &bytes)
-        .and_then(|_| fs::rename(&tmp, &abs))
-        .map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            format!("write {path}: {e}")
-        })
+    atomic_write(&abs, &bytes).map_err(|e| format!("write {path}: {e}"))
 }
 
 #[tauri::command]
 fn vault_write(vault: String, path: String, content: String) -> CmdResult<()> {
     let abs = safe_join(&vault, &path)?;
-    // R16: atomic write — sibling temp + rename (export_write precedent), so a
-    // mid-write failure (disk full, crash) never leaves a note truncated. The
-    // temp name is DOT-prefixed on purpose: the watcher's noise filter
-    // (to_vault_relative) drops dotfile segments, so the temp file's
-    // create/rename events never reach the frontend.
-    let mut tmp_name = std::ffi::OsString::from(".");
-    tmp_name.push(abs.file_name().map(|n| n.to_os_string()).unwrap_or_default());
-    tmp_name.push(".geode-tmp");
-    let tmp = abs.with_file_name(tmp_name);
-    fs::write(&tmp, content)
-        .and_then(|_| fs::rename(&tmp, &abs))
-        .map_err(|e| {
-            let _ = fs::remove_file(&tmp);
-            format!("write {path}: {e}")
-        })
+    atomic_write(&abs, content.as_bytes()).map_err(|e| format!("write {path}: {e}"))
 }
 
 #[tauri::command]

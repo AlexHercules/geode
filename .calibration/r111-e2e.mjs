@@ -5,8 +5,8 @@
  *
  * The Obsidian compat shim (`window.app`, set by the plugin loader) now bridges binary IO to
  * Geode's native binary read/create — Vault.readBinary/createBinary + DataAdapter.readBinary/
- * writeBinary (image/PDF/Excalidraw plugins). Binary OVERWRITE via Vault.modifyBinary is real
- * since R120 (atomic tmp+rename); the lower-level DataAdapter.writeBinary stays create-only.
+ * writeBinary (image/PDF/Excalidraw plugins). Binary OVERWRITE is real since R120 (Vault.modifyBinary,
+ * atomic tmp+rename); DataAdapter.writeBinary creates-or-overwrites since R122.
  */
 import { chromium } from "playwright";
 
@@ -78,11 +78,11 @@ const modOk = await app(async () => {
   catch { return false; }
 });
 ok("vault.modifyBinary overwrites an existing binary (R120, no longer a gap)", modOk);
-const overwriteThrew = await app(async () => {
-  try { await window.app.vault.adapter.writeBinary("r111compat.bin", new Uint8Array([1]).buffer); return false; }
-  catch { return true; }
+const overwriteBytes = await app(async () => {
+  await window.app.vault.adapter.writeBinary("r111compat.bin", new Uint8Array([42, 43]).buffer);
+  return [...new Uint8Array(await window.app.vault.adapter.readBinary("r111compat.bin"))];
 });
-ok("adapter.writeBinary on an EXISTING path throws (create-only, no silent truncation)", overwriteThrew);
+ok("adapter.writeBinary on an EXISTING path OVERWRITES atomically (R122) → [42,43]", JSON.stringify(overwriteBytes) === JSON.stringify([42, 43]), JSON.stringify(overwriteBytes));
 
 // ── path traversal is rejected (R111 review MAJOR: core createBinary now guards) ──
 console.log("— untrusted plugin path is guarded (no `..`/absolute escape) —");
