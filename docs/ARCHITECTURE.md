@@ -71,6 +71,30 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 140 additions — Explorer 多选批量操作（bulk delete + move · 完成多选弧 · data-safety 轮）【As-built v0.137】
+
+> **状态：As-built（v0.137 交付，2026-06-20）。** 完成 R138 多选 / R139 files-menu 弧的最后一片——让多选对**终端用户**可用：右键多选 → **Delete N / Move N**。**data-safety 轮**（N 笔 trash/rename）：**完全复用既有 vetted 单节点 throat**（R42 `trash`、R16/R70 `renameWithLinkUpdate`），不新增写路径。gate 揭示的 4 道 data-safety 守则：① **flush 一次**（`flushAll` 是 vault-global，循环前调一次非每文件）；② **dedup-to-roots**（选区含 `folder/` + `folder/a.md` 时只 trash 根=`folder/`，子孙随之消失；剪掉有祖先在选区内的 path，复用 deleteNode 的 `isUnder` prefix 逻辑→防「已消失」抛错+正确计数）；③ **best-effort partial-failure**（trash/rename 可恢复，每次 try/catch + 计数 + 单条 notice，**不**因单失败中止全循环、**不**求事务性）；④ **active/open 文件免处理**（`trash` emit `file:deleted`→`handleDeleted` 按 prefix 关 tab，循环自动逐个关）。同名撞车靠 **adapter `rename` 「target exists→throw」backstop**（MemoryAdapter + Rust 双侧守卫，绝不弱化）。
+
+**契约（加性；新 bulk helper 复用 vetted throat + 多文件菜单内置项）**：
+- `features/explorer/Explorer.tsx`：
+  - 新 module-private 纯函数 `toRoots(paths): string[]`（剔除有祖先在集合内的 path = dedup-to-roots）+ `confirmDelete(message, title)`（提取 deleteNode 既有 `isTauri()?ask:window.confirm` idiom 为共享 helper，deleteNode 改调它=行为逐字节同旧）。
+  - 新 `bulkDelete(paths)`：`toRoots` → `confirmDelete(deleteConfirmBulk{count})` → **`flushAll()` 一次** → `for(root) try{ await vault.trash(root) }catch{log}` → `clearSelection()`。
+  - 新 `bulkMove(paths, target)`：`toRoots` → `for(root){ 每迭代读 fresh `app.vault.tree.get()`（避闭包 tree 陈旧）+ stale 守卫 fileExists/folderExists + `resolveDropTarget` + `wouldCollide` + `renameWithLinkUpdate` }catch{skip++}` → `clearSelection()` + 部分失败 `showLinkUpdateNotice(bulkMovePartial{moved,skipped})`。**无 confirm**（recoverable rename、单 move 也无 confirm）。
+  - `menu.files` 分支加内置 **Delete N**（`is-danger`、`bulkDelete(files)`）+ **Move N**（`setBulkMovePaths(files)`）按钮（复用 `explorer.delete`/`moveTo` label）；**drop R139 的 `filesItems.length>0` gate**→多选**总是**开多文件菜单（现总有内置项）。
+  - 新 `bulkMovePaths: string[]|null` state（**不**overload 单值 `movePath`）+ 第二个 MoveToModal 渲染分支（`fromPath`=`{count} files` aria、`folders`=allFolders 减选区 roots+子孙、`allowRoot`、`onSelect`→`bulkMove`）。
+- `core/i18n/dict.panels.ts`：新 `explorer.deleteConfirmBulk`「Delete {count} items?」+ `explorer.bulkMovePartial`「Moved {moved}, skipped {skipped}」（en+zh）。
+
+**数据安全（§A 自查 · data-safety skill 触发）**：bulk delete = 复用 R42 trash-after-flush 无损路径（flush 一次）+ dedup-to-roots 防双删 + partial best-effort（trash 可恢复）+ reactive tab 关闭（file:deleted）；bulk move = 复用 R16/R70 link-rewrite + 同名 adapter throw backstop + fresh-tree-per-iter；**无新写机制**、确认对话复用既有 idiom。r42/r24 回归必跑。
+
+**双端**：浏览器 e2e（新 r140-e2e）= 多选 → Delete N 确认→trash 全部 + dedup-to-roots（folder+desc 选只删根）+ Move N → 目标文件夹移全部 + 同名撞车 skip 不覆盖 + partial notice + R139 fallback 改（无 handler 多选仍开多文件菜单显内置 Delete N）；桌面 probe（r140-probe）= 真 fs 裸二进制 bulkDelete N 文件入 `.trash` + 文件夹 trash 移除子孙（外部读判定 = dedup-to-roots 正确性根据）。
+
+**对抗评审（reviewer 穷尽 data-safety §A + 实证撞车路径 → 0 critical/major data-safety 缺陷 + 1 MINOR e2e 补 + 1 trivial parity 修）：**
+- **F1 MINOR（e2e 漏覆盖最关键的 bulk-move 撞车，已补）**：r140-e2e 原只测无撞车 bulk move；契约双端声称覆盖「同名撞车 skip 不覆盖 + partial notice」却未断言=data-safety 轮的回归网漏洞（reviewer 实证行为正确但套件没锁）。**补**：加同名撞车 case（ca/dup.md + cb/dup.md 两 CONTENT 移同文件夹→一个移走、另一个 SKIP 留原位保内容、partial notice「Moved 1, skipped 1」）。
+- **F3 trivial（bulkMove 漏 `expanded` Set 重映射，已修 parity）**：单 moveNode 移文件夹后 `setExpanded(remapPaths(...))`，bulkMove 漏了→bulk 移的展开文件夹在目标处渲染为折叠（benign、非数据丢失，flattenVisible 忽略不存在 key）。**修**：bulkMove 成功 rename 后若 isFolder 也 remap（捕获 isFolder 一次复用 guard + remap）。
+- **reviewer 实证证伪全维（data-safety 底线）**：**bulk delete**——`flushAll()` 是 vault-global（刷全部脏 handle 非仅活动）、循环前 await **一次**（flush-then-trash → `.trash` 持最新编辑）；用 `trash` 非 hard-delete（可恢复）；per-file try/catch best-effort（单失败不中止、trash 原子无半态）；`toRoots` 的 `startsWith(q+"/")` **尾斜杠防兄弟前缀误删**（`"foobar.md".startsWith("foo.md/")`=false、`"a/bc".startsWith("a/b/")`=false 实证）；active/open 文件 flush 先跑 + `file:deleted` 按 prefix 关 tab + 按 prefix 取消挂起保存（trashed 文件不会被防抖保存复活）。**bulk move**——同名撞车**双重兜底**（per-iter fresh `wouldCollide` 看见前一迭代已移入目标 + adapter「target exists→throw」MemoryAdapter+Rust 双侧、**实证无覆盖无丢**）；`app.vault.tree.get()` per-iter **真新鲜**（`await rename→await refreshTree→tree.set()` 同步 Store 在下一迭代前完成）；renameWithLinkUpdate 串行 runTail + 每次 fresh flush/ensureFresh → 顺序无关、「A 链 B 双移」basename `[[B]]` 仍解析（only-fix-broken stillResolves）；移入已在的目标→resolveDropTarget null→skip 无错。**§A 清单全过**（autosave 防抖 flush 收敛 / close-flush 取消挂起 / rename-while-open handle 重定向 / delete-while-open prefix 关+取消 / folder-path-events 全程 prefix）。clearSelection-after-bulk 可接受（失败文件去选仍在盘）；confirmDelete 提取逐字节同旧；分层纯 feature 复用 core throat、读 `tree.get()` 直取是契约钦定的 freshness 选择。
+
+**套件**：typecheck 0 · npm build + cargo build (release) exit 0 · **r140-e2e 18/18**（多选总开多文件菜单含内置 Delete N/Move N + bulk delete trash 全选+未选留 + dedup-to-roots folder+child 只删根无错 + bulk move 入文件夹 + **同名撞车 skip 保内容 + partial notice** + 无单文件 Rename）· **r140-probe 8/8**（真 WKWebView+真 fs：sequential trash N 入 `.trash`、未选留、文件夹 trash 移除子孙=dedup 根据；外部读判定）· **data-safety 回归 r42 17/17·r24 12/12·r97 15/15·r28 23/23 全绿** + r139 14/14（fallback 改）·r130/r138 · 简化门 clean（0 编辑）。**多选弧收官**（R138 选 → R139 插件 files-menu → R140 内置 bulk delete/move）。
+
 ## Round 139 additions — compat `workspace.on('files-menu')` 多文件右键菜单（file-menu 大头收官 · 插件 API 商业主轴 · R138 解锁）【As-built v0.136】
 
 > **状态：As-built（v0.136 交付，2026-06-20）。** R130 单文件 `file-menu` + R131 `editor-menu` 后，file-menu 大头最后一片 = **多文件 `files-menu`**（Obsidian 右键文件多选 fire `files-menu`，传 `TAbstractFile[]`，插件加批量项）。R138 Explorer 多选解锁了前置。**完全镜像 R130 跨 3 层 core-meet 范式**（分层铁律下 compat/features 互不 import → core 会合 + 降维纯数据过界）：core 新 provider、compat fire 事件、Explorer 右键多选时调多文件版。**纯加性 display（菜单贡献），无 vault 写**（批量操作 defer）。
