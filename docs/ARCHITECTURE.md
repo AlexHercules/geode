@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 147 additions — compat `MarkdownView.showSearch(replace?)`（插件 API 商业主轴 · 复用 R34 editor find · 零 data-safety）【As-built v0.144】
+
+> **状态：As-built（v0.144 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（1 文件跳过条件）。** 续 R146 compat surface 审计。**Gate（两道核查）**：① d.ts——`awk` 提 MarkdownView 类体确认 `showSearch(replace?: boolean): void` 是 `@public`（d.ts:4233）；② Geode 现状——grep 确认 Geode 有 R34 editor find/replace（`searchCommands.ts` 用 CM `openSearchPanel(view)` + replace-field focus）+ compat `MarkdownView.editor: Editor`（`Editor.cm: EditorView` public readonly），但 MarkdownView 没 showSearch→插件调 `view.showSearch()` 即崩。**clean 映射**：`showSearch(replace)`→`openSearchPanel(this.editor.cm)`（CM 库、R34 同机制）+ replace 时聚焦 replace 字段。**零 data-safety**（开搜索面板=纯 display UI，不写文档）。**零新依赖**（`@codemirror/search` 已是 R34 依赖）。
+
+**契约（加性；compat MarkdownView 一方法）**：
+- **`compat/obsidian/workspace.ts` MarkdownView 类**：`showSearch(replace?: boolean): void`——`const view=this.editor.cm; openSearchPanel(view); if(replace) requestAnimationFrame(()=>{ view.dom.querySelector('.cm-search [name="replace"]')?.focus()/.select() })`。**replace-focus 内联**（5 行 DOM helper 镜像 features/editor `focusReplaceField`——**compat 不能 import features**，分层强制的小重复，同 R141 localStorage 先例）。`import { openSearchPanel } from "@codemirror/search"`（compat 已 import @codemirror/* 如 editor.ts；`@codemirror/search` 是既有 dep、非新依赖）。
+- **不动 core/features**（纯 compat 加性）。
+
+**数据安全**：开 CM 搜索面板=纯 display UI，**零 vault/.md/文档写**（replace 的实际替换是用户经面板触发、走 R34 已 vetted 的 CM 路径）=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r147-e2e）= 开文件→活动 MarkdownView；`view.showSearch()`→`.cm-search` 面板出现 + `showSearch(true)`→replace 字段聚焦（`document.activeElement` 是 `[name=replace]`）+ 方法 shape。桌面 probe = **N/A**（showSearch 委托 R34 `openSearchPanel`——其 WKWebView 行为已由 r34-probe 验证；showSearch 无平台特异行为，浏览器 e2e 覆盖 compat 接线 + replace focus）。
+
+**data-testid**：复用 CM `.cm-search` panel（`[name="replace"]` 输入）。
+
+**对抗评审（reviewer 8 维全证伪 → 0 confirmed）：** openSearchPanel target 正确（`this.editor.cm`=`new Editor(documents.getActiveView().view)`、与 R34 `editor:search` 同一 EditorView 实例=r34-proven 路径）· replace-focus rAF 正确（**scope 到 `view.dom`** 非 `document`=split 内不抓兄弟编辑器面板、单 rAF 同 R34 focusReplaceField、面板未挂载则 `el=null` `?.focus()` 优雅退化不崩）· 分层（`@codemirror/search` 是 R34 既有外部 dep、compat 已 import @codemirror/*、零 features import）· 强制 dup（5 行镜像 focusReplaceField、唯一共享脆弱 token=`.cm-search [name="replace"]` selector 改了 r34+r147 同时红=有网兜、低于抽取阈值）· data-safety 零写 · 边角（openSearchPanel open-only 非 toggle=已开再调不关闭仍聚焦 replace、undefined/false 都跳过 replace-focus）· faithfulness（open-only 语义对、二次 showSearch 保持开着非关闭）· 类型（`Editor.cm` public readonly 无 cast）。**采纳 reviewer 覆盖建议**：补 panel-already-open 再入 e2e（不 Escape 直接二次 showSearch(true)→面板保持开+replace 聚焦）锁 open-only 语义。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r147-e2e 13/13**（showSearch() 开面板 + Escape 关 + showSearch(true) 聚焦 replace + showSearch(false) 不聚焦 replace + **再入 open-only 保持开+聚焦** + 方法 shape）· 回归 r34 15/15（editor find/replace）·r116 9/9（MarkdownView getMode/getViewData）· 简化门 clean（1 文件）。**桌面 probe N/A**（委托 R34 openSearchPanel 已 r34-probe WKWebView 验证；rAF 用户调触发非后台定时器=无 App-Nap 暴露）。
+
+---
+
 ## Round 146 additions — compat `WorkspaceLeaf.setPinned` + `togglePinned`（插件 API 商业主轴 · 复用 R39 tab-pin · 零 data-safety）【As-built v0.143】
 
 > **状态：As-built（v0.143 交付，2026-06-20）。对抗评审 7 维 → 1 MINOR 确认修+e2e 锁 + 余全证伪 + 简化门 clean（1 文件跳过条件）。** compat surface 审计轮（R144 方法复用）。**Gate 路径（两道核查，R138/R144 教训）**：① **stale-gap 核查**——HANDOFF 默认项 Properties 增强续经 grep 揭示**全已实现**：tags chip 点击搜索=R83（`PropertiesPanel.searchTag`）、File properties 右栏=R86（`FilePropertiesPanel`）→ Properties 候选**已枯竭/或非 faithful（date→日记 Obsidian 无此行为）**，弃。② **compat surface 审计**——`curl` 全量 obsidian.d.ts，比对 Vault/Notice/MetadataCache/Component/Workspace/WorkspaceLeaf 等类的 `@public` 方法 vs Geode compat：多数已全（R111–R144 填过），**真·缺失且 bounded+faithful 的**=`WorkspaceLeaf.setPinned(pinned:boolean)` + `togglePinned()`（均 `@public`）——Geode 有 R39 tab-pin（`core/workspace.toggleTabPin` + `TabState.pinned`）但 compat 的 WorkspaceLeaf facade 没暴露→插件调 `leaf.setPinned(true)` 即 `is not a function` 崩。**零 data-safety**（纯 tab UI 态，复用 vetted `toggleTabPin`，无 vault/.md 写）。
