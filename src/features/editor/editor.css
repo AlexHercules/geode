@@ -849,6 +849,12 @@ iframe.geode-embed-pdf {
   padding: 0.05em 0.5em;
   font-size: 0.85em;
   white-space: nowrap;
+  cursor: pointer; /* R152: clickable → search the tag */
+}
+
+.preview-content .tag-pill:hover {
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 /* --- task lists --- */

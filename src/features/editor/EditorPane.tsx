@@ -712,6 +712,19 @@ export function EditorPane({ tab }: { tab: TabState }) {
         return;
       }
 
+      // R152 (㊻): a reading-view #tag pill → search that tag (Obsidian behavior). The pill is a
+      // <span class="tag-pill" data-tag="…"> from markdown.ts — pure delegation, no pipeline change.
+      // Checked EARLY so a #tag inside a heading/callout title searches instead of folding; but
+      // `!closest("a")` lets a pill that is link display text (`[#tag](url)`) fall through to
+      // navigation, matching the heading/callout branches' own link guard (R152 review F4).
+      const tagPill = el.closest<HTMLElement>(".tag-pill");
+      if (tagPill && !el.closest("a")) {
+        e.preventDefault();
+        const tag = tagPill.dataset.tag;
+        if (tag) app.workspace.requestSearch(`#${tag}`);
+        return;
+      }
+
       // R18: collapsible callout title toggles .is-collapsed (pure class
       // flip — a re-render returns to the authored initial state, recorded
       // 口径). Links inside the title fall through to the link delegations
