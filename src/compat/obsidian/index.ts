@@ -11,7 +11,7 @@ import { installDomAugmentation } from "./dom";
 installDomAugmentation();
 
 export { Events, type EventRef } from "./events";
-export { Component } from "./component";
+export { Component, MarkdownRenderChild } from "./component";
 export { TAbstractFile, TFile, TFolder, type FileStats } from "./files";
 export { Vault, CompatDataAdapter, type DataAdapter, type DataWriteOptions } from "./vault";
 export {

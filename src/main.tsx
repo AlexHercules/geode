@@ -36,7 +36,9 @@ import {
   registerCodeBlockProcessor as registerCoreCodeBlockProcessor,
   type MarkdownPostProcessor,
   registerMarkdownPostProcessor as registerCoreMdPostProcessor,
+  RenderChildOwner,
 } from "@core/markdownPostProcessors";
+import { MarkdownRenderChild } from "@compat/obsidian/component";
 import { renamePropertyAcrossVault, type PropertyRewriteResult } from "@core/propertyRewrite";
 import {
   deriveMentionTerms,
@@ -278,6 +280,24 @@ async function bootstrap() {
   // R134: the live-preview lang→handler registry lookup — a §D-safe (synchronous, App-Nap-immune)
   // desktop probe of whether the registration actually populated the live map on the real binary.
   mdPpHost.__geodeHasCodeBlockProcessor = hasCodeBlockProcessor;
+
+  // R135: §D-safe synchronous probe of the addChild lifecycle — the real ctx path needs a render
+  // (App-Nap-throttled headless), but RenderChildOwner + MarkdownRenderChild load/unload run
+  // synchronously, so the desktop probe can verify the new lifecycle works on the shipped binary.
+  const rcHost = globalThis as unknown as {
+    __geodeProbeRenderChild?: () => { afterAdd: string[]; afterUnload: string[] };
+  };
+  rcHost.__geodeProbeRenderChild = () => {
+    const log: string[] = [];
+    const owner = new RenderChildOwner();
+    const child = new MarkdownRenderChild(document.createElement("div"));
+    child.onload = () => log.push("load");
+    child.onunload = () => log.push("unload");
+    owner.addChild(child); // loads immediately → "load"
+    const afterAdd = [...log];
+    owner.unload(); // → "unload"
+    return { afterAdd, afterUnload: [...log] };
+  };
 
   // always-on tag-rename probe (R69, ㉝): drive the real-fs vault-wide tag
   // rewrite engine directly from browser/desktop E2E (WKWebView has no CDP).

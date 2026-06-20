@@ -117,3 +117,17 @@ export async function loadComponentAsync(component: Component): Promise<void> {
   component.load();
   if (component._loadPromise) await component._loadPromise;
 }
+
+/**
+ * Obsidian MarkdownRenderChild (R135) — a Component a markdown post-processor adds via
+ * `ctx.addChild(child)`; its onunload fires when the rendered section is torn down. Dataview/Tasks
+ * subclass it to clean up listeners/intervals when their block is removed. The base just pins the
+ * containerEl; lifecycle comes from Component (load/unload/onunload).
+ */
+export class MarkdownRenderChild extends Component {
+  containerEl: HTMLElement;
+  constructor(containerEl: HTMLElement) {
+    super();
+    this.containerEl = containerEl;
+  }
+}

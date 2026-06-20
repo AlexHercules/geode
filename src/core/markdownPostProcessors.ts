@@ -14,8 +14,57 @@
  */
 import { Store } from "./store";
 
-/** Context handed to a post-processor. Phase-1 subset: sourcePath + frontmatter are real;
- *  getSectionInfo (DOM→source lines) and addChild (child lifecycle) are stubs — deferred. */
+/** The source-line range a rendered element maps back to (Obsidian MarkdownSectionInformation). */
+export interface MarkdownSectionInformation {
+  /** the FULL note source text */
+  text: string;
+  /** 0-based first line of the section */
+  lineStart: number;
+  /** 0-based last line of the section */
+  lineEnd: number;
+}
+
+/** R135: structural shape of a child component (compat MarkdownRenderChild satisfies it via Component's
+ *  load/unload). Kept structural because core must not import compat. */
+export interface RenderChild {
+  load(): void;
+  unload(): void;
+}
+
+/**
+ * R135: collects the children a post-processor adds for ONE render and tears them down together.
+ * The feature side (reading-view effect / live widget) owns it and calls `unload()` when that render
+ * is torn down (re-render / view close / widget destroyed) — giving addChild a real lifecycle without
+ * core importing compat's Component. addChild loads immediately (Obsidian: a child added to a loaded
+ * parent loads now).
+ */
+export class RenderChildOwner {
+  private readonly children: RenderChild[] = [];
+  /** the owner is an already-loaded parent until unload() runs (terminal). */
+  private loaded = true;
+  addChild(child: RenderChild): void {
+    if (this.children.includes(child)) return; // idempotent, like Component.addChild
+    this.children.push(child);
+    // R135 review (MAJOR): a handler may call addChild AFTER an await — by then this render may be torn
+    // down. Loading into a dead owner leaks a child that never unloads (mirrors Component's `if loaded`).
+    if (this.loaded) child.load();
+  }
+  unload(): void {
+    this.loaded = false; // terminal: a late addChild no longer loads
+    // reverse order + per-child isolation; splice empties so a second unload is a no-op
+    for (const child of this.children.splice(0).reverse()) {
+      try {
+        child.unload();
+      } catch (err) {
+        console.error("[markdown-render-child] unload threw", err);
+      }
+    }
+  }
+}
+
+/** Context handed to a post-processor. `getSectionInfo` is real for live preview (CM line info) and
+ *  null for reading view (DOM→source-line mapping needs a markdown.ts data-line change = §C, deferred);
+ *  `addChild` is real (R135) — children load on add and unload when the render is torn down. */
 export interface MarkdownPostProcessorContext {
   /** unique-per-render id (phase 1: the source path) */
   docId: string;
@@ -25,10 +74,10 @@ export interface MarkdownPostProcessorContext {
   frontmatter: unknown;
   /** the rendered reading-view container */
   containerEl: HTMLElement;
-  /** phase 1 stub — section source mapping is deferred */
-  getSectionInfo(el: HTMLElement): null;
-  /** phase 1 stub — child component lifecycle is deferred */
-  addChild(child: unknown): void;
+  /** source-line range of the section `el` belongs to, or null when unmappable */
+  getSectionInfo(el: HTMLElement): MarkdownSectionInformation | null;
+  /** register a child component whose onunload fires when this render is torn down */
+  addChild(child: RenderChild): void;
 }
 
 export type MarkdownPostProcessor = (
@@ -159,13 +208,15 @@ export function makeMarkdownPostProcessorContext(
   sourcePath: string,
   containerEl: HTMLElement,
   frontmatter: unknown,
+  owner: RenderChildOwner,
+  getSectionInfo: (el: HTMLElement) => MarkdownSectionInformation | null = () => null,
 ): MarkdownPostProcessorContext {
   return {
     docId: sourcePath,
     sourcePath,
     frontmatter,
     containerEl,
-    getSectionInfo: () => null,
-    addChild: () => {},
+    getSectionInfo,
+    addChild: (child) => owner.addChild(child),
   };
 }

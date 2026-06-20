@@ -9,7 +9,12 @@
  */
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
-import { getCodeBlockProcessor, makeMarkdownPostProcessorContext } from "@core/markdownPostProcessors";
+import {
+  getCodeBlockProcessor,
+  makeMarkdownPostProcessorContext,
+  type MarkdownSectionInformation,
+  RenderChildOwner,
+} from "@core/markdownPostProcessors";
 import { hydrateEmbeds } from "./embeds";
 import { openWikilink } from "./wikilinks";
 
@@ -75,6 +80,10 @@ export class HydratedBlockWidget extends WidgetType {
   }
 }
 
+/** R135: the render-child owner for a live plugin code block, keyed by the widget's DOM (not the
+ *  widget instance — eq() reuses one DOM across keystrokes while widget instances are rebuilt). */
+const pluginWidgetOwners = new WeakMap<HTMLElement, RenderChildOwner>();
+
 /**
  * R134 — a live-preview widget for a PLUGIN-registered code-block lang (Dataview's `dataview`,
  * Tasks' `tasks`). Unlike HydratedBlockWidget (an html placeholder + async hydrate), it hands the
@@ -108,10 +117,23 @@ export class PluginCodeBlockWidget extends WidgetType {
     const handler = getCodeBlockProcessor(lang);
     if (handler) {
       const path = this.getPath();
+      const owner = new RenderChildOwner();
+      pluginWidgetOwners.set(wrap, owner); // owner lives on the DOM (eq() reuses DOM across keystrokes)
+      // R135: getSectionInfo is trivial in live preview — CM gives line numbers. Capture the immutable
+      // doc + position now so a later call reflects the render-time section (text computed lazily).
+      const doc = view.state.doc;
+      const from = this.from;
+      const newlines = (this.source.match(/\n/g) ?? []).length;
+      const getSectionInfo = (): MarkdownSectionInformation => {
+        const lineStart = doc.lineAt(from).number - 1;
+        return { text: doc.toString(), lineStart, lineEnd: lineStart + newlines };
+      };
       const ctx = makeMarkdownPostProcessorContext(
         path,
         wrap,
         this.app.metadata.getMetadata(path)?.frontmatter?.fields ?? null,
+        owner,
+        getSectionInfo,
       );
       // isolate like the reading-view path (R133): try/catch a SYNC throw, .catch an async rejection
       try {
@@ -124,6 +146,17 @@ export class PluginCodeBlockWidget extends WidgetType {
     }
     attachLiveBlockReveal(wrap, view, this.from, this.app, this.getPath);
     return wrap;
+  }
+
+  // R135: when CM drops this widget's DOM (cursor enters the fence / fence changes), unload the
+  // children the handler added so their onunload fires (Dataview cleanup). The owner lives on the dom,
+  // not the widget instance, because eq() keeps one DOM across keystrokes while widgets are rebuilt.
+  destroy(dom: HTMLElement): void {
+    const owner = pluginWidgetOwners.get(dom);
+    if (owner) {
+      owner.unload();
+      pluginWidgetOwners.delete(dom);
+    }
   }
 
   ignoreEvent(): boolean {

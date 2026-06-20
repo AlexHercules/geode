@@ -594,11 +594,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
   useEffect(() => {
     if (tab.mode !== "preview" || !handle) return;
     const el = previewContentRef.current;
-    if (el) {
-      void hydrateEmbeds(el, app, handle.path);
-      hydrateCodeCopy(el); // R95: code-fence copy buttons (post-render, byte-neutral)
-      runMarkdownPostProcessors(el, app, handle.path); // R132: plugin reading-view post-processors
-    }
+    if (!el) return;
+    void hydrateEmbeds(el, app, handle.path);
+    hydrateCodeCopy(el); // R95: code-fence copy buttons (post-render, byte-neutral)
+    const owner = runMarkdownPostProcessors(el, app, handle.path); // R132: plugin reading-view post-processors
+    // R135: unload any children the processors added when this render is torn down — React replaces the
+    // dangerouslySetInnerHTML subtree on previewHtml change, so onunload fires before the next render's
+    // children mount (and on unmount / leaving preview). Matches Obsidian's per-render child lifecycle.
+    return () => owner?.unload();
     // R132 review: previewHtml-driven only — a registry change must NOT re-run on the un-wiped DOM
     // (would duplicate non-idempotent processors / linger disposed output). Like Obsidian, processors
     // apply to SUBSEQUENT renders, not retroactively to an already-open view.

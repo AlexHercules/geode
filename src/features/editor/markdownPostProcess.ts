@@ -9,15 +9,24 @@ import type { GeodeApp } from "@app/AppContext";
 import {
   getMarkdownPostProcessors,
   makeMarkdownPostProcessorContext,
+  RenderChildOwner,
 } from "@core/markdownPostProcessors";
 
-export function runMarkdownPostProcessors(el: HTMLElement, app: GeodeApp, sourcePath: string): void {
+/** Runs reading-view post-processors and returns the owner of any children they added (R135), so the
+ *  caller can `owner.unload()` them when this render is torn down. Undefined when no processors ran. */
+export function runMarkdownPostProcessors(
+  el: HTMLElement,
+  app: GeodeApp,
+  sourcePath: string,
+): RenderChildOwner | undefined {
   const procs = getMarkdownPostProcessors();
-  if (procs.length === 0) return;
+  if (procs.length === 0) return undefined;
+  const owner = new RenderChildOwner();
   const ctx = makeMarkdownPostProcessorContext(
     sourcePath,
     el,
     app.metadata.getMetadata(sourcePath)?.frontmatter?.fields ?? null,
+    owner,
   );
   for (const proc of procs) {
     try {
@@ -30,4 +39,5 @@ export function runMarkdownPostProcessors(el: HTMLElement, app: GeodeApp, source
       console.error("[markdown-post-processor] processor threw", err);
     }
   }
+  return owner;
 }
