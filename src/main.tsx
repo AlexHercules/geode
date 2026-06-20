@@ -1170,20 +1170,25 @@ async function bootstrap() {
       input: Partial<Pick<SearchInput, "content" | "basename" | "path" | "frontmatter">> & {
         tags?: string[];
       },
+      defaultCaseSensitive?: boolean,
     ) => boolean;
   };
-  searchHost.__geodeSearchQuery = (query, input) => {
+  searchHost.__geodeSearchQuery = (query, input, defaultCaseSensitive = false) => {
     const parsed = parseSearchQuery(query);
     if (!parsed.expr) return false;
     const path = input.path ?? "Note.md";
-    return evaluateSearch(parsed.expr, {
-      path,
-      fileName: path.split("/").pop() ?? path,
-      basename: input.basename ?? "Note",
-      content: input.content ?? "",
-      tags: input.tags ?? [],
-      frontmatter: input.frontmatter,
-    }).matched;
+    return evaluateSearch(
+      parsed.expr,
+      {
+        path,
+        fileName: path.split("/").pop() ?? path,
+        basename: input.basename ?? "Note",
+        content: input.content ?? "",
+        tags: input.tags ?? [],
+        frontmatter: input.frontmatter,
+      },
+      defaultCaseSensitive,
+    ).matched;
   };
 
   // always-on multi-cursor probe (R63, ㉕): verifies the STATE foundation on the

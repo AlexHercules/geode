@@ -196,6 +196,9 @@ export function SearchPanel() {
   // R80: toolbar prefs — sort + more-context persisted; collapse is per-session
   const [sortKey, setSortKey] = useState<SortKey>(() => readSearchPref("geode.searchSort", "relevance") as SortKey);
   const [moreContext, setMoreContext] = useState(() => readSearchPref("geode.searchContext", "") === "1");
+  // R143: global "Match case" toggle (Obsidian's Aa) — flips default-mode terms;
+  // explicit match-case:/ignore-case: operators still win. Persisted like the rest.
+  const [matchCase, setMatchCase] = useState(() => readSearchPref("geode.searchCase", "") === "1");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false); // transient "copied" feedback on the copy button
 
@@ -270,7 +273,7 @@ export function SearchPanel() {
           // R68: frontmatter fields drive the `[property]` operator
           frontmatter: meta?.frontmatter?.fields,
         };
-        const outcome = evaluateSearch(expr, input);
+        const outcome = evaluateSearch(expr, input, matchCase);
         if (!outcome.matched) continue;
         const nameMatch = outcome.nameRanges.length > 0;
         out.push({
@@ -293,7 +296,7 @@ export function SearchPanel() {
     return () => {
       cancelled = true;
     };
-  }, [app.vault, app.metadata, parsed, rev, excluded]);
+  }, [app.vault, app.metadata, parsed, rev, excluded, matchCase]);
 
   // R80: sort + truncate derived from allResults (re-sort never re-scans).
   const results = useMemo(
@@ -320,6 +323,12 @@ export function SearchPanel() {
   const toggleMoreContext = () => {
     setMoreContext((v) => {
       persistSearchPref("geode.searchContext", v ? "0" : "1");
+      return !v;
+    });
+  };
+  const toggleMatchCase = () => {
+    setMatchCase((v) => {
+      persistSearchPref("geode.searchCase", v ? "0" : "1");
       return !v;
     });
   };
@@ -497,6 +506,16 @@ export function SearchPanel() {
           spellCheck={false}
           data-testid="search-input"
         />
+        <button
+          className={"search-case-toggle" + (matchCase ? " is-active" : "")}
+          onClick={toggleMatchCase}
+          aria-pressed={matchCase}
+          aria-label={t("search.matchCase")}
+          title={t("search.matchCase")}
+          data-testid="search-case-toggle"
+        >
+          Aa
+        </button>
         {query && (
           <button
             className="search-clear"

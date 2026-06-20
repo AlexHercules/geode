@@ -457,19 +457,34 @@ type TermExpr = Extract<SearchExpr, { type: "term" }>;
 /** Per-evaluateSearch-call caches (one input file per call). */
 interface EvalCtx {
   input: SearchInput;
+  /** R143: the panel's global "Match case" toggle — applies to `default`-mode
+   *  terms only (explicit match-case:/ignore-case: operators keep their mode). */
+  defaultSensitive: boolean;
   lowerNames: Map<NameKey, LoweredText>;
   lowerTags: readonly string[] | null;
   regexes: Map<SearchMatcher, RegExp>; // compiled once, "g" appended
   lowerNeedles: Map<SearchMatcher, string>;
 }
 
+/** A text matcher's effective case sensitivity (R143): an explicit
+ *  match-case:/ignore-case: operator (CaseMode "sensitive"/"insensitive") always
+ *  wins; a "default" term follows the panel's global Match-case toggle. */
+function caseSensitive(mode: CaseMode, ctx: EvalCtx): boolean {
+  return mode === "sensitive" || (mode === "default" && ctx.defaultSensitive);
+}
+
 const NO_RANGES: SearchMatchRange[] = [];
 const NO_MATCH: NodeResult = { matched: false, ranges: NO_RANGES, nameRanges: NO_RANGES };
 const MATCH_NO_RANGES: NodeResult = { matched: true, ranges: NO_RANGES, nameRanges: NO_RANGES };
 
-export function evaluateSearch(expr: SearchExpr, input: SearchInput): SearchOutcome {
+export function evaluateSearch(
+  expr: SearchExpr,
+  input: SearchInput,
+  defaultCaseSensitive = false,
+): SearchOutcome {
   const ctx: EvalCtx = {
     input,
+    defaultSensitive: defaultCaseSensitive,
     lowerNames: new Map(),
     lowerTags: null,
     regexes: new Map(),
@@ -558,7 +573,7 @@ function evalExpr(expr: SearchExpr, ctx: EvalCtx, scope: Scope, collect: boolean
       const realKey = Object.keys(fields).find((k) => k.toLowerCase() === expr.key.toLowerCase());
       if (realKey === undefined) return NO_MATCH;
       if (expr.value === null) return MATCH_NO_RANGES; // key exists
-      const sensitive = expr.value.caseMode === "sensitive";
+      const sensitive = caseSensitive(expr.value.caseMode, ctx);
       const needle = sensitive ? expr.value.text : expr.value.text.toLowerCase();
       const raw = fields[realKey];
       const values = Array.isArray(raw) ? raw : [raw];
@@ -617,7 +632,7 @@ function matchContent(
   collect: boolean,
 ): { matched: boolean; ranges: SearchMatchRange[] } {
   if (matcher.kind === "text") {
-    if (matcher.caseMode === "sensitive") {
+    if (caseSensitive(matcher.caseMode, ctx)) {
       return textScan(scope.text, matcher.text, scope.offset, collect);
     }
     const lo = (scope.lower ??= lowerText(scope.text));
@@ -633,7 +648,7 @@ function matchName(
   collect: boolean,
 ): { matched: boolean; ranges: SearchMatchRange[] } {
   if (matcher.kind === "text") {
-    if (matcher.caseMode === "sensitive") {
+    if (caseSensitive(matcher.caseMode, ctx)) {
       return textScan(ctx.input[key], matcher.text, 0, collect);
     }
     const lo = lowerName(ctx, key);
@@ -651,7 +666,7 @@ function matchTags(matcher: SearchMatcher, ctx: EvalCtx): boolean {
     }
     return false;
   }
-  const sensitive = matcher.caseMode === "sensitive";
+  const sensitive = caseSensitive(matcher.caseMode, ctx);
   const needle = sensitive ? matcher.text : lowerNeedle(ctx, matcher);
   if (needle.length === 0) return false;
   const tags = sensitive ? ctx.input.tags : lowerTags(ctx);
