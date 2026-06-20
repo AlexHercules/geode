@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 149 additions — compat `Keymap.isModEvent` 补全（static · tab/split/window/中键 · 插件 API 商业主轴 · 零 data-safety）【As-built v0.146】
+
+> **状态：As-built（v0.146 交付，2026-06-21）。对抗评审 9 维 → 1 MINOR 确认修（mod 平台感知）+ 余全证伪 + 简化门 clean（2 文件）。** 续 R148——R148 reviewer 实证 informational：Geode `isModEvent` 只返 `"tab"|false`，d.ts 是 `"tab"|"split"|"window"`+中键。**Gate**：d.ts 注释逐字——「Returns 'tab' if Cmd/Ctrl pressed OR middle-click MouseEvent；'split' if Cmd/Ctrl+Alt；'window' if Cmd/Ctrl+Alt+Shift」（@since 0.16.0）。**grep 确认 isModEvent 无内部调用者**（仅 compat 定义）→ 纯 compat API 补全、**零内部行为改动**（只影响调 `Keymap.isModEvent` 的 plugins）。`PaneType="tab"|"split"|"window"` 已是类型、Geode 有 `splitActivePane`（"window" 仅作分类返回值、不实际开窗）。**零 data-safety**（纯 static 读 event flag）。
+
+**契约（加性；compat Keymap.isModEvent 重写）**：
+- **`compat/obsidian/ui.ts` Keymap.isModEvent**：`if(!evt) return false; const mod=Keymap.isModifier(evt,"Mod");`（**复用 R148 isModifier=平台感知 Mod[mac Cmd/其它 Ctrl]、两 Keymap helper 一致**）→ **most-specific first**：`mod&&altKey&&shiftKey`→`"window"`、`mod&&altKey`→`"split"`、`mod`→`"tab"`、`evt instanceof MouseEvent && evt.button===1`（中键，MouseEvent+PointerEvent[extends MouseEvent]）→`"tab"`、else `false`。无内部调用者→旧 either-mod→平台 mod 的改动零内部影响。
+- **`main.tsx`**：`__geodeKeymapIsModEvent(kind, flags)` 测试钩子（镜像 R148 `__geodeKeymapIsModifier`）——`kind:"mouse"|"keyboard"` 构造 MouseEvent(button)/KeyboardEvent + modifier flags → `Keymap.isModEvent`。
+
+**数据安全**：纯 static 读 event flag，**零 vault/.md 写**=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r149-e2e）= **平台 Mod 经 XOR 判定**（恰 meta/ctrl 之一是 Mod、平台无关）→ Mod→tab / 非 Mod 键→false / Mod+Alt→split / Mod+Alt+Shift→window / 无 mod→false / mouse 中键(button1)→tab / 左右键→false / mouse Mod+Alt→split + 边角（middle+Mod+Alt+Shift→window=most-specific 先）。桌面 probe = **N/A**（isModEvent **把唯一平台分支[Mod]委托给 isModifier=r148-probe 已在真 mac 二进制验过 Mod=Cmd**；其余 split/window/中键是平台无关 if-cascade、浏览器 e2e 全覆盖）。
+
+**data-testid**：N/A（probe-hook 驱动）。
+
+**对抗评审（reviewer 9 维 → 1 MINOR 确认修 + 余全证伪）：** **F1 MINOR（已修+e2e 锁）**：原 `mod=evt.ctrlKey||evt.metaKey`（跨平台 either-mod）与**同类 R148 isModifier 的平台感知 Mod 不一致**——mac 上 Ctrl+click 是 OS context-menu 弦、忠实 Obsidian 不该当 mod 事件（不返 tab）；**修**=`mod=Keymap.isModifier(evt,"Mod")` 复用 R148（平台感知 + DRY + 类内一致），e2e 改平台无关 XOR 判定。**证伪**：中键检测正确（`instanceof MouseEvent` 抓 MouseEvent+PointerEvent、排除 KeyboardEvent/TouchEvent、button1=中键）· most-specific-first 优先级对（mod 组合先于中键、middle+mod+alt+shift→window）· 向后兼容（旧 mod-only→tab/no-mod→false 保持、mod+alt→split 是 intended 新行为、无内部调用者故零内部回归）· **无内部调用者**（grep 确认仅定义+probe）· data-safety 零写 · 探针无泄漏 · 类型（instanceof 收窄 evt.button、全路径返 PaneType|boolean、无 any）· 边角（TouchEvent+mod→tab、PointerEvent 中键→tab）。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r149-e2e 16/16**（平台 Mod XOR + Mod/Mod+Alt/Mod+Alt+Shift→tab/split/window + 非 Mod 键/无 mod/partial→false + 中键→tab/左右键→false + mouse Mod+Alt→split + most-specific 中键+mod 组合 win）· 回归 r148 14/14（Keymap isModifier 同文件、isModEvent 现复用之）·r51 10/10 · 简化门 clean（2 文件）。**桌面 probe N/A**（平台分支委托 isModifier=r148-probe 已验）。
+
+---
+
 ## Round 148 additions — compat `Keymap.isModifier`（static · 插件 API 商业主轴 · 零 data-safety）【As-built v0.145】
 
 > **状态：As-built（v0.145 交付，2026-06-21）。对抗评审 8 维全证伪 + gate 决策（pushScope/popScope 不做）经核验 SOUND → 0 confirmed defect（clean）+ 简化门 clean（2 文件跳过条件）。** 续 R146/R147 compat surface 审计。**Gate（d.ts + Geode 现状 + 范围裁剪）**：`awk` 提 Keymap 类确认四方法——`static isModifier(evt, modifier): boolean`(@0.12.17)、`pushScope(scope)`(@0.13.9)、`popScope(scope)`(@0.13.9)、`static isModEvent`(@0.16.0，Geode 已有)。**只做 `isModifier`**——它是 static、plugins 直接经类调（`Keymap.isModifier(evt,"Mod")`）、缺它即崩=**真 crash-gap**；**pushScope/popScope 故意不做**（已是 `app.keymap` 上的 no-op[plugin.ts:386，「host never dispatches scopes」文档化]，且 Keymap **类**的 instance 方法 plugins 够不到=加了也无调用路径=completionism padding，弃）。**零 data-safety**（纯 static helper 读 event 修饰键 flag，无写）。

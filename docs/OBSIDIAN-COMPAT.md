@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R149 套件回归（2026-06-21，平台分支委托 isModifier · 桌面 probe N/A）
+
+R149 = compat **`Keymap.isModEvent` 补全**（续 R148——R148 reviewer 标的真缺口）。**Gate**：d.ts 注释逐字（'tab' if Mod OR 中键；'split' if Mod+Alt；'window' if Mod+Alt+Shift @0.16.0）+ grep 确认 **无内部调用者**（纯 compat API 补全、零内部行为改）。`ui.ts` isModEvent 重写：`mod=Keymap.isModifier(evt,"Mod")`（**复用 R148 平台感知 Mod**）→ most-specific first（Mod+Alt+Shift→window / Mod+Alt→split / Mod→tab / `evt instanceof MouseEvent && button===1` 中键→tab / else false）；`main.tsx` `__geodeKeymapIsModEvent` 钩子。**零 data-safety**（纯 static 读 event flag）。**对抗评审 9 维 → 1 MINOR 确认修+e2e 锁**：原 `mod=ctrlKey||metaKey`（跨平台 either-mod）与同类 R148 isModifier 平台感知不一致（mac Ctrl+click=OS context-menu 不该当 mod）→修=复用 `isModifier(evt,"Mod")`（平台感知+DRY+类内一致）、e2e 改平台无关 XOR；余全证伪 + 简化门 clean。
+
+新增套件：`r149-e2e.mjs` **16/16**（平台 Mod XOR + Mod/Mod+Alt/Mod+Alt+Shift→tab/split/window + 非 Mod 键/无 mod/partial→false + 中键→tab/左右键→false + mouse Mod+Alt→split + most-specific 中键+mod 组合 win）。**套件矩阵不回退**：r148 14/14（Keymap isModifier 同文件、isModEvent 现复用之）·r51 10/10。**桌面 probe N/A**（isModEvent 把唯一平台分支[Mod]委托给 isModifier=r148-probe 已在真 mac 二进制验过 Mod=Cmd；其余 split/window/中键平台无关 if-cascade、浏览器 e2e 全覆盖）。
+
 ### R148 套件回归（2026-06-21，macOS release 二进制 v0.145.0 实测 `r148-probe-vault`）
 
 R148 = compat **`Keymap.isModifier`（static）**（插件 API 商业主轴，续 R146/R147 surface 审计）。**Gate（d.ts + 范围裁剪）**：`awk` 提 Keymap 类确认四方法（`static isModifier`@0.12.17 / `pushScope`/`popScope`@0.13.9 / `static isModEvent` Geode 已有）。**只做 `isModifier`**——static、plugins 直接经类调、缺它即崩=真 crash-gap；**pushScope/popScope 故意不做**（已 no-op on `app.keymap`=keymapStub、Keymap 类 instance 方法 plugins 够不到=无调用路径=死代码，**reviewer 核验 SOUND**）。`ui.ts` Keymap 加 `static isModifier(evt,modifier):boolean`（switch Mod/Ctrl/Meta/Shift/Alt[Mod=`Platform.isMacOS?metaKey:ctrlKey`]+`default:return false` 防 untyped JS 传非法串返 undefined）+ `Platform` import；`main.tsx` `__geodeKeymapIsModifier` 测试钩子。**零 data-safety**（纯 static 读 event flag）。**对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 采纳 1 nit（default-case）** + 简化门 clean（2 文件）。
