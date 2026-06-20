@@ -71,6 +71,36 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 134 additions — 插件代码块处理器 live preview（编辑模式也渲染 · registerMarkdownPostProcessor 大头 phase 3 · Dataview/Tasks 主要机制续）【As-built v0.131】
+
+> **状态：As-built（v0.131 交付，2026-06-20）。** R132（通用 postProcessor·阅读视图）+ R133（代码块处理器·阅读视图）让 Dataview/Tasks 在**阅读视图**工作；R134 让它们在**编辑模式（live preview）**也渲染——`​```dataview`/`​```tasks` 在编辑器里实时渲成结果，而非裸 fence 源。**复用 Geode 既有 live-block widget 管线**（R55/R56/R57/R75 的 liveTables/liveMermaid/liveMath/liveQuery）：syntaxTree 扫 FencedCode → 光标不在块内则块级 REPLACE 装饰 + atomicRanges + `contenteditable=false` 渲 widget；光标/点击进块 → 揭源编辑。**纯视图层、绝不改文档字节**（继承 R55 数据安全：块级装饰必出自 StateField、行首对齐、选区命中跳过）。不动 `core/markdown.ts`（r18-diff/§C 不触发）。
+
+**关键约束（explorer 揭示）**：R133 把 handler 存为**不透明 post-processor**（lang 闭包在 `makeCodeBlockPostProcessor` 里、注册表看不见）→ live preview **无法按 lang 查 handler**。故 R134 必须加一个 **core lang→handler 注册表**，**阅读视图（R133 路径）+ live preview（R134）共读一个真源**。
+
+**契约（加性；core 注册表 + 新 live 扩展 + EditorPane 反应式重配 + 测试钩子）**：
+- `core/markdownPostProcessors.ts`（扩展，非新文件——同一「插件 markdown 后处理」关注点）：
+  - 新 `codeBlockProcessors: Map<string, handler>`（lang→handler，last-writer-wins；live preview 一 lang 一渲染器）+ `codeBlockProcessorsRevision = new Store(0)`。
+  - 新 `getCodeBlockProcessor(lang)` / `hasCodeBlockProcessor(lang)`（live 扩展查表）。
+  - 新 `registerCodeBlockProcessor(lang, handler, sortOrder=0): { processor, dispose }` = **单一双注册点**：内部 `makeCodeBlockPostProcessor`(阅读视图 post-processor) + 写 live Map，`dispose` 同时撤两者（Map 删按 identity 守卫、不误清同 lang 的新注册）。compat + 测试钩子都调它 → 双注册逻辑只一处。
+  - 新 `makeMarkdownPostProcessorContext(sourcePath, containerEl, frontmatter): MarkdownPostProcessorContext` = ctx 形状**单一真源**（阅读视图 `markdownPostProcess.ts` + live `livePluginCodeBlocks` 共用；phase-2 真 getSectionInfo 改一处）。
+- `compat/obsidian/plugin.ts`：registerMarkdownCodeBlockProcessor 改调 `registerCodeBlockProcessor`（一行：`const {processor,dispose}=…; this.register(dispose); return processor`）——比 R133 更薄、行为对阅读视图逐字节不变（R133 e2e 9/9 须保持）。
+- `features/editor/livePluginCodeBlocks.ts`（新）：`findPluginCodeBlockRanges(state)`（扫 FencedCode、`hasCodeBlockProcessor(lang)` 才收）+ `livePluginCodeBlocks(app, getPath)`（用共享 `liveBlockWidgets` spec + `PluginCodeBlockWidget`）。
+- `features/editor/liveHydratedWidget.ts`（扩展）：新 `PluginCodeBlockWidget`（toDOM：`splitFence` 拆 lang+body、`getCodeBlockProcessor(lang)` 查 handler、新 div 调 `handler(body, div, ctx)`、try/catch+`.catch` 隔离同 R133）+ 提取**模块私有 `attachLiveBlockReveal`**（光标揭源 + internal-link 导航——HydratedBlockWidget 与 PluginCodeBlockWidget 共用，HydratedBlockWidget 内联 mousedown 改调它，行为逐字节不变，r56/r57/r75 e2e 兜回归）+ 模块私有 `splitFence`（拆 fence 源为 lang+inner body，去围栏去尾 `\n`）。
+- `features/editor/livePreview.ts`：`livePluginCodeBlocks(app, getPath)` 加进 live 扩展数组（紧邻 liveQuery，第 5 个并行 live-block 扩展——无中心 switch）。
+- `features/editor/EditorPane.tsx`：`useStore(codeBlockProcessorsRevision)` → 一个 effect（镜像 R115 compatExtRev / 既有 mode effect）在注册表变化时 `modeCompartment.reconfigure(editorModeExtensions(…))` → 已开编辑器无需切模式/编辑即重渲（插件开机前注册=首挂载即见；开着注册=此 effect 重渲；兜底：liveBlockWidgets 本就 docChanged/selection 重建）。
+- `main.tsx`：`__geodeRegisterMarkdownCodeBlockProcessor` 测试钩子改调 `registerCodeBlockProcessor(…).dispose` → 同一 core 双注册（阅读视图 + live 都被 e2e 测到，不再只测阅读视图）。
+
+**数据安全（§A/§C 自查）**：① widget 纯 REPLACE 块装饰（出自 StateField，R55 铁律）+ atomicRanges（光标不进块）+ `contenteditable=false`；② 选区命中块 → 跳过 widget 揭源（liveBlockWidget.ts:32）；③ 行首对齐守卫（mid-line/嵌套 fence 保源，:30）；④ **零写回**——widget 只 sliceDoc 读 + handler 填 div + 点击 dispatch *selection*（非 changes），绝不改文档字节；⑤ 不动 `core/markdown.ts` fence 渲染 → r18-diff/§C 不触发、r26-bytes 0 invariant 须保持。
+
+**双端**：浏览器 e2e（新 r134-e2e）= 注册 `​```testblock` → live preview 渲成 handler div + 未注册 lang 留裸 fence + 光标进块揭源 + disposer 撤渲 + 注册表变化重渲（reconfigure）；桌面 probe（r134-probe）= 真 WKWebView 加载 + 注册表 registerable（live 编辑器 React 树/CM hydration 受 App-Nap 节流 §D → 表层；渲染语义由 e2e 覆盖）。
+
+**对抗评审（reviewer 多维 → 2 MINOR 边角确认修 + e2e 锁；data-safety/分层/反应式/错误隔离全证伪）：**
+- **MINOR fix 1（内置 lang 撞车 → 同一 fence 双块装饰，已修+e2e 锁）**：`findPluginCodeBlockRanges` 只 gate `hasCodeBlockProcessor(lang)`、**不排除内置 live-fence lang**（mermaid/query）。插件注册 `"mermaid"` → livePluginCodeBlocks 与 liveMermaid 都检测同一 `​```mermaid` 范围 → 各发一个 `Decoration.replace({block})`+atomicRanges 叠在同一 `[from,to]` → CM 双 widget/装饰冲突（阅读视图天然免疫：内置渲 `.geode-*` div 不匹配 `language-mermaid`；live 是 lang 字符串检测、缺此守卫）。**修**：detector 加 `BUILTIN_LIVE_FENCE_LANGS = {mermaid, query}` 排除（内置胜、对齐阅读视图）。e2e 锁：注册 `"mermaid"` → `​```mermaid` 仍由 liveMermaid 渲（cm-live-mermaid×1）、cm-live-codeblock-mermaid×0。
+- **MINOR fix 2（splitFence 剥错 marker 型闭合 fence → live body ≠ 阅读 body，已修+e2e 锁）**：闭合-剥离正则 `(`{3,}|~{3,})` 不论开 marker 型都匹配 → **未闭合** `~~~` fence 在 EOF 末行恰为 `​```` 时（lezer 视其为正文、不闭合 `~~~`），阅读视图给 handler `"…\n```"` 而 splitFence 误剥 `​```` → live 给 `"…"`，两端发散。**修**：闭合绑定开 marker 字符（`marker[1][0]`，`\`/`~`），仅剥同型。e2e 锁：未闭合 `~~~wrapblock` 末行 `​```` → handler body 保留该行。
+- **reviewer 证伪全维**：**data-safety PASS**（widget 纯块 REPLACE 装饰出自 StateField + atomicRanges + `contenteditable=false`、选区命中揭源、零 `changes` dispatch——唯一 dispatch 是点击的 selection-only、handler 拿到的 ctx 无 view/vault 引用故零写回能力；`core/markdown.ts` 未改 → §C/r18-diff/r26-bytes 0 invariant 不触发）· `attachLiveBlockReveal` 提取逐字节等价（同 `from`、两分支均 preventDefault）· CRLF 上游 LF 化非问题 · `eq(source+from)` 防 handler 每键重跑、块前编辑移位则进**新** wrap 不重复 append · EditorPane reconfigure effect 与 mode effect 不冲突（reconfigure 到当前 mode、appliedModeRef 守卫不失效、preview 早返、source no-op、首挂载不冗余 fire）· dispose identity 守卫正确（register A→再注册同 lang B→dispose A-old 不误删 B）· 分层（core 仅 import store、用 DOM 同 embeds、不 import feature/app）· 错误隔离镜像 R133（try/catch sync + .catch async 不逃逸中止编辑器）。
+
+**套件**：typecheck 0 · cargo build (release) exit 0 · **r134-e2e 24/24**（live 渲染+body/ctx/div + 未注册留裸 + 开着注册重渲 reconfigure + 光标揭源往返 + 文档字节不变 + disposer 撤渲 + **fix1 内置 lang 不双渲** + **fix2 未闭合反型 marker body 保留**）· **r134-probe 6/6**（真 WKWebView：核心 lang→handler 注册表 register→true/dispose→false 转换 §D-safe；live 编辑器 widget headless 不渲染 §D→由 e2e 覆盖）· 回归 r133 9/9·r132 11/11·r56 13/13·r57 19/19·r75 16/16·r26-bytes 0 invariant·r23 22/22·r24 12/12 · 简化门 clean（0 编辑：新导出全被消费、无 ≥8 行重复、`attachLiveBlockReveal`/`makeMarkdownPostProcessorContext` 已是去重产物）。**剩余缺口（compat 商业主轴）**：registerMarkdownPostProcessor 续 phase（`getSectionInfo`/`addChild` 真实现——live preview 已闭环）· file-menu 续 phase（files-menu 需 Explorer 多选 · 其它 source · editor-menu 原生项）· `MenuItem.setSubmenu`/`referenceLinks`（低优）。
+
 ## Round 133 additions — compat Plugin.registerMarkdownCodeBlockProcessor（阅读视图代码块处理器 · 插件 API 商业主轴 · Dataview/Tasks 主要机制）【As-built v0.130】
 
 > **状态：As-built（v0.130 交付，2026-06-20）。** Obsidian `Plugin.registerMarkdownCodeBlockProcessor(lang, (source, el, ctx) => …)`（插件把 ```` ```lang ```` 渲染成自定义内容）现真实现——这是 **Dataview 的 `dataview` 块、Tasks 的 `tasks` 块的【主要】机制**，比 R132 通用 postProcessor 更直接命中旗舰插件。**Obsidian口径**：它是 post-processor 的语法糖（移除渲染后的 `<pre><code>`、给 handler 一个新 `<div>` 填）→ **复用 R132 注册表、compat-mostly、加性 display-only**（不动 `core/markdown.ts`、无 vault 写）。
