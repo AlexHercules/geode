@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 130 additions — compat workspace.on('file-menu')（右键菜单钩子 · 插件 API 商业主轴 · 主线大头 phase 1）【As-built v0.127】
+
+> **状态：As-built（v0.127 交付，2026-06-20）。** Obsidian `workspace.on('file-menu', (menu, file, source, leaf?) => menu.addItem(...))`（插件给文件/文件夹右键菜单加项）现真实现——**插件迁移阻塞面最大的两大头之一，本轮 phase 1 = Explorer 文件/文件夹菜单**。小项耗尽后（R119–R129 连做 11 项）自主启动该大头（§自主契约「决定并往前」，不做 busywork）。editor-menu 延后（Geode 编辑器用浏览器原生右键菜单、无宿主菜单可并入，需另建）。
+
+**架构契约（跨 3 层 · 在 core 会合 · 冻结）**：分层铁律下 **compat 不能 import features、features 不能 import compat** → 桥**必须在 core 会合**：compat 写 provider 进 core 注册表，feature 从 core 注册表读。
+- `core/plugins.ts`：新**纯数据**类型 `MenuContribution {title, icon?, section?, disabled?, warning?, checked?, onClick}`（core 不认 compat Menu——compat 把 Menu 项**降维成纯数据**再过界）+ `FileMenuContext {path, isFolder, source}`。PluginManager 加 `registerFileMenuProvider(fn): ()=>void`（单 provider，disposer 仅当 `===fn` 才清——防 reload 旧 disposer 误清新 provider）+ `collectFileMenu(ctx): MenuContribution[]`（同步，try/catch→`[]`）。
+- `compat/obsidian/menuCollect.ts`（新）：`CollectorMenu`/`CollectorMenuItem`——插件 `menu.addItem(item=>item.setTitle().setIcon().onClick())` 录成 `MenuContribution[]`、**零 DOM**（不碰工作中的 popup Menu、不浪费每次右键的 DOM）；空 title 项丢弃；addSeparator/setNoIcon/setIsLabel 为 no-op（v1）。
+- `compat/obsidian/workspace.ts`：`on('file-menu', ...)` overload（type-only import Menu/TAbstractFile）。
+- `compat/obsidian/context.ts`：`disposers.push(plugins.registerFileMenuProvider((ctx) => { file = ctx.isFolder?getFolder:getFile; if(!file) return []; menu = new CollectorMenu(); workspace.trigger('file-menu', menu, file, ctx.source, undefined); return menu.items; }))`——**每次右键建 fresh CollectorMenu + fire fresh trigger**（插件 handler 闭包抓当前 file），`trigger` 同步遍历所有 handler→多插件项按注册序累积。
+- `features/explorer/Explorer.tsx`：MenuState 加 `contributed`，在行 `onContextMenu` **一次性** `app.plugins.collectFileMenu({path, isFolder, source})`（存 state，避免 re-render 重跑插件 handler），原生项后画一条分隔 + 渲染 contributed 项（warning→is-danger、disabled→attr、icon→`<Icon>`），onClick = `setMenu(null); item.onClick()`（菜单先关再执行，同 R93 原生口径）。
+
+**对抗评审（reviewer 8 维 · 分层优先 → 0 critical/major，分层证伪干净；1 MINOR 评审修 + 2 文档化）：**
+- **分层（核心，证伪）**：grep 确认 compat 无 `@features/@app` import、Explorer 新码无 `@compat` import；`MenuContribution`/`FileMenuContext` 在 `@core/plugins`；CollectorMenu 只在 compat 内经 `workspace.trigger` 流转（core 只见返回的纯 `MenuContribution[]`）；Menu/TAbstractFile 为 type-only import（erased 无运行时环）。
+- **reviewer 证伪全维**：lifecycle（loader 先 dispose 旧 context 再建新；`===fn` 守卫容忍乱序/缺失 dispose）· 多插件累积（`Events.trigger` 遍历全 handler 按注册序入同一 CollectorMenu，`tryTrigger` 隔离抛错插件）· per-open freshness（collectFileMenu 在 onContextMenu 一次性、存 state、不随 re-render 重跑；fresh Menu+trigger 抓当前 file）· CollectorMenu 缺的 Menu 方法（dom/showAtMouseEvent/instanceof）被 tryTrigger+try/catch 兜成 `[]` 不崩 · **数据安全=零**（菜单是 UI、桥不写 vault；onClick 在 `setMenu(null)` 后执行同 R93；title 走 React 文本节点转义无注入）· Icon 未知名 fallback `file-text` 不崩。
+- **MINOR 评审修**：contributed onClick 加 try/catch+console.error（与 compat MenuItem[ui.ts] 兜错口径一致，throwing 插件 onClick 不渗入 React 事件系统）。
+- **文档化偏离（v1 scope）**：① `MenuContribution.checked`/`section` 被录但 Explorer v1 不渲染（无 checkmark/section 排序）——数据经 collectFileMenu 流出，渲染**延后**（非 dead，是 forward-compat）· ② `item.onClick()` 不传 event 实参（Obsidian 传 Mouse/KeyboardEvent，罕见 idiom）· ③ 未知 lucide 图标名 fallback `file-text`（Geode 手写图标集 ⊊ lucide）。
+
+**套件**：typecheck 0 · cargo build exit 0 · r130-e2e **12/12**（数据路径：titles/icons/warnings/source/file/onClick + folder→TFolder + unknown-path→[]；**Explorer UI**：右键→contributed 按钮→点击→onClick fire→菜单关）· r130-probe **7/7** 真 WKWebView（collectFileMenu 数据路径——title/icon/source/file/onClick 真机全验；Explorer UI 无 CDP 由 e2e 覆盖）· 回归 r93 22/22（Explorer 右键菜单）·r91 10/10·r129 11/11（compat 载入）·r128 19/19 · 简化门 clean。**剩余缺口（compat 商业主轴）**：**file-menu 续 phase**（editor-menu[需建原生编辑器菜单] · files-menu[多选] · 其它 source[tab/link/more-options] · section 排序）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· `MenuItem.setSubmenu`/`referenceLinks`（低优）。
+
 ## Round 129 additions — compat App.loadLocalStorage / saveLocalStorage / isDarkMode（per-vault UI 态 + 主题查询 · 插件 API 商业主轴）【As-built v0.126】
 
 > **状态：As-built（v0.126 交付，2026-06-20）。** Obsidian `App.loadLocalStorage(key)`/`saveLocalStorage(key, data)`（per-vault localStorage，data=null 清除）+ `isDarkMode()`（当前主题是否暗）现真实现。插件存折叠态/最近项等 per-vault UI 状态 + 按主题切配色。**纯 compat 单文件（plugin.ts App 类）、零改 core、零新依赖、零 data-safety 面**（localStorage 是浏览器 UI 态，非用户 vault 数据）。

@@ -144,7 +144,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `Plugin.registerHoverLinkSource` / `hoverPopover`·`HoverParent` | **R25：`registerHoverLinkSource` 升真实无操作登记**（记录 source id 返回——Geode 全局悬停预览已覆盖插件渲染的 `a.internal-link`，无需插件参与）；插件自渲染预览 `hoverPopover`/`HoverParent` **仍为缺口**（插件被 Geode 全局 hover 被动覆盖，但其自挂 popover 不生效） |
 | `app.internalPlugins`（书签 instance API） | **R27：书签数据文件 `.obsidian/bookmarks.json` 双向保真**（Geode 原生书签读写同一文件，未知键/类型 round-trip——见 ARCHITECTURE R27），但 `app.internalPlugins.getPluginById("bookmarks").instance`（`getBookmarks()`/`addItem()`/`removeItem()` 等程序化 API）**仍为缺口**（插件无法经 API 操作书签，只能间接经文件） |
 | **R60 新登记 ↓（商业主轴 = 插件迁移，2026-06-14 全景调研 II code-verify）** | |
-| `workspace.on('file-menu'/'editor-menu'/'files-menu')` 右键菜单钩子 | **缺**：Menu/MenuItem 基础设施已就绪（`compat/obsidian/ui.ts:506/583`），但宿主侧无 trigger（文件树/编辑器右键不发 `file-menu`/`editor-menu` 事件）。**生态高频**（无数插件靠它加右键项）；与原生 ㊿ 标签/文件右键菜单同根，宜一并接 |
+| `workspace.on('file-menu'/'editor-menu'/'files-menu')` 右键菜单钩子 | **部分（R130 phase 1：file-menu Explorer 出队）**：新 core 菜单贡献注册表（`PluginManager.registerFileMenuProvider`/`collectFileMenu`，纯数据 `MenuContribution`）在 core 会合——compat 写 provider（`menuCollect.ts` CollectorMenu 录项零 DOM + `context.ts` fire `file-menu` 事件），Explorer 读 `app.plugins.collectFileMenu` 渲染项。`workspace.on('file-menu')` 真触发。**续 phase 缺**：`editor-menu`（需建原生编辑器右键菜单，Geode 现用浏览器原生）· `files-menu`（多选）· 其它 source（tab/link/more-options）· section 排序（v1 按插入序，文档化偏离）|
 | `Plugin.registerMarkdownPostProcessor` / `registerMarkdownCodeBlockProcessor` | **缺**：**生态影响最大单项**（Dataview / Tasks 等明星插件依赖）。需阅读侧 `core/markdown.ts` + 编辑侧 `liveBlockWidget`/`livePreview` 双线接 processor 管线，**工程大** |
 | ~~`Plugin.registerEditorExtension`~~ | **R115 出队**：新 core `editorExtensions` 注册表桥接（compat 写、EditorPane 读+订阅 revision）；新 compat compartment，register/dispose 经 revision reconfigure 所有 open view + 新 view seed。数据安全：reconfigure 无 doc change + autosave 是 view 外 updateListener → 编辑期注册不丢 |
 | ~~`app.commands`（executeCommandById / listCommands / commands / findCommand / executeCommand / editorCommands）~~ | **R113+R118 出队**：架在 core `CommandRegistry` 上（共享原生 palette 注册表）。R113=executeCommandById（尊重 available 预检）/listCommands/commands（name thunk 解析成 string）。R118=findCommand(id)/executeCommand(command, by-id 回查)/editorCommands。**R121=removeCommand(id)**（新 core CommandRegistry.removeById=delete+revision bump，与 register disposer 逐字段一致）。**app.commands 全成员完成。** **偏离**：editorCommands 恒 `{}`（Geode 不单独追踪 editor-scoped）；executeCommand 不执行未注册的传入对象 |
@@ -189,6 +189,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### R130 套件回归（2026-06-20，macOS release 二进制 v0.127.0 实测 `r130-probe-vault`）
+
+R130 = compat `workspace.on('file-menu')`（右键菜单钩子，**插件迁移阻塞面最大的主线大头之一，phase 1 = Explorer 文件/文件夹菜单**；R119–R129 连做 11 小项后自主启动）。**跨 3 层在 core 会合**（分层铁律下 compat/features 互不 import）：core 新菜单贡献注册表（`MenuContribution` 纯数据 + `registerFileMenuProvider`/`collectFileMenu`）· compat `menuCollect.ts` CollectorMenu 录插件项零 DOM + context.ts fire `file-menu` 事件 · Explorer 收集渲染。editor-menu 延后（需建原生编辑器菜单）。
+
+新增套件：`r130-e2e.mjs` **12/12**（数据路径 titles/icons/warnings/source/file/onClick + folder→TFolder + unknown→[]；**Explorer UI** 右键→contributed 按钮→点击→onClick→菜单关）+ `r130-probe.mjs` **7/7**（真 WKWebView collectFileMenu 数据路径全验；UI 无 CDP 由 e2e 覆盖）。**套件矩阵不回退**：r93 22/22（Explorer 右键菜单）·r91 10/10·r129 11/11·r128 19/19·r127 15/15·r126 11/11·r125 16/16。
 
 ### R129 套件回归（2026-06-20，macOS release 二进制 v0.126.0 实测 `r129-probe-vault`）
 
