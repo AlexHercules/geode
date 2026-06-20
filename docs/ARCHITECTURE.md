@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 145 additions — 快捷键面板「只显已分配」过滤 toggle（funnel · 续 R142 设置面 · 零 data-safety）【As-built v0.142】
+
+> **状态：As-built（v0.142 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** ㊾ 续 快捷键面板增强。**Gate 确认真实（防 phantom，R144 教训）**：WebFetch obsidian.md/help/User+interface/Hotkeys 逐字证实——「To show only commands that have assigned hotkeys, select the **filter icon** in Settings → Hotkeys」→ Obsidian 真有此 funnel filter（ON=只显已绑定快捷键的命令）。HotkeysSection 现有文本 filter（R 早轮），R145 加一个 funnel toggle 与之并排。**纯前端 UI 过滤态、零 data-safety**（同 R143/R142 设置面）。
+
+**契约（加性；HotkeysSection 一个 toggle）**：
+- **`app/icons.tsx`**：新 `filter` funnel 图标（lucide 漏斗 `M22 3H2l8 9.46V19l4 2v-8.54L22 3z`）——图标集无 funnel，加一个 SVG path（非运行时依赖）。
+- **`SettingsModal.tsx` HotkeysSection**：① 新 `assignedOnly` state（per-mount session 态，**不持久化**=与既有文本 `filter` 同惯例，重开设置即重置）；② `rows` filter 加 `&& (!assignedOnly || app.commands.getEffectiveHotkey(cmd.id) !== null)`（与文本 q 复合 AND）；③ 文本 input 包进 `.hotkeys-filter-row`（flex）+ funnel toggle 按钮（`is-active`+`aria-pressed`、title=`settings.hotkeysAssignedOnly`、`Icon name="filter"`）。空态复用既有 `settings-hotkeys-empty`。
+- **dict.views.ts**：新 `settings.hotkeysAssignedOnly`（EN "Show assigned hotkeys only" / ZH "只显示已分配快捷键的命令"）。
+- **settings.css**：`.hotkeys-filter-row`（flex+gap、margin-bottom 移此）+ `.hotkeys-filter-toggle`（funnel 按钮、`is-active` accent）；既有 `.hotkeys-filter` margin-bottom 归零（移到 row）。
+
+**数据安全**：纯 UI 过滤态（session state，无 localStorage、无 vault/.md 写）=零 data-safety 面。
+
+**双端**：浏览器 e2e（新 r145-e2e）= 默认显全部命令 + funnel ON→只显有 effective hotkey 的命令（注册有/无 hotkey 各一验过滤）+ funnel OFF→恢复全部 + 与文本 filter 复合 AND + `is-active`/`aria-pressed` 切换。桌面 probe = N/A（纯前端设置 UI，同 R142/R143）。
+
+**data-testid**：`settings-hotkeys-assigned-toggle`（复用 `settings-hotkeys-filter` / `hotkey-row-<id>` / `settings-hotkeys-empty`）。
+
+**对抗评审（reviewer 8 维全证伪 → 0 confirmed）：** filter 复合逻辑（`(group1) && (!assignedOnly || eff!==null)`、括号必需防 `&&`>`||` 误绑、assignedOnly=false 逐字节同旧）· getEffectiveHotkey「已分配」语义（覆盖 default hotkey + override 两者；**显式 unbind（override=null）→ getEffectiveHotkey 返 null → 过滤掉**=faithful：被移除默认的命令不该出现在「只显已分配」）· 反应式（`useStore(commands.revision)`、setHotkeyOverride bump→rows 重算→行消失）· CSS（`.hotkeys-filter` width:100%→flex:1+min-width:0 防溢出、margin-bottom 移 row 无双边距、funnel 34px stretch 对齐）· session-state 选择（per-mount 不持久化=同既有文本 filter、Obsidian funnel 也 session 重置）· icon（funnel path 有效、IconProps.name 联合不破、未知名 fallback file-text）· data-safety 零面 · 边角（空态/aria-pressed/类拼接前导空格/无 form 故 type 缺省无害）。**采纳 reviewer 可选覆盖建议**：补显式-unbind 分支 e2e（默认 hotkey→override null→assigned-only 隐藏）锁最 subtle 的 faithfulness 分支。
+
+**套件**：typecheck 0 · 生产 build + cargo check exit 0 · **r145-e2e 15/15**（funnel 默认 OFF 显全部 + ON 只显有 effective hotkey + OFF 恢复 + 与文本 filter 复合 AND + is-active/aria-pressed + **默认 hotkey 显示 / 显式 unbind 隐藏**）· 回归 r142 18/18（设置 modal nav）· 简化门 clean（0 编辑）。**桌面 probe N/A**（纯前端设置 UI，同 R142/R143）。
+
+---
+
 ## Round 144 additions — compat Menu API 补全（`static forEvent` + `setParentElement` · 插件 API 商业主轴 · 零 data-safety）【As-built v0.141】
 
 > **状态：As-built（v0.141 交付，2026-06-20）。对抗评审 8 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean（0 编辑）。** 换口味 compat 小项。**Gate 否决 setSubmenu（R128/R137/R138 反 completionism 又一次）**：HANDOFF 默认项 `MenuItem.setSubmenu`——`curl` 拉全量 obsidian.d.ts（8482 行）`grep setSubmenu` = **0 命中**；官方 docs `MenuItem` 页只列 8 方法（onClick/setChecked/setDisabled/setIcon/setIsLabel/setSection/setTitle/setWarning）Geode **已全有**；`setSubmenu` dedicated docs 页「does not exist」→ **setSubmenu 不是 public API、不实现**（造它=发明 Obsidian 没有的方法=反 faithful）。**但同次 d.ts 比对揪出两个【真·缺失】public Menu 方法**：`setParentElement(el: HTMLElement): this`(@0.16.0) + `static forEvent(evt: PointerEvent|MouseEvent): Menu`(@1.6.0)——后者是 Obsidian 1.6+ 插件建右键菜单的**现代惯用法**（`Menu.forEvent(evt).addItem(…).showAtMouseEvent(evt)`），Geode 缺它→插件调用即 `Menu.forEvent is not a function` 崩。**零 data-safety**（纯菜单 DOM UI，零 vault/.md 写）。
