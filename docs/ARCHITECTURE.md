@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 129 additions — compat App.loadLocalStorage / saveLocalStorage / isDarkMode（per-vault UI 态 + 主题查询 · 插件 API 商业主轴）【As-built v0.126】
+
+> **状态：As-built（v0.126 交付，2026-06-20）。** Obsidian `App.loadLocalStorage(key)`/`saveLocalStorage(key, data)`（per-vault localStorage，data=null 清除）+ `isDarkMode()`（当前主题是否暗）现真实现。插件存折叠态/最近项等 per-vault UI 状态 + 按主题切配色。**纯 compat 单文件（plugin.ts App 类）、零改 core、零新依赖、零 data-safety 面**（localStorage 是浏览器 UI 态，非用户 vault 数据）。
+
+**契约（加性；3 真方法，非 stub）**：
+- `compat/obsidian/plugin.ts` App 类：`loadLocalStorage(key): unknown`（`localStorage.getItem` → JSON.parse，缺省 null，非 JSON 旧值原样返回）· `saveLocalStorage(key, value)`（`value === null || undefined` → removeItem；否则 `setItem(JSON.stringify(value))`——**JSON round-trip 支持 string/number/object**）· `isDarkMode(): boolean`（读 `document.body.classList.contains("theme-dark")`，themes.ts 维护的 resident 主题 class）。**key 按 vault 命名空间** `geode-ls:${vault.getName()}:${key}`（getName=geode.vaultName，两 vault 不互相 clobber）。
+
+**对抗评审（reviewer 多维 → 1 MINOR[非阻塞] 部分加固 + 文档化；余全证伪，"faithful and safe"）：**
+- **MINOR 评审应对（命名空间 collision）**：命名空间用 vault basename（`vault.getName()`=可变、非唯一、未转义），有两类碰撞——① colon 歧义（vault `a`+key `b:c` 与 vault `a:b`+key `c` 都 → `geode-ls:a:b:c`，病态）；② **同 basename**（两个不同路径但都叫 `Notes` 的 vault 共享 prefs，更现实）。**应对**：colon 类**一行加固**（`encodeURIComponent` 两段→`:` 不再能混淆分隔符，e2e 补 colon-key 独立性）；同 basename 类**文档化为已知限制**（core 无 stable per-vault id，修它要动 core；且这是 ephemeral UI 态非 vault 数据，真插件数据走 `saveData→data.json` 不受影响 → benign，不值得为它动 core）。**非阻塞，reviewer 判 "safe to commit"。**
+- **reviewer 证伪全维**：**zero data-safety 面**（只碰 localStorage + document.body，绝不达 `.md`/rewrite 引擎/autosave）· JSON round-trip 与 Obsidian 自身逻辑近逐字一致（`value == null` 清除等价、undefined 不存 "undefined"）· isDarkMode 读 themes.ts 唯一写者维护的 resident class（比 core matchMedia 更准，覆盖显式 override + 系统翻转 + init，bootstrap 早于 plugin onload）· 分层/依赖干净（零新 import）· App 类放置 + 返回类型对齐 Obsidian。
+- **faithfulness 校准（自做 WebFetch）**：官方 `loadLocalStorage`/`saveLocalStorage` per-vault（"for this vault"）+ null 清除（"if data is null, the entry will be cleared"）；`isDarkMode()` 方法（v1.10.0）。
+
+**套件**：typecheck 0 · cargo build exit 0 · r129-e2e **10/10**（string/number/object round-trip / 缺省 null / null 清除 / vault 命名空间 / 不泄漏 bare key / isDarkMode 暗亮 / **reload 持久化**）· r129-probe **9/9** 真 WKWebView 原生 localStorage（App 方法**无需编辑器挂载、headless 全验**：round-trip/clear/missing/namespace/isDarkMode 与 body class 一致）· 简化门 clean（~30 行单文件加性）。**剩余缺口（compat 商业主轴）**：`MenuItem.setSubmenu`（需扩 Menu 基建小项）· `CachedMetadata.referenceLinks`（@since 1.8.7、shape 矛盾、低价值——降级）· **`registerMarkdownPostProcessor`**（Dataview 命脉，**工程大、宜单独拍板**）· **`file-menu`/`editor-menu` 钩子**（**阻塞面最大、宜单独拍板**，Menu 基建已就绪只差宿主 trigger）——**小项至此基本清空**。
+
 ## Round 128 additions — compat Editor 方法补全（multi-sel / 批量编辑 / exec / undo·redo · 插件 API 商业主轴）【As-built v0.125】
 
 > **状态：As-built（v0.125 交付，2026-06-20）。** Obsidian `Editor` 余下的 CM6-可直接映射方法现真实现——编辑器操作类插件的高频面。**纯 compat（仅 `editor.ts`）、零改 core、零新依赖**（@codemirror/commands `^6.8.0` + @codemirror/language `^6.10.0` 早是依赖，loader.ts/core 已用）。**写方法（setLine/transaction）走 `cm.dispatch` → doc-change listener → autosave**（与既有 replaceRange 同一 proven-safe 路径，非 handle.setText 静默丢数据陷阱[R123]）。**gate 拐点决策**：HANDOFF 默认 referenceLinks（getFileCache 最后字段），但 gate WebFetch 揭露其 `@since 1.8.7`（极新，多数插件不用）+ 官方 d.ts(`extends Reference {}`)与 docs 页(`extends CacheItem{id,link}`)**shape 互相矛盾**（faithfulness 无法定）+ 价值低；同时 gate 扫 compat 缺口表(line 154)发现 **Editor 余项「可直接映射 CM6」** = 清晰+高价值+faithful → 自主改取（§两道前置门 grep/survey 第五次救场，redirect 到更优项）。
