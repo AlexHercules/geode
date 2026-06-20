@@ -504,6 +504,14 @@ export class Workspace extends Events {
     callback: (menu: Menu, file: TAbstractFile, source: string, leaf?: WorkspaceLeaf) => unknown,
     ctx?: unknown,
   ): EventRef;
+  /** R131: an editor right-click context menu is opening — add items via `menu.addItem(...)`. Geode
+   *  shows the menu only if a plugin contributed an item (else the browser default menu shows;
+   *  native cut/copy/paste items in the menu are deferred). `info` is the active MarkdownView. */
+  on(
+    name: "editor-menu",
+    callback: (menu: Menu, editor: Editor, info: MarkdownView) => unknown,
+    ctx?: unknown,
+  ): EventRef;
   on(name: string, callback: (...data: never[]) => unknown, ctx?: unknown): EventRef;
   on(name: string, callback: (...data: never[]) => unknown, ctx?: unknown): EventRef {
     return super.on(name, callback, ctx);

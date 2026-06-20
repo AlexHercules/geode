@@ -26,6 +26,8 @@
  */
 import type { AppHandle, PluginManager } from "@core/plugins";
 import type { Vault as GeodeVault } from "@core/vault";
+import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
+import { editorContextMenuExtension } from "./editorMenu";
 import { FileRegistry } from "./files";
 import { CollectorMenu } from "./menuCollect";
 import { MetadataCache } from "./metadata";
@@ -216,6 +218,11 @@ export function createCompatContext(
       return menu.items;
     }),
   );
+
+  /* ----- R131: editor-menu — an always-on CM contextmenu extension (via the R115 core registry)
+   * turns an editor right-click into the 'editor-menu' event + shows the plugin items. Compat-only:
+   * the editor feature applies it without importing compat. ----- */
+  disposers.push(registerCoreEditorExtension(editorContextMenuExtension(workspace)));
 
   return {
     app,
