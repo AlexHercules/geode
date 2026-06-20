@@ -71,6 +71,28 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 139 additions — compat `workspace.on('files-menu')` 多文件右键菜单（file-menu 大头收官 · 插件 API 商业主轴 · R138 解锁）【As-built v0.136】
+
+> **状态：As-built（v0.136 交付，2026-06-20）。** R130 单文件 `file-menu` + R131 `editor-menu` 后，file-menu 大头最后一片 = **多文件 `files-menu`**（Obsidian 右键文件多选 fire `files-menu`，传 `TAbstractFile[]`，插件加批量项）。R138 Explorer 多选解锁了前置。**完全镜像 R130 跨 3 层 core-meet 范式**（分层铁律下 compat/features 互不 import → core 会合 + 降维纯数据过界）：core 新 provider、compat fire 事件、Explorer 右键多选时调多文件版。**纯加性 display（菜单贡献），无 vault 写**（批量操作 defer）。
+
+**契约（加性；镜像 R130 单文件路径的多文件平行）**：
+- `core/plugins.ts`：新 `FilesMenuContext { paths: string[]; source: string }` + `filesMenuProvider` 字段 + `registerFilesMenuProvider(fn: (ctx) => MenuContribution[])`（一 loader 一个，disposer stale 守卫同 R130）+ `collectFilesMenu(ctx): MenuContribution[]`（同步、try/catch、[] 兜底）。**与单文件 provider 各自独立**（Obsidian file-menu/files-menu 是分开的事件分开的 handler）。
+- `compat/obsidian/context.ts`：新 files-menu provider（镜像 file-menu bridge）——`ctx.paths` 各 `registry.getFolder(p) ?? registry.getFile(p)` 解析为 `TAbstractFile[]`（混选文件+文件夹）、`new CollectorMenu()`（复用，event-agnostic）、`workspace.trigger("files-menu", menu, files, ctx.source, undefined)`、返 `menu.items`。
+- `compat/obsidian/workspace.ts`：on-table 加 `files-menu` typed 重载 `(menu: Menu, files: TAbstractFile[], source: string, leaf?) => any`（运行时 `on(name:string,...)` 通配已支持任意名，typed 仅 TS）。
+- `features/explorer/Explorer.tsx`：`MenuState` 加 `files?: string[]`（present→多文件菜单）；row `onContextMenu` 当 `selection.size > 1 && selection.has(node.path)`（右键在多选内，R138 已保选）→ `collectFilesMenu({paths:[...selection], source:"file-explorer-context-menu"})`，**有贡献项→多文件菜单**（`files` set），**无贡献项→回落单文件菜单**（v1 批量操作 defer、无插件项时不显空菜单=务实简化）；右键选外或单选→既有单文件路径。**render 重构**：contributed-items 块从单文件 IIFE 内**提取为共享尾块**（单/多文件共用，单文件渲染逐字节不变=r130-e2e 保持）+ 多文件分支渲「{count} 已选」header；sep gate `contributed.length>0 && (node!==null || files)`。
+- `core/i18n/dict.panels.ts`：新 `explorer.filesSelected`「{count} files selected」/「已选 {count} 个文件」（en + zh）。
+
+**数据安全**：纯菜单贡献 display，**零 vault 写**（批量 delete/move defer 为后续 data-safety 轮）。插件 onClick 由 R130 既有 try/catch 兜（render 共享尾块继承）。
+
+**双端**：浏览器 e2e（新 r139-e2e）= 注册 `on("files-menu",...)` handler → Explorer 多选 m-a/m-b → 右键在选内 → 多文件菜单显贡献项 + {count} header + 点击 onClick 拿到 files 数组（路径全对）+ 右键选外回落单文件 + 无 handler 时回落单文件（不空菜单）；桌面 probe（r139-probe）= 真 WKWebView collectFilesMenu fire 事件 + handler 拿 TFile[] §D-safe 数据路径。
+
+**对抗评审（reviewer 7 维全证伪 + 0 代码缺陷）：**
+- **render 提取 byte-identity（最高风险=单文件 file-menu 须不变）证伪**：contributed `.map` 从单文件 IIFE 内移到 `.explorer-menu` div 的共享尾兄弟节点——**React fragment（`<>`）无 DOM 节点、扁平进父**，故单文件渲染节点序列逐字节同前（…delete/sep/contrib 同位、同 testid、同 onClick try/catch 字符串）；sep gate `contributed.length>0 && (node!==null||files)` 对单文件 `node!==null`→`(true)`=同原、empty-area `contributed=[]`→moot。r130/r131/r93/r138/r28 绿即此证。
+- **reviewer 证伪全维**：provider 正确（`getFolder??getFile` 互斥单解、`.filter` 丢未解析路径、`files.length===0` 在 trigger **前**返 [] 不空 fire、try/catch 吞抛、disposer stale 守卫 reload 序无关）· onContextMenu（`multi=size>1&&has` 在 mutation 前算、`setSelected` 不碰 selection Set 故 `[...selection]` 读完整多选、fallback `filesItems.length===0`→单文件单 setMenu 无双菜单、render `menu.files?` 先判头分支胜）· **零 vault 写**（纯菜单贡献 display、批量操作 defer、插件 onClick 同 R130 try/catch 吞）· 分层（core 纯不 import compat/feature、compat→core registerFilesMenuProvider+自家 CollectorMenu、Explorer→core collectFilesMenu）· **files-menu 注册表独立于 file-menu 正确**（Obsidian 真发两个不同事件 TFile vs TFile[]、合并 generic 会误建模）· 边角（size===1→单菜单、folder+file 混选→TFolder+TFile[]、stale path Map.get miss→filter 丢、metachar/CJK 精确 Map key 无 regex 面）。
+- **文档化偏离（reviewer 标，informational）**：v1 多选右键无插件项时**回落单文件菜单**（fire files-menu 返 [] 后又 fire file-menu 给 lead node）——Obsidian 多选只 fire files-menu；本偏离仅在 files-menu 无贡献时触发、批量操作 defer 下的务实简化。header count 用 `selection.length`（含潜在 stale path 可能多计 1）=display-only benign。
+
+**套件**：typecheck 0 · npm build + cargo build (release) exit 0 · **r139-e2e 14/14**（fallback 无 handler→单菜单 + 数据路径 collectFilesMenu fire 事件返项 + handler 拿 TFile[]/source + 空路径→[] + UI 多选右键多文件菜单 {count} header+贡献项+无单文件 built-in + 点击 onClick 拿全选 files + 右键选外塌缩单菜单）· **r139-probe 6/6**（真 WKWebView collectFilesMenu §D-safe 数据路径）· 回归 r130 12/12（file-menu render 不变）·r131 7/7·r93 22/22·r138 11/11·r28 23/23 · 简化门 clean（0 编辑）。**file-menu 大头收官**（R130 file-menu + R131 editor-menu + R139 files-menu）。**剩余 compat 缺口**：editor-menu 原生编辑项 / 其它 source（tab/link/more-options）· `MenuItem.setSubmenu`（低优）· 批量操作（bulk delete/move=原生 data-safety 轮）。
+
 ## Round 138 additions — Explorer 多选（Cmd/Ctrl-click 切换 + Shift-click 范围 · 原生 UX · 解锁 files-menu 前置）【As-built v0.135】
 
 > **状态：As-built（v0.135 交付，2026-06-20）。** 转向原生（㊵ graph 嵌套标签经 gate **WebFetch 判 Obsidian graph 不画 tag→tag 层级边=反 faithful 弃**）。Explorer 多选 = Obsidian 文件树 Cmd/Ctrl-click 切换选择 + Shift-click 范围选——**faithful 无疑**（Obsidian 必有）+ **解锁 compat `files-menu`**（R130 单文件 file-menu 已做，files-menu 需多选才 fire）。**自包含单文件**（仅 `Explorer.tsx`，`.is-selected` CSS 既有样式自动应用到每个选中行→无 CSS 改）、**纯 UI 选择态零写盘=无 data-safety 面**。
