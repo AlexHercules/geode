@@ -190,6 +190,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
 
+### R152 套件回归（2026-06-21，阅读视图 tag pill 点击 · 事件委托不动 markdown.ts · 桌面 probe N/A）
+
+R152 = **阅读视图 `#tag` pill 点击→搜索**（㊻ 收官：R150 树 + R151 排序 + R152 pill 点击）。**Gate（§C 规避）**：grep `markdown.ts:1185` 确认阅读视图 #tag 已渲 `<span class="tag-pill" data-tag="<tag>">`（已有 class+data）→ EditorPane `onPreviewClick` **事件委托**加 `.tag-pill` 分支即可、**不改 markdown.ts 字节=不触 §C/r26-bytes**。分支早置（让 #tag in heading 搜索而非折叠）+ `!el.closest("a")` 守卫（pill 作 link 显示文本时 fall through 导航、匹配 heading/callout 同守卫）。`.tag-pill` 加 cursor:pointer+hover。**纯 click→requestSearch 零 data-safety**（同 TagsPanel sink）。**对抗评审 9 维 → 1 MINOR 确认修+e2e 锁**（F4=`[#tag](url)` pill 嵌 `<a>` 内、分支漏 `!closest("a")` 守卫吞 link 导航→加守卫）+ 余证伪 + 简化门 clean。
+
+新增套件：`r152-e2e.mjs` **12/12**（pill 渲 + click→search + 嵌套 pill 全路径 + tag-in-heading wins over fold + heading text 仍 fold + **pill-in-link 导航不搜索**=F4 锁 + 非 pill no-op）。**套件矩阵不回退**：r29 19/19（阅读视图 click 链 heading-fold/internal-link）·**r26-bytes 0**（markdown.ts 字节不变=§C 不触）。**桌面 probe N/A**（阅读视图 DOM 委托、WKWebView 渲染 App-Nap-不可靠 §D、逻辑平台无关）。
+
 ### R151 套件回归（2026-06-21，原生标签排序菜单 · 桌面 probe N/A）
 
 R151 = **标签面板排序菜单**（㊻ 续 R150 树）。**Gate**：WebFetch obsidian.md/help/plugins/tags 确认 Obsidian「Change sort order: Tag name / Frequency」（4 选项）。TagsPanel：`TagSortKey`(freq-desc/asc + name-asc/desc) + `buildTagTree(map, sortKey="freq-desc")` 参数化（`TAG_CMP[sortKey]` 每层重排）+ `sortKey` state（持久 `geode.tagsSort` inline raw localStorage、`isTagSortKey` **显式 4 值校验非 `v in TAG_CMP`** 防原型键 bug）+ panel-header `<select>` 4 option。**默认 freq-desc=R150 序逐字符同=零回归**。**纯 UI 排序零 data-safety**。**对抗评审 9 维全证伪 → 0 confirmed defect（clean）** + 简化门 clean（简化 agent 主动驳回 `v in TAG_CMP` 原型键 bug）。

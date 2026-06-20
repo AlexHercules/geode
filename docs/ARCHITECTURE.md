@@ -71,6 +71,26 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 152 additions — 阅读视图 `#tag` pill 点击搜索（㊻ 收官 · 事件委托不动 markdown.ts · 零 data-safety）【As-built v0.149】
+
+> **状态：As-built（v0.149 交付，2026-06-21）。对抗评审 9 维 → 1 MINOR 确认修（pill-in-link 加 `!closest("a")` 守卫）+ 余全证伪 + 简化门 clean。** ㊻ 收官（R150 树 + R151 排序 + R152 pill 点击）。**Gate（§C 规避）**：grep `markdown.ts:1185` 确认阅读视图 #tag 渲为 `<span class="tag-pill" data-tag="<tag>">`——**已有 class+data 属性** → EditorPane 阅读视图容器**事件委托**（onPreviewClick 加 `.tag-pill` 分支）即可、**不改 markdown.ts HTML 字节 = 不触发 §C/r18-diff/r26-bytes**。faithful=Obsidian 阅读视图 #tag 可点搜该 tag。**纯读 click→search 零 data-safety**。
+
+**契约（加性；EditorPane onPreviewClick 一分支）**：
+- **`features/editor/EditorPane.tsx` onPreviewClick**：在既有 `el.closest()` 委托链加 `.tag-pill` 分支——`const pill=el.closest(".tag-pill"); if(pill){ e.preventDefault(); const tag=pill.dataset.tag; if(tag) app.workspace.requestSearch("#"+tag); return; }`（与 TagsPanel/GraphView 同 `requestSearch` sink）。pill 是 span 非 anchor、不与既有 anchor 分支冲突。
+- **不动 markdown.ts**（pill HTML 既有、零字节改）。**v1 defer（文档化）**：live preview（CM cm-hashtag decoration）点击=CM-side 处理、另轮；本轮仅阅读视图 .tag-pill。
+
+**数据安全**：纯 click→requestSearch（读 data-tag + 切搜索面板），**零 vault/.md 写**、不动 markdown.ts 渲染管线=零 data-safety 面 + §C 不触发。
+
+**双端**：浏览器 e2e（新 r152-e2e）= 阅读视图渲 #tag pill → 点击 → requestSearch（leftPanel=search + searchRequest 种 `#tag`）+ 嵌套 tag pill 点击搜全 tag + 非 pill 点击不误触发。桌面 probe = N/A（阅读视图 DOM 渲染 + 点击委托——WKWebView 阅读视图渲染 App-Nap-不可靠[§D]、委托逻辑平台无关，浏览器 e2e 全覆盖；同既有阅读视图交互轮 r18/r29 口径）。
+
+**data-testid**：复用 markdown.ts 既有 `.tag-pill`（`data-tag`）。
+
+**对抗评审（reviewer 9 维 → 1 MINOR 确认修 + 余全证伪）：** **F4 MINOR（已修+e2e 锁）**：markdown.ts geode-tags rule 也 pillify【markdown link 显示文本里的 #tag】（`[#alpha](url)`→pill 嵌进 `<a>`）；我的 tag-pill 分支早置且**无 `!closest("a")` 守卫**→吞掉 link 导航改成搜索（与同文件 heading/callout 分支【有】`!closest("a")` 守卫不一致）→**修**=`if(tagPill && !el.closest("a"))`（pill 在 link 内则 fall through 到 anchor 分支导航、匹配既有精度+保 pre-R152 行为）+ e2e 锁（pill-in-link 导航不搜索）。**证伪**：markdown.ts 零改 §C 不触（r26-bytes 0）· wikilink alias 不 pillify（geode-wikilinks 在 geode-tags 后、tag-time 仍占位符）· 独立 pill 在 heading/callout 早置拦截=tag wins over fold faithful· checkbox 是 void 元素 pill 不可嵌· requestSearch 正确（data-tag 是裸 tag、`#`+重建、嵌套全路径）· data-tag 受 TAG_RE charclass 约束+escapeHtml 无注入· CSS scope 仅 `.preview-content`（export 不加 affordance）、`--text-on-accent` 已定义· data-safety 零写· live preview defer（CM cm-hashtag 非 .tag-pill）合理。
+
+**套件**：typecheck 0 · cargo check exit 0 · **r152-e2e 12/12**（pill 渲 + click→search + 嵌套 pill 全路径 + tag-in-heading wins over fold + heading text 仍 fold + **pill-in-link 导航不搜索**=F4 锁 + 非 pill no-op）· 回归 r29 19/19（阅读视图 click 链 heading-fold/internal-link）· **r26-bytes 0**（markdown.ts 字节不变=§C 不触）· 简化门 clean。**桌面 probe N/A**（阅读视图 DOM 委托、WKWebView 渲染 App-Nap-不可靠 §D、逻辑平台无关）。**㊻ 收官**（R150 树 + R151 排序 + R152 pill 点击）。**v1 defer**：live preview CM hashtag 点击。
+
+---
+
 ## Round 151 additions — 标签面板排序菜单（㊻ 续 R150 · freq/name × asc/desc · 零 data-safety）【As-built v0.148】
 
 > **状态：As-built（v0.148 交付，2026-06-21）。对抗评审 9 维全证伪 → 0 confirmed defect（clean）+ 简化门 clean。** 续 R150 标签树。**Gate（faithfulness）**：WebFetch obsidian.md/help/plugins/tags 已确认 Obsidian 标签面板「Change sort order: Tag name / Frequency」（2 轴×2 向=4 选项，与 Geode 自家 SearchPanel sort 同形）。R150 在 `buildTagTree` cmp 硬编码 count desc；R151 加排序 toggle（每层 siblings 重排）。**纯 UI 排序、零 data-safety**（同 R150）。
