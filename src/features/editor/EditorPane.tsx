@@ -11,6 +11,7 @@ import {
   indentUsingTabs,
   autoPairBrackets,
   showInlineTitle,
+  showBacklinksInDocument,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { editorExtensionsRevision, getEditorExtensions } from "@core/editorExtensions";
@@ -38,6 +39,7 @@ import { hydrateCodeCopy } from "./codeCopy";
 import { runMarkdownPostProcessors } from "./markdownPostProcess";
 import { renderPreview, toggleTaskOnLine } from "./preview";
 import { PropertiesPanel } from "./PropertiesPanel";
+import { BacklinksInDocument } from "./BacklinksInDocument";
 import { openWikilink } from "./wikilinks";
 import { handleObsidianUri } from "./obsidianUriHandler";
 import "./editor.css";
@@ -154,6 +156,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const useTabs = useStore(indentUsingTabs);
   /* R94: Obsidian "Show inline title" — filename as an H1 atop the note (display-only) */
   const inlineTitleOn = useStore(showInlineTitle);
+  // R154: gate the reading-view linked-mentions section (Obsidian "Backlink in document")
+  const backlinksInDoc = useStore(showBacklinksInDocument);
   /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
   const compatExtRev = useStore(editorExtensionsRevision);
   const cbProcRev = useStore(codeBlockProcessorsRevision);
@@ -932,6 +936,10 @@ export function EditorPane({ tab }: { tab: TabState }) {
           ref={previewContentRef}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />
+        {/* R154: linked mentions at the bottom of the note (Obsidian "Backlink in
+            document"). Appended AFTER .preview-content so the render pipeline / §C bytes
+            are untouched; read-only (getBacklinks + click→openFile). */}
+        {backlinksInDoc && <BacklinksInDocument path={handle.path} />}
       </div>
     );
   }

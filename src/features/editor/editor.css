@@ -1789,3 +1789,98 @@ mark {
 .property-add-name {
   max-width: 14em;
 }
+
+/* R154: linked mentions at the bottom of the reading view (Obsidian "Backlink in
+   document"). Lives inside .editor-preview, below .preview-content, so it scrolls with
+   the note. Read-only — click a row to open the source note. Aligns with the readable-line
+   column like the .properties-panel sibling above (tracks --readable-line-width, 32px inset);
+   carries the note's bottom scroll breathing room now that it's the last element. */
+.editor-preview > .embedded-backlinks {
+  max-width: var(--readable-line-width, 46em);
+  margin: 0 auto;
+  padding: 16px 32px 120px;
+  border-top: 1px solid var(--border);
+}
+
+/* when the backlinks section follows the note body, the body no longer owns the bottom
+   breathing room — tighten it so the divider sits a sensible gap below the last line.
+   (:has degrades gracefully to the full 120px gap on engines without support.) */
+.preview-content:has(+ .embedded-backlinks) {
+  padding-bottom: 24px;
+}
+
+.embedded-backlinks-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.embedded-backlinks-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--bg-panel-alt);
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.embedded-backlinks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ebl-source-title {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: 5px;
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ebl-source-title:hover {
+  background: var(--bg-hover);
+}
+
+.ebl-snippet {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-panel-alt);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  word-break: break-word;
+}
+
+.ebl-snippet:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-normal);
+}
+
+.ebl-source-title:focus-visible,
+.ebl-snippet:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}

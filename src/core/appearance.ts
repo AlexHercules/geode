@@ -100,6 +100,18 @@ export function setAutoPairBrackets(on: boolean): void {
   persistBool(AUTO_PAIR_KEY, on);
 }
 
+/** R154 (㊷): Obsidian's "Backlink in document" — show the note's linked mentions at
+ *  the bottom of the reading view. Default OFF (Obsidian opt-in). Read-only: the section
+ *  is appended below the rendered content in EditorPane, so it never touches the markdown
+ *  render pipeline (§C byte invariant untouched). */
+const BACKLINKS_IN_DOC_KEY = "geode.backlinksInDocument";
+export const showBacklinksInDocument = new Store<boolean>(readBool(BACKLINKS_IN_DOC_KEY, false));
+
+export function setShowBacklinksInDocument(on: boolean): void {
+  showBacklinksInDocument.set(on);
+  persistBool(BACKLINKS_IN_DOC_KEY, on);
+}
+
 /** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
  *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
  *  (zero regression). Consumed by workspace.openFile. */

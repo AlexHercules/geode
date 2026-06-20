@@ -12,6 +12,8 @@ import {
   setShowLineNumbers,
   autoPairBrackets,
   setAutoPairBrackets,
+  showBacklinksInDocument,
+  setShowBacklinksInDocument,
   defaultNewTabMode,
   setDefaultNewTabMode,
   tabIndentSize,
@@ -100,7 +102,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.150.0";
+const APP_VERSION = "0.151.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -214,6 +216,7 @@ function AppearanceSection() {
   const strict = useStore(strictLineBreaks);
   const lineNo = useStore(showLineNumbers);
   const autoPair = useStore(autoPairBrackets);
+  const backlinksInDoc = useStore(showBacklinksInDocument);
   const newTabMode = useStore(defaultNewTabMode);
   /* R92: editor indentation — indent using tabs + tab indent size */
   const useTabs = useStore(indentUsingTabs);
@@ -554,6 +557,25 @@ function AppearanceSection() {
           aria-label={t("settings.autoPairBrackets")}
           data-testid="settings-autopair-toggle"
           onClick={() => setAutoPairBrackets(!autoPair)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R154: show linked mentions at the bottom of the note (Obsidian "Backlink in
+          document", default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.backlinksInDocument")}</div>
+          <div className="setting-desc">{t("settings.backlinksInDocumentDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${backlinksInDoc ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={backlinksInDoc}
+          aria-label={t("settings.backlinksInDocument")}
+          data-testid="settings-backlinks-indoc-toggle"
+          onClick={() => setShowBacklinksInDocument(!backlinksInDoc)}
         >
           <span className="settings-toggle-thumb" />
         </button>
