@@ -63,6 +63,12 @@ export interface RegisterOptions {
    * When given, localStorage persistence is skipped for this record.
    */
   persistEnabled?: (enabled: boolean) => void;
+  /**
+   * R166: on-disk folder name under `.obsidian/plugins/` for community plugins.
+   * The manifest id can legitimately differ from the folder name (the loader
+   * warns when it does), so uninstall MUST delete this dir, not the id.
+   */
+  installDir?: string;
 }
 
 /** A sidebar panel contributed by a plugin (compat registerView); App shell hosts it. */
@@ -320,6 +326,44 @@ export class PluginManager {
    */
   unregister(id: string): void {
     this.removeRecord(id);
+  }
+
+  /**
+   * R166 (B1): permanently uninstall an Obsidian community plugin — tear down the
+   * runtime, drop it from community-plugins.json, then delete its on-disk folder.
+   * Scoped to source==="obsidian" (id === manifest id === folder name); builtin is
+   * packaged and external (.geode dev scripts) has no id→file map (deferred).
+   * DATA-SAFETY: deletes ONLY `.obsidian/plugins/<id>` (never a user .md). The id
+   * is manifest-derived (half-trusted) → validate it is a single safe path segment
+   * (the Rust backend has safe_join, but the Memory adapter does not).
+   */
+  async uninstall(id: string): Promise<void> {
+    const record = this.records.get(id);
+    if (!record || record.source !== "obsidian") return;
+    // delete the ON-DISK folder, which may differ from the manifest id (the
+    // loader warns on mismatch) — using `id` here would silently miss the real
+    // folder or clobber a *different* plugin whose folder == this manifest id
+    const dir = record.options?.installDir ?? id;
+    if (!dir || /[\\/]/.test(dir) || dir.includes("..") || dir.startsWith(".")) {
+      console.error(`[plugins] refusing to uninstall unsafe plugin dir: ${dir}`);
+      return;
+    }
+    // 1. stop the runtime first (onunload + disposers) so the plugin can't write
+    //    its data.json while we delete the folder
+    this.removeRecord(id);
+    // 2. drop the id from community-plugins.json via the registered hook (keeps
+    //    core out of the compat persistence layer)
+    try {
+      record.options?.persistEnabled?.(false);
+    } catch (err) {
+      console.error(`[plugins] uninstall: persistEnabled(false) for ${id} threw`, err);
+    }
+    // 3. delete the plugin folder (recursive; includes its data.json config)
+    try {
+      await this.app.vault.remove(`.obsidian/plugins/${dir}`);
+    } catch (err) {
+      console.error(`[plugins] uninstall: removing .obsidian/plugins/${dir} threw`, err);
+    }
   }
 
   /**

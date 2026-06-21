@@ -167,6 +167,9 @@ export const en = {
   "settings.pluginEmptyObsidian": "No Obsidian plugins found.",
   "settings.enablePlugin": "Enable {name}",
   "settings.disablePlugin": "Disable {name}",
+  "settings.uninstallPlugin": "Uninstall {name}",
+  "settings.uninstallConfirmTitle": "Uninstall plugin",
+  "settings.uninstallConfirm": "Permanently delete the plugin \"{name}\" and its settings? This removes its folder from disk and cannot be undone.",
 
   // ---- settings: hotkeys ----
   // instruction note split around inline <em>/<code> elements:
@@ -483,6 +486,9 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.pluginEmptyObsidian": "未发现 Obsidian 插件。",
   "settings.enablePlugin": "启用 {name}",
   "settings.disablePlugin": "停用 {name}",
+  "settings.uninstallPlugin": "卸载 {name}",
+  "settings.uninstallConfirmTitle": "卸载插件",
+  "settings.uninstallConfirm": "永久删除插件「{name}」及其设置？这会从磁盘移除它的文件夹，无法恢复。",
 
   // ---- settings: hotkeys ----
   "settings.hotkeysNote1": "点击 ",

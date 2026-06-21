@@ -370,6 +370,7 @@ async function runLoad(
       await plugins.register(wrapper, "obsidian", {
         enabled,
         persistEnabled: (on) => persistEnabledId(vault, id, on),
+        installDir: source.dir, // R166: real folder name (may differ from id) for uninstall
       });
       loadedIds.push(id);
     } catch (err) {

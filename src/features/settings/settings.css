@@ -386,6 +386,28 @@
   border-bottom: none;
 }
 
+/* R166 (B1): right-side action cluster (uninstall + enable/disable toggle) */
+.plugin-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.plugin-uninstall-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.plugin-uninstall-btn:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
+
 .plugin-info {
   min-width: 0;
 }
