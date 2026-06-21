@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 160 additions — C5 侧栏可收起：可见折叠/展开 toggle affordance（Tier 7 · gate 纠误「实为 85% 早已实现」· 纯 app-shell overlay 零 data-safety）【As-built v0.157】
+
+> **状态：As-built（已交付）。** 对抗评审 7 维 → **0 critical / 0 major / 1 minor（M1，已修）**：M1=mid-height toggle overlay 遮住 editor 右缘 CodeMirror 滚动条 36px 带（z-index 11 拦住中点拖拽）→ 修=两 toggle 各 `margin-left/right: 12px` inset 避开 10px scrollbar（各态 ≥2px gap）。**关键风险「`.app-body { position: relative }` 改变 containing-block」全证伪**（reviewer 逐一核：`.app-body` 内每个 `position:absolute` 后代都已有更近的 positioned 祖先[`.sidebar`/`.pane-resizer`/`.main-content`/`.tab` 等全 relative]、所有 `position:fixed` 元素免疫[`.app-body` 无 transform/filter/contain] → 唯一新受影响 = 两个 intended toggle）。简化门：1 处减法（合并 `.sidebar-toggle-left/right` transform 进基类，-4 行）+ 我自纠 1 处过期注释。验收：r160-e2e 24/24、r100 15/15、r81 14/14、r86 11/11、typecheck 0、cargo check、生产构建。**桌面 probe N/A**（纯 DOM/CSS overlay + localStorage、平台无关，reviewer 证 Memory adapter 与 WKWebView 同构，沿 R150-R159 DOM-only 先例）。
+>
+> **Gate 纠误（本轮核心教训）**：ROADMAP 第七梯队 C5「**缺**」是陈旧误判——`explorer` 实查发现 C5 **约 85% 早在 R2+ 落地**：state `leftSidebarOpen`/`rightSidebarOpen`（**正向命名**，非 spec 的 `...Collapsed`，已落盘 `geode.workspace.v1` → **不重命名**）、`workspace.toggleLeftSidebar()/toggleRightSidebar()`、命令 `app:toggle-left-sidebar`/`-right-sidebar`（i18n thunk 名已在）、随 `WorkspaceState` 持久化 + sanitize 迁移、`SidebarResizer` 拖拽调宽、ribbon 再点激活图标即收起。**唯一真缺口 = 没有专用可见折叠 affordance**（只能命令面板 / 再点 ribbon；右栏更是只有命令）。疑似又踩 zsh-grep 静默失败坑（R80/R143 教训）。**纪律强化**：登记 Tier 7 用户实测缺口前已做一轮 code-verify，但仍漏判 C5——「先 explorer 实查再动手」对每个候选项都不可省。
+
+**契约（加性；只动 `app/App.tsx` + `styles/app.css`，无 core 改动、无跨模块签名）**：
+- **`app/App.tsx`**：① 新 `SidebarToggle({side, open, offset, label, onToggle})` 组件（2 真实调用点 = 合法 DRY）：`.app-body` 绝对定位 `<button>`，inline `style={side==="left"?{left:offset}:{right:offset}}`，icon=open?inward:outward（left→chevron-left 内指=折叠 / closed→chevron-right 外指=展开，right 镜像），`data-testid="sidebar-toggle-{side}"`，`aria-label/title = t("cmd.toggleLeftSidebar"|"...Right...")`（**复用既有 i18n key**，无新增）。② 右栏块后渲两个实例：left `offset=(ribbonVisible?44:0)+(leftSidebarOpen?leftWidth:0)`，right `offset=rightSidebarOpen?rightWidth:0`（border-box 全局 → border 在 width 内、offset 落在 sidebar↔main 边界）。
+- **`styles/app.css`**：`.app-body { position: relative }`（toggle 锚点）+ `.sidebar-toggle`（absolute、top:50% translateY(-50%)、16×36 pill、z-index 11[resizer 是 10]、opacity .55→hover 1、色全走 `--border`/`--bg-panel`/`--text-faint`/`--bg-hover`/`--text-normal` CSS 变量）+ `.sidebar-toggle-left{margin-left:12px}` / `.sidebar-toggle-right{margin-right:12px}`（M1 inset）。
+- **r160-e2e**（24）：两 toggle 存在/可见、默认双栏开、icon 内指、open 时居 border（centerX>300）、点击折叠→栏消失+icon 外指+移向 ribbon（<100）→再点展开、右栏对称、reload 后仍折叠（持久化）、命令路径仍可执行（未绑键但 palette 可调）。
+
+**决策（自主，记录在案）**：命令**保持未绑键**——Obsidian 的 toggle-left/right-sidebar 官方默认就未绑（社区长期诉求），spec 写「+默认键」与真实 Obsidian 有张力 → 选最忠实方案（仅提供命令，用户在 Hotkeys 设置自绑），避让既有键占用（`Mod+\`/`Mod+数字`/`Mod+,`/`Mod+G` 等）。
+
+**数据安全**：纯 app-shell DOM/CSS overlay + 复用既有反应式 `WorkspaceState`，**零 editor/vault/markdown/fs 写**，无 `.md` 写面、无竞态子句触发。
+
+**v1 nuance / defer**：默认无快捷键（用户自绑，对齐 Obsidian）；toggle 为 mid-height 边缘 pill（非 Obsidian 的 tab-header-corner，因 Geode tab-bar 为 per-pane 不宜放 → 边缘 overlay 是解耦最优）；不做 collapsed 时的悬停-边缘展开热区（pill 已常驻可见）。
+
+---
+
 ## Round 159 additions — compat `app.internalPlugins.getPluginById("daily-notes").instance.options`（商业主轴 · 复用 R48 daily-note 设置 · 纯只读零 data-safety）【As-built v0.156】
 
 > **状态：As-built（已交付）。** 对抗评审 6 维全 CONFIRMED clean → **0 confirmed defect**（reviewer 证 record 重构对 bookmarks 零回归[同对象引用]+ `Object.hasOwn` 守卫两 method 都在[防 getPluginById("toString") 命中原型]+ live getter 真[改设置 options 跟变无 reload]+ folder RAW 匹配 Obsidian instance.options[消费 lib 自 trim]+ 全仓零 `.plugins` 迭代者[populated record 不破 calendar]+ 纯只读零写面）+ 简化门 clean。验收：r159-e2e 14/14、r158 13/13[record 重构零回归]、r113 10/10、r43 22/22[daily-note]、typecheck/cargo。**桌面 probe N/A**（纯 JS API shim 平台无关、同 R158/R113）。
