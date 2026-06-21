@@ -9,6 +9,7 @@ import { dailyNoteFolder, dailyNoteFormat, dailyNoteTemplate } from "@core/daily
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import { basename, stripExtension } from "@core/vault";
 import {
+  makeCodeBlockPostProcessor,
   registerCodeBlockProcessor as registerCoreCodeBlockProcessor,
   type MarkdownPostProcessor,
   type MarkdownPostProcessorContext,
@@ -912,6 +913,42 @@ export abstract class Plugin extends Component {
 
   /** Called only on explicit user enable in real Obsidian — default no-op. */
   onUserEnable(): void {}
+}
+
+/* ---------------- static preview renderer ---------------- */
+
+/**
+ * R172: static MarkdownPreviewRenderer.registerPostProcessor / unregisterPostProcessor /
+ * createCodeBlockPostProcessor — the static (non-Plugin) post-processor entry some older render
+ * plugins use. Routes to the same core R132 registry as Plugin.registerMarkdownPostProcessor;
+ * since there is no plugin-unload lifecycle here, disposers are tracked in a static Map keyed by
+ * the processor so unregisterPostProcessor can tear down.
+ */
+export class MarkdownPreviewRenderer {
+  private static disposers = new Map<MarkdownPostProcessor, () => void>();
+
+  static registerPostProcessor(postProcessor: MarkdownPostProcessor, sortOrder?: number): void {
+    // a re-register of the same processor disposes the prior registration first (no leak/dup)
+    MarkdownPreviewRenderer.disposers.get(postProcessor)?.();
+    MarkdownPreviewRenderer.disposers.set(
+      postProcessor,
+      registerCoreMarkdownPostProcessor(postProcessor, sortOrder),
+    );
+  }
+
+  static unregisterPostProcessor(postProcessor: MarkdownPostProcessor): void {
+    const dispose = MarkdownPreviewRenderer.disposers.get(postProcessor);
+    if (!dispose) return; // not registered — no-op
+    dispose();
+    MarkdownPreviewRenderer.disposers.delete(postProcessor);
+  }
+
+  static createCodeBlockPostProcessor(
+    language: string,
+    handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => void | Promise<void>,
+  ): MarkdownPostProcessor {
+    return makeCodeBlockPostProcessor(language, handler);
+  }
 }
 
 /* ---------------- setting tabs ---------------- */

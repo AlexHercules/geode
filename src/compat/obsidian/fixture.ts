@@ -34,6 +34,10 @@
  * no-match → null, reusable scorer) and prepareSimpleSearch(query) (all
  * whitespace-split tokens must occur, matches sorted by start, missing token →
  * null); JSON results land in <div data-testid="fixture-d3search-results">.
+ * R172: a one-line test stub exposing the static obsidian.MarkdownPreviewRenderer
+ * class to window.__obsidianMPR, so the browser E2E can drive its static methods
+ * (registerPostProcessor/unregisterPostProcessor/createCodeBlockPostProcessor)
+ * from the page context (same shape as R132's window.__geodeRegisterMarkdownPostProcessor).
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -504,6 +508,10 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
       }
       d3El.textContent = JSON.stringify(out);
     })();
+
+    // R172 — expose the static MarkdownPreviewRenderer class so the browser E2E
+    // can drive its static methods from the page context (no DOM/cleanup needed).
+    window.__obsidianMPR = obsidian.MarkdownPreviewRenderer;
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));
   }

@@ -56,6 +56,7 @@ export {
 } from "./editor";
 export {
   App,
+  MarkdownPreviewRenderer,
   Plugin,
   PluginSettingTab,
   SettingTab,
