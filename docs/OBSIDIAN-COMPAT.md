@@ -228,7 +228,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **parseYaml / stringifyYaml**（utils，missing，L 高）— Dataview/Templater/QuickAdd/Tasks/MetaEdit 读写配置/frontmatter 重度调用；**但需打包 YAML 运行时库 = §自主契约硬边界 #5（新运行时依赖），须用户拍板**，故记录但不自动入队（或评估自研 YAML 子集）。
 
 **中价值（多为已有内部能力的一行级桥接 / 速赢）**
-- **sleep（全局）+ nextFrame + Document.on/off**（global-aug，missing，med）— 载入器只注入 window.moment+window.app；插件调全局 `sleep()` 直接 ReferenceError 崩。QuickAdd/Templater 用户脚本常用。一行修：`g.sleep=ms=>new Promise(r=>setTimeout(r,ms))`，并补 window.sleep/nextFrame、Document.prototype.on/off 复用现有委托监听实现。
+- ~~**sleep（全局）+ nextFrame + Document.on/off**（global-aug，missing，med）~~ — ✅ **R169 完成**（dom.ts g block 加 `g.sleep`/`g.nextFrame`，`()=>resolve()` 包装防 timer-id 透传；抽 `delegatedOn`/`delegatedOff` 共享函数、HTMLElement+Document 两 prototype 复用委托监听；global.d.ts 补 interface Document + declare sleep/nextFrame）。QuickAdd/Templater 脚本 crash-safety。
 - **editorInfoField + editorLivePreviewField + editorEditorField + editorViewField + Editor.getDoc**（editor，missing，med）— R115 已开放 registerEditorExtension 后，CM6 装饰/widget 插件靠这几个 runtime StateField 取活动文件/EditorView、并把渲染门控到 Live Preview。Geode 已有 live/source modeCompartment + activeEditor 可回填。getDoc 一行 `getDoc(){return this;}` 救 CM5-legacy 插件。
 - **~~loadMermaid（再导出）~~ + renderMath/finishRenderMath + sanitizeHTMLToDom**（render-search，missing，med）— ~~loadMermaid~~ ✅ **R168 完成**（barrel 一行再导出 @core/mermaid）；**剩** renderMath 可由已打包 KaTeX（core/math.ts loadKatex）回填、finishRenderMath no-op；sanitizeHTMLToDom 是设置页/渲染输出常用安全 DOM 构建器（安全敏感、单拆）。
 - ~~**arrayBufferToBase64 / base64ToArrayBuffer / getBlobArrayBuffer**（utils，missing，med）~~ — ✅ **R168 完成**（util.ts 三件套桥接 core/net bytesToBase64/base64ToBytes，`.buffer` 无 slack 因 exact-size alloc）。Excalidraw/媒体附件用。
@@ -250,6 +250,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R169 套件回归（2026-06-21，Tier 8 D7「全局 sleep/nextFrame + Document.on/off 委托监听」· compat global/dom · crash-safety · 桌面 probe N/A）
+
+R169 = 第八梯队 **D7**（复用既有 HTMLElement 委托机制、零新依赖）。**Gate（R160 教训）**：sleep/nextFrame 全仓零命中=完全缺（插件调全局 `sleep()` 直接 ReferenceError 崩）；Document.on/off 缺（dom.ts 只 patch 了 HTMLElement.prototype.on/off + DocumentFragment.find）；**关键复用**：Document.on/off 与 HTMLElement.on/off 委托逻辑 token 级相同 → 抽 `delegatedOn`/`delegatedOff` 模块函数两 prototype 共用（净减法、2 真实调用点）。**实现**：dom.ts 抽取 + `define(Document.prototype,{on,off})` + g block `g.sleep`/`g.nextFrame`（`()=>resolve()` 包装防 timer-id 透传）；global.d.ts `interface Document{on/off}` + `declare function sleep/nextFrame`。**对抗评审 8 维 → 0 confirmed defect（clean）**：抽取零回归（git diff 逐行字节等价 + e2e HTMLElement.on/off 回归锁）；Document 宿主 `_EVENTS` 实例属性不串台；`()=>resolve()` 包装必要（裸 `setTimeout(resolve,ms)` 透传 timer-id 破 Promise<void>，简化门独立确认）；ambient 无冲突（typecheck 0、lib.dom 无 jQuery 式 Document.on/全局 sleep）。简化门 **clean**（净 0 行；抽取=减法去重）。
+
+新增套件：`r169-e2e.mjs` **11/11**（IIFE 无异常 + sleep(25)≥15ms + nextFrame resolve + **Document.on 命中 click fire 一次 + delegateTarget===匹配元素 + 非命中 click 不 fire + off 后不 fire** + **HTMLElement.prototype.on/off 抽取回归**[elOnFires/elOffFires] + fixture 仍 enabled + 无 page error）。**套件矩阵不回退**：r168 16/16（D1/D2/D10/D9，同 fixture 文件）·r165 9/9（compat shim + fixture 加载）·r113 10/10（compat boot）·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 JS + DOM 标准 API：Promise 定时器/委托监听，零 fs/Rust/平台分支，WKWebView≡Chromium，同 R165/R167/R168）。**§D 提示（非缺陷）**：`nextFrame` 依赖 `requestAnimationFrame`，桌面 probe 后台 t≈10s 后 await 它受 App Nap 可能不归来——断言放加载后前几秒。**v1 defer**：D9 renderMath/finishRenderMath（KaTeX 适配）、D9 sanitizeHTMLToDom（安全敏感）、D3 prepareFuzzySearch 留后续轮。
 
 ### R168 套件回归（2026-06-21，Tier 8 D 系列零依赖打包 · D1 apiVersion→1.8.0 + D2 parseLinktext + D10 base64 三件套 + D9 loadMermaid 再导出 · compat util · 桌面 probe N/A）
 
