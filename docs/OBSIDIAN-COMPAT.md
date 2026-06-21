@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R165 套件回归（2026-06-21，Tier 7 B3③ `global` 垫片 · loader 注入 globalThis.global · 商业主轴 compat · 桌面 probe N/A）
+
+R165 = Tier 7 **B3③「`global` 垫片」**（B3-附 表 ③ 出队）。**Gate**：Node-targeting 插件 bundle（obsidian-git 等）引用 Node 全局 `global` 作自由变量，`loader.ts` `new Function("require","module","exports", code)` 求值时崩 `Can't find variable: global`。修=`runLoad()` 在 moment 注入后加 `(globalThis as {global?:unknown}).global ??= globalThis`（求值前、幂等、cast 绕 TS7017）。**对抗评审 9 维 → 0 confirmed defect**；**最关键 = 假绿排除**（reviewer 实测 vite 无 global define/polyfill、`about:blank` global undefined、删 shim 即 `ReferenceError`、装即解 → shim 是唯一修复源）+ 副作用证伪（lodash/mermaid `typeof global` 守卫前后同解 window）+ 不垫 process/Buffer 取舍正确。简化门 skip（单文件 1 行）。bonus：native 插件 eval 也受益。
+
+新增套件：`r165-e2e.mjs` **9/9**（window.moment 设[runLoad 跑] + `window.global===window` + `globalThis.global===globalThis` + `typeof global==="object"` + **复刻 loader exact eval** `new Function("require","module","exports","module.exports=global")`→exports===window + `?obsfixture=1` 回归 fixture status "enabled"[shim 不破 obsidian 插件加载路径] + 无 page error）。**套件矩阵不回退**：r113 10/10（compat boot）·r116 9/9（getMode compat）·typecheck 0/cargo/生产构建。**桌面 probe N/A**（纯 JS 全局赋值平台无关、WKWebView 语义一致；真实 obsidian-git 完整功能需 isomorphic-git+fs 另评）。**v1 defer**：只垫 global（不垫 process/Buffer）；obsidian-git 完整功能（isomorphic-git+fs/网络）= B3②④/新依赖远期。
+
 ### R164 套件回归（2026-06-21，Tier 7 C2 inline title 改名 · 复用 R16 renameWithLinkUpdate · DATA-SAFETY 轮 · 桌面 probe N/A）
 
 R164 = Tier 7 **C2「编辑页内 inline title 改名」**。**Gate**：explorer 确认 inline title（R94）display-only，`renameWithLinkUpdate`（R16）+ Explorer RenameInput 模式全在，唯一缺口=让 inline title 可编辑。inline title 改可点击元素，提交走 `renameWithLinkUpdate`（**R16 vetted、绝不新起 vault.rename**：内部 flush 脏正文→改写链接→改名→`file:renamed` 自动跟 tab）。validate 镜像 Explorer.validateName（case-insensitive dup 守卫）。**DATA-SAFETY 轮**：**对抗评审 + data-safety 8 维 → 1 confirmed minor（D1 skipped-link notice 缺失，已修自写 notice）**；**关键澄清 = rename-over-existing 三重防护**（validate dup 守卫 + Memory adapter throw + Rust `to.exists()` 检查）+ renameWithLinkUpdate 抛错 catch → **零数据丢失路径、四底线守住**。简化门 clean（自纠注释脱节）。

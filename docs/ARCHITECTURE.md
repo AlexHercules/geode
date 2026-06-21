@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 165 additions — Tier 7 B3③「`global` 垫片」（loader 注入 globalThis.global · 解锁 Node-targeting 插件 bundle · 商业主轴 compat · 一行）【As-built v0.162】
+
+> **状态：As-built（已交付）。** 对抗评审 9 维 → **0 confirmed defect（clean）**。**最关键证伪 = 假绿风险已排除**（reviewer 实测：`vite.config.ts` 无 `define`/global polyfill、`package.json` 零 global-polyfill 依赖、`about:blank` `typeof window.global==="undefined"`、删 shim 后 loader 的 exact eval 真抛 `ReferenceError: global is not defined` → **shim 是唯一修复源、非假绿**）。副作用全证伪（dist 里 lodash/mermaid 的 `typeof global` 守卫在 shim 前后都解析到同一 `window` 对象、零行为变化；Geode 源码无 `window.global`/`typeof global` 假设其不存在的读取）。process/Buffer 不垫的取舍正确（垫 process 会让 bundle 的 `typeof process!=="undefined"` 分支误判走 Node 路径）。简化门 skip（单文件 1 行代码 + 注释）。验收：r165-e2e 9/9、回归 r113 10/10（compat boot）·r116 9/9·typecheck 0·cargo·生产构建。**桌面 probe N/A**（纯 JS 全局赋值平台无关、WKWebView 语义一致；真实 obsidian-git 完整功能需 isomorphic-git+fs 另评）。**bonus**：`core/plugins.ts` native 插件 eval 也吃到此 shim（free `global` 现亦可解、纯加性）。
+>
+> **Gate**：Node-targeting 插件 bundle（obsidian-git 等）引用 Node 全局 `global` 作自由变量，`loader.ts` 的 `new Function("require","module","exports", code)` 求值时崩 `Can't find variable: global`（只传 3 参、`global` 不在作用域）。**澄清**：loader.ts:163 既有「global」实为 moment 全局（`window.moment`），与 Node `global` 无关。
+
+**契约（加性 · 单文件 1 行）**：
+- **`compat/obsidian/loader.ts`**：`runLoad()` 顶部、`window.moment ??= moment`(163) 之后、所有 main.js 求值前，加 `(globalThis as { global?: unknown }).global ??= globalThis;`。**幂等**（`??=` 不 clobber 已存在的 real global）；`runLoad` boot/`app:reload-plugins`/vault 切换无条件跑该行（同 moment 先例、无 early-return）；cast 绕 TS7017（globalThis 无 index signature）、属性类型 `unknown` 非 any 泄漏。
+- **r165-e2e**（9）：window.moment 设（runLoad 跑）+ `window.global===window` + `globalThis.global===globalThis` + `typeof global==="object"` + **复刻 loader exact eval** `new Function("require","module","exports","module.exports=global")`→exports===window + `?obsfixture=1` 回归 fixture status "enabled"（shim 不破 obsidian 插件加载路径）。
+
+**data-safety**：纯 compat/loader bootstrap，零 vault/editor/markdown 写（非 data-safety 轮）。
+
+**v1 nuance / defer**：只垫 `global`（不垫 process/Buffer）；obsidian-git 等深层还需 isomorphic-git + fs/网络（B3②④/新依赖、远期或硬边界 #5），本轮只解**加载期** `global` free-var 崩溃、完整功能另评。
+
+---
+
 ## Round 164 additions — Tier 7 C2「编辑页内 inline title 改名」（可编辑 inline title → renameWithLinkUpdate · 复用 R16 vetted 改名引擎 · DATA-SAFETY 轮）【As-built v0.161】
 
 > **状态：As-built（已交付）。** 对抗评审 + data-safety 8 维 → **1 confirmed minor（D1，已修）**：D1 = inline 改名只 `console.warn` skipped links 而 Explorer 弹用户 notice → 桌面用户看不到 console、metachar 改名致链接 dangling 静默（**非数据丢失**，仅 integrity-visibility）→ 修=自写 `showLinkUpdateNotice`（镜像 Explorer，feature-local 分层禁跨 import）+ commit 改 `showLinkUpdateNotice(t("explorer.linkUpdateSkipped",{count}))`。**关键 data-safety 澄清**：reviewer 证 rename-over-existing **有三重防护**（validate case-insensitive dup 守卫 + Memory adapter `vault.ts` throw target-exists + Rust `main.rs` `to.exists()` 检查），且 `renameWithLinkUpdate` 抛错被 catch → **本轮零数据丢失路径、四底线守住**。简化门 clean（自纠 1 处：EditorPane 文档注释被新组件插入后脱节→移回函数上方）。验收：r164-e2e 16/16（含内容保全 + 链接改写 + dup 不覆盖 + 空名/dup 校验）、回归 r70 23/23（链接改写）·r28 23/23（rename）·r94 14/14（inline title 显示）·typecheck 0·cargo·生产构建。**桌面 probe N/A**（inline title UI 平台无关 DOM；fs 写经 R16 `renameWithLinkUpdate`=Explorer 已用 vetted 路径、r70-probe 已桌面覆盖）。
