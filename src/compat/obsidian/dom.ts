@@ -104,15 +104,55 @@ function defineGetters(proto: object, getters: Record<string, () => unknown>): v
   }
 }
 
-/** bookkeeping for delegated HTMLElement.on/off listeners (_EVENTS) */
+/** bookkeeping for delegated HTMLElement/Document.on/off listeners (_EVENTS) */
 interface DelegatedListenerInfo {
   selector: string;
-  listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown;
+  listener: (this: HTMLElement | Document, ev: Event, delegateTarget: HTMLElement) => unknown;
   options?: boolean | AddEventListenerOptions;
   wrapped: EventListener;
 }
 
-type DelegatedHost = HTMLElement & { _EVENTS?: Record<string, DelegatedListenerInfo[]> };
+type DelegatedHost = (HTMLElement | Document) & {
+  _EVENTS?: Record<string, DelegatedListenerInfo[]>;
+};
+
+/** delegated listener: fires when the event target matches `selector` inside this host */
+function delegatedOn(
+  this: HTMLElement | Document,
+  type: string,
+  selector: string,
+  listener: (this: HTMLElement | Document, ev: Event, delegateTarget: HTMLElement) => unknown,
+  options?: boolean | AddEventListenerOptions,
+): void {
+  const host = this as DelegatedHost;
+  const wrapped: EventListener = (ev) => {
+    const target = ev.target;
+    if (!(target instanceof Element)) return;
+    const match = target.closest(selector);
+    if (match instanceof HTMLElement && host.contains(match)) {
+      listener.call(host, ev, match);
+    }
+  };
+  const events = (host._EVENTS ??= {});
+  (events[type] ??= []).push({ selector, listener, options, wrapped });
+  host.addEventListener(type, wrapped, options);
+}
+
+function delegatedOff(
+  this: HTMLElement | Document,
+  type: string,
+  selector: string,
+  listener: (this: HTMLElement | Document, ev: Event, delegateTarget: HTMLElement) => unknown,
+  _options?: boolean | AddEventListenerOptions,
+): void {
+  const host = this as DelegatedHost;
+  const list = host._EVENTS?.[type];
+  if (!list) return;
+  const idx = list.findIndex((i) => i.selector === selector && i.listener === listener);
+  if (idx < 0) return;
+  const [info] = list.splice(idx, 1);
+  host.removeEventListener(type, info.wrapped, info.options);
+}
 
 export function installDomAugmentation(): void {
   const g = globalThis as unknown as Record<string, unknown>;
@@ -371,41 +411,8 @@ export function installDomAugmentation(): void {
       this.dispatchEvent(new Event(eventType, { bubbles: true }));
     },
     /** delegated listener: fires when the event target matches `selector` inside this element */
-    on(
-      this: HTMLElement,
-      type: string,
-      selector: string,
-      listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
-      options?: boolean | AddEventListenerOptions,
-    ): void {
-      const host = this as DelegatedHost;
-      const wrapped: EventListener = (ev) => {
-        const target = ev.target;
-        if (!(target instanceof Element)) return;
-        const match = target.closest(selector);
-        if (match instanceof HTMLElement && host.contains(match)) {
-          listener.call(host, ev, match);
-        }
-      };
-      const events = (host._EVENTS ??= {});
-      (events[type] ??= []).push({ selector, listener, options, wrapped });
-      host.addEventListener(type, wrapped, options);
-    },
-    off(
-      this: HTMLElement,
-      type: string,
-      selector: string,
-      listener: (this: HTMLElement, ev: Event, delegateTarget: HTMLElement) => unknown,
-      _options?: boolean | AddEventListenerOptions,
-    ): void {
-      const host = this as DelegatedHost;
-      const list = host._EVENTS?.[type];
-      if (!list) return;
-      const idx = list.findIndex((i) => i.selector === selector && i.listener === listener);
-      if (idx < 0) return;
-      const [info] = list.splice(idx, 1);
-      host.removeEventListener(type, info.wrapped, info.options);
-    },
+    on: delegatedOn,
+    off: delegatedOff,
     /* deferred members — warn-stubs so the gap report stays truthful */
     onNodeInserted(this: HTMLElement, _listener: () => unknown, _once?: boolean): () => void {
       reportGap("dom", "HTMLElement.onNodeInserted", "no-op (returns a no-op destroyer)");
@@ -426,6 +433,12 @@ export function installDomAugmentation(): void {
       const s = getComputedStyle(this);
       return this.clientHeight - (parseFloat(s.paddingTop) || 0) - (parseFloat(s.paddingBottom) || 0);
     },
+  });
+
+  /* ----- Document (delegated listeners on document root) ----- */
+  define(Document.prototype, {
+    on: delegatedOn,
+    off: delegatedOff,
   });
 
   /* ----- SVGElement ----- */
@@ -461,6 +474,14 @@ export function installDomAugmentation(): void {
   g.fish = (selector: string): HTMLElement | null => document.querySelector(selector);
   g.fishAll = (selector: string): HTMLElement[] =>
     Array.from(document.querySelectorAll(selector));
+  g.sleep = (ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      setTimeout(() => resolve(), ms);
+    });
+  g.nextFrame = (): Promise<void> =>
+    new Promise((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
 
   /* ----- global window/document aliases (single-window host, no popouts) ----- */
   defineGetters(g, {

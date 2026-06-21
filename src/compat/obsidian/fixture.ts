@@ -20,6 +20,10 @@
  * (apiVersion/requireApiVersion, parseLinktext, arrayBufferToBase64 +
  * base64ToArrayBuffer + getBlobArrayBuffer, loadMermaid) and writing the JSON
  * results into a live <div data-testid="fixture-d-results"> for the E2E.
+ * R169: a second one-shot async IIFE exercising the Tier 8 D7 surface — global
+ * sleep(ms)/nextFrame() and the delegated Document.on/off listeners — plus a
+ * zero-regression re-check of HTMLElement.prototype.on/off (refactored to a
+ * shared impl this round); JSON results land in <div data-testid="fixture-d7-results">.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -332,6 +336,72 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
         out.error = String(e);
       }
       dResultsEl.textContent = JSON.stringify(out);
+    })();
+
+    // R169 — Tier 8 D7: global sleep(ms)/nextFrame() + Document.on/off delegated
+    // event listeners. The HTMLElement.prototype.on/off pair was refactored to a
+    // shared implementation this round, so we also re-prove the element variant
+    // (zero-regression). Same one-shot async IIFE + live <div> pattern as R168.
+    var d7El = document.createElement("div");
+    d7El.setAttribute("data-testid", "fixture-d7-results");
+    document.body.appendChild(d7El);
+    this.register(function () { d7El.remove(); });
+    (async function () {
+      var out = {};
+      try {
+        // sleep — resolves after roughly ms milliseconds
+        var t0 = Date.now();
+        await sleep(25);
+        out.sleepElapsedOk = (Date.now() - t0) >= 15;   // tolerate timer jitter
+        // nextFrame — resolves on the next animation frame
+        await nextFrame();
+        out.nextFrameOk = true;
+        // Document.on/off — delegated listener fires only when a bubbled event's
+        // target.closest(selector) matches; handler gets (ev, delegateTarget).
+        var container = document.createElement("div");
+        var btn = document.createElement("button");
+        btn.className = "d7-target";
+        btn.textContent = "t";
+        container.appendChild(btn);
+        document.body.appendChild(container);
+        var fires = 0, lastDelegateMatch = false;
+        var handler = function (ev, delegateTarget) { fires++; lastDelegateMatch = (delegateTarget === btn); };
+        document.on("click", ".d7-target", handler);
+        btn.click();                       // bubbles to document → matches
+        out.firesAfterFirstClick = fires;  // expect 1
+        out.delegateTargetOk = lastDelegateMatch;  // expect true
+        // a click on a non-matching element does not fire the delegate
+        var other = document.createElement("button");
+        other.className = "d7-other";
+        container.appendChild(other);
+        other.click();
+        out.firesAfterNonMatchClick = fires;  // still 1
+        // off removes the delegate — no more fires
+        document.off("click", ".d7-target", handler);
+        btn.click();
+        out.firesAfterOff = fires;            // still 1
+        container.remove();
+        // regression: HTMLElement.prototype.on/off still delegate (shared impl)
+        var host = document.createElement("div");
+        var child = document.createElement("span");
+        child.className = "d7-el-child";
+        host.appendChild(child);
+        document.body.appendChild(host);
+        var elFires = 0;
+        var elHandler = function () { elFires++; };
+        host.on("click", ".d7-el-child", elHandler);
+        child.click();
+        out.elOnFires = elFires;              // expect 1
+        host.off("click", ".d7-el-child", elHandler);
+        child.click();
+        out.elOffFires = elFires;             // still 1
+        host.remove();
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      d7El.textContent = JSON.stringify(out);
     })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));

@@ -128,6 +128,24 @@ interface HTMLElement {
   findAllSelf(selector: string): HTMLElement[];
 }
 
+interface Document {
+  /** delegated listener (target must match `selector` inside this document) */
+  on(
+    this: Document,
+    type: string,
+    selector: string,
+    listener: (this: Document, ev: Event, delegateTarget: HTMLElement) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+  off(
+    this: Document,
+    type: string,
+    selector: string,
+    listener: (this: Document, ev: Event, delegateTarget: HTMLElement) => unknown,
+    options?: boolean | AddEventListenerOptions,
+  ): void;
+}
+
 interface SVGElement {
   setCssStyles(styles: Partial<CSSStyleDeclaration>): void;
   setCssProps(props: Record<string, string>): void;
@@ -162,6 +180,8 @@ declare function createSvg(
 ): SVGElement;
 declare function fish(selector: string): HTMLElement | null;
 declare function fishAll(selector: string): HTMLElement[];
+declare function sleep(ms: number): Promise<void>;
+declare function nextFrame(): Promise<void>;
 
 /** Alias of `document` (Geode is single-window; popout windows do not exist). */
 declare var activeDocument: Document;
