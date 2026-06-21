@@ -1305,7 +1305,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | 功能 | 当前状态（code-verified 2026-06-21）| 范围与切入点提示 |
 |---|---|---|
 | **B1 插件管理面板（启停 / 设置入口 / 删除 / 浏览）** | **部分**（启停对齐 `community-plugins.json` R4 ✓；但 grep **无** `uninstall`/`removePlugin`/`deletePlugin` → **删除 / 卸载缺**；缺 Obsidian 式「已安装插件」列表面板）| 设置页加「社区插件」管理面板：列出已装插件（开关 + 齿轮进设置 + 删除 / 卸载 + 版本 / 作者 + 浏览 / 安装入口）。删除走文件系统移除 `.obsidian/plugins/<id>` + 从 `community-plugins.json` 摘除（**写 `.obsidian` 配置，复用既有 RMW 纪律**）。 |
-| **B2 插件设置「一个插件一个 Tab」** | **部分**（机制已在：compat `PluginSettingTab`/`addSettingTab` + `core/plugins.ts settingsSections` + SettingsModal「插件设置」分组渲染——**但所有插件设置挤在同一分组，非 Obsidian 那样左侧每插件独立条目**）| 改 SettingsModal 左侧导航（`SECTIONS.map`）：为每个 `settingsSection` 生成独立条目（社区插件区，图标 + 插件名），点击右侧只渲染该插件的 `display()`；对齐 Obsidian「设置左栏每插件一项」信息架构。**纯前端 IA 重排，settingsSections 数据已就绪**。 |
+| ~~**B2 插件设置「一个插件一个 Tab」**~~ | ✅ **R163 完成** | SettingsModal 左栏 SECTIONS 后为每个 enabled 插件的 settingsSection 生成独立 nav 条目（`settings-nav-plugin-<id>`，puzzle icon + 插件名 + `plugin:` 前缀选中态），点击右栏只渲该插件 `display()`（复用 `PluginSettingsBody` 命令式 mount/unmount，`key` 保证切插件真卸载/挂载）。删 PluginsSection 内 crammed 折叠卡片堆 + `PluginSettingsBlock` 组件 + 5 条 orphan 死 CSS。选中插件被禁用→fallback 回 Plugins。对抗评审 9 维全证伪 + 20 e2e（含 cross-plugin 切换 + live-add + fallback）。**v1 defer**：插件自定义图标（PluginSettingsSection 无 icon 字段，全用 puzzle）。 |
 | **B3 "很多插件无法加载"（Tier 兼容长尾）** | **进行中 · 用户已给样本**（套件 5/5 加载启用；2026-06-21 用户桌面实测报 **10 个加载失败插件**，已按根因归四类、逐条 code-verify → **见下「B3-附」表**）| 逐插件按根因修：① 补缺的 obsidian 导出 ② Node/Electron 模块最小垫片 ③ `global` 垫片 ④ `window.require` 受控垫片。流程：看控制台越级 warn-stub + 设置页缺口报告 → 补 shim 或登记缺口。详见 `docs/OBSIDIAN-COMPAT.md`。 |
 | **B4 obsidian API 全签名一致（长期）** | **进行中**（compat 按 Tier 推进，已对照官方 `obsidian.d.ts` 160+ 签名）| 长期目标：把越级 warn-stub 逐 Tier 转真实现。范围、法律边界、Tier 表见 `docs/OBSIDIAN-COMPAT.md`（头号输入）。 |
 
@@ -1335,7 +1335,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 > **B3 内取用顺序**：先 **③ `global` 垫片**（一行解锁 obsidian-git 等 + 普惠）→ 再 **① 补缺失超类导出**（`AbstractInputSuggest` 等，查清即加）→ 再 **② electron/fs 最小垫片**（按 clipboard/opener 可行项先做）→ **④ + webview/remote** 列远期或越界。
 
-> **第七梯队取用建议**：~~C5 侧栏折叠~~（R160）/ ~~A1 删除当前笔记~~（R161）/ ~~C4 收藏按钮~~（**R162 done**）/ **B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
+> **第七梯队取用建议**：~~C5 侧栏折叠~~（R160）/ ~~A1 删除当前笔记~~（R161）/ ~~C4 收藏按钮~~（R162）/ ~~B2 插件设置分 Tab~~（**R163 done**）/ **C2 inline 改名** 零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
 
 #### 第八梯队 — compat-API 全表面再校准缺口（2026-06-21 · 13 域并行校准 + 对抗 code-verify，对照 obsidian.d.ts ≈v1.9/297 导出）
 

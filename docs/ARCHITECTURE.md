@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 163 additions — Tier 7 B2「插件设置：一个插件一个 Tab」（SettingsModal 左栏 per-plugin IA · 复用 settingsSections Store + 命令式 mount/unmount · 纯前端零写）【As-built v0.160】
+
+> **状态：As-built（已交付）。** 对抗评审 9 维 → **0 confirmed defect（clean）**：命令式 mount/unmount 生命周期正确（`key={pluginTab.id}` 切插件真卸载+真挂载、`PluginSettingsBody` 函数体字节未变只换调用位置、mountedRef 防 StrictMode 双挂仍成立）；section 字符串协议无碰撞（固定 id 无冒号、`plugin:<sectionId>` 永不等于固定 id、`find` 去 startsWith 守卫后仍正确）；fallback effect 无限循环证伪（reset 后 section 不再 `plugin:` 前缀、effect 空跑）；enabled 过滤 + revision 实时增减正确；删 crammed 组零回归（列表渲染未动、无 orphan import）；死 CSS 删除安全（5 条 orphan 规则全仓零引用、`.plugin-group-*` 仍被组头用未误删）；分层无 compat import；a11y/i18n/data-safety 全证伪（纯前端零写路径）。简化门：1 减法（`pluginTab` 三元守卫→裸 `.find`，-2 行）+ 删 5 条本轮 orphan 的死 CSS。验收：r163-e2e 20/20（含 cross-plugin 切换 + live-add + fallback）、回归 r94 14/14·r88 13/13·r92 21/21·typecheck 0·cargo·生产构建。**桌面 probe N/A**（settings modal DOM IA、平台无关、无 fs/平台分支）。
+>
+> **Gate**：explorer 亲自 `rg` 确认现状=所有插件设置挤 Plugins 分组内的折叠卡片堆（`PluginSettingsBlock`）。机制全在（compat `addSettingTab` → core `addSettingsSection` → `settingsSections` Store、`PluginSettingsBody` 命令式挂载）。**唯一缺口 = IA**：改成 Obsidian「左栏每插件一项」。
+
+**契约（加性 + IA 重排 · 单文件主改 · 零 core/compat 改动）**：
+- **`features/settings/SettingsModal.tsx`**：① `section` state `SectionId`→`string`（固定 id 或 `plugin:<section.id>`）；② 顶层 hoist `useStore(plugins.revision)`+`useStore(settingsSections)` + `pluginTabs`=settingsSections.filter(enabled 插件) + `pluginTab`=find 当前选中 + fallback `useEffect`（选中插件消失→`setSection("plugins")`）；③ 左栏 SECTIONS.map 后渲 per-plugin `<button data-testid="settings-nav-plugin-${s.id}">`（puzzle icon + s.name + `plugin:` 前缀选中态）+ 分隔 label（`.settings-nav-title.settings-nav-subtitle` + i18n `settings.pluginSettingsGroup`）；④ 右栏 `{pluginTab && <section><h2 className="settings-heading">{name}</h2><PluginSettingsBody key={id} section/></section>}`；⑤ **删** PluginsSection 的 crammed `activeSections` 组 + `settingsSections`/`enabledByid`/`activeSections` 局部；⑥ **删** `PluginSettingsBlock` 折叠卡组件。
+- **`features/settings/settings.css`**：+`.settings-nav-subtitle`（margin-top/padding-top/border-top 分隔）；**删** 5 条 orphan 死规则（`.plugin-settings-block`/`-header`/`-header:hover`/`-title`/`-subtitle`）；保留 `.plugin-settings-body`。
+- **复用既有**：`PluginSettingsBody`（命令式 mount/unmount 不变）、`PluginSettingsSection` 形状（core/plugins.ts、不动）、i18n `settings.pluginSettingsGroup`、icon `puzzle`。
+- **r163-e2e**（20）：per-plugin nav 条目 + 固定 section 仍在 + 老折叠块缺席 + display() 仅选中时挂 + 切走卸载/切回重挂 + Plugins 段不再内联设置 + cross-plugin A→B 切换卸载/挂载 + live-add 条目 + 移除选中 section→fallback 回 plugins。
+
+**data-safety**：纯前端 IA（不写 vault/.md/editor）；`section.mount` 调插件 `display()`，其持久化是插件自身 `saveData`（非本轮引入）。
+
+**v1 nuance / defer**：单插件多 `addSettingTab` → 多同名 nav 条目（边缘、属既有数据模型）；插件名超长仅 cosmetic（既有 nav-item 共性）；所有插件 settings 用 `puzzle` 图标（PluginSettingsSection 无 icon 字段，加自定义图标需扩 core 契约=defer）。
+
+---
+
 ## Round 162 additions — Tier 7 C4「收藏按钮显式 UI 入口」（editor-header 星标 toggle · 复用 R27 vetted toggleFile · 单文件加性）【As-built v0.159】
 
 > **状态：As-built（已交付）。** 对抗评审 + data-safety 8 维 → **0 confirmed defect（clean）**：toggleFile RMW 同步原子（`itemsStore.get→anyFileMatches→set` 无 await、并发/快速双击安全）+ `regChain` 串行化写盘 + vault-switch 守卫；CM EditorView useEffect deps `[app,tab.id,handle,isPreview]` 不含 bookmarks → 书签变化**不重建 view**（cm-host ref 稳定）；previewHtml useMemo deps 不含 bookmarks → 不重算阅读视图；per-file 绑定正确（`EditorPane key={tab.id}`）；可见性 gate 正确（EditorPane 仅 markdown 渲染、attachment→AttachmentView/graph→GraphView、按钮根本不现于非 md pane）；icon fill none↔currentColor 切换生效（Icon `{...rest}` 覆盖默认）。简化门 skip（单文件 ~18 行加性、单用按钮，命中 <50 行/≤2 文件 skip 条件）。验收：r162-e2e 16/16、回归 r27 22/22（书签持久化）·r158 13/13（书签 instance）·typecheck 0·cargo·生产构建。**桌面 probe N/A**（按钮纯 DOM/UI 平台无关；toggleFile 写 bookmarks.json 是 R27 vetted 路径未改）。

@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R163 套件回归（2026-06-21，Tier 7 B2 插件设置「一个插件一个 Tab」· SettingsModal 左栏 per-plugin IA · 桌面 probe N/A）
+
+R163 = Tier 7 **B2「插件设置：一个插件一个 Tab」**。**Gate**：explorer 确认机制全在（compat `addSettingTab`→core `addSettingsSection`→`settingsSections` Store + `PluginSettingsBody` 命令式挂载），唯一缺口 = IA（所有插件设置挤 Plugins 分组折叠卡片堆，非 Obsidian 左栏每插件一项）。改 SettingsModal 左栏为每个 enabled 插件 settingsSection 生成独立 nav 条目，点击右栏只渲该插件 `display()`（复用 `PluginSettingsBody`，`key` 保证切插件真卸载/挂载）。**纯前端 IA 重排零写**。**对抗评审 9 维 → 0 confirmed defect**（命令式 mount/unmount 生命周期、section 字符串协议无碰撞、fallback effect 无循环、enabled 过滤 + revision 实时增减、删 crammed 组零回归、死 CSS 删除安全、分层无 compat import）。简化门 1 减法（`pluginTab` 守卫→裸 find）+ 删 5 条 orphan 死 CSS。
+
+新增套件：`r163-e2e.mjs` **20/20**（per-plugin nav 条目 + 固定 section 仍在 + 老折叠块缺席 + display() 仅选中时挂 + 切走卸载/切回重挂 + Plugins 段不再内联设置 + **cross-plugin A→B 切换卸载/挂载** + **live-add 条目**[revision bump] + **移除选中 section→fallback 回 plugins** + 无 page error）。**套件矩阵不回退**：r94 14/14（inline title/ribbon 显隐 settings）·r88 13/13（行号/默认视图 settings）·r92 21/21（Tab 缩进 settings）——固定 section 零回归·typecheck 0/cargo/生产构建。**桌面 probe N/A**（settings modal DOM IA、平台无关、无 fs/平台分支）。**v1 defer**：插件自定义图标（全用 puzzle）。
+
 ### R162 套件回归（2026-06-21，Tier 7 C4 收藏按钮显式 UI 入口 · 复用 R27 vetted toggleFile · 桌面 probe N/A）
 
 R162 = Tier 7 **C4「收藏按钮显式 UI 入口」**。**Gate**：explorer 亲自 `rg` 确认无现存可见收藏按钮（只有命令 + ribbon 开面板）；R27 已有 `bookmarks.toggleFile`/`isFileBookmarked`/`items` Store 全部所需。**唯一缺口 = 可见 UI 入口** → editor-header 加星标 toggle 按钮，点击走既有 toggleFile（**R27 vetted 序列化 RMW、非新写路径**），`useStore(bookmarks.items)` 订阅实时刷新实心/空心。**对抗评审 + data-safety 8 维 → 0 confirmed defect**（toggleFile RMW 同步原子 + regChain 串行化、并发双击安全；CM EditorView/previewHtml deps 不含 bookmarks → 书签变化不重建 view/不重算阅读视图；per-file 绑定正确；attachment/graph pane 不渲此按钮）。简化门 skip（单文件 ~18 行加性单用按钮）。零 core/CSS/i18n 新增（复用 editor-mode-btn + cmd.bookmarkFile/unbookmarkFile + bookmark icon fill 切换）。
