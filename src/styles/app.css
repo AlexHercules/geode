@@ -156,6 +156,7 @@ textarea:focus {
   flex: 1;
   display: flex;
   min-height: 0;
+  position: relative;
 }
 
 .ribbon {
@@ -230,6 +231,43 @@ textarea:focus {
 
 .sidebar-resizer:hover {
   background: var(--accent-muted);
+}
+
+/* C5: always-visible collapse/expand toggles pinned to the inner edge of the
+   main area at each sidebar↔main border, mid-height — clears the tab bar (top)
+   and status bar (below .app-body), auto-repositions from the live widths */
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-faint);
+  opacity: 0.55;
+  z-index: 11;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.sidebar-toggle:hover {
+  opacity: 1;
+  color: var(--text-normal);
+  background: var(--bg-hover);
+}
+
+/* inset a touch from the border so the pill clears the editor's edge
+   scrollbar/click target (M1) while still reading as an edge affordance */
+.sidebar-toggle-left {
+  margin-left: 12px;
+}
+
+.sidebar-toggle-right {
+  margin-right: 12px;
 }
 
 /* right sidebar panel tabs */

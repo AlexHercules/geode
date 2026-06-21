@@ -857,6 +857,23 @@ export function App() {
             </div>
           </aside>
         )}
+
+        {/* C5: visible sidebar collapse/expand toggles (commands stay unbound,
+            matching Obsidian's default — users bind keys in Hotkeys settings) */}
+        <SidebarToggle
+          side="left"
+          open={ws.leftSidebarOpen}
+          offset={(ribbonVisible ? 44 : 0) + (ws.leftSidebarOpen ? ws.leftWidth : 0)}
+          label={t("cmd.toggleLeftSidebar")}
+          onToggle={() => app.workspace.toggleLeftSidebar()}
+        />
+        <SidebarToggle
+          side="right"
+          open={ws.rightSidebarOpen}
+          offset={ws.rightSidebarOpen ? ws.rightWidth : 0}
+          label={t("cmd.toggleRightSidebar")}
+          onToggle={() => app.workspace.toggleRightSidebar()}
+        />
       </div>
 
       {/* status bar (R100: hidden when showStatusBar is off) */}
@@ -1104,6 +1121,35 @@ function RibbonButton(props: { icon: string; title: string; active?: boolean; on
       onClick={props.onClick}
     >
       <Icon name={props.icon} size={20} />
+    </button>
+  );
+}
+
+/**
+ * C5: dedicated collapse/expand affordance for a sidebar. Always rendered (an
+ * overlay anchored to `.app-body`); `offset` is the live pixel distance of the
+ * sidebar↔main border from the matching edge, so it tracks resize + collapse.
+ * Chevron points inward to collapse when open, outward to expand when closed.
+ */
+function SidebarToggle(props: {
+  side: "left" | "right";
+  open: boolean;
+  offset: number;
+  label: string;
+  onToggle: () => void;
+}) {
+  const inward = props.side === "left" ? "chevron-left" : "chevron-right";
+  const outward = props.side === "left" ? "chevron-right" : "chevron-left";
+  return (
+    <button
+      className={`sidebar-toggle sidebar-toggle-${props.side}`}
+      style={props.side === "left" ? { left: props.offset } : { right: props.offset }}
+      aria-label={props.label}
+      title={props.label}
+      data-testid={`sidebar-toggle-${props.side}`}
+      onClick={props.onToggle}
+    >
+      <Icon name={props.open ? inward : outward} size={14} />
     </button>
   );
 }
