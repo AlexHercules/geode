@@ -71,6 +71,82 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 173 additions — Tier 8 D9「`sanitizeHTMLToDom` HTML 清洗器」（compat · 保守 allowlist + 惰性 template 解析 · 零新依赖 · 🔒 安全敏感）【As-built v0.170】
+
+> **状态：As-built（已交付）。** 🔒 **heavy XSS 对抗评审 → 0 可执行绕过（clean）**——reviewer **对 live 编译代码实跑 ~50 向量电池**（每 payload adopt 进 live DOM + 300-500ms 后查 window flag），全部脚本/事件**未执行**：① 标签 FORBID_DROP 整除（script/style/iframe/object/embed/svg/math/form/audio/video…含子树）；② on\* 全覆盖（toLowerCase 前置、onERROR/ontoggle/onanimationstart…）；③ scheme allowlist 拒 javascript:/vbscript:/data:/file:/blob:/about:；④ **控制字符+实体绕过全拦**（`java\tscript:`/`\n`/`\r`/NBSP/前导空格/`&#106;avascript:`/`&#x6a;`/`&Tab;`/`JaVaScRiPt:`——getAttribute 已解码实体 + `[-  ]` strip + toLowerCase）；⑤ namespace 混淆（svg>script / svg>a xlink:href / math>script / svg>foreignObject>iframe → svg/math 整除根除）；⑥ 非 URL_ATTRS 携 URL（longdesc/srcset/formaction → 非 allowlist 剥）；⑦ unwrap 提升安全（walk 先全树收集、结构变更在 walk 后、forbid remove 先于 unwrap、未知元素自身属性随移除无害）；⑧ mXSS 规避（直返 fragment 不 re-parse）；⑨ NUL `java\x00script:` → template 解析转 U+FFFD → 当相对路径放行但浏览器 resolve 为 http 相对、**不可执行**；⑩ 5000 层深嵌套不爆栈（迭代 TreeWalker）。**假绿反证**：reviewer 元测试喂未清洗 onerror→150ms 内确实 fire，证 e2e 的 `scriptDidNotRun`/`imgOnerrorDidNotFire`/`svgScriptDidNotRun` 是真测执行非查属性。可接受 nuance（非缺陷）：协议相对 `//host`（导航非脚本）、保留 id（exotic DOM-clobber、Obsidian 同款）、拒所有 data:（含 data:image，保守）、剥 style。简化门 **clean**（紧凑纯安全函数无 dup/死代码/脚手架；allowlist/isSafeUrl/双 post-walk 循环/迭代 TreeWalker 全 load-bearing 不可减）。验收：r173-e2e **31/31**（含 3 条 did-not-execute）、回归 r172 6/6·r171 14/14·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 DOM 清洗、零 fs/Rust/平台分支、WKWebView≡Chromium）。**⚠️ 教训（文档写作）**：本节契约块的 `isSafeUrl` 正则初版误嵌**字面控制字符**（`/[ <ctrl> ]/`），令 ARCHITECTURE.md 被 `file`/`grep` 判为 binary（plain grep 找不到「Round 173」误报「节缺失」）→ 修=正则在**文档**里一律写转义形 `- `（实现 sanitize.ts 写 `\x00-\x20 ` 本就正确）；**markdown/doc 里写控制字符范围用转义、绝不嵌字面控制字节**。
+>
+> **Gate（R160 教训：explorer 实查现状）**：compat 缺 `sanitizeHTMLToDom`（grep 零；现有 sanitize* 均无关——workspace sanitizeTab/Node 是状态校验、noteComposer sanitizeNoteName 是文件名）→ **须自写**。**🔒 安全敏感（heavy XSS 对抗评审）**：返回供插件注入 DOM 的 fragment，错一处=XSS。**保守优先于保真**（宁可多删合法内容也不漏一个向量）。
+>
+> **设计（防御性、DoS-resistant、防 mXSS）**：① 用 `<template>.innerHTML = html` **惰性解析**——template content 是 inert（scripts 不执行、资源不加载，直到 adopt）；返回**直接持有的 fragment**（不二次 serialize→re-parse，避免 mXSS）。② **迭代 TreeWalker**（`SHOW_ELEMENT`，非递归——避免深嵌套 `<div><div>…` 爆栈 DoS）：walk 全程只**就地洗属性**（TreeWalker 容忍属性变更）+ 收集结构决策；walk 完再做结构变更（remove/unwrap，带 `parentNode` 守卫防祖先已删的孤儿节点）。
+
+**契约（加性 · 新 compat 文件 · 自写保守 allowlist）**：
+
+```ts
+// src/compat/obsidian/sanitize.ts — 新建
+const FORBID_DROP = new Set([  // 整除（含子树）：可执行脚本 / 加载资源 / 交互 / 异命名空间
+  "script","style","iframe","object","embed","noscript","template","link","meta","base","head","title",
+  "svg","math","applet","frame","frameset","form","input","button","textarea","select","option",
+  "audio","video","source","track",
+]);
+const ALLOWED_TAGS = new Set([  // 格式化安全集；洗属性后保留
+  "a","abbr","b","bdi","bdo","blockquote","br","caption","cite","code","col","colgroup","dd","del","details",
+  "dfn","div","dl","dt","em","figcaption","figure","h1","h2","h3","h4","h5","h6","hr","i","img","ins","kbd",
+  "li","mark","ol","p","pre","q","rp","rt","ruby","s","samp","small","span","strong","sub","summary","sup",
+  "table","tbody","td","tfoot","th","thead","time","tr","u","ul","var","wbr",
+]);
+const ALLOWED_ATTRS = new Set([  // 全局安全属性（+ data-* / aria- 前缀放行）
+  "class","id","title","alt","dir","lang","role","colspan","rowspan","span","start","reversed","datetime",
+  "cite","type","width","height","align","valign","scope","headers","abbr",
+]);
+const URL_ATTRS = new Set(["href","src"]);   // 经 isSafeUrl 校验 scheme
+
+function isSafeUrl(value: string): boolean {
+  // 先剥所有控制字符+空白（浏览器忽略 scheme 内 tab/换行 → "java\tscript:" 会执行 → 必须剥掉再判 scheme）
+  const v = value.replace(/[\u0000-\u0020\u00a0]+/g, "").toLowerCase();
+  if (v === "" || v.startsWith("#")) return true;     // 锚点 / 空 = 安全
+  const m = /^([a-z][a-z0-9+.-]*):/.exec(v);
+  if (!m) return true;                                 // 无 scheme = 相对路径，安全
+  const s = m[1];
+  return s === "http" || s === "https" || s === "mailto" || s === "tel";  // 拒 javascript:/vbscript:/data:/file:
+}
+
+export function sanitizeHTMLToDom(html: string): DocumentFragment {
+  const template = document.createElement("template");
+  template.innerHTML = html ?? "";
+  const frag = template.content;
+  const forbid: Element[] = [], unwrap: Element[] = [];
+  const walker = document.createTreeWalker(frag, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_COMMENT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.nodeType === Node.COMMENT_NODE) { (n as ChildNode).remove(); continue; }  // 注释剥（条件注释向量）
+    const el = n as Element;
+    const tag = el.tagName.toLowerCase();
+    if (FORBID_DROP.has(tag)) { forbid.push(el); continue; }
+    if (!ALLOWED_TAGS.has(tag)) { unwrap.push(el); continue; }
+    // allowed：洗属性（就地、TreeWalker 安全）
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith("on")) { el.removeAttribute(attr.name); continue; }                 // 事件处理器
+      if (name.startsWith("data-") || name.startsWith("aria-")) continue;                     // 放行
+      if (URL_ATTRS.has(name)) { if (!isSafeUrl(attr.value)) el.removeAttribute(attr.name); continue; }
+      if (!ALLOWED_ATTRS.has(name)) el.removeAttribute(attr.name);                             // 含 style/srcset 等一律剥
+    }
+  }
+  for (const el of forbid) el.remove();                                  // 含子树
+  for (const el of unwrap) { if (el.parentNode) el.replaceWith(...el.childNodes); }  // 守卫祖先已删的孤儿
+  return frag;
+}
+```
+
+- **barrel `index.ts`**（:100-101 附近）：`export { sanitizeHTMLToDom } from "./sanitize";`。
+
+**文件所有权（owner A 实现 + owner B 测试 · fixture MAIN_JS 运行时字符串、零编译耦合 → 全并行）**：
+- **Owner A**：`src/compat/obsidian/sanitize.ts`（新建）+ `src/compat/obsidian/index.ts`（barrel）。
+- **Owner B**：`src/compat/obsidian/fixture.ts`（onload XSS 向量电池：每向量 `sanitizeHTMLToDom`→**adopt 进 live body**→验脚本/onerror 不执行[window flag undefined]、危险标签/属性缺席、合法内容保留，写 `<div data-testid="fixture-d9san-results">` JSON）+ `.calibration/r173-e2e.mjs`（heavy XSS 断言）。
+
+**data-safety**：纯 DOM 清洗（解析→洗→返 detached fragment），零 vault/.md/editor 写 → **非 data-safety 轮**；但 **🔒 安全敏感**=XSS 面，对抗评审须穷举向量（`<script>`/`<img onerror>`/`href=javascript:`/`java\tscript:` 控制字符绕过/`<svg><script>`/`<iframe>`/data:/style/注释/深嵌套 DoS）。
+
+**v1 nuance / defer（保守取舍，文档化）**：① 拒**所有** `data:` URL（含 data:image——data:image/svg+xml 可携脚本，保守全拒）；② 剥 `style` 属性（CSS 注入向量，保守全剥）；③ FORBID_DROP 含 form/input/button/audio/video（丢内容，保守）；④ svg/math 整除（异命名空间向量多）；⑤ 未做 namespace-aware 精细 SVG 子集（够多数设置页/渲染输出用）。**D6 setIcon Lucide=硬边界 #5 待用户拍板**；D5/D8/D12/D15/D16 中型 API 留后续轮。
+
 ## Round 172 additions — Tier 8 D11「`MarkdownPreviewRenderer` 静态 post-processor 类」（compat · 薄桥接既有 R132 核心注册表 · 零新依赖）【As-built v0.169】
 
 > **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）**。**关键证伪**：① registry 路由=静态 registerPostProcessor 与实例 registerMarkdownPostProcessor 调**同一个** `registerCoreMarkdownPostProcessor`（core 唯一 export、唯一 registered[]）→ reading view 应用之（r172 静态 pp 真跑 `.preview-content` + r132 实例版 11/11 不受影响 双向证）；② disposer Map 生命周期=重复注册 dedup（先拆旧 entry 防 leak/dup，与 Obsidian「同 pp 多次 push」偏离是**有意更安全的 v1 nuance**）+ unregister 未注册 no-op + 静态 API 无 plugin-unload 生命周期（卸载后 pp 须手动 unregister=**Obsidian 静态类同款 nuance**，非缺陷）；③ createCodeBlockPostProcessor 纯工厂（仅 `makeCodeBlockPostProcessor` 不注册、caller 自 register，符合 Obsidian createX/registerX 语义）；④ 实例版字节未动（git diff + r132 11/11·r134 24/24 回归）；⑤ sortOrder?:number 省略传 undefined 触发 core `sortOrder=0` 默认参；⑥ 无意写路径全无（写 disposer Map + 委托 core registry + 操作 detached el）。简化门 **clean/skip**（纯加性薄类 + 1 import + barrel / ≤2 文件 / 无 existing-code 重构）。验收：r172-e2e **6/6**（静态注册路由核心注册表→reading view 应用 + unregister 后重渲不跑 + createCodeBlockPostProcessor 纯工厂 pre→div 变换）、回归 r132 11/11·r134 24/24·r171 14/14·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（compat registry-bridge orchestration 平台无关，同 R113/R130/R132 先例）。
