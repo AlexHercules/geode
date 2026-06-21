@@ -23,6 +23,7 @@ import type { PropertyEdit } from "@core/properties";
 import type { TabState, ViewMode } from "@core/types";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
+import { bookmarks } from "@core/bookmarks";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import {
@@ -162,6 +163,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const inlineTitleOn = useStore(showInlineTitle);
   // R154: gate the reading-view linked-mentions section (Obsidian "Backlink in document")
   const backlinksInDoc = useStore(showBacklinksInDocument);
+  // R162: subscribe so the header bookmark star reflects bookmark changes live
+  useStore(bookmarks.items);
+  const bookmarked = tab.filePath !== null && bookmarks.isFileBookmarked(tab.filePath);
   /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
   const compatExtRev = useStore(editorExtensionsRevision);
   const cbProcRev = useStore(codeBlockProcessorsRevision);
@@ -979,6 +983,20 @@ export function EditorPane({ tab }: { tab: TabState }) {
           {tab.title}
         </div>
         <div className="editor-header-spacer" />
+        {tab.filePath !== null && (
+          <button
+            className={"editor-mode-btn" + (bookmarked ? " is-active" : "")}
+            data-testid="bookmark-toggle"
+            title={t(bookmarked ? "cmd.unbookmarkFile" : "cmd.bookmarkFile")}
+            aria-label={t(bookmarked ? "cmd.unbookmarkFile" : "cmd.bookmarkFile")}
+            aria-pressed={bookmarked}
+            onClick={() => {
+              if (tab.filePath) void bookmarks.toggleFile(tab.filePath);
+            }}
+          >
+            <Icon name="bookmark" size={15} {...(bookmarked ? { fill: "currentColor" } : {})} />
+          </button>
+        )}
         <div
           className="editor-mode-group"
           role="group"
