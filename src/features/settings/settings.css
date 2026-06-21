@@ -50,6 +50,13 @@
   user-select: none;
 }
 
+/* R163: mid-nav separator label above the per-plugin settings tabs */
+.settings-nav-subtitle {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 .settings-nav-item {
   display: flex;
   align-items: center;
@@ -453,38 +460,6 @@
 }
 
 /* ---------- plugin settings sections (compat PluginSettingTab) ---------- */
-
-.plugin-settings-block {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  margin: 8px 0;
-  overflow: hidden;
-}
-
-.plugin-settings-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
-  text-align: left;
-  color: var(--text-normal);
-  background: var(--bg-panel-alt);
-}
-
-.plugin-settings-header:hover {
-  background: var(--bg-hover);
-}
-
-.plugin-settings-title {
-  font-weight: 600;
-}
-
-.plugin-settings-subtitle {
-  font-size: 12px;
-  color: var(--text-muted);
-}
 
 .plugin-settings-body {
   padding: 10px 12px;

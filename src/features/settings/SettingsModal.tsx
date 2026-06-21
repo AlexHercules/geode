@@ -106,7 +106,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.159.0";
+const APP_VERSION = "0.160.0";
 
 type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
 
@@ -135,14 +135,30 @@ export function SettingsModal() {
   const app = useApp();
   const t = useI18n();
   /* peek (don't consume) the auto-check flag — UpdateSection consumes it on mount */
-  const [section, setSection] = useState<SectionId>(pendingAutoCheck ? "about" : "appearance");
+  // R163: section is a string — fixed ids (SectionId) OR `plugin:<sectionId>` for
+  // a per-plugin settings tab (Obsidian "one plugin, one tab" left-nav IA).
+  const [section, setSection] = useState<string>(pendingAutoCheck ? "about" : "appearance");
   const close = () => app.workspace.closeModal();
   const panelRef = useRef<HTMLDivElement>(null);
+
+  /* R163: enabled plugins that contribute a settings section → one left-nav tab each */
+  useStore(app.plugins.revision); // re-render on enable/disable/register
+  const settingsSections = useStore(app.plugins.settingsSections);
+  const enabledPluginIds = new Set(
+    app.plugins.list().filter((e) => e.enabled).map((e) => e.plugin.id),
+  );
+  const pluginTabs = settingsSections.filter((s) => enabledPluginIds.has(s.pluginId));
+  const pluginTab = pluginTabs.find((s) => `plugin:${s.id}` === section);
 
   /* take focus away from the editor so keystrokes don't keep editing the note behind */
   useEffect(() => {
     panelRef.current?.focus();
   }, []);
+
+  /* if the open plugin tab's plugin gets disabled/uninstalled, fall back to Plugins */
+  useEffect(() => {
+    if (section.startsWith("plugin:") && pluginTab === undefined) setSection("plugins");
+  }, [section, pluginTab]);
 
   return (
     <div
@@ -182,6 +198,25 @@ export function SettingsModal() {
               <span>{t(s.labelKey)}</span>
             </button>
           ))}
+          {/* R163: one left-nav entry per enabled plugin's settings tab */}
+          {pluginTabs.length > 0 && (
+            <>
+              <div className="settings-nav-title settings-nav-subtitle">
+                {t("settings.pluginSettingsGroup")}
+              </div>
+              {pluginTabs.map((s) => (
+                <button
+                  key={s.id}
+                  className={`settings-nav-item${section === `plugin:${s.id}` ? " is-active" : ""}`}
+                  data-testid={`settings-nav-plugin-${s.id}`}
+                  onClick={() => setSection(`plugin:${s.id}`)}
+                >
+                  <Icon name="puzzle" size={15} />
+                  <span>{s.name}</span>
+                </button>
+              ))}
+            </>
+          )}
         </nav>
 
         <div className="settings-content" data-testid={`settings-section-${section}`}>
@@ -190,6 +225,13 @@ export function SettingsModal() {
           {section === "hotkeys" && <HotkeysSection />}
           {section === "command-palette" && <CommandPaletteSection />}
           {section === "about" && <AboutSection />}
+          {/* R163: per-plugin settings tab (Obsidian "one plugin, one tab") */}
+          {pluginTab && (
+            <section>
+              <h2 className="settings-heading">{pluginTab.name}</h2>
+              <PluginSettingsBody key={pluginTab.id} section={pluginTab} />
+            </section>
+          )}
         </div>
       </div>
     </div>
@@ -1181,7 +1223,6 @@ function PluginsSection() {
   const app = useApp();
   const t = useI18n();
   useStore(app.plugins.revision); // re-render on enable/disable/register
-  const settingsSections = useStore(app.plugins.settingsSections);
   const obsidianReport = useStore(app.obsidianLoadReport);
   const entries = app.plugins.list();
   const builtin = entries.filter((e) => e.source === "builtin");
@@ -1198,14 +1239,6 @@ function PluginsSection() {
       .filter((r) => r.minAppWarning !== undefined)
       .map((r) => [r.id, r.minAppWarning as string] as const),
   );
-
-  /* settings sections contributed by ENABLED plugins, with the plugin name for the header */
-  const enabledByid = new Map(entries.filter((e) => e.enabled).map((e) => [e.plugin.id, e.plugin]));
-  const activeSections = settingsSections
-    .map((section) => ({ section, plugin: enabledByid.get(section.pluginId) }))
-    .filter((x): x is { section: PluginSettingsSection; plugin: (typeof entries)[number]["plugin"] } =>
-      x.plugin !== undefined,
-    );
 
   return (
     <section>
@@ -1269,6 +1302,7 @@ function PluginsSection() {
         {t("settings.obsidianHintPost")}
       </p>
       <PluginList entries={obsidian} group="obsidian" warnings={obsidianWarnings} />
+      {/* R163: per-plugin settings moved OUT of this group into left-nav tabs */}
 
       {obsidianIssues.length > 0 && (
         <div className="plugin-list plugin-error-list" data-testid="settings-obsidian-errors">
@@ -1295,52 +1329,11 @@ function PluginsSection() {
         </div>
       )}
 
-      {activeSections.length > 0 && (
-        <>
-          <div className="plugin-group-header">
-            <h3 className="plugin-group-title">{t("settings.pluginSettingsGroup")}</h3>
-          </div>
-          {activeSections.map(({ section, plugin }) => (
-            <PluginSettingsBlock key={section.id} section={section} pluginName={getPluginName(plugin)} />
-          ))}
-        </>
-      )}
     </section>
   );
 }
 
-/** Collapsible host for one plugin-contributed settings section (compat PluginSettingTab). */
-function PluginSettingsBlock({
-  section,
-  pluginName,
-}: {
-  section: PluginSettingsSection;
-  pluginName: string;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      className="plugin-settings-block"
-      data-testid={`plugin-settings-section-${section.id}`}
-    >
-      <button
-        className="plugin-settings-header"
-        aria-expanded={open}
-        data-testid={`plugin-settings-toggle-${section.id}`}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <Icon name={open ? "chevron-down" : "chevron-right"} size={14} />
-        <span className="plugin-settings-title">{pluginName}</span>
-        {section.name && section.name !== pluginName && (
-          <span className="plugin-settings-subtitle">{section.name}</span>
-        )}
-      </button>
-      {open && <PluginSettingsBody section={section} />}
-    </div>
-  );
-}
-
-/** Mounts section.mount(container) while visible; unmounts on collapse/unmount. */
+/** Mounts section.mount(container) while the plugin's tab is selected; unmounts on switch. */
 function PluginSettingsBody({ section }: { section: PluginSettingsSection }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(false); // guards double-mount under StrictMode
