@@ -96,7 +96,7 @@ export {
   type SearchResult,
   type UserEvent,
 } from "./ui";
-export { addIcon, setIcon, setTooltip, type IconName } from "./icons";
+export { addIcon, getIcon, getIconIds, setIcon, setTooltip, type IconName } from "./icons";
 export { loadMermaid } from "@core/mermaid";
 export { finishRenderMath, loadMathJax, renderMath } from "./math";
 export { sanitizeHTMLToDom } from "./sanitize";
@@ -107,6 +107,7 @@ export {
   debounce,
   getAllTags,
   getBlobArrayBuffer,
+  getLanguage,
   getLinkpath,
   htmlToMarkdown,
   MarkdownRenderer,

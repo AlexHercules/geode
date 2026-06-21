@@ -43,6 +43,12 @@
  * javascript:/iframe/onclick/data:/svg+script) is sanitized then ADOPTED INTO THE
  * LIVE DOM, and the JSON results (incl. window-flag "did-not-execute" assertions
  * snapshotted after a 150ms tick) land in <div data-testid="fixture-d9san-results">.
+ * R174: a one-shot async IIFE exercising the Tier 8 D12+D16 surface — getLanguage()
+ * (current locale string), getIcon(id) (SVGSVGElement for a real builtin id, null for
+ * unknown), getIconIds() (non-empty string[]), Platform.resourcePathPrefix ("" honest
+ * placeholder), this.app.fileManager.getAvailablePathForAttachment(name) (deduped path
+ * string) and getNewFileParent(sourcePath) (a TFolder with a .path string); JSON results
+ * land in <div data-testid="fixture-d1216-results">.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -605,6 +611,48 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
         out.svgScriptDidNotRun = (window.__xssSvg === undefined);
         d9sEl.textContent = JSON.stringify(out);
       }, 150);
+    })();
+
+    // R174 — Tier 8 D12+D16: getLanguage()/getIcon()/getIconIds()/
+    // Platform.resourcePathPrefix (D16) + fileManager.getAvailablePathForAttachment()/
+    // getNewFileParent() (D12). getAvailablePathForAttachment is async, so a single
+    // async IIFE computes every result and stashes the JSON in a live <div> for the E2E.
+    var d1216El = document.createElement("div");
+    d1216El.setAttribute("data-testid", "fixture-d1216-results");
+    document.body.appendChild(d1216El);
+    this.register(function () { d1216El.remove(); });
+    (async function () {
+      var out = {};
+      try {
+        // D16-1 getLanguage — current locale string ("en" with the e2e-preset locale)
+        out.lang = obsidian.getLanguage();
+        out.langIsString = (typeof out.lang === "string");
+        // D16-3 getIconIds — all registered icon ids (builtin + addIcon)
+        var ids = obsidian.getIconIds();
+        out.iconIdsIsArray = Array.isArray(ids);
+        out.iconIdsNonEmpty = ids.length > 0;
+        // D16-2 getIcon — use a REAL id from getIconIds()[0] (avoids guessing a
+        // builtin name that may not exist) → expect an SVGSVGElement
+        var builtinId = ids[0];
+        var icon = obsidian.getIcon(builtinId);
+        out.iconIsSvg = (icon instanceof SVGSVGElement);
+        out.iconNullForUnknown = (obsidian.getIcon("no-such-icon-zzz") === null);
+        // D16 Platform.resourcePathPrefix — honest "" placeholder
+        out.resourcePathPrefix = obsidian.Platform.resourcePathPrefix;
+        out.resourcePrefixIsString = (typeof obsidian.Platform.resourcePathPrefix === "string");
+        // D12-5 getAvailablePathForAttachment — deduped attachment path string (async)
+        var attPath = await self.app.fileManager.getAvailablePathForAttachment("r174-img.png");
+        out.attPathIsString = (typeof attPath === "string" && attPath.length > 0);
+        out.attPathHasExt = /\\.png$/.test(attPath);
+        // D12-6 getNewFileParent — a TFolder with a .path string
+        var parent = self.app.fileManager.getNewFileParent("r174-note.md");
+        out.parentHasPath = (parent != null && typeof parent.path === "string");
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      d1216El.textContent = JSON.stringify(out);
     })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));

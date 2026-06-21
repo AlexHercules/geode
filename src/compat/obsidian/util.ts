@@ -8,6 +8,7 @@
 // dep optimizer. Defining locales switches the global one; restored below.
 import momentImpl from "moment/min/moment-with-locales";
 import { hydrateEmbeds } from "@core/embeds";
+import { locale } from "@core/i18n";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { strictLineBreaks } from "@core/appearance";
 import type { MetadataIndex } from "@core/metadata";
@@ -247,7 +248,22 @@ export const Platform = {
   isWin: ua.includes("Windows"),
   isLinux: ua.includes("Linux") && !ua.includes("Android"),
   isSafari: false,
+  // Honest placeholder: Geode serves no `app://` resource prefix yet (real
+  // resource-path resolution is deferred to D5). Empty string is a valid
+  // `string` subtype, so plugins reading Platform.resourcePathPrefix compile.
+  resourcePathPrefix: "",
 } as const;
+
+/* ---------------- getLanguage (D16-1) ---------------- */
+
+/**
+ * The official `getLanguage(): string` returns the active UI locale code.
+ * Geode tracks it in the core i18n `locale` Store ("en" | "zh"); both are
+ * `string` subtypes, satisfying the declared return type.
+ */
+export function getLanguage(): string {
+  return locale.get();
+}
 
 /* ---------------- moment (real, R5 T2 decision) ---------------- */
 

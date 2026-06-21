@@ -57,6 +57,26 @@ export function getIconSvg(iconId: string): string | null {
   return builtin !== undefined ? wrap(builtin, "0 0 24 24") : null;
 }
 
+/**
+ * 'Returns an SVGSVGElement for the given icon id, or null if unknown.' (D16-2)
+ * Parses the full <svg> markup via a <template> — the HTML parser handles
+ * <svg> in foreign-content mode, yielding a real SVGSVGElement. An instanceof
+ * guard returns it (no cast / any); anything else degrades to null.
+ */
+export function getIcon(iconId: string): SVGSVGElement | null {
+  const markup = getIconSvg(iconId);
+  if (markup === null) return null;
+  const template = document.createElement("template");
+  template.innerHTML = markup.trim();
+  const el = template.content.firstElementChild;
+  return el instanceof SVGSVGElement ? el : null;
+}
+
+/** 'Returns a list of all registered icon ids.' (D16-2) built-ins + addIcon()s. */
+export function getIconIds(): string[] {
+  return [...Object.keys(BUILTIN), ...registered.keys()];
+}
+
 /** Sets a tooltip via aria-label + title (Geode has no custom tooltip popup). */
 export function setTooltip(el: HTMLElement, tooltip: string, _options?: unknown): void {
   el.setAttribute("aria-label", tooltip);

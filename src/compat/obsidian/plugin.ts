@@ -26,9 +26,11 @@ import {
   type PropertyValue,
 } from "@core/properties";
 import type { Command as GeodeCommand } from "@core/types";
+import { attachmentFolder, resolveAttachmentDir } from "@core/attachments";
+import { resolveNewNoteFolder } from "@core/newNote";
 import { Component } from "./component";
 import type { Editor } from "./editor";
-import type { FileRegistry } from "./files";
+import type { FileRegistry, TFolder } from "./files";
 import { reportGap } from "./gaps";
 import { getIconSvg, type IconName } from "./icons";
 import type { MetadataCache } from "./metadata";
@@ -242,12 +244,18 @@ async function doProcessFrontMatter(
  * the core engine, matching the official "update all links" semantics — the
  * official Vault.rename stays a bare rename by design), `processFrontMatter`
  * is real since R22 (read-mutate-splice on the properties model, see
- * doProcessFrontMatter), and `generateMarkdownLink` is real since R112
- * (delegates to core formatLink — honors link settings, resolve-back verified).
- * Every OTHER method access records a gap and resolves to undefined, so chained
- * calls do not crash. `then` is excluded so the proxy is not accidentally thenable.
+ * doProcessFrontMatter), `generateMarkdownLink` is real since R112
+ * (delegates to core formatLink — honors link settings, resolve-back verified),
+ * and `getAvailablePathForAttachment` / `getNewFileParent` are real since R-D12
+ * (reuse the core attachment-folder + new-note-location resolvers, so they honour
+ * the same user settings the host uses). Every OTHER method access records a gap
+ * and resolves to undefined, so chained calls do not crash. `then` is excluded so
+ * the proxy is not accidentally thenable.
+ *
+ * `registry` lets getNewFileParent return a live TFolder instance (compat-internal
+ * signature change, not a cross-module contract).
  */
-function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
+function makeFileManager(handle: Omit<AppHandle, "ui">, registry: FileRegistry): unknown {
   // Official signature returns Promise<void>; the rewrite report is dropped.
   // `file` is duck-typed: any TAbstractFile-shaped object with a vault path.
   const renameFile = async (file: { path: string }, newPath: string): Promise<void> => {
@@ -299,6 +307,51 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
     const inner = linktext + (sub ? `#${sub}` : "");
     return al !== undefined && al !== linktext ? `[[${inner}|${al}]]` : `[[${inner}]]`;
   };
+  // R-D12: official d.ts:2967 — "Resolves a unique path for the attachment file
+  // being saved. Ensures that the parent directory exists and dedupes the
+  // filename if the destination filename already exists." We reuse the SAME core
+  // resolvers the host uses: resolveAttachmentDir (Obsidian attachmentFolderPath
+  // semantics) over the live attachmentFolder Store, plus vault.uniquePath for the
+  // collision suffix ("X.png" → "X 1.png"). sourcePath defaults to the active
+  // file's path (core workspace.getActiveFile() is already a path string | null).
+  // The parent dir is created idempotently (try/catch — createNewNote precedent at
+  // core/newNote.ts:84) before the unique-path probe so the caller's write lands.
+  // No case-insensitive dedupe: Obsidian's official behaviour is plain dedupe only
+  // (case-insensitive is layered higher up in core importAttachment, not here).
+  const getAvailablePathForAttachment = async (
+    filename: string,
+    sourcePath?: string,
+  ): Promise<string> => {
+    const notePath = sourcePath ?? handle.workspace.getActiveFile() ?? "";
+    const dir = resolveAttachmentDir(notePath, attachmentFolder.get());
+    const dot = filename.lastIndexOf(".");
+    // No dot, or a leading dot only (".gitignore") → treat the whole name as the stem.
+    const stem = dot > 0 ? filename.slice(0, dot) : filename;
+    const ext = dot > 0 ? filename.slice(dot + 1) : "";
+    if (dir) {
+      try {
+        await handle.vault.createFolder(dir);
+      } catch {
+        /* folder already exists (createFolder is create_dir_all-style) — fine */
+      }
+    }
+    return handle.vault.uniquePath(dir, stem, ext);
+  };
+  // R-D12: official d.ts:2893 — the folder a new file should be created in given
+  // the focused file's path. We map it onto the R89 "default location for new
+  // notes" setting via resolveNewNoteFolder, then resolve a live TFolder from the
+  // registry (getFolder, not get — get() can return a TFile when a same-named file
+  // shadows the path; we always hand back a folder). ensureFolder materialises a
+  // not-yet-created folder so the return is never null — fireCreate=false because
+  // this is a pure QUERY ("where would a new file go"), not a mutation: it must NOT
+  // broadcast a vault create event for a folder that was never created on disk (R174
+  // review: phantom create misleads folder-watching plugins; Obsidian fires nothing).
+  // `newFilePath` (extension-based inference) is not consulted — Geode has a single
+  // new-note location setting, no per-extension routing (recorded gap, no crash).
+  const getNewFileParent = (sourcePath: string, _newFilePath?: string): TFolder => {
+    const folderPath = resolveNewNoteFolder(sourcePath || null);
+    return registry.getFolder(folderPath) ?? registry.ensureFolder(folderPath, false);
+  };
   return new Proxy(
     {},
     {
@@ -307,6 +360,8 @@ function makeFileManager(handle: Omit<AppHandle, "ui">): unknown {
         if (prop === "renameFile") return renameFile;
         if (prop === "processFrontMatter") return processFrontMatter;
         if (prop === "generateMarkdownLink") return generateMarkdownLink;
+        if (prop === "getAvailablePathForAttachment") return getAvailablePathForAttachment;
+        if (prop === "getNewFileParent") return getNewFileParent;
         reportGap("App", `fileManager.${prop}`, "no-op stub — resolves to undefined");
         return async () => undefined;
       },
@@ -559,9 +614,11 @@ export class App {
 
   /* ----- out-of-tier App members: warn-stubs, never a crash (T2 gaps) ----- */
 
-  /** renameFile (R16) + processFrontMatter (R22) are real; other methods gap per access. */
+  /** renameFile (R16) + processFrontMatter (R22) + generateMarkdownLink (R112) +
+   *  getAvailablePathForAttachment/getNewFileParent (R-D12) are real; other methods
+   *  gap per access. */
   get fileManager(): unknown {
-    return (this._fileManager ??= makeFileManager(this._geode.handle));
+    return (this._fileManager ??= makeFileManager(this._geode.handle, this._geode.registry));
   }
 
   /** app.commands (R113): executeCommandById/listCommands/commands over the core
