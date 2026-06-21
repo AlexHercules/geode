@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R166 套件回归（2026-06-21，Tier 7 B1 插件卸载入口 · PluginManager.uninstall · 删 .obsidian/plugins/<dir> · DATA-SAFETY 相邻 · 桌面 probe N/A）
+
+R166 = Tier 7 **B1「插件管理面板·卸载入口」**（删除/卸载部分）。**Gate**：启停对齐 community-plugins.json（R4），grep 无 uninstall→缺。SettingsModal 给 obsidian 社区插件加卸载按钮 → `confirmDelete` → 新 `PluginManager.uninstall(id)`：removeRecord（停运行时）→ persistEnabled(false)（摘 community-plugins.json 钩子，避 core import compat）→ vault.remove(.obsidian/plugins/<dir>)。**v1 scope = 仅 obsidian**（external 无 id→file 映射 defer、builtin 打包、marketplace 越界）。**DATA-SAFETY 相邻**：**对抗评审 9 维 → 1 MAJOR（D1 已修）**：D1 = 删除路径用 manifest id 而非真实 `source.dir`（loader warn 二者可异）→ `dir!==id` 时漏删/错删另一插件配置（红线未破、仍封闭 `.obsidian/plugins/`）→ 修=`RegisterOptions` 加 `installDir`、删 dir 非 id。红线全证伪（dir 校验封死越界双层 + Rust safe_join；删除顺序停运行时优先；confirmDelete 弹窗）。简化门 clean。
+
+新增套件：`r166-e2e.mjs` **18/18**（seeded obsidian 插件 enabled + 卸载按钮仅 obsidian[builtin 无] + 点击卸载→registry 移除 + **vault.remove spy 验封闭 `.obsidian/plugins/<dir>`** + 摘 community-plugins.json + **D1 dir≠id 删 folder 非 id 回归** + guard[builtin/nonexistent no-op] + 无 page error）。**套件矩阵不回退**：r113 10/10（compat boot、本轮动 loader register）·r163 20/20（settings IA、本轮动 PluginList）·r165 9/9（global shim）·typecheck 0/cargo/生产构建。**桌面 probe N/A**（orchestration 平台无关、e2e 验路径+guard；fs 删用既有 vault.remove→vault_delete[Rust safe_join + remove_dir_all]、r42/r140 delete probe 已桌面覆盖）。**v1 defer**：external/builtin 不可卸载、marketplace 浏览/安装。
+
 ### R165 套件回归（2026-06-21，Tier 7 B3③ `global` 垫片 · loader 注入 globalThis.global · 商业主轴 compat · 桌面 probe N/A）
 
 R165 = Tier 7 **B3③「`global` 垫片」**（B3-附 表 ③ 出队）。**Gate**：Node-targeting 插件 bundle（obsidian-git 等）引用 Node 全局 `global` 作自由变量，`loader.ts` `new Function("require","module","exports", code)` 求值时崩 `Can't find variable: global`。修=`runLoad()` 在 moment 注入后加 `(globalThis as {global?:unknown}).global ??= globalThis`（求值前、幂等、cast 绕 TS7017）。**对抗评审 9 维 → 0 confirmed defect**；**最关键 = 假绿排除**（reviewer 实测 vite 无 global define/polyfill、`about:blank` global undefined、删 shim 即 `ReferenceError`、装即解 → shim 是唯一修复源）+ 副作用证伪（lodash/mermaid `typeof global` 守卫前后同解 window）+ 不垫 process/Buffer 取舍正确。简化门 skip（单文件 1 行）。bonus：native 插件 eval 也受益。

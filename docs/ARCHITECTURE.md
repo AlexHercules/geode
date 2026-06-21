@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 166 additions — Tier 7 B1「插件管理面板·卸载入口」（PluginManager.uninstall · 仅 obsidian 社区插件 · 删 .obsidian/plugins/<dir> · DATA-SAFETY 相邻）【As-built v0.163】
+
+> **状态：As-built（已交付）。** 对抗评审 + data-safety 9 维 → **1 MAJOR（D1，已修）**：D1 = uninstall 用 `manifest.id` 拼删除路径，但磁盘文件夹是 `source.dir`，loader 明确 warn 二者可不同 → `dir!==id` 时桌面删不存在路径（静默失败、reload 复活）或**错删另一个文件夹名==manifest-id 的插件配置**（红线未破：仍封闭在 `.obsidian/plugins/` 内、不碰用户 .md，故 major 非 critical）→ 修=`RegisterOptions` 加 `installDir`、loader 传 `source.dir`、uninstall 删 `record.options?.installDir ?? id` 并校验 dir（非 id）。**红线核查全证伪**：id/dir 校验封死越界（空串/`/`/`\`/任意位置 `..`/前导 `.` 全 REJECT；双层防护 = 前端正则 + Rust `safe_join` 拒 `..`/绝对路径）；删除顺序 removeRecord（停运行时）→ persistEnabled(false)（摘 community-plugins.json）→ vault.remove（删目录），`record` const 在 removeRecord 后仍持有引用安全；confirmDelete 弹窗（永久删除/含配置文案）。简化门 clean。验收：r166-e2e 18/18（含 **D1 dir≠id 回归** + vault.remove spy 验删除路径封闭 + guard）、回归 r113 10/10·r163 20/20·r165 9/9·typecheck 0·cargo·生产构建。**桌面 probe N/A**（orchestration 平台无关、e2e 验路径+guard；fs 删用既有 `vault.remove`→`vault_delete`[Rust safe_join + remove_dir_all]、r42/r140 delete probe 已桌面覆盖）。
+>
+> **Gate**：启停已对齐 community-plugins.json（R4），grep 无 uninstall→删除/卸载缺。基础设施全在（vault.remove 递归、unregister、Rust safe_join、confirmDelete、persistEnabled 钩子）。**两缺口**：external 插件无 id→file 映射（`GeodePlugin` 无路径字段、loadExternal 丢弃 file.name）→ defer；community-plugins.json 摘 id 走 `persistEnabled(false)` 钩子（避免 core import compat）。**v1 scope = 仅 obsidian（社区）插件**（id=dir、零契约扩展[除 D1 的 installDir]、零新 Rust）。
+
+**契约（加性 · core 新方法 + UI 按钮）**：
+- **`core/plugins.ts`**：`RegisterOptions` 加 `installDir?: string`（R166：磁盘文件夹名，可异于 manifest id）。新 `async uninstall(id)`：① `record.source!=="obsidian"` 早返；② `dir = options?.installDir ?? id` + 校验单段安全路径（Memory adapter 无 safe_join）；③ `removeRecord(id)`（停运行时）；④ `record.options?.persistEnabled?.(false)`（摘 community-plugins.json）；⑤ `await this.app.vault.remove(\`.obsidian/plugins/${dir}\`)`。
+- **`compat/obsidian/loader.ts`**：obsidian register 传 `installDir: source.dir`。
+- **`features/settings/SettingsModal.tsx`**：PluginList item 把 toggle 包进 `.plugin-actions` div + obsidian-only 卸载按钮（`confirmDelete`→`app.plugins.uninstall(id)`、inline trash svg[镜像 reload-plugins 先例]、`data-testid=plugin-uninstall-<id>`）。import `@core/confirm`。
+- **`dict.views.ts`**：+`settings.uninstallPlugin`/`uninstallConfirmTitle`/`uninstallConfirm`（永久删除/含配置文案）EN+ZH。**`settings.css`**：`.plugin-actions`/`.plugin-uninstall-btn`（hover `--danger`）。
+- **r166-e2e**（18）：seeded obsidian 插件 enabled + 卸载按钮仅 obsidian（builtin 无）+ 点击卸载→registry 移除 + **vault.remove spy 验封闭 `.obsidian/plugins/<dir>`** + 摘 community-plugins.json + **D1 dir≠id 删 folder 非 id** + guard（builtin/nonexistent no-op）。
+
+**data-safety**：唯一删 = `.obsidian/plugins/<dir>`（封闭在 `.obsidian/`、绝不碰用户 .md）；dir 校验单段（双层 + Rust safe_join）；removeRecord 先停运行时防 data.json 竞态；真删走 confirmDelete 弹窗。
+
+**v1 nuance / defer**：仅 obsidian 社区插件可卸载（external `.geode` dev 脚本无 id→file 映射、builtin 打包）；不做 marketplace 浏览/安装（需网络/越界）；卸载即删 data.json 用户配置（文案已提示）。
+
+---
+
 ## Round 165 additions — Tier 7 B3③「`global` 垫片」（loader 注入 globalThis.global · 解锁 Node-targeting 插件 bundle · 商业主轴 compat · 一行）【As-built v0.162】
 
 > **状态：As-built（已交付）。** 对抗评审 9 维 → **0 confirmed defect（clean）**。**最关键证伪 = 假绿风险已排除**（reviewer 实测：`vite.config.ts` 无 `define`/global polyfill、`package.json` 零 global-polyfill 依赖、`about:blank` `typeof window.global==="undefined"`、删 shim 后 loader 的 exact eval 真抛 `ReferenceError: global is not defined` → **shim 是唯一修复源、非假绿**）。副作用全证伪（dist 里 lodash/mermaid 的 `typeof global` 守卫在 shim 前后都解析到同一 `window` 对象、零行为变化；Geode 源码无 `window.global`/`typeof global` 假设其不存在的读取）。process/Buffer 不垫的取舍正确（垫 process 会让 bundle 的 `typeof process!=="undefined"` 分支误判走 Node 路径）。简化门 skip（单文件 1 行代码 + 注释）。验收：r165-e2e 9/9、回归 r113 10/10（compat boot）·r116 9/9·typecheck 0·cargo·生产构建。**桌面 probe N/A**（纯 JS 全局赋值平台无关、WKWebView 语义一致；真实 obsidian-git 完整功能需 isomorphic-git+fs 另评）。**bonus**：`core/plugins.ts` native 插件 eval 也吃到此 shim（free `global` 现亦可解、纯加性）。
