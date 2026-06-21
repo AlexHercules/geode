@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 164 additions — Tier 7 C2「编辑页内 inline title 改名」（可编辑 inline title → renameWithLinkUpdate · 复用 R16 vetted 改名引擎 · DATA-SAFETY 轮）【As-built v0.161】
+
+> **状态：As-built（已交付）。** 对抗评审 + data-safety 8 维 → **1 confirmed minor（D1，已修）**：D1 = inline 改名只 `console.warn` skipped links 而 Explorer 弹用户 notice → 桌面用户看不到 console、metachar 改名致链接 dangling 静默（**非数据丢失**，仅 integrity-visibility）→ 修=自写 `showLinkUpdateNotice`（镜像 Explorer，feature-local 分层禁跨 import）+ commit 改 `showLinkUpdateNotice(t("explorer.linkUpdateSkipped",{count}))`。**关键 data-safety 澄清**：reviewer 证 rename-over-existing **有三重防护**（validate case-insensitive dup 守卫 + Memory adapter `vault.ts` throw target-exists + Rust `main.rs` `to.exists()` 检查），且 `renameWithLinkUpdate` 抛错被 catch → **本轮零数据丢失路径、四底线守住**。简化门 clean（自纠 1 处：EditorPane 文档注释被新组件插入后脱节→移回函数上方）。验收：r164-e2e 16/16（含内容保全 + 链接改写 + dup 不覆盖 + 空名/dup 校验）、回归 r70 23/23（链接改写）·r28 23/23（rename）·r94 14/14（inline title 显示）·typecheck 0·cargo·生产构建。**桌面 probe N/A**（inline title UI 平台无关 DOM；fs 写经 R16 `renameWithLinkUpdate`=Explorer 已用 vetted 路径、r70-probe 已桌面覆盖）。
+>
+> **Gate**：explorer 确认 inline title（R94）display-only（`EditorPane.tsx` 注释「editing → rename is deferred」）。`renameWithLinkUpdate`（R16）+ Explorer RenameInput/validateName/commitRename 模式全在。**唯一缺口 = 让 inline title 可编辑**。
+
+**契约（加性 · 单文件主改 · 复用 R16 改名引擎绝不新起写路径）**：
+- **`features/editor/EditorPane.tsx`**：① `inlineTitleEl` 从静态 `<div>{tab.title}</div>` → `<InlineTitle tab={tab}/>`；② 新 `InlineTitle`：display = `<span className="inline-title-text" role=button onClick={进编辑}>` + edit = `<InlineTitleInput>`；**`.inline-title` div 两态常驻**（R94：cm-host 前置兄弟不增删、不重挂 CM）；`validate` **镜像 Explorer.validateName**（非空 + 无 `[\\/]` + case-insensitive 同目录 sibling 去重排除自身，**= rename-over-existing 的 UX 层防护**）；`commit` 拼 `newPath`、`if(newPath===path)return`、`await renameWithLinkUpdate({vault,metadata,documents}, path, newPath)`（其内部 flush 脏正文→改写链接→`vault.rename`→`file:renamed`→`retargetFileTab` 自动跟 tab）；skipped→notice。③ 新 `InlineTitleInput`（受控 `<input>` 镜像 RenameInput 自写副本：focus+select、`done` ref 防双提交、Enter/Esc/blur、is-invalid）。④ 自写 `showLinkUpdateNotice`（D1）。
+- **`features/editor/editor.css`**：`.inline-title-text`（cursor:text）/`.inline-title-input`（`font:inherit` 继承 H1 + 覆盖全局 `input{}` reset 成无框透明）/`.is-invalid`（--danger）。
+- **`core/i18n/dict.views.ts`**：+`editor.renameTitle`「Click to rename / 点击重命名」EN+ZH。复用 `explorer.linkUpdateSkipped`。
+- **复用**：`renameWithLinkUpdate`(@core/linkRewrite)/`findFolder`(@core/explorerMove)/`parentPath`+`basename`(@core/vault)；改名写口、`file:renamed`→tab 跟随、三重 dup 防护全不动。
+- **r164-e2e**（16）：inline title 显示 basename + 点击进编辑 input 预填 + Escape 取消 + 空名/dup is-invalid 不 commit + commit 改名+tab 跟随+内容保全+链接改写 + 同名 no-op。
+
+**data-safety**：唯一写 = 复用 R16 vetted `renameWithLinkUpdate`（flush-before-rename A.3、三重 rename-over-existing 防护、catch 兜底）；inline title `<input>` 单行无换行污染；对抗输入（元字符/CJK/空）经 validate + R16 引擎 post-rewrite reassert。
+
+**v1 nuance / defer**：case-only 改名（macOS 大小写不敏感 FS）经引擎 `to.exists()` throw → 静默 no-op（既有引擎/Explorer 共性、非本轮引入）；commit 后不恢复编辑器焦点（同 Explorer，cosmetic）；skipped-link notice 与 QuickSwitcher/Explorer 是 3 份变体（testid 不同），未来可参数化抽 core。
+
+---
+
 ## Round 163 additions — Tier 7 B2「插件设置：一个插件一个 Tab」（SettingsModal 左栏 per-plugin IA · 复用 settingsSections Store + 命令式 mount/unmount · 纯前端零写）【As-built v0.160】
 
 > **状态：As-built（已交付）。** 对抗评审 9 维 → **0 confirmed defect（clean）**：命令式 mount/unmount 生命周期正确（`key={pluginTab.id}` 切插件真卸载+真挂载、`PluginSettingsBody` 函数体字节未变只换调用位置、mountedRef 防 StrictMode 双挂仍成立）；section 字符串协议无碰撞（固定 id 无冒号、`plugin:<sectionId>` 永不等于固定 id、`find` 去 startsWith 守卫后仍正确）；fallback effect 无限循环证伪（reset 后 section 不再 `plugin:` 前缀、effect 空跑）；enabled 过滤 + revision 实时增减正确；删 crammed 组零回归（列表渲染未动、无 orphan import）；死 CSS 删除安全（5 条 orphan 规则全仓零引用、`.plugin-group-*` 仍被组头用未误删）；分层无 compat import；a11y/i18n/data-safety 全证伪（纯前端零写路径）。简化门：1 减法（`pluginTab` 三元守卫→裸 `.find`，-2 行）+ 删 5 条本轮 orphan 的死 CSS。验收：r163-e2e 20/20（含 cross-plugin 切换 + live-add + fallback）、回归 r94 14/14·r88 13/13·r92 21/21·typecheck 0·cargo·生产构建。**桌面 probe N/A**（settings modal DOM IA、平台无关、无 fs/平台分支）。

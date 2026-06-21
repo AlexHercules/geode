@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R164 套件回归（2026-06-21，Tier 7 C2 inline title 改名 · 复用 R16 renameWithLinkUpdate · DATA-SAFETY 轮 · 桌面 probe N/A）
+
+R164 = Tier 7 **C2「编辑页内 inline title 改名」**。**Gate**：explorer 确认 inline title（R94）display-only，`renameWithLinkUpdate`（R16）+ Explorer RenameInput 模式全在，唯一缺口=让 inline title 可编辑。inline title 改可点击元素，提交走 `renameWithLinkUpdate`（**R16 vetted、绝不新起 vault.rename**：内部 flush 脏正文→改写链接→改名→`file:renamed` 自动跟 tab）。validate 镜像 Explorer.validateName（case-insensitive dup 守卫）。**DATA-SAFETY 轮**：**对抗评审 + data-safety 8 维 → 1 confirmed minor（D1 skipped-link notice 缺失，已修自写 notice）**；**关键澄清 = rename-over-existing 三重防护**（validate dup 守卫 + Memory adapter throw + Rust `to.exists()` 检查）+ renameWithLinkUpdate 抛错 catch → **零数据丢失路径、四底线守住**。简化门 clean（自纠注释脱节）。
+
+新增套件：`r164-e2e.mjs` **16/16**（inline title 显 basename + 点击进编辑 input 预填 + Escape 取消 + 空名 is-invalid + dup is-invalid + invalid Enter 不改名/不覆盖 dup + commit 改名+**tab 跟随**+**内容保全**[无数据丢失]+**链接改写** `[[orig]]→[[renamed]]` + 同名 no-op + 无 page error）。**套件矩阵不回退**：r70 23/23（md 链接改写、本轮 onClick 走它）·r28 23/23（rename）·r94 14/14（inline title 显示，本轮扩展）·typecheck 0/cargo/生产构建。**桌面 probe N/A**（inline title UI 平台无关 DOM；fs 写经 R16 `renameWithLinkUpdate`=Explorer 已用 vetted 路径、r70-probe 已桌面覆盖）。**v1 defer**：commit 后焦点不回编辑器、case-only 改名引擎 throw no-op。
+
 ### R163 套件回归（2026-06-21，Tier 7 B2 插件设置「一个插件一个 Tab」· SettingsModal 左栏 per-plugin IA · 桌面 probe N/A）
 
 R163 = Tier 7 **B2「插件设置：一个插件一个 Tab」**。**Gate**：explorer 确认机制全在（compat `addSettingTab`→core `addSettingsSection`→`settingsSections` Store + `PluginSettingsBody` 命令式挂载），唯一缺口 = IA（所有插件设置挤 Plugins 分组折叠卡片堆，非 Obsidian 左栏每插件一项）。改 SettingsModal 左栏为每个 enabled 插件 settingsSection 生成独立 nav 条目，点击右栏只渲该插件 `display()`（复用 `PluginSettingsBody`，`key` 保证切插件真卸载/挂载）。**纯前端 IA 重排零写**。**对抗评审 9 维 → 0 confirmed defect**（命令式 mount/unmount 生命周期、section 字符串协议无碰撞、fallback effect 无循环、enabled 过滤 + revision 实时增减、删 crammed 组零回归、死 CSS 删除安全、分层无 compat import）。简化门 1 减法（`pluginTab` 守卫→裸 find）+ 删 5 条 orphan 死 CSS。
