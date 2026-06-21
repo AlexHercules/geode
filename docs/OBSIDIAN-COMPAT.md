@@ -236,7 +236,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **~~FileManager.getAvailablePathForAttachment + getNewFileParent~~ + adapter.stat**（vault-files，stub，med）— ~~getAvailablePathForAttachment/getNewFileParent~~ ✅ **R174**（接进 makeFileManager Proxy、复用 uniquePath/resolveAttachmentDir/resolveNewNoteFolder）；**剩 adapter.stat ⏸**=须新 Rust fs::metadata + 扩 VaultAdapter（defer）。paste-image/QuickAdd/Excalidraw 去重附件路径。
 - **Setting.addColorPicker + ColorComponent**（ui-components，stub/missing，med）— 现 reportGap 静默丢控件。Style-Settings 邻近、callout/tag 颜色、主题微调插件用。约 120 行组件（hex↔rgb↔hsl + 原生 `<input type=color>`）即闭合。
 - **registerObsidianProtocolHandler 派发 + registerExtensions**（lifecycle/protocol，stub，med）— Geode 已有原生 obsidian:// 管线（core/obsidianUri.ts + features/editor/obsidianUriHandler.ts）但只跑内置 open/new/search；插件注册的自定义 action（Advanced URI、QuickAdd capture URI）不派发。registerExtensions 让 Excalidraw `.excalidraw`/图片/PDF 查看器关联视图。
-- **Workspace.getMostRecentLeaf + setActiveLeaf + openLinkText eState 子路径**（workspace，missing/partial，med）— Templater/QuickAdd「开到右 pane」+ 程序化 open 后聚焦 + #heading/^block 子路径滚动（现 openLinkText 忽略 openViewState）。
+- ~~**Workspace.getMostRecentLeaf + setActiveLeaf + openLinkText eState 子路径**（workspace，missing/partial，med）~~ — ✅ **R175 完成**（openLinkText parseLinktext+resolveSubpath.slice(1)→requestReveal 滚动 #heading/^block；getMostRecentLeaf=activeLeaf facade；setActiveLeaf=sidebar reveal/no-op；r175-e2e 10/10）。Templater/QuickAdd 导航。
 - **~~getLanguage + getIcon + getIconIds + Platform.resourcePathPrefix~~ + App.lastEvent**（utils/lifecycle，missing/stub，med）— ~~getLanguage/getIcon/getIconIds/Platform.resourcePathPrefix~~ ✅ **R174**（locale.get() / getIconSvg→SVGSVGElement / BUILTIN+registered keys / 占位 ""）；**剩 App.lastEvent ⏸**=须 app-shell 全局事件捕获（越 compat 自包含、defer）致 Mod/Shift 点击 Keymap.isModEvent 不识别。
 
 #### 全新 API 族（T3 / out-of-scope，只记录不入队，防下轮重发现）
@@ -250,6 +250,14 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R175 套件回归（2026-06-22，Tier 8 D15「Workspace 导航：openLinkText eState 子路径滚动 + getMostRecentLeaf + setActiveLeaf」· compat workspace.ts · 复用 R14 reveal 基建 + R171 parseLinktext · 桌面 probe N/A）
+
+R175 = 第八梯队 **D15**（第八梯队最后一个纯前端中型项、零新依赖）。**Gate（R160）**：三子项全缺非误判（openLinkText 实现存在但 `.split("#")[0]` 丢 subpath + 忽略 openViewState）。**实现**：openLinkText 用 `parseLinktext(linktext.split("|")[0])` 拆 {path,subpath} + openFile 后 `resolveSubpath(resolvedPath, subpath.slice(1))`[去前导 `#`、保 `^`]→`if(span)`→`requestReveal(resolvedPath, from, to)`（逐字镜像 vetted `wikilinks.ts:29-38`、**vault.create 未解析分支字节未动**）；getMostRecentLeaf=返 activeLeaf facade；setActiveLeaf=sidebar→reveal/否则 no-op。**对抗评审 8 维 → 0 confirmed defect（clean）+ 红线全证伪**：# 形 slice(1) 只吃 `#` 保 `^`、reveal 用 resolvedPath、openFile 后时序对齐 R14 vetted、vault.create 字节未变（r71 17/17 证）、纯 subpath 自链接早退（nuance）、新建空文件 resolveSubpath 返 null 不 reveal、分层 compat→core 无 features import、两层 shim 共享同一 core Workspace。简化门 **删 1 行**（void openViewState no-op）。
+
+新增套件：`r175-e2e.mjs` **10/10**（getMostRecentLeaf 非 null+object + openLinkText 无 subpath 开正确文件 + **#heading subpath 经 revealTarget Store 捕获断言 path 匹配 + 数值 span**[from>0,to>=from] + setActiveLeaf 不抛 + 无 page error）。**套件矩阵不回退**：r71 17/17（md 链接导航、openLinkText 改动验证）·r107 12/12（wikilink heading 补全）·r64 15/15（outline scroll-to-heading reveal 机制）·r174 14/14（同 fixture）·r113 10/10·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯导航/reveal 编排、reveal 滚动几何经 r64-probe[同 requestReveal 路径]覆盖、openLinkText 平台无关）。**v1 nuance**：纯 subpath 自链接 `#h` 早退不导航；openViewState 不消费 eState（subpath 来自 linktext 主源）；setActiveLeaf 非 sidebar no-op（单 active-pane facade、recorded deviation）；e2e 未测 `#^blockid`（slice(1) 保 `^`→resolveSubpath block 分支逻辑正确、下轮可补断言）。
+
+**🛑🛑 第八梯队【可纯自主 compat 完成的项全部清空】（R167→R175 九轮零回归）→ loop 在 R175 后【暂停、交回用户定大方向】**：剩余 D6 lucide（硬边界#5 新依赖）/ D5 getResourcePath（Tauri asset、Rust/host）/ D8 editorInfoField 等 CM6 StateField（跨层 features/editor 喂值）/ D12-7 adapter.stat（Rust fs::metadata）/ D16-4 App.lastEvent（app-shell 事件捕获）/ D14 protocol 派发（host）—— 每项须用户拍板或跨层/host 大集成；C3/C1/C6/C7/C8 须先确认诉求。
 
 ### R174 套件回归（2026-06-21，Tier 8 D12+D16 中型纯 API 打包 · FileManager.getAvailablePathForAttachment/getNewFileParent + getLanguage + getIcon/getIconIds + Platform.resourcePathPrefix · compat 复用既有 core/compat · 桌面 probe N/A）
 
