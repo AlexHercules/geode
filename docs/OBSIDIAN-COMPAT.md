@@ -221,7 +221,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 **高价值（零新依赖、流行插件直接依赖）**
 - ~~**parseLinktext**（metadata，missing）~~ — ✅ **R168 完成**（util.ts，不 trim、subpath 含 `#`，对齐 Obsidian 真实源、与 getLinkpath 分立不合并）。Dataview/Templater/链接处理插件普遍调用。
-- **prepareFuzzySearch + prepareSimpleSearch**（render-search，missing）— Dataview/QuickAdd/多数 fuzzy picker 直接调用的模块函数。ui.ts:483 有私有 fuzzyMatch 可上浮升级。
+- ~~**prepareFuzzySearch + prepareSimpleSearch**（render-search，missing）~~ — ✅ **R171 完成**（ui.ts：prepareFuzzySearch curry 私有 fuzzyMatch、prepareSimpleSearch 新 word-substring；+ SearchMatches/SearchMatchPart 类型别名；r171-e2e 14/14）。Dataview/QuickAdd 直接调用。
 - ~~**AbstractInputSuggest&lt;T&gt;**（suggest-keymap，missing）~~ — ✅ **R167 完成**（=第七梯队 B3①/第八梯队 D4）：新类 extends 既有 `PopoverSuggest`、`textInputEl.getBoundingClientRect()` 自包含浮层（不复用 manager 绑死 CM6 坐标的 position()）、复用 `.geode-suggest-popup` 样式=零 CSS/零依赖。Templater/QuickAdd/Periodic Notes 的 FolderSuggest/FileSuggest import 不再 module-eval 抛错。r167-e2e 25/25。
 - **Vault.getResourcePath / DataAdapter.getResourcePath**（vault-files，stub，L 高）— 现返回 vault 相对路径而非可加载 URI；全仓无 Tauri asset-protocol/convertFileSrc 桥。Excalidraw/image-toolkit/PDF++/媒体嵌入构建 `<img>/<embed> src` 静默失败。
 - **setIcon Lucide 覆盖**（utils-icons，partial，L 高）— 仅 12 个手绘内置图标，其余 Lucide 名渲染空 placeholder（不崩但无字形）。生态绝大多数 ribbon/command 图标不可见。
@@ -250,6 +250,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R171 套件回归（2026-06-21，Tier 8 D3「prepareFuzzySearch/prepareSimpleSearch 模块级搜索函数」· compat ui.ts · 复用私有 fuzzyMatch · 桌面 probe N/A）
+
+R171 = 第八梯队 **D3**（curry 既有私有 fuzzyMatch + 新薄 word-substring、零新依赖）。**Gate（R160 教训）**：compat 缺两者（grep 零）；ui.ts:483 私有 `fuzzyMatch(text,query):SearchResult|null`（substring 优先、否则字符 fuzzy、matches 已 `[start,end)`）+ `SearchResult{score,matches}`（ui.ts:472 已导出）。**实现**：`prepareFuzzySearch(q)=(text)=>fuzzyMatch(text, q.trim())`（同模块 curry 私有、不导出 fuzzyMatch）；`prepareSimpleSearch(q)`=token 按空白拆、每 token 必为子串否则 null、matches=[start,end) 按 start 排、`score-=at`；加 `SearchMatches`/`SearchMatchPart` 类型别名。**对抗评审 7 维 → 0 confirmed defect（clean）**：curry 无状态污染（prepared fn 多 text 复用）；**prepareSimpleSearch 重复/重叠/多次出现三边角全为可接受 v1 nuance**（renderMatches 尚未实现=无 consumer 受损，留待实现时在其内部去重/合并区间）；matches `[start,end)` 与 d.ts SearchMatchPart 一致；score 方向与 fuzzyMatch 一致（高=好）；元字符/CJK 安全（indexOf 字面量、无 ReDoS）；`fuzzyMatch` 仍私有 + `SearchResult`/`FuzzySuggestModal` 未动。简化门 **clean/skip**（纯加性 2 薄函数 + 2 类型别名 / ≤2 文件 / 无 existing-code 重构）。
+
+新增套件：`r171-e2e.mjs` **14/14**（fuzzy substring 快路径 matches `[[0,3]]` + 非连续字符命中[`fb`→`foobar`] + 不匹配返 null + **prepared fn 可跨 text 复用** + simple 全 token 命中 + matchCount===2 + **matches 按 start 排序** + 缺 token 返 null + 两导出皆 function + fixture 仍 enabled + 无 page error）。**套件矩阵不回退**：r170 12/12（D9 math，同 fixture 文件）·r168 16/16·r113 10/10·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 JS 字符串匹配、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167-R170）。**v1 nuance**：prepareSimpleSearch 是 word-substring（非 Obsidian 完整加权算法、够多数 picker 用）；后续实现 renderMatches 时在其内部去重/合并重叠区间。
 
 ### R170 套件回归（2026-06-21，Tier 8 D9「数学渲染 API 簇 renderMath/finishRenderMath/loadMathJax」· compat · 复用 core loadKatex · 桌面 probe N/A）
 

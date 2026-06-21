@@ -71,6 +71,55 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 171 additions — Tier 8 D3「`prepareFuzzySearch`/`prepareSimpleSearch` 模块级搜索函数」（compat · curry 既有私有 fuzzyMatch + 新薄 word-substring 匹配 · 零新依赖）【As-built v0.168】
+
+> **状态：As-built（已交付）。** 对抗评审 7 维 → **0 confirmed defect（clean）**。**关键证伪（含边角实测）**：① prepareFuzzySearch curry 无状态污染（`q=trim` prepare 段算一次、闭包捕获、同 prepared fn 多 text 复用，`fSub("afoo")≠null && fSub("zzz")===null` 实测）；trim 贴近 Obsidian（前后空白不敏感）+ 使 substring 快路径命中；② prepareSimpleSearch 边角全为**可接受 v1 nuance 非缺陷**——重复 token `"foo foo"`→`[[0,3],[0,3]]`、重叠 token、同 token 多次只取首 indexOf——契约已记「word-substring 简化」，且**唯一文档化 consumer `renderMatches` 尚未实现**（全仓零命中）→ 无 consumer 因重复/重叠区间崩；后续实现 renderMatches 时在其内部去重/合并区间（标准做法）；③ matches `[start,end)` 与 fuzzyMatch/d.ts SearchMatchPart 一致；④ score 方向（`score-=at`，越靠前越接近 0=越高）与 fuzzyMatch 高分=好一致；⑤ 元字符/CJK 安全（`indexOf` 字面量、无 ReDoS）；⑥ `fuzzyMatch` 仍私有、`SearchResult`/`FuzzySuggestModal` 字节未动；⑦ 无意写路径全无。简化门 **clean/skip**（纯加性 2 薄函数 + 2 类型别名 / ≤2 文件 / 无 existing-code 重构）。验收：r171-e2e **14/14**（fuzzy substring 快路径 matches `[[0,3]]` + in-order 非连续字符命中 + 不匹配返 null + 可复用 + simple 全 token 命中 + 缺 token 返 null + matches 按 start 排序）、回归 r170 12/12·r168 16/16·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS 字符串匹配、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167-R170）。
+>
+> **Gate（R160 教训：explorer 实查现状）**：compat 缺 prepareFuzzySearch/prepareSimpleSearch（grep 零命中）；`ui.ts:483` 已有**私有** `fuzzyMatch(text, query): SearchResult | null`（substring 优先、否则 in-order 字符 fuzzy、`matches: Array<[number,number]>` 已是 `[start,end)` 区间），`SearchResult{score, matches}`（ui.ts:472）已定义并经 barrel 导出（index.ts:90 `type SearchResult`）。**关键复用**：`prepareFuzzySearch(query)` = curry 既有 fuzzyMatch（同模块直接访问私有函数、无需导出 fuzzyMatch）；matches 区间语义已对齐 Obsidian `SearchMatchPart=[from,to]`（d.ts:5587）。
+>
+> **商业主轴价值**：Dataview/QuickAdd/多数 fuzzy picker 直接调用这两个模块函数做候选过滤/高亮。
+
+**契约（加性 · ui.ts 内 · 复用私有 fuzzyMatch + 新薄匹配）**：
+
+```ts
+// src/compat/obsidian/ui.ts — SearchResult(472)/fuzzyMatch(483) 附近新增
+export type SearchMatchPart = [number, number];     // [from, to)（对齐 d.ts:5587）
+export type SearchMatches = SearchMatchPart[];
+// SearchResult 既有不动（其 matches: Array<[number,number]> 与 SearchMatches 结构等价）
+
+export function prepareFuzzySearch(query: string): (text: string) => SearchResult | null {
+  const q = query.trim();                           // prepare 步：trim 一次（使 substring 快路径可命中）
+  return (text) => fuzzyMatch(text, q);             // curry 既有私有 fuzzyMatch
+}
+export function prepareSimpleSearch(query: string): (text: string) => SearchResult | null {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return (text) => {
+    if (tokens.length === 0) return { score: 0, matches: [] };
+    const lower = text.toLowerCase();
+    const matches: Array<[number, number]> = [];
+    let score = 0;
+    for (const token of tokens) {                   // 每个 token 必须作为子串出现
+      const at = lower.indexOf(token);
+      if (at === -1) return null;
+      matches.push([at, at + token.length]);
+      score -= at;                                  // 越靠前分越高
+    }
+    matches.sort((a, b) => a[0] - b[0]);
+    return { score, matches };
+  };
+}
+```
+
+- **barrel `index.ts`** ui 块：加 `prepareFuzzySearch`/`prepareSimpleSearch` + `type SearchMatches`/`type SearchMatchPart`（`SearchResult` 已导出）。
+
+**文件所有权（owner A 实现 + owner B 测试 · fixture MAIN_JS 运行时字符串、零编译耦合 → 全并行）**：
+- **Owner A**：`src/compat/obsidian/ui.ts`（2 函数 + 2 类型别名）+ `src/compat/obsidian/index.ts`（barrel）。**绝不碰** 既有 `fuzzyMatch`/`SearchResult`/`FuzzySuggestModal`。
+- **Owner B**：`src/compat/obsidian/fixture.ts`（onload 调 prepareFuzzySearch/prepareSimpleSearch 验 substring/fuzzy 命中 + 不匹配返 null + matches 区间，写 `<div data-testid="fixture-d3search-results">` JSON）+ `.calibration/r171-e2e.mjs`。
+
+**data-safety**：纯函数（字符串匹配返 {score,matches}）；零 vault/.md/editor 写 → **非 data-safety 轮**。
+
+**v1 nuance / defer**：prepareSimpleSearch 是 word-substring（每 token 必现、越靠前越高、按 start 排序），非 Obsidian 完整加权算法（够多数 picker 用）；prepareFuzzySearch trim query（prepare 步使 substring 快路径命中）；fuzzyMatch 保持私有（不导出，prepareFuzzySearch 同模块 curry）。D9 sanitizeHTMLToDom（安全敏感）、D6 setIcon Lucide 留后续轮。
+
 ## Round 170 additions — Tier 8 D9「数学渲染 API 簇 `renderMath`/`finishRenderMath`/`loadMathJax`」（compat · 复用 core `loadKatex` 已打包 KaTeX · 零新依赖）【As-built v0.167】
 
 > **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）**。**关键证伪**：① **sync/async 队列竞态**=`renderMath` 在**同步段** `pending.push(promise)` 再 `return el` → consumer `el=renderMath();append;await finishRenderMath()` 后 KaTeX 必已 typeset 进 el（push 早于任何 finishRenderMath 的 `splice(0)`、无漏 await；交错 render→finish→render→finish 符合 Obsidian 全局 flush 队列模型）；② **永不抛/永不 reject**（throwOnError:false + `.catch` 设 source fallback resolve void → `Promise.all` 不 reject；loadKatex 失败 core 清缓存可重试）；③ **DoS/XSS 安全**（`maxSize:100` rule-bomb 防护与 embeds.ts 一字一致；`source` 经 `textContent` 非 innerHTML、KaTeX `output:"html"` 自转义）；④ **队列内存**=`pending` 增长的是已 resolve 的 `Promise<void>`（cheap、非真泄漏，Obsidian 队列等价 nuance）；⑤ 契约逐字匹配 d.ts:3193/3854/5423；⑥ 无意写路径全无（唯一 DOM 写是 detached `<span>` 的 textContent/katex.render）。简化门 **clean/skip**（新 ~25 行薄适配 / ≤2 文件 / 无 existing-code 重构）。验收：r170-e2e **12/12**（renderMath 同步返元素+class + 非法 LaTeX 不抛 + finishRenderMath resolve + `.katex` 子元素真实存在 + is-loaded + loadMathJax resolve）、回归 r169 11/11·r168 16/16·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS + DOM 标准 API + 动态 import KaTeX、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167/R168/R169）。
