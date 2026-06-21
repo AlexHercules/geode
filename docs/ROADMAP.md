@@ -1282,6 +1282,57 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 > **第六梯队取用顺序建议**：高 ROI 先取 **㊵ 图谱设置**（用户可见度高）、**㊺ 外观补全**（强调色/系统主题日常高频）、**㊸ 搜索 UI**、**㊿ 标签页右键菜单**（交互主入口）。**㊶ 含 strict line breaks 动 markdown.ts → data-safety + 字节级套件**；㊼ cssclasses 纯读 / ㊽ 新文件位置纯前端、Reveal-in-Finder 加 Rust 只读命令——多为只读/前端。**远期 / 需用户拍板（不在本表）**：导入器 Importer（Evernote/Notion/Roam，大工程）· 社区主题应用内浏览器 · Web viewer / Audio recorder / Bases（新能力，硬边界 #5）。
 > **⚠️ 设置「重复」纠误（用户提问）**：Templates`{文件夹,日期格式,时间格式}` / Daily`{新文件位置,日期格式,模板位置}` / Unique`{新文件位置,前缀格式,模板位置}` 三区字段看似重复——**code-verify（`SettingsModal.tsx:481/531/581`）确认忠实于 Obsidian**（三个独立核心插件各一套设置）。语义不同：各「位置」指向不同用途文件夹；Templates 的「日期格式」管 `{{date}}` **变量**、Daily 的管文件**名**。**不应合并**（合并即偏离 Obsidian）。真实缺口是 Geode 这些 setting-item **缺 `setting-desc` 说明文字**（Obsidian 每项有澄清描述）→ 看似重复；**补描述即可**（归入 ㊶ 设置面板补全的顺手项）。另：Obsidian 有**全局**「新文件位置」（Files&Links），与各插件位置是**分层**关系（全局默认 + 插件覆盖）而非冗余——Geode 缺此全局项（见 ㊽）。
 
+#### 第七梯队 — 用户实测体验缺口（2026-06-21 用户登记）
+
+> **登记口径**：用户在桌面端实测 Geode 后提出的一批「日常使用就会撞到」的体验缺口，分三组：
+> **A 快捷键 / B 插件体系对齐 / C 操作性功能**。本批为**用户报告**，下表「当前状态」一栏已经
+> 2026-06-21 对 `src/` 做 code-verify 校准（沿用本项目「登记缺口前先核实、勿把已实现当缺口」纪律）——
+> 已实现 / 部分实现的据实标注，避免假缺口。编号改用 **A/B/C + 序号**（圈号 ①–㊿ 已在第一–六梯队用尽）。
+> 执行口径沿用历轮：逐项按序自主推进，验收 = 四条底线 + 官方校准（docs.obsidian.md）+ 双端 probe 不回退。
+> **标 ⚠️ 者需先与用户确认诉求或先 code-verify，再开工。**
+
+**A · 快捷键 / 命令缺口**
+
+| 功能 | 当前状态（code-verified 2026-06-21）| 范围与切入点提示 |
+|---|---|---|
+| **A1 删除当前笔记（命令 + 可绑键）** | **缺**（grep 无 `delete-file`/`delete-note` 命令；删除当前笔记只能去文件树右键）| 注册 `editor:delete-file` / `app:delete-current-file` 命令，走已有 `vault.trash`（R42 回收站，**非永久删 = 守数据安全底线**）+ 确认弹窗；Obsidian 该命令**默认无键**，提供命令即可由用户在快捷键面板自绑（也可给个默认键）。 |
+| **A2 全量快捷键 / 命令对照补齐（"等等"）** | **待全量盘点**（用户列「删除当前笔记等等」，其余未逐一举出）| 一轮纯调研：WebFetch 官方 Hotkeys/Commands 页 × Geode 命令注册表（`core/commands.ts` + App.tsx 各 `id:`）做 diff，列出 Geode 缺的 Obsidian 默认命令，逐项登记入本梯队（沿用第四梯队「键盘优先」排序）。 |
+
+**B · 插件体系与 Obsidian 完全对齐**
+
+| 功能 | 当前状态（code-verified 2026-06-21）| 范围与切入点提示 |
+|---|---|---|
+| **B1 插件管理面板（启停 / 设置入口 / 删除 / 浏览）** | **部分**（启停对齐 `community-plugins.json` R4 ✓；但 grep **无** `uninstall`/`removePlugin`/`deletePlugin` → **删除 / 卸载缺**；缺 Obsidian 式「已安装插件」列表面板）| 设置页加「社区插件」管理面板：列出已装插件（开关 + 齿轮进设置 + 删除 / 卸载 + 版本 / 作者 + 浏览 / 安装入口）。删除走文件系统移除 `.obsidian/plugins/<id>` + 从 `community-plugins.json` 摘除（**写 `.obsidian` 配置，复用既有 RMW 纪律**）。 |
+| **B2 插件设置「一个插件一个 Tab」** | **部分**（机制已在：compat `PluginSettingTab`/`addSettingTab` + `core/plugins.ts settingsSections` + SettingsModal「插件设置」分组渲染——**但所有插件设置挤在同一分组，非 Obsidian 那样左侧每插件独立条目**）| 改 SettingsModal 左侧导航（`SECTIONS.map`）：为每个 `settingsSection` 生成独立条目（社区插件区，图标 + 插件名），点击右侧只渲染该插件的 `display()`；对齐 Obsidian「设置左栏每插件一项」信息架构。**纯前端 IA 重排，settingsSections 数据已就绪**。 |
+| **B3 "很多插件无法加载"（Tier 兼容长尾）** | **进行中 · 用户已给样本**（套件 5/5 加载启用；2026-06-21 用户桌面实测报 **10 个加载失败插件**，已按根因归四类、逐条 code-verify → **见下「B3-附」表**）| 逐插件按根因修：① 补缺的 obsidian 导出 ② Node/Electron 模块最小垫片 ③ `global` 垫片 ④ `window.require` 受控垫片。流程：看控制台越级 warn-stub + 设置页缺口报告 → 补 shim 或登记缺口。详见 `docs/OBSIDIAN-COMPAT.md`。 |
+| **B4 obsidian API 全签名一致（长期）** | **进行中**（compat 按 Tier 推进，已对照官方 `obsidian.d.ts` 160+ 签名）| 长期目标：把越级 warn-stub 逐 Tier 转真实现。范围、法律边界、Tier 表见 `docs/OBSIDIAN-COMPAT.md`（头号输入）。 |
+
+**C · 操作性功能**
+
+| 功能 | 当前状态（code-verified 2026-06-21）| 范围与切入点提示 |
+|---|---|---|
+| **C1 切换仓库（vault 快速切换）** | **部分**（**已有命令** `app:open-vault`→`openVaultFlow`，i18n「打开其他库…」；缺最近-vault 列表 / 切换器弹窗）| 记录最近打开的 vault 列表（localStorage）+ 一个 vault 切换器（弹窗 / 菜单，列最近库一键切换）；切库已有 race-guard（R36/R45 多处 vault-switch 清理）。 |
+| **C2 编辑页内直接改标题（inline title 改名）** | **缺**（`showInlineTitle` 显示已有 R94，但 EditorPane.tsx:873 显式「**Display-only in v1, editing → rename is deferred**」→ 当前只能右键 / frontmatter 改）| 让编辑区顶部 inline title 成为可编辑元素，提交时走 `renameWithLinkUpdate`（R16 改名 + 链接改写，**改的是文件名、不写 frontmatter/YAML**）；compat `fileManager.renameFile` 已实现可复用。 |
+| **C3 左右分屏** | ⚠️ **已实现（R3）/ 待确认诉求**（pane 树 + `Ctrl+\`/`Ctrl+Shift+\` 左右 / 上下分屏；tab 跨 pane 拖拽）| R3 已有分屏；用户报告"缺"疑为**入口发现性**（只有快捷键，无可见分屏按钮 / 菜单项）。建议：tab 右键 / 标签栏加「左右分屏」按钮入口。**请用户确认是要可见入口，还是别的语义。** |
+| **C4 收藏功能（收藏夹有、收藏动作"缺"）** | **部分**（**已有命令** `bookmarks:bookmark-file`/`-heading`/`-block` + 书签面板 R27；i18n 提示「从命令面板或右键收藏」）| 功能在、缺**显式 UI 入口**：在编辑区 / 标签页 / 文件树行上加可见「收藏 / 星标」按钮（toggle），不止命令面板；点击走既有 `bookmarks.toggleFile`。 |
+| **C5 左右侧栏可收起** | **缺**（grep 无 toggle-sidebar 命令；仅 ribbon 静态显示开关 R94 在外观设置，非运行时折叠）| workspace 加 `leftSidebarCollapsed`/`rightSidebarCollapsed` 状态 + 折叠箭头 / 按钮 + 命令 `app:toggle-left-sidebar`/`app:toggle-right-sidebar`（+ 默认键，对齐 Obsidian）；持久化进布局。 |
+| **C6 开发者模式（三件套，用户 2026-06-21 确认）** | **缺 / 低优先（用户可搁置）**（Geode 已支持 `.geode/plugins` 本地加载 = 部分开发者能力）| 三部分，均"接线为主"、可拆三小项分轮：**(a) DevTools / 控制台**——命令 + 快捷键开 webview 检查器（Tauri dev `WebviewWindow.open_devtools`；生产需开 `devtools` feature）；**(b) 插件热重载**——监听 `.geode/plugins` + `.obsidian/plugins` 的 `.js` 变化 → 自动 unload/reload（loader 已有 unregister/register 生命周期 + Rust notify watcher 可复用）；**(c) 详细日志开关**——输出插件加载诊断 + 越级 API warn-stub 到控制台（复用 `gaps.ts` warn-once/report）。 |
+
+**B3-附 · 实测加载失败插件清单（2026-06-21 用户桌面实测 · 报错为 WKWebView/JSC 原文 · 逐条 code-verify）**
+
+> 报错信息已精确定位根因。修复成本差异大：**③ `global` 垫片是最便宜的一条**（一行、且普惠所有 Node-targeting bundle）；**④ `window.require` / webview / remote 类多为越界或远期**。下表「修法」均经 2026-06-21 对 `compat/obsidian/` 核实。
+
+| 根因组 | 失败插件 | 报错（原文）| 修法 / 可行性（已核实）|
+|---|---|---|---|
+| **① 超类为 undefined**（`extends` 一个 compat 未导出的类）| calendar · quick-linker · rss-dashboard · vscode-editor | `The superclass is not a constructor.` | 逐插件查其 `extends` 目标，补 `compat/obsidian/index.ts` 缺的导出 + 必要实现。**已确认缺 `AbstractInputSuggest`**（compat 零匹配；quick-linker 类链接补全常用）；calendar/rss-dashboard/vscode-editor 需逐个查具体 undefined 符号（ItemView/EditorSuggest 等已导出，故另有他类）。**中等可行**——多为补导出 + 薄实现。 |
+| **② require Node/Electron 模块**（白名单外，loader.ts:44-55 抛错；现仅 `obsidian`+`@codemirror/*`+`path` shim）| media-extended（`@electron/remote`）· obsidian-auto-link-title（`electron`）· realclaudian（`fs`）· surfing（`electron`）| `module not available in Geode: <m>` | 分模块定夺：`electron` 补**最小垫片**（clipboard→Tauri/web、shell.openExternal→opener、ipcRenderer no-op）→ auto-link-title **可行**、surfing（webview）**难**；`@electron/remote` 主进程桥 → **多无 Tauri 等价、难**；`fs` 补**最小垫片**走 Tauri fs（越出 vault、面大）→ **部分 / 谨慎**。`electron`/`fs` 现确认均不在白名单。 |
+| **③ 缺 `global`**（Node 全局）| obsidian-git | `Can't find variable: global` | **最便宜的一条 · 已核实无垫片**：loader.ts:161 的「global」实为 **moment 全局**（`window.moment`），与 Node `global` 无关 → 求值前注入 `globalThis.global = globalThis`（+ 可选 `process`/`Buffer`）即解锁加载。注：obsidian-git 深层还需 isomorphic-git + fs/网络，修 global 仅解锁加载、完整功能另评。**低成本高杠杆**（普惠所有 Node bundle）。 |
+| **④ 缺 `window.require`**（Electron 专有）| obsidian-importer | `window.require is not a function（node:original-fs）` | 重度 Electron/Node（导入外部 app 数据、asar 绕过）→ **基本越界 / 远期**。可加受控 `window.require` 垫片止血（映射极少数模块、其余 graceful throw），完整功能不现实。 |
+
+> **B3 内取用顺序**：先 **③ `global` 垫片**（一行解锁 obsidian-git 等 + 普惠）→ 再 **① 补缺失超类导出**（`AbstractInputSuggest` 等，查清即加）→ 再 **② electron/fs 最小垫片**（按 clipboard/opener 可行项先做）→ **④ + webview/remote** 列远期或越界。
+
+> **第七梯队取用建议**：**C5 侧栏折叠 / A1 删除当前笔记 / C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）。
+
 ## 已知技术债
 
 - R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/
