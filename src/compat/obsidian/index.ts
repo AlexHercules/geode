@@ -92,10 +92,14 @@ export {
   type UserEvent,
 } from "./ui";
 export { addIcon, setIcon, setTooltip, type IconName } from "./icons";
+export { loadMermaid } from "@core/mermaid";
 export {
   apiVersion,
+  arrayBufferToBase64,
+  base64ToArrayBuffer,
   debounce,
   getAllTags,
+  getBlobArrayBuffer,
   getLinkpath,
   htmlToMarkdown,
   MarkdownRenderer,
@@ -105,6 +109,7 @@ export {
   parseFrontMatterEntry,
   parseFrontMatterStringArray,
   parseFrontMatterTags,
+  parseLinktext,
   Platform,
   request,
   requestUrl,

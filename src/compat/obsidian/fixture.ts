@@ -16,6 +16,10 @@
  * R167: an AbstractInputSuggest bound to a live <input> (data-testid
  * fixture-input-suggest) with a sibling result div (fixture-input-suggest-selected)
  * — type-ahead completion over [apple, apricot, banana] for the browser E2E.
+ * R168: a one-shot async IIFE exercising the Tier 8 D-series util exports
+ * (apiVersion/requireApiVersion, parseLinktext, arrayBufferToBase64 +
+ * base64ToArrayBuffer + getBlobArrayBuffer, loadMermaid) and writing the JSON
+ * results into a live <div data-testid="fixture-d-results"> for the E2E.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -292,6 +296,43 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
       inputSug.setValue(value);
       selectedEl.textContent = "selected: " + value;
     });
+
+    // R168 — Tier 8 D-series util exports: apiVersion/requireApiVersion,
+    // parseLinktext, arrayBufferToBase64/base64ToArrayBuffer/getBlobArrayBuffer,
+    // loadMermaid. Compute every result in one async IIFE and stash the JSON in
+    // a live <div> so the browser E2E can read it after the awaits settle.
+    var dResultsEl = document.createElement("div");
+    dResultsEl.setAttribute("data-testid", "fixture-d-results");
+    document.body.appendChild(dResultsEl);
+    this.register(function () { dResultsEl.remove(); });
+    (async function () {
+      var out = {};
+      try {
+        out.apiVersion = obsidian.apiVersion;
+        out.req16 = obsidian.requireApiVersion("1.6.0");
+        out.req180 = obsidian.requireApiVersion("1.8.0");
+        out.req190 = obsidian.requireApiVersion("1.9.0");
+        out.pl_heading = obsidian.parseLinktext("Note#heading");
+        out.pl_plain = obsidian.parseLinktext("Note");
+        out.pl_block = obsidian.parseLinktext("Note#^block");
+        out.pl_subonly = obsidian.parseLinktext("#heading");
+        // base64 round-trip over bytes [72,105,33] = "Hi!"
+        var bytes = new Uint8Array([72, 105, 33]);
+        var b64 = obsidian.arrayBufferToBase64(bytes.buffer);
+        out.b64 = b64;
+        var back = new Uint8Array(obsidian.base64ToArrayBuffer(b64));
+        out.b64_roundtrip = Array.from(back).join(",");
+        var blobBuf = await obsidian.getBlobArrayBuffer(new Blob([bytes]));
+        out.blob_bytes = Array.from(new Uint8Array(blobBuf)).join(",");
+        var m = await obsidian.loadMermaid();
+        out.mermaidRender = typeof (m && m.render);
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      dResultsEl.textContent = JSON.stringify(out);
+    })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));
   }

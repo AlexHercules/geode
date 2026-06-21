@@ -47,8 +47,11 @@ export function _getCompatHostHandle(): CompatHostHandle | null {
 
 /* ---------------- versioning ---------------- */
 
-/** The obsidian API version this shim claims compatibility with (R4 decision). */
-export const apiVersion = "1.5.0";
+/** The obsidian API version this shim claims compatibility with. Bumped to
+ *  1.8.0: matches the full 1.7.x surface plus early 1.8.x face already shipped
+ *  (removeCommand / getAllFolders / footnoteRefs / clipboard copy). Kept below
+ *  1.12.3 because appendBinary remains a stub. */
+export const apiVersion = "1.8.0";
 
 /** @internal numeric semver compare: a<b => -1, a==b => 0, a>b => 1. */
 export function semverCompare(a: string, b: string): number {
@@ -87,6 +90,30 @@ export function normalizePath(path: string): string {
 export function getLinkpath(linktext: string): string {
   const idx = linktext.indexOf("#");
   return (idx === -1 ? linktext : linktext.slice(0, idx)).trim();
+}
+
+/** Split a linktext into { path, subpath }. subpath KEEPS its leading "#"/"^"
+ *  (faithful to Obsidian's parseLinktext: substr(idx)). NOT the same as
+ *  getLinkpath, which trims — keep them separate. */
+export function parseLinktext(linktext: string): { path: string; subpath: string } {
+  const idx = linktext.indexOf("#");
+  if (idx < 0) return { path: linktext, subpath: "" };
+  return { path: linktext.slice(0, idx), subpath: linktext.slice(idx) };
+}
+
+/** ArrayBuffer → base64 string (bridges core/net bytesToBase64). */
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  return bytesToBase64(new Uint8Array(buffer));
+}
+
+/** base64 string → ArrayBuffer (bridges core/net base64ToBytes). */
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  return base64ToBytes(base64).buffer;
+}
+
+/** Blob → ArrayBuffer (standard API). */
+export function getBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  return blob.arrayBuffer();
 }
 
 /** Case-insensitive / RegExp frontmatter key lookup. */
