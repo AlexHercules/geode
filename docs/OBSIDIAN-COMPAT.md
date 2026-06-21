@@ -215,12 +215,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 #### apiVersion 漂移（载入性结论，非纯文档）
 
-`apiVersion = "1.5.0"`（util.ts:51）落后于审计所对 d.ts（≈1.9，成员至 1.13.0），且 `requireApiVersion` 对此字符串做 semver 比较（util.ts:67）。**漂移是载入性的**：Geode 实际已实现远超 1.5.0 的面（removeCommand 1.7.2 · onUserEnable 1.7.2 · getFileByPath 1.5.7 · getAllFolders 1.6.6 · copy 1.8.7 · footnoteRefs 1.8.7 · frontmatterLinks 1.4.0 · setErrorMessage 1.13.0 · addComponent 1.11.0），却自报 1.5.0 → 任何 `requireApiVersion(">=1.6")` 的插件得 `false`，**静默走 legacy/禁用分支**，且 manifest `minAppVersion>=1.6` 触发载入器 warn+设置页标注。反向看 1.5.0 对「未实现的 1.10+ Bases / 1.13 声明式 Settings」是诚实的。**建议**：升到 ≈"1.8.0"/"1.9.0"（匹配已实现面、避免假阴性），同时保持对 1.10+ 全新族的诚实门控；纯字符串常量改动，semverCompare 逻辑本身正确。注意 appendBinary(1.12.3) 等未实现，故不可虚报过高版本。
+**✅ R168 已解决（升 "1.8.0"）**——下文为原始审计记录。`apiVersion = "1.5.0"`（util.ts:51）落后于审计所对 d.ts（≈1.9，成员至 1.13.0），且 `requireApiVersion` 对此字符串做 semver 比较（util.ts:67）。**漂移是载入性的**：Geode 实际已实现远超 1.5.0 的面（removeCommand 1.7.2 · onUserEnable 1.7.2 · getFileByPath 1.5.7 · getAllFolders 1.6.6 · copy 1.8.7 · footnoteRefs 1.8.7 · frontmatterLinks 1.4.0 · setErrorMessage 1.13.0 · addComponent 1.11.0），却自报 1.5.0 → 任何 `requireApiVersion(">=1.6")` 的插件得 `false`，**静默走 legacy/禁用分支**，且 manifest `minAppVersion>=1.6` 触发载入器 warn+设置页标注。反向看 1.5.0 对「未实现的 1.10+ Bases / 1.13 声明式 Settings」是诚实的。**建议**：升到 ≈"1.8.0"/"1.9.0"（匹配已实现面、避免假阴性），同时保持对 1.10+ 全新族的诚实门控；纯字符串常量改动，semverCompare 逻辑本身正确。注意 appendBinary(1.12.3) 等未实现，故不可虚报过高版本。
 
 #### NEW 缺口清单（未在 live gap 表 L126–155 追踪 · 按迁移价值排序）
 
 **高价值（零新依赖、流行插件直接依赖）**
-- **parseLinktext**（metadata，missing）— 拆 wikilink 为 `{path,subpath}`；Dataview/Templater/链接处理插件普遍调用。Geode 仅有 getLinkpath（path 半），subpath 半丢失。本域最高价值、实现 trivial。
+- ~~**parseLinktext**（metadata，missing）~~ — ✅ **R168 完成**（util.ts，不 trim、subpath 含 `#`，对齐 Obsidian 真实源、与 getLinkpath 分立不合并）。Dataview/Templater/链接处理插件普遍调用。
 - **prepareFuzzySearch + prepareSimpleSearch**（render-search，missing）— Dataview/QuickAdd/多数 fuzzy picker 直接调用的模块函数。ui.ts:483 有私有 fuzzyMatch 可上浮升级。
 - ~~**AbstractInputSuggest&lt;T&gt;**（suggest-keymap，missing）~~ — ✅ **R167 完成**（=第七梯队 B3①/第八梯队 D4）：新类 extends 既有 `PopoverSuggest`、`textInputEl.getBoundingClientRect()` 自包含浮层（不复用 manager 绑死 CM6 坐标的 position()）、复用 `.geode-suggest-popup` 样式=零 CSS/零依赖。Templater/QuickAdd/Periodic Notes 的 FolderSuggest/FileSuggest import 不再 module-eval 抛错。r167-e2e 25/25。
 - **Vault.getResourcePath / DataAdapter.getResourcePath**（vault-files，stub，L 高）— 现返回 vault 相对路径而非可加载 URI；全仓无 Tauri asset-protocol/convertFileSrc 桥。Excalidraw/image-toolkit/PDF++/媒体嵌入构建 `<img>/<embed> src` 静默失败。
@@ -230,8 +230,8 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 **中价值（多为已有内部能力的一行级桥接 / 速赢）**
 - **sleep（全局）+ nextFrame + Document.on/off**（global-aug，missing，med）— 载入器只注入 window.moment+window.app；插件调全局 `sleep()` 直接 ReferenceError 崩。QuickAdd/Templater 用户脚本常用。一行修：`g.sleep=ms=>new Promise(r=>setTimeout(r,ms))`，并补 window.sleep/nextFrame、Document.prototype.on/off 复用现有委托监听实现。
 - **editorInfoField + editorLivePreviewField + editorEditorField + editorViewField + Editor.getDoc**（editor，missing，med）— R115 已开放 registerEditorExtension 后，CM6 装饰/widget 插件靠这几个 runtime StateField 取活动文件/EditorView、并把渲染门控到 Live Preview。Geode 已有 live/source modeCompartment + activeEditor 可回填。getDoc 一行 `getDoc(){return this;}` 救 CM5-legacy 插件。
-- **loadMermaid（再导出）+ renderMath/finishRenderMath + sanitizeHTMLToDom**（render-search，missing，med）— loadMermaid 实现已在 core/mermaid.ts:15（mermaid@11 已打包），仅缺从 compat index 一行再导出；renderMath 可由已打包 KaTeX（core/math.ts）回填；sanitizeHTMLToDom 是设置页/渲染输出常用安全 DOM 构建器。
-- **arrayBufferToBase64 / base64ToArrayBuffer / getBlobArrayBuffer**（utils，missing，med）— core/net.ts 已有 bytesToBase64/base64ToBytes，零成本桥接、无新依赖。Excalidraw/媒体附件用。
+- **~~loadMermaid（再导出）~~ + renderMath/finishRenderMath + sanitizeHTMLToDom**（render-search，missing，med）— ~~loadMermaid~~ ✅ **R168 完成**（barrel 一行再导出 @core/mermaid）；**剩** renderMath 可由已打包 KaTeX（core/math.ts loadKatex）回填、finishRenderMath no-op；sanitizeHTMLToDom 是设置页/渲染输出常用安全 DOM 构建器（安全敏感、单拆）。
+- ~~**arrayBufferToBase64 / base64ToArrayBuffer / getBlobArrayBuffer**（utils，missing，med）~~ — ✅ **R168 完成**（util.ts 三件套桥接 core/net bytesToBase64/base64ToBytes，`.buffer` 无 slack 因 exact-size alloc）。Excalidraw/媒体附件用。
 - **MarkdownPreviewRenderer 静态 registerPostProcessor**（views/render，missing，med）— 实例版（Plugin.registerMarkdownPostProcessor，R132-R136）已做；静态类形式未导出，老插件命中 undefined。薄桥接到 R132 注册表即可。
 - **FileManager.getAvailablePathForAttachment + getNewFileParent + adapter.stat**（vault-files，stub，med）— paste-image/QuickAdd/Excalidraw/importer 计算去重附件路径；现 Proxy fallthrough 返 async undefined 在期望 string/TFolder 处可下游抛错。
 - **Setting.addColorPicker + ColorComponent**（ui-components，stub/missing，med）— 现 reportGap 静默丢控件。Style-Settings 邻近、callout/tag 颜色、主题微调插件用。约 120 行组件（hex↔rgb↔hsl + 原生 `<input type=color>`）即闭合。
@@ -250,6 +250,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R168 套件回归（2026-06-21，Tier 8 D 系列零依赖打包 · D1 apiVersion→1.8.0 + D2 parseLinktext + D10 base64 三件套 + D9 loadMermaid 再导出 · compat util · 桌面 probe N/A）
+
+R168 = 第八梯队 **D1+D2+D10+D9-loadMermaid** 打包（纯再导出/极薄桥接、复用既有内部实现、零新依赖）。**Gate（R160 教训：explorer 逐项实查）**：D1 apiVersion 常量 util.ts:51 旧 "1.5.0"；D2 compat 缺 parseLinktext（getLinkpath 是 trim 半成品、语义不同）；D10 core/net 已有 bytesToBase64/base64ToBytes；D9 loadMermaid 实现已在 core/mermaid.ts:15 仅缺再导出。**实现**：D1→"1.8.0"（匹配已实现 1.7.x 全+早期 1.8.x、不虚高 appendBinary 1.12.3 仍 stub）；D2 `parseLinktext`（不 trim、subpath 含 `#`，对齐 Obsidian 真实源、与 getLinkpath 分立不合并）；D10 三件套桥接 @core/net（`.buffer` 无 slack 因 exact-size alloc）；D9 barrel `export {loadMermaid} from "@core/mermaid"`。**对抗评审 8 维 → 0 confirmed defect（clean）**——**D1 版本假承诺严格排除**（枚举全部 39 stub×引入版本：(1.5.0,1.8.0] 区间零 stub、所有 stub 均 >1.8.0 或 pre-1.0 era 既有，1.8.0=诚实最大值）；D2 与 Obsidian 真实源逐字节等价（10 边角实跑）；D10 `.buffer` 无 slack；D9 类型更精确子类型 + live `.render` 是 function（非 mock）；分层 compat→core 无循环。简化门 **clean/skip**（生产 diff ~20 行/≤2 文件/全薄包装）。
+
+新增套件：`r168-e2e.mjs` **16/16**（IIFE 无异常 + apiVersion==="1.8.0" + **requireApiVersion("1.6.0")===true[对旧 1.5.0 回归]** + req("1.8.0")===true + req("1.9.0")===false + 4 parseLinktext 形状[含 subpath 含 `#`/空 path/空 subpath] + **base64 round-trip `[72,105,33]`→"SGkh"→还原** + getBlobArrayBuffer 字节保真 + **loadMermaid().render 是 function** + fixture 仍 enabled + 无 page error）。**套件矩阵不回退**：r167 25/25（AbstractInputSuggest，同 fixture 文件）·r165 9/9（compat global shim + fixture 加载路径）·r113 10/10（compat boot）·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 JS：版本常量/字符串拆分/base64/动态 import mermaid，零 fs/Rust/平台分支，WKWebView≡Chromium 标准 web API，同 R165/R167）。**v1 defer**：D7 sleep/nextFrame/Document.on/off、D9 renderMath/finishRenderMath（KaTeX 适配）、D9 sanitizeHTMLToDom（安全敏感）留后续轮。
 
 ### R167 套件回归（2026-06-21，Tier 7 B3① ＝ Tier 8 D4「`AbstractInputSuggest<T>` 输入框 type-ahead 基类」· compat · 零 CSS/零依赖 · 桌面 probe N/A）
 
