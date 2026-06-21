@@ -162,6 +162,14 @@ async function runLoad(
   // fixture paths both come through here). Never overwrite an existing one.
   window.moment ??= moment;
 
+  // B3③ (R165): Node-targeting plugin bundles (obsidian-git etc.) reference the
+  // Node global `global` as a free variable and crash with "Can't find variable:
+  // global" when main.js evaluates. Point it at globalThis so the lookup resolves
+  // — idempotent (??=), never clobbers a real one. (Unrelated to window.moment
+  // above, which is the *moment* global.) process/Buffer are intentionally NOT
+  // shimmed: `typeof process` branches in bundles would silently change behavior.
+  (globalThis as { global?: unknown }).global ??= globalThis;
+
   // idempotent: unload the previous round first (does NOT persist enabled:false)
   for (const id of loadedIds.splice(0)) plugins.unregister(id);
   previousContext?.dispose();
