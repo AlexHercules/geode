@@ -29,6 +29,11 @@
  * finishRenderMath() (await the render queue), loadMathJax() (prewarm), and the
  * throwOnError:false invariant (invalid LaTeX must not throw); JSON results land
  * in <div data-testid="fixture-d9math-results">.
+ * R171: a SYNCHRONOUS IIFE exercising the Tier 8 D3 search surface —
+ * prepareFuzzySearch(query) (substring fast-path → [[0,3]], in-order chars,
+ * no-match → null, reusable scorer) and prepareSimpleSearch(query) (all
+ * whitespace-split tokens must occur, matches sorted by start, missing token →
+ * null); JSON results land in <div data-testid="fixture-d3search-results">.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -451,6 +456,53 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
         out.error = String(e);
       }
       d9El.textContent = JSON.stringify(out);
+    })();
+
+    // R171 — Tier 8 D3 search: prepareFuzzySearch(query) and
+    // prepareSimpleSearch(query) each return a (text) => SearchResult | null
+    // scorer. SearchResult = { score:number, matches:Array<[start,end)> }.
+    // Fuzzy is in-order char matching (substring fast-path → [[0,3]] for
+    // "foo"/"foobar"); simple splits the query on whitespace and every token
+    // must occur as a substring, matches sorted by start. This probe is purely
+    // SYNCHRONOUS (no awaits), so a plain IIFE writes the JSON immediately.
+    var d3El = document.createElement("div");
+    d3El.setAttribute("data-testid", "fixture-d3search-results");
+    document.body.appendChild(d3El);
+    this.register(function () { d3El.remove(); });
+    (function () {
+      var out = {};
+      try {
+        // fuzzy: substring fast-path
+        var fSub = obsidian.prepareFuzzySearch("foo");
+        var rSub = fSub("foobar");
+        out.fuzzySubNonNull = (rSub !== null);
+        out.fuzzySubMatches = rSub ? JSON.stringify(rSub.matches) : null;  // expect [[0,3]]
+        out.fuzzySubScoreNum = rSub ? (typeof rSub.score === "number") : false;
+        // fuzzy: in-order chars (non-contiguous)
+        var fFz = obsidian.prepareFuzzySearch("fb");
+        var rFz = fFz("foobar");
+        out.fuzzyCharsNonNull = (rFz !== null);   // f@0, b@3 in order → match
+        // fuzzy: no match
+        var rNo = obsidian.prepareFuzzySearch("xyz")("foobar");
+        out.fuzzyNoMatchIsNull = (rNo === null);
+        // fuzzy: reusable (same prepared fn on 2 texts)
+        out.fuzzyReuse = (fSub("afoo") !== null) && (fSub("zzz") === null);
+        // simple: all tokens substrings
+        var sFn = obsidian.prepareSimpleSearch("foo bar");
+        var rS = sFn("xx foo yy bar");
+        out.simpleNonNull = (rS !== null);
+        out.simpleMatchCount = rS ? rS.matches.length : 0;     // expect 2
+        out.simpleSorted = rS ? (rS.matches[0][0] <= rS.matches[1][0]) : false;  // sorted by start
+        // simple: a token missing → null
+        out.simpleMissingIsNull = (obsidian.prepareSimpleSearch("foo zzz")("foo bar") === null);
+        // types exist (functions)
+        out.fnTypes = (typeof obsidian.prepareFuzzySearch === "function") && (typeof obsidian.prepareSimpleSearch === "function");
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      d3El.textContent = JSON.stringify(out);
     })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));

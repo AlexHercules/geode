@@ -77,6 +77,8 @@ export {
   Modal,
   MomentFormatComponent,
   Notice,
+  prepareFuzzySearch,
+  prepareSimpleSearch,
   Scope,
   SearchComponent,
   Setting,
@@ -88,6 +90,8 @@ export {
   ValueComponent,
   type FuzzyMatch,
   type Instruction,
+  type SearchMatches,
+  type SearchMatchPart,
   type SearchResult,
   type UserEvent,
 } from "./ui";

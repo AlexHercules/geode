@@ -507,6 +507,35 @@ function fuzzyMatch(text: string, query: string): SearchResult | null {
   return { score: score - matches.length * 10, matches };
 }
 
+export type SearchMatchPart = [number, number];
+export type SearchMatches = SearchMatchPart[];
+
+/** Prepare a reusable fuzzy matcher (curries the in-order char fuzzy matcher). */
+export function prepareFuzzySearch(query: string): (text: string) => SearchResult | null {
+  const q = query.trim();
+  return (text: string): SearchResult | null => fuzzyMatch(text, q);
+}
+
+/** Prepare a simple word-substring matcher: every whitespace-split token must
+ *  appear as a substring; earlier hits score higher. */
+export function prepareSimpleSearch(query: string): (text: string) => SearchResult | null {
+  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return (text: string): SearchResult | null => {
+    if (tokens.length === 0) return { score: 0, matches: [] };
+    const lower = text.toLowerCase();
+    const matches: Array<[number, number]> = [];
+    let score = 0;
+    for (const token of tokens) {
+      const at = lower.indexOf(token);
+      if (at === -1) return null;
+      matches.push([at, at + token.length]);
+      score -= at;
+    }
+    matches.sort((a, b) => a[0] - b[0]);
+    return { score, matches };
+  };
+}
+
 export abstract class FuzzySuggestModal<T> extends SuggestModal<FuzzyMatch<T>> {
   getSuggestions(query: string): Array<FuzzyMatch<T>> {
     const out: Array<FuzzyMatch<T>> = [];
