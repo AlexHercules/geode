@@ -38,6 +38,7 @@ export {
 } from "./workspace";
 export { FileView, ItemView, View, type ViewStateResult } from "./view";
 export {
+  AbstractInputSuggest,
   EditorSuggest,
   PopoverSuggest,
   type EditorSuggestContext,

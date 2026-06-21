@@ -107,6 +107,269 @@ export abstract class EditorSuggest<T> extends PopoverSuggest<T> {
   abstract getSuggestions(context: EditorSuggestContext): T[] | Promise<T[]>;
 }
 
+/* ----------------- AbstractInputSuggest (input type-ahead) ----------------- */
+
+/**
+ * Attach type-ahead to a plain `<input>` or a `contenteditable <div>`. Unlike
+ * EditorSuggest (CodeMirror-anchored, manager-driven), this is fully
+ * self-contained: it owns its own popup, document-level listeners and reposition
+ * loop, anchored on `textInputEl.getBoundingClientRect()`. Mirrors the official
+ * AbstractInputSuggest<T> (obsidian.d.ts:294-338) used by settings-tab inputs
+ * (folder/file/tag pickers, etc.). Reuses the same popup styling as the
+ * EditorSuggest popup (zero new CSS), but distinct testids.
+ */
+export abstract class AbstractInputSuggest<T> extends PopoverSuggest<T> {
+  /** Max rendered items; 0 = unlimited. Defaults to 100 (official contract). */
+  limit = 100;
+
+  private readonly textInputEl: HTMLInputElement | HTMLDivElement;
+  private _selectCallback:
+    | ((value: T, evt: MouseEvent | KeyboardEvent) => unknown)
+    | null = null;
+  private _popupEl: HTMLElement | null = null;
+  private _items: T[] = [];
+  private _itemEls: HTMLElement[] = [];
+  private _selected = 0;
+  /** stale-token guard for async getSuggestions (bumped on close too) */
+  private _token = 0;
+  /**
+   * rAF id of the pending coalesced reposition; 0 = none scheduled. MUST be
+   * reset to 0 before running / after cancelling — R7 lesson: a stale non-zero
+   * id makes every later schedule attempt early-return forever.
+   */
+  private _repositionRaf = 0;
+  private _detachDom: (() => void) | null = null;
+
+  constructor(app: App, textInputEl: HTMLInputElement | HTMLDivElement) {
+    super(app);
+    this.textInputEl = textInputEl;
+    // a union element type collapses addEventListener to the generic (Event)
+    // overload, losing KeyboardEvent — register through the HTMLElement event
+    // map (both branches are HTMLElement) so the typed overloads apply
+    const el: HTMLElement = textInputEl;
+    el.addEventListener("input", this._onInput);
+    el.addEventListener("focus", this._onInput);
+    el.addEventListener("blur", this._onBlur);
+    el.addEventListener("keydown", this._onKeydown);
+  }
+
+  /** Read the live value (input.value, or contenteditable textContent). */
+  getValue(): string {
+    const el = this.textInputEl;
+    return el instanceof HTMLInputElement ? el.value : (el.textContent ?? "");
+  }
+
+  /**
+   * Programmatically set the value. Does NOT dispatch an `input` event (same as
+   * AbstractTextComponent.setValue — avoids re-triggering the suggest loop).
+   */
+  setValue(value: string): void {
+    const el = this.textInputEl;
+    if (el instanceof HTMLInputElement) el.value = value;
+    else el.textContent = value;
+  }
+
+  /** Default: hand the value to the registered onSelect callback, then close. */
+  selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent): void {
+    this._selectCallback?.(value, evt);
+    this.close();
+  }
+
+  /** Register the selection callback (chainable). */
+  onSelect(callback: (value: T, evt: MouseEvent | KeyboardEvent) => unknown): this {
+    this._selectCallback = callback;
+    return this;
+  }
+
+  protected abstract getSuggestions(query: string): T[] | Promise<T[]>;
+
+  /** Re-query and render for the current input value. */
+  override open(): void {
+    void this._requery();
+  }
+
+  /** Tear down the popup, document listeners and any in-flight query. */
+  override close(): void {
+    this._token++; // cancel any in-flight getSuggestions
+    this._detachDom?.();
+    this._detachDom = null;
+    if (this._repositionRaf !== 0) {
+      cancelAnimationFrame(this._repositionRaf);
+      this._repositionRaf = 0; // R7 lesson: never leave a cancelled id behind
+    }
+    this._popupEl?.remove();
+    this._popupEl = null;
+    this._items = [];
+    this._itemEls = [];
+    this._selected = 0;
+  }
+
+  /* ----- event handlers (bound fields so add/removeEventListener match) ----- */
+
+  private readonly _onInput = (): void => {
+    void this._requery();
+  };
+
+  private readonly _onBlur = (): void => {
+    this.close();
+  };
+
+  private readonly _onKeydown = (evt: KeyboardEvent): void => {
+    if (!this._popupEl || this._items.length === 0) return;
+    if (evt.key === "ArrowDown") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this._moveSelection(1);
+    } else if (evt.key === "ArrowUp") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this._moveSelection(-1);
+    } else if (evt.key === "Enter") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this._selectItem(this._selected, evt);
+    } else if (evt.key === "Escape") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      this.close();
+    }
+    // any other key falls through to the input itself
+  };
+
+  /* ----- query + render ----- */
+
+  private async _requery(): Promise<void> {
+    const token = ++this._token;
+    let items: T[];
+    try {
+      items = await this.getSuggestions(this.getValue());
+    } catch (err) {
+      console.error("[obsidian-compat] AbstractInputSuggest.getSuggestions threw", err);
+      items = [];
+    }
+    if (token !== this._token) return; // stale async result / closed mid-flight
+    const capped = this.limit > 0 ? items.slice(0, this.limit) : items;
+    if (capped.length === 0) {
+      this.close();
+      return;
+    }
+    this._items = capped;
+    this._selected = 0;
+    this._render();
+    this._position();
+  }
+
+  private _ensurePopupEl(): HTMLElement {
+    if (this._popupEl) return this._popupEl;
+    const el = document.createElement("div");
+    el.className = "geode-suggest-popup suggestion-container";
+    el.setAttribute("data-testid", "input-suggest-popup");
+    // keep the input focused while clicking suggestions
+    el.addEventListener("mousedown", (evt) => evt.preventDefault());
+    document.body.appendChild(el);
+    this._popupEl = el;
+    this._attachDomListeners();
+    return el;
+  }
+
+  private _render(): void {
+    const popup = this._ensurePopupEl();
+    popup.textContent = "";
+    this._itemEls = [];
+    this._items.forEach((item, i) => {
+      const el = document.createElement("div");
+      el.className = "suggestion-item";
+      el.setAttribute("data-testid", "input-suggest-item");
+      if (i === this._selected) el.classList.add("is-selected");
+      try {
+        // el supports el.setText etc. via the global DOM augmentation (dom.ts)
+        this.renderSuggestion(item, el);
+      } catch (err) {
+        console.error("[obsidian-compat] AbstractInputSuggest.renderSuggestion threw", err);
+      }
+      el.addEventListener("mousemove", () => this._setSelected(i));
+      el.addEventListener("click", (evt) => this._selectItem(i, evt));
+      popup.appendChild(el);
+      this._itemEls.push(el);
+    });
+  }
+
+  /** Fixed-position below the input; flips above near the viewport bottom. */
+  private _position(): void {
+    const popup = this._popupEl;
+    if (!popup) return;
+    const rect = this.textInputEl.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const left = Math.max(
+      4,
+      Math.min(rect.left, window.innerWidth - popupRect.width - 8),
+    );
+    let top = rect.bottom + 2;
+    if (top + popupRect.height > window.innerHeight - 4) {
+      top = rect.top - popupRect.height - 2; // flip above the input
+    }
+    popup.style.left = `${left}px`;
+    popup.style.top = `${Math.max(4, top)}px`;
+    popup.style.minWidth = `${rect.width}px`;
+  }
+
+  private _setSelected(i: number): void {
+    if (i === this._selected || i < 0 || i >= this._itemEls.length) return;
+    this._itemEls[this._selected]?.classList.remove("is-selected");
+    this._selected = i;
+    this._itemEls[i]?.classList.add("is-selected");
+  }
+
+  private _moveSelection(delta: number): void {
+    if (this._items.length === 0) return;
+    const next = (this._selected + delta + this._items.length) % this._items.length;
+    this._setSelected(next);
+    this._itemEls[next]?.scrollIntoView({ block: "nearest" });
+  }
+
+  private _selectItem(i: number, evt: MouseEvent | KeyboardEvent): void {
+    const item = this._items[i];
+    if (item === undefined) return;
+    try {
+      // selectSuggestion calls close() itself, so capture the item first
+      this.selectSuggestion(item, evt);
+    } catch (err) {
+      console.error("[obsidian-compat] AbstractInputSuggest.selectSuggestion threw", err);
+    }
+  }
+
+  /* ----- document-level listeners while the popup is open ----- */
+
+  private _attachDomListeners(): void {
+    const onMousedown = (evt: MouseEvent): void => {
+      const target = evt.target;
+      if (!(target instanceof Node)) return;
+      if (this._popupEl?.contains(target)) return;
+      if (this.textInputEl.contains(target) || this.textInputEl === target) return;
+      this.close();
+    };
+    // Follow the anchor on viewport changes. "scroll" does not bubble, so only
+    // a capture-phase document listener sees scrolling ancestors. Coalesced
+    // through rAF (repositionRaf !== 0 means a frame is already pending) so
+    // _position() runs at most once per frame; writing style never fires scroll.
+    const onViewportChange = (): void => {
+      if (this._repositionRaf !== 0) return; // already scheduled this frame
+      this._repositionRaf = requestAnimationFrame(() => {
+        this._repositionRaf = 0; // reset BEFORE repositioning (R7 lesson)
+        this._position();
+      });
+    };
+    document.addEventListener("mousedown", onMousedown, true);
+    window.addEventListener("resize", onViewportChange);
+    document.addEventListener("scroll", onViewportChange, true);
+    this._detachDom = () => {
+      document.removeEventListener("mousedown", onMousedown, true);
+      window.removeEventListener("resize", onViewportChange);
+      document.removeEventListener("scroll", onViewportChange, true);
+    };
+  }
+}
+
 /* ---------------- runtime (one manager per compat context) ---------------- */
 
 type AnySuggest = EditorSuggest<unknown>;

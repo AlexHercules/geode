@@ -13,6 +13,9 @@
  * R13: the MarkdownRenderer probe also renders ![[Welcome]] (note embed —
  * assert .geode-embed-note-content) and ![[Fixture Block#^fxblock]] against a
  * fixture-created note, probing getFileCache().blocks along the way.
+ * R167: an AbstractInputSuggest bound to a live <input> (data-testid
+ * fixture-input-suggest) with a sibling result div (fixture-input-suggest-selected)
+ * — type-ahead completion over [apple, apricot, banana] for the browser E2E.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -101,6 +104,20 @@ var FixtureSuggest = class extends obsidian.EditorSuggest {
     var ctx = this.context;
     if (!ctx) return;
     ctx.editor.replaceRange(value, ctx.start, ctx.end);
+  }
+};
+
+// R167: AbstractInputSuggest — type-ahead completion bound to a plain <input>.
+// Unlike EditorSuggest, getSuggestions(query) receives the query STRING (the
+// current input value), not a context. Empty query returns all candidates.
+var FixtureInputSuggest = class extends obsidian.AbstractInputSuggest {
+  getSuggestions(query) {
+    var all = ["apple", "apricot", "banana"];
+    var q = query.toLowerCase();
+    return all.filter(function (s) { return s.indexOf(q) === 0; });
+  }
+  renderSuggestion(value, el) {
+    el.setText(value);
   }
 };
 
@@ -255,6 +272,25 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
           self
         );
       }
+    });
+
+    // R167: AbstractInputSuggest bound to a real <input> in the live DOM, so
+    // the browser E2E can focus + type + navigate the completion popup.
+    var inputEl = document.createElement("input");
+    inputEl.type = "text";
+    inputEl.setAttribute("data-testid", "fixture-input-suggest");
+    document.body.appendChild(inputEl);
+    var selectedEl = document.createElement("div");
+    selectedEl.setAttribute("data-testid", "fixture-input-suggest-selected");
+    selectedEl.textContent = "";
+    document.body.appendChild(selectedEl);
+    // cleanup: remove the injected DOM when the plugin unloads (no residue)
+    this.register(function () { inputEl.remove(); });
+    this.register(function () { selectedEl.remove(); });
+    var inputSug = new FixtureInputSuggest(this.app, inputEl);
+    inputSug.onSelect(function (value) {
+      inputSug.setValue(value);
+      selectedEl.textContent = "selected: " + value;
     });
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));
