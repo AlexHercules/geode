@@ -38,6 +38,11 @@
  * class to window.__obsidianMPR, so the browser E2E can drive its static methods
  * (registerPostProcessor/unregisterPostProcessor/createCodeBlockPostProcessor)
  * from the page context (same shape as R132's window.__geodeRegisterMarkdownPostProcessor).
+ * R173: a SECURITY IIFE exercising the Tier 8 D9 sanitizeHTMLToDom XSS vector
+ * battery — each dangerous vector (script/img onerror/javascript:/control-char
+ * javascript:/iframe/onclick/data:/svg+script) is sanitized then ADOPTED INTO THE
+ * LIVE DOM, and the JSON results (incl. window-flag "did-not-execute" assertions
+ * snapshotted after a 150ms tick) land in <div data-testid="fixture-d9san-results">.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -512,6 +517,95 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
     // R172 — expose the static MarkdownPreviewRenderer class so the browser E2E
     // can drive its static methods from the page context (no DOM/cleanup needed).
     window.__obsidianMPR = obsidian.MarkdownPreviewRenderer;
+
+    // R173 — Tier 8 D9 sanitizeHTMLToDom: a conservative allowlist cleaner that
+    // returns a DocumentFragment. SECURITY probe (XSS vector battery): every
+    // dangerous vector is sanitized → ADOPTED INTO THE LIVE DOM (appended under a
+    // body-mounted host) → then we assert the script/onerror did NOT execute
+    // (window flags stay undefined after a tick) AND legitimate content survived.
+    // The setTimeout(150) gives any (stripped) onerror a chance to fire before we
+    // snapshot the flags — proving the stripping, not just absence of the attr.
+    var d9sEl = document.createElement("div");
+    d9sEl.setAttribute("data-testid", "fixture-d9san-results");
+    document.body.appendChild(d9sEl);
+    var sanHost = document.createElement("div");
+    document.body.appendChild(sanHost);
+    this.register(function () { d9sEl.remove(); sanHost.remove(); });
+    (function () {
+      var out = {};
+      try {
+        window.__xssScript = undefined; window.__xssImg = undefined; window.__xssSvg = undefined;
+        var S = obsidian.sanitizeHTMLToDom;
+        // helper: sanitize → adopt into live DOM → return the host element to inspect
+        function bake(html) { var h = document.createElement("div"); h.appendChild(S(html)); sanHost.appendChild(h); return h; }
+
+        out.returnsFragment = (S("<b>x</b>") instanceof DocumentFragment);
+
+        // 1) script element dropped + not executed
+        var h1 = bake('<script>window.__xssScript=1<\\/script><b>keep</b>');
+        out.noScriptEl = !h1.querySelector("script");
+        out.scriptText = h1.textContent;                  // "keep" (script text removed with the element)
+        // 2) img onerror stripped + not fired
+        var h2 = bake('<img src="x-nonexistent-zzz.png" onerror="window.__xssImg=1">');
+        out.imgPresent = !!h2.querySelector("img");
+        out.imgNoOnerror = h2.querySelector("img") ? !h2.querySelector("img").hasAttribute("onerror") : false;
+        // 3) href javascript: stripped
+        var h3 = bake('<a href="javascript:window.__xssA=1">link</a>');
+        out.aPresent = !!h3.querySelector("a");
+        out.aNoJsHref = h3.querySelector("a") ? !h3.querySelector("a").hasAttribute("href") : false;
+        out.aText = h3.textContent;                        // "link"
+        // 4) java\\tscript: (control-char bypass) stripped — runtime sees a real TAB
+        var h4 = bake('<a href="java\\tscript:window.__xssT=1">t</a>');
+        out.tabJsStripped = h4.querySelector("a") ? !h4.querySelector("a").hasAttribute("href") : false;
+        // 5) iframe dropped
+        out.noIframe = !bake('<iframe src="https://evil.example"></iframe>').querySelector("iframe");
+        // 6) onclick on allowed div stripped, text kept
+        var h6 = bake('<div onclick="window.__xssC=1">ok</div>');
+        out.divNoOnclick = h6.querySelector("div") ? !h6.querySelector("div").hasAttribute("onclick") : false;
+        out.divText = h6.textContent;                      // "ok"
+        // 7) safe href kept
+        var h7 = bake('<a href="https://example.com">e</a>');
+        out.safeHrefKept = h7.querySelector("a") ? h7.querySelector("a").getAttribute("href") === "https://example.com" : false;
+        // 8) relative href kept
+        var h8 = bake('<a href="/rel/path">r</a>');
+        out.relHrefKept = h8.querySelector("a") ? h8.querySelector("a").getAttribute("href") === "/rel/path" : false;
+        // 9) data: href stripped
+        out.dataHrefStripped = (function () { var a = bake('<a href="data:text/html,<x>">d</a>').querySelector("a"); return a ? !a.hasAttribute("href") : false; })();
+        // 10) svg+script dropped (no script element, no exec)
+        var h10 = bake('<svg><script>window.__xssSvg=1<\\/script></svg><i>ok</i>');
+        out.svgScriptGone = !h10.querySelector("script");
+        out.svgGone = !h10.querySelector("svg");
+        // 11) unknown tag unwrapped, inner kept
+        var h11 = bake('<unknownx>keep<b>bold</b></unknownx>');
+        out.unknownUnwrapped = !h11.querySelector("unknownx");
+        out.unknownInnerKept = !!h11.querySelector("b") && h11.textContent.indexOf("keep") !== -1;
+        // 12) style attr stripped
+        var h12 = bake('<div style="color:red">s</div>');
+        out.styleStripped = h12.querySelector("div") ? !h12.querySelector("div").hasAttribute("style") : false;
+        // 13) data-/aria- kept; class kept; arbitrary attr stripped
+        var h13 = bake('<div class="c" data-x="1" aria-label="a" foo="bar">k</div>');
+        var d13 = h13.querySelector("div");
+        out.classKept = d13 ? d13.getAttribute("class") === "c" : false;
+        out.dataKept = d13 ? d13.getAttribute("data-x") === "1" : false;
+        out.ariaKept = d13 ? d13.getAttribute("aria-label") === "a" : false;
+        out.fooStripped = d13 ? !d13.hasAttribute("foo") : false;
+        // 14) comment node removed
+        out.commentRemoved = (function () { var h = document.createElement("div"); h.appendChild(S("<!-- c -->text")); return h.childNodes.length === 1 && h.childNodes[0].nodeType === 3; })();
+
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      // snapshot the window flags AFTER a tick — any (stripped) onerror/script would
+      // have had a chance to run by now; their staying undefined proves no execution.
+      setTimeout(function () {
+        out.scriptDidNotRun = (window.__xssScript === undefined);
+        out.imgOnerrorDidNotFire = (window.__xssImg === undefined);
+        out.svgScriptDidNotRun = (window.__xssSvg === undefined);
+        d9sEl.textContent = JSON.stringify(out);
+      }, 150);
+    })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));
   }
