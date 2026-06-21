@@ -205,7 +205,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 | workspace | 17 | 23 | 0 | 52 | 1 | missing 多为 popout/layout-tree=low |
 | views | 9 | 4 | 0 | 17 | 0 | TextFileView/previewMode 偏 T2/T3 |
 | editor | 6 | 4 | 1 | 11 | 0 | editorInfoField/LivePreviewField 是 med |
-| suggest-keymap | 14 | 1 | 1 | 2 | 0 | AbstractInputSuggest=high |
+| suggest-keymap | 15 | 1 | 1 | 1 | 0 | ✅ AbstractInputSuggest done（R167，full+1/missing−1） |
 | ui-components | 16 | 3 | 3 | 7 | 0 | addColorPicker/ColorComponent=med |
 | markdown-render-search | 6 | 4 | 1 | 18 | 0 | prepareFuzzySearch/loadMermaid/sanitizeHTMLToDom |
 | utils-icons-platform | 12 | 3 | 0 | 19 | 0 | parseYaml/setIcon Lucide/base64 桥 |
@@ -222,7 +222,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 **高价值（零新依赖、流行插件直接依赖）**
 - **parseLinktext**（metadata，missing）— 拆 wikilink 为 `{path,subpath}`；Dataview/Templater/链接处理插件普遍调用。Geode 仅有 getLinkpath（path 半），subpath 半丢失。本域最高价值、实现 trivial。
 - **prepareFuzzySearch + prepareSimpleSearch**（render-search，missing）— Dataview/QuickAdd/多数 fuzzy picker 直接调用的模块函数。ui.ts:483 有私有 fuzzyMatch 可上浮升级。
-- **AbstractInputSuggest&lt;T&gt;**（suggest-keymap，missing）— 输入框 type-ahead 基类（设置页 folder/file/tag picker）。Templater/QuickAdd/Periodic Notes 均 subclass；import 即在 module-eval 抛错。可架在现有 PopoverSuggest + EditorSuggest popup 机制上。
+- ~~**AbstractInputSuggest&lt;T&gt;**（suggest-keymap，missing）~~ — ✅ **R167 完成**（=第七梯队 B3①/第八梯队 D4）：新类 extends 既有 `PopoverSuggest`、`textInputEl.getBoundingClientRect()` 自包含浮层（不复用 manager 绑死 CM6 坐标的 position()）、复用 `.geode-suggest-popup` 样式=零 CSS/零依赖。Templater/QuickAdd/Periodic Notes 的 FolderSuggest/FileSuggest import 不再 module-eval 抛错。r167-e2e 25/25。
 - **Vault.getResourcePath / DataAdapter.getResourcePath**（vault-files，stub，L 高）— 现返回 vault 相对路径而非可加载 URI；全仓无 Tauri asset-protocol/convertFileSrc 桥。Excalidraw/image-toolkit/PDF++/媒体嵌入构建 `<img>/<embed> src` 静默失败。
 - **setIcon Lucide 覆盖**（utils-icons，partial，L 高）— 仅 12 个手绘内置图标，其余 Lucide 名渲染空 placeholder（不崩但无字形）。生态绝大多数 ribbon/command 图标不可见。
 - **parseYaml / stringifyYaml**（utils，missing，L 高）— Dataview/Templater/QuickAdd/Tasks/MetaEdit 读写配置/frontmatter 重度调用；**但需打包 YAML 运行时库 = §自主契约硬边界 #5（新运行时依赖），须用户拍板**，故记录但不自动入队（或评估自研 YAML 子集）。
@@ -250,6 +250,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R167 套件回归（2026-06-21，Tier 7 B3① ＝ Tier 8 D4「`AbstractInputSuggest<T>` 输入框 type-ahead 基类」· compat · 零 CSS/零依赖 · 桌面 probe N/A）
+
+R167 = 第七梯队 **B3①「补缺超类导出」** ＝ 第八梯队 **D4「`AbstractInputSuggest<T>`」**（合并做）。**Gate（R160 教训：explorer 实查）**：`AbstractInputSuggest` 完全缺失（compat 零定义/零导出，仅 vendored `.calibration/obsidian.d.ts:294-338` 有权威类型）；父类 `PopoverSuggest`（suggest.ts:37-63）已实现可直接 extends、CSS `.geode-suggest-popup .suggestion-item` 现成。**关键定位陷阱**：既有 `EditorSuggestManager.position()` 硬绑 CM6 坐标（`coordsAtPos`）→ 新类**绝不复用**、改用通用 `textInputEl.getBoundingClientRect()`、不进 manager（Obsidian 真实 AbstractInputSuggest 构造时自挂 input 事件、不经 registerEditorSuggest）。新 `AbstractInputSuggest<T> extends PopoverSuggest<T>`（suggest.ts，与 PopoverSuggest/EditorSuggest 同文件、不动 manager）：构造 `(app, textInputEl)` 挂 input/focus→重算、blur→close、keydown→Arrow/Enter/Escape；自包含浮层（token-guard async + rAF reposition + 外点关 + 幂等 close）；`getValue`/`setValue`（instanceof HTMLInputElement 守卫）；`selectSuggestion` 具体（onSelect 回调 + close）；`onSelect` 链式；barrel 一行导出。**对抗评审 9 维 → 0 confirmed defect（clean）**（生命周期=官方一致取舍 + document 监听 close 干净撤 + rAF 归零、async token-guard 同 SuggestModal 纪律、blur↔click 竞态 preventDefault 保焦 + close 幂等、**无意写路径 grep 实证证伪=非 data-safety 轮**、`_itemEls===_items` 不变量在 renderSuggestion 抛错下仍成立、`limit=0`=unlimited 贴官方 d.ts:297）。简化门 **clean**（净 0 行：与 manager/SuggestModal 同名方法仅相似非 token 级相同 + 既有两个 out-of-diff + 合并=加间接层 → 不抽）。
+
+新增套件：`r167-e2e.mjs` **25/25**（初始无浮层 + focus→全列表 3 条[空查询] + type "ap" 过滤剩 2[apple/apricot 无 banana] + 首条默认 `.is-selected` + ArrowDown 移第 2 + **Enter→popup 关 + input.value 写回 "apricot"[setValue] + selected div="selected: apricot"[onSelect 触发]** + 清空 type "ba" 单条 **click 选中写回 banana** + Escape 关保值[Escape 关 popup 但保 input 焦点=对齐 Obsidian] + 外点关 + **fixture 仍 status "enabled"**[新 input suggest 不破插件] + 无 page error）。**套件矩阵不回退**：r165 9/9（compat global shim + fixture 加载路径，本轮扩展 fixture）·r113 10/10（compat boot）·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 JS + DOM 类、零 fs/Rust/平台分支；`getBoundingClientRect`/`focus`/DOM 事件是 WKWebView 与 Chromium 同构的标准 web API；同 R113/R116/R158/R159/R165 compat-shim 先例）。**v1 defer**：键盘不跑 scope._handlers 优先链（无已知 input-suggest 插件用）；不渲 instructions 条（Obsidian input suggest 无）；contenteditable div 锚点 getValue/setValue 支持但触发仍靠 input 事件。
 
 ### R166 套件回归（2026-06-21，Tier 7 B1 插件卸载入口 · PluginManager.uninstall · 删 .obsidian/plugins/<dir> · DATA-SAFETY 相邻 · 桌面 probe N/A）
 

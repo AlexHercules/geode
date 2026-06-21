@@ -71,6 +71,45 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 167 additions — Tier 7 B3① ＝ Tier 8 D4「`AbstractInputSuggest<T>` 输入框 type-ahead 基类」（compat · 解锁 Templater/QuickAdd/Periodic Notes 的 FolderSuggest/FileSuggest · 复用 PopoverSuggest 基类 + 既有 .geode-suggest-popup 样式）【As-built v0.164】
+
+> **状态：As-built（已交付）。** 对抗评审 9 维 → **0 confirmed defect（clean）**。**关键证伪**：① 生命周期=与官方一致的 v1 取舍（`PopoverSuggest` 不 extends Component、官方亦无 dispose；input 级监听随 suggest 常驻、document 级监听 + rAF 在 `close()` 经 `_detachDom` + `cancelAnimationFrame` 干净撤；retain cycle 在 input 移除+解引用后整体可回收，fixture `this.register(()=>inputEl.remove())` 断链）；② async token-guard 与既有 `SuggestModal._updateSuggestions` 同纪律（`getValue()` await 前同步求值、stale 丢弃、`close()` 也 bump）；③ blur↔click-select 竞态由 popup `mousedown` preventDefault 保焦解决、outside-click 双触发下 `close()` 全 null-guard **幂等**；④ **无意写路径实证证伪**（grep 零 `vault.modify/create/rename/.write`；`setValue` 仅写 input value/textContent=UI 字符串、`renderSuggestion`→setText 用 textContent 无注入）→ **非 data-safety 轮成立**；⑤ `renderSuggestion` per-item try/catch 后仍 append+push、维持 `_itemEls.length===_items.length` 不变量（索引 math 不越界）；⑥ `limit=0`=unlimited 贴合官方 d.ts:297 原文「Set to 0 to disable [the limit]」。简化门 **clean**（净 0 行：新类是 Step 1 契约决策的完整抽象非薄包装；与 `EditorSuggestManager` 同名方法仅相似非 token 级相同 + 后者 out-of-diff + 合并=加间接层 → 明确不抽）。验收：r167-e2e **25/25**（focus→全列表 / type 过滤 / ArrowDown+Enter 选择→setValue 写回 + onSelect 触发 / click 选择 / Escape 关保值 / 外点关 / fixture 仍 enabled）、回归 r165 9/9（compat global shim + fixture 加载路径）·r113 10/10（compat boot）·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS + DOM 类、零 fs/Rust/平台分支；getBoundingClientRect/focus/DOM 事件是 WKWebView 与 Chromium 同构的标准 web API；同 R113/R116/R158/R159/R165 compat-shim 先例）。
+>
+> **Gate（R160 教训：explorer 实查现状，别信缺口表字面）**：explorer 确认 `AbstractInputSuggest` **完全缺失**（compat 无定义、无导出；只有 vendored `.calibration/obsidian.d.ts:294-338` 有权威类型）。但底座齐全：父类 `PopoverSuggest<T>`（`suggest.ts:37-63`）已实现可直接 `extends`；CSS `.geode-suggest-popup .suggestion-item`（`compat.css:366-394`）现成可复用（**零 CSS 新增**）。**关键定位陷阱**：现有 `EditorSuggestManager.position()`（`suggest.ts:331-353`）硬绑 CM6 坐标（`cm.coordsAtPos(editor.posToOffset(...))`），**绝不可复用到 `<input>` 锚点** → 新类必须用通用 `textInputEl.getBoundingClientRect()` 定位。`AbstractInputSuggest` 行为 = 「SuggestModal（`ui.ts:339-470`）的列表/键盘/token-guard 逻辑 + 浮层锚到任意 input 旁」，**不进 EditorSuggestManager**（manager 是 editor-cursor 专用 + 注册制；Obsidian 真实 AbstractInputSuggest 在构造时自挂 input 事件、不经 registerEditorSuggest）。
+>
+> **商业主轴价值**：FolderSuggest/FileSuggest（继承本类）是 Templater/QuickAdd/Periodic Notes 设置页的 type-ahead 输入补全；`import` 即 module-eval 触达本类（缺失 → 类构造抛错 → 整插件 onload 失败 = B3-附 ① calendar/quick-linker 失败根因之一）。
+
+**契约（加性 · compat 自包含 · 权威类型 = `.calibration/obsidian.d.ts:294-338`）**：
+
+```ts
+// src/compat/obsidian/suggest.ts — 新增，与 PopoverSuggest/EditorSuggest 同文件、不动 EditorSuggestManager
+export abstract class AbstractInputSuggest<T> extends PopoverSuggest<T> {
+  limit = 100;                                   // 0 = 不设上限（unlimited），见 nuance
+  constructor(app: App, textInputEl: HTMLInputElement | HTMLDivElement);
+  setValue(value: string): void;                 // 写回 input.value（或 contenteditable div.textContent），不派发 input 事件（同 AbstractTextComponent.setValue 不触 onChange）
+  getValue(): string;                            // 读 input.value（或 div.textContent ?? ""）
+  protected abstract getSuggestions(query: string): T[] | Promise<T[]>;  // ⚠ query=string（≠ EditorSuggest.getSuggestions(context)）
+  selectSuggestion(value: T, evt: MouseEvent | KeyboardEvent): void;     // 具体（≠ PopoverSuggest 抽象）：调 onSelect 回调 + close()
+  onSelect(callback: (value: T, evt: MouseEvent | KeyboardEvent) => unknown): this;
+  // renderSuggestion(value, el) 仍抽象（继承自 PopoverSuggest）；open()/close() 覆写驱动自包含浮层
+}
+```
+
+- **生命周期（不经 manager）**：构造时 `super(app)`（PopoverSuggest 设 `app`+`new Scope()`）→ 存 `textInputEl`+`limit=100` → 给 input 挂 `input`+`focus` 监听（→ 重算建议）、`blur` 监听（→ `close()`；浮层 `mousedown` `preventDefault` 保 input 焦点，故点候选不被 blur 抢先关）、`keydown` 监听（浮层开时 ArrowDown/Up/Enter/Escape 导航/选择/关）。
+- **自包含浮层（镜像 SuggestModal/manager 的列表逻辑、坐标源换 input rect）**：`_token`（async stale-guard，bump on close）、`_items`/`_itemEls`/`_selected`、`_popupEl`（class `geode-suggest-popup suggestion-container`、`data-testid="input-suggest-popup"`、`mousedown` preventDefault 保焦）、item（`.suggestion-item`、`data-testid="input-suggest-item"`、`.is-selected`、click→selectSuggestion、mousemove→setSelected）。`_position()` 用 `textInputEl.getBoundingClientRect()`：left clamp 进视口、`top = rect.bottom + 2`、底部溢出翻到 `rect.top - h - 2`；`minWidth = rect.width`。浮层开时 document capture-phase `mousedown`（点 popup/input 外 → close）+ `scroll`/`resize` rAF-coalesced 重定位（R7 教训：rAF id 用后归零）；`close()` 撤所有 document 级监听 + 移除 popup + bump token。
+- **`getValue`/`setValue`**：`"value" in el` → `el.value`；否则 contenteditable `el.textContent`。`setValue` 仅写值不派发 `input`（编程置值本就不触发 `input` 事件 → 不会回环重算）。
+- **`selectSuggestion`（默认实现）**：`this._selectCallback?.(value, evt)` → `this.close()`（子类可覆写以 setValue/自定义）。`onSelect(cb)` 存 `_selectCallback` 返 `this`。
+- **`index.ts` barrel**：`from "./suggest"` 导出块加 `AbstractInputSuggest`（单行）。
+- **零 CSS 新增**：复用 `.geode-suggest-popup` + `.suggestion-item`（testid 是 attribute 非 class，不影响样式）。
+
+**文件所有权（2 implementer 并行 · fixture 的 MAIN_JS 是运行时字符串、不参与 typecheck → 与 suggest.ts 实现零编译依赖、可全并行）**：
+- **Owner A**：`src/compat/obsidian/suggest.ts`（新类）+ `src/compat/obsidian/index.ts`（barrel 单行）。
+- **Owner B**：`src/compat/obsidian/fixture.ts`（`FixtureInputSuggest extends obsidian.AbstractInputSuggest`，挂到 fixture 追加进 body 的 `<input data-testid="fixture-input-suggest">`，getSuggestions 按 query 前缀过滤静态列表、renderSuggestion=el.setText、onSelect→setValue+把选中值写进 `data-testid="fixture-input-suggest-selected"`）+ `.calibration/r167-e2e.mjs`（focus→浮层现+全列表、键入过滤、ArrowDown+Enter 选择→input 值写回+onSelect 触发、click 选择、Escape/外点关、空查询全列表 + 回归 r165 fixture enabled）。
+
+**data-safety**：本类只读（getSuggestions 由子类提供，FolderSuggest/FileSuggest 读 vault folder/file 列表）；`setValue` 写的是**用户设置输入框**（UI 字符串、非 vault .md 文件）→ **不触 editor/markdown/vault 写管线、非 data-safety 轮**。
+
+**v1 nuance / defer**：① `limit=0` 解释为**不设上限**（show all，对齐 plugin 友好语义，非「显示 0 条」）；② 键盘只直接处理 Arrow/Enter/Escape，**不跑 `scope._handlers` 优先链**（EditorSuggestManager 为 nldates 做的；无已知 input-suggest 插件加 scope handler → defer）；③ 不暴露 `instructions` 条（Obsidian input suggest 无指令栏，`setInstructions` 继承自 PopoverSuggest 无害但不渲染）；④ contenteditable `HTMLDivElement` 锚点支持 getValue/setValue 但 type-ahead 触发仍靠 `input` 事件（div 需 contenteditable 才发 `input`）。
+
 ## Round 166 additions — Tier 7 B1「插件管理面板·卸载入口」（PluginManager.uninstall · 仅 obsidian 社区插件 · 删 .obsidian/plugins/<dir> · DATA-SAFETY 相邻）【As-built v0.163】
 
 > **状态：As-built（已交付）。** 对抗评审 + data-safety 9 维 → **1 MAJOR（D1，已修）**：D1 = uninstall 用 `manifest.id` 拼删除路径，但磁盘文件夹是 `source.dir`，loader 明确 warn 二者可不同 → `dir!==id` 时桌面删不存在路径（静默失败、reload 复活）或**错删另一个文件夹名==manifest-id 的插件配置**（红线未破：仍封闭在 `.obsidian/plugins/` 内、不碰用户 .md，故 major 非 critical）→ 修=`RegisterOptions` 加 `installDir`、loader 传 `source.dir`、uninstall 删 `record.options?.installDir ?? id` 并校验 dir（非 id）。**红线核查全证伪**：id/dir 校验封死越界（空串/`/`/`\`/任意位置 `..`/前导 `.` 全 REJECT；双层防护 = 前端正则 + Rust `safe_join` 拒 `..`/绝对路径）；删除顺序 removeRecord（停运行时）→ persistEnabled(false)（摘 community-plugins.json）→ vault.remove（删目录），`record` const 在 removeRecord 后仍持有引用安全；confirmDelete 弹窗（永久删除/含配置文案）。简化门 clean。验收：r166-e2e 18/18（含 **D1 dir≠id 回归** + vault.remove spy 验删除路径封闭 + guard）、回归 r113 10/10·r163 20/20·r165 9/9·typecheck 0·cargo·生产构建。**桌面 probe N/A**（orchestration 平台无关、e2e 验路径+guard；fs 删用既有 `vault.remove`→`vault_delete`[Rust safe_join + remove_dir_all]、r42/r140 delete probe 已桌面覆盖）。
