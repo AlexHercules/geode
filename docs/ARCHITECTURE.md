@@ -71,6 +71,49 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 172 additions — Tier 8 D11「`MarkdownPreviewRenderer` 静态 post-processor 类」（compat · 薄桥接既有 R132 核心注册表 · 零新依赖）【As-built v0.169】
+
+> **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）**。**关键证伪**：① registry 路由=静态 registerPostProcessor 与实例 registerMarkdownPostProcessor 调**同一个** `registerCoreMarkdownPostProcessor`（core 唯一 export、唯一 registered[]）→ reading view 应用之（r172 静态 pp 真跑 `.preview-content` + r132 实例版 11/11 不受影响 双向证）；② disposer Map 生命周期=重复注册 dedup（先拆旧 entry 防 leak/dup，与 Obsidian「同 pp 多次 push」偏离是**有意更安全的 v1 nuance**）+ unregister 未注册 no-op + 静态 API 无 plugin-unload 生命周期（卸载后 pp 须手动 unregister=**Obsidian 静态类同款 nuance**，非缺陷）；③ createCodeBlockPostProcessor 纯工厂（仅 `makeCodeBlockPostProcessor` 不注册、caller 自 register，符合 Obsidian createX/registerX 语义）；④ 实例版字节未动（git diff + r132 11/11·r134 24/24 回归）；⑤ sortOrder?:number 省略传 undefined 触发 core `sortOrder=0` 默认参；⑥ 无意写路径全无（写 disposer Map + 委托 core registry + 操作 detached el）。简化门 **clean/skip**（纯加性薄类 + 1 import + barrel / ≤2 文件 / 无 existing-code 重构）。验收：r172-e2e **6/6**（静态注册路由核心注册表→reading view 应用 + unregister 后重渲不跑 + createCodeBlockPostProcessor 纯工厂 pre→div 变换）、回归 r132 11/11·r134 24/24·r171 14/14·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（compat registry-bridge orchestration 平台无关，同 R113/R130/R132 先例）。
+>
+> **Gate（R160 教训：explorer 实查现状）**：① **D6 setIcon Lucide 撞硬边界 #5**——`package.json` 无 `lucide`/`lucide-react`，补全 Lucide 需新运行时依赖=须用户拍板，**本轮不做、已上报**；② D9 sanitizeHTMLToDom 安全敏感、从零自写 XSS allowlist、无复用基→deferred 留专门careful轮；③ **选 D11**（最贴 R168-R171「薄桥接/复用既有 infra」模式、零依赖、低风险）。compat 缺 `MarkdownPreviewRenderer`（仅 Plugin **实例** `registerMarkdownPostProcessor`[R132]/`registerMarkdownCodeBlockProcessor`[R133/R134] 存在）；core 已有全部所需：`registerCoreMarkdownPostProcessor(pp,sortOrder)`→disposer（markdownPostProcessors.ts:94）、`makeCodeBlockPostProcessor(lang,handler)`→纯 MarkdownPostProcessor builder（:124，**不注册**，正合 createCodeBlockPostProcessor 工厂语义）。
+>
+> **商业主轴价值**：老式静态调用路径 `MarkdownPreviewRenderer.registerPostProcessor(...)` 的渲染插件（不经 Plugin 实例）当前命中 undefined 崩。
+
+**契约（加性 · plugin.ts 新顶层类 · 全复用 core R132）**：
+
+```ts
+// src/compat/obsidian/plugin.ts — 新顶层 export class（@core/markdownPostProcessors import 加 makeCodeBlockPostProcessor）
+export class MarkdownPreviewRenderer {
+  private static disposers = new Map<MarkdownPostProcessor, () => void>();
+  static registerPostProcessor(postProcessor: MarkdownPostProcessor, sortOrder?: number): void {
+    MarkdownPreviewRenderer.disposers.get(postProcessor)?.();   // 重复注册先拆旧（防 leak/dup）
+    MarkdownPreviewRenderer.disposers.set(postProcessor, registerCoreMarkdownPostProcessor(postProcessor, sortOrder));
+  }
+  static unregisterPostProcessor(postProcessor: MarkdownPostProcessor): void {
+    const dispose = MarkdownPreviewRenderer.disposers.get(postProcessor);
+    if (!dispose) return;                                       // 未注册→no-op
+    dispose();
+    MarkdownPreviewRenderer.disposers.delete(postProcessor);
+  }
+  static createCodeBlockPostProcessor(
+    language: string,
+    handler: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => void | Promise<void>,
+  ): MarkdownPostProcessor {
+    return makeCodeBlockPostProcessor(language, handler);       // 纯工厂、不注册（caller 自 register）
+  }
+}
+```
+
+- **barrel `index.ts`** plugin 块：加 `MarkdownPreviewRenderer`。
+
+**文件所有权（owner A 实现 + owner B 测试 · fixture MAIN_JS 运行时字符串、零编译耦合 → 全并行）**：
+- **Owner A**：`src/compat/obsidian/plugin.ts`（新 `MarkdownPreviewRenderer` 类 + `makeCodeBlockPostProcessor` import）+ `src/compat/obsidian/index.ts`（barrel）。**绝不碰** Plugin 实例 registerMarkdownPostProcessor/registerMarkdownCodeBlockProcessor。
+- **Owner B**：`src/compat/obsidian/fixture.ts`（onload 里 `window.__obsidianMPR = obsidian.MarkdownPreviewRenderer` 测试桩）+ `.calibration/r172-e2e.mjs`（**镜像 r132-e2e**：经 `__obsidianMPR.registerPostProcessor` 注册→开 note preview 验 post-processor 跑[同核心注册表]→`unregisterPostProcessor` 后重渲不跑；`createCodeBlockPostProcessor` 作**纯工厂**测——手搓含 `<pre><code class="language-r172lang">` 的 el、调返回的 processor、验 handler 跑 + `<pre>` 被替换）。
+
+**data-safety**：纯桥接（注册/注销/工厂），写的是 disposer Map + 委托既有 R132 注册表（display-only、不改 markdown.ts 字节、不写 vault/.md）→ **非 data-safety 轮**。
+
+**v1 nuance / defer**：disposers Map 跟踪静态注册（无 plugin-unload 生命周期，靠 unregisterPostProcessor 显式拆）；重复注册同一 processor 先拆旧再注册（防 dup/leak）；createCodeBlockPostProcessor 是纯工厂（caller 须自行 registerPostProcessor 它，对齐 Obsidian）。**D6 setIcon Lucide = 硬边界 #5 待用户拍板**；D9 sanitizeHTMLToDom（安全敏感）留专门轮。
+
 ## Round 171 additions — Tier 8 D3「`prepareFuzzySearch`/`prepareSimpleSearch` 模块级搜索函数」（compat · curry 既有私有 fuzzyMatch + 新薄 word-substring 匹配 · 零新依赖）【As-built v0.168】
 
 > **状态：As-built（已交付）。** 对抗评审 7 维 → **0 confirmed defect（clean）**。**关键证伪（含边角实测）**：① prepareFuzzySearch curry 无状态污染（`q=trim` prepare 段算一次、闭包捕获、同 prepared fn 多 text 复用，`fSub("afoo")≠null && fSub("zzz")===null` 实测）；trim 贴近 Obsidian（前后空白不敏感）+ 使 substring 快路径命中；② prepareSimpleSearch 边角全为**可接受 v1 nuance 非缺陷**——重复 token `"foo foo"`→`[[0,3],[0,3]]`、重叠 token、同 token 多次只取首 indexOf——契约已记「word-substring 简化」，且**唯一文档化 consumer `renderMatches` 尚未实现**（全仓零命中）→ 无 consumer 因重复/重叠区间崩；后续实现 renderMatches 时在其内部去重/合并区间（标准做法）；③ matches `[start,end)` 与 fuzzyMatch/d.ts SearchMatchPart 一致；④ score 方向（`score-=at`，越靠前越接近 0=越高）与 fuzzyMatch 高分=好一致；⑤ 元字符/CJK 安全（`indexOf` 字面量、无 ReDoS）；⑥ `fuzzyMatch` 仍私有、`SearchResult`/`FuzzySuggestModal` 字节未动；⑦ 无意写路径全无。简化门 **clean/skip**（纯加性 2 薄函数 + 2 类型别名 / ≤2 文件 / 无 existing-code 重构）。验收：r171-e2e **14/14**（fuzzy substring 快路径 matches `[[0,3]]` + in-order 非连续字符命中 + 不匹配返 null + 可复用 + simple 全 token 命中 + 缺 token 返 null + matches 按 start 排序）、回归 r170 12/12·r168 16/16·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS 字符串匹配、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167-R170）。

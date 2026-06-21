@@ -232,7 +232,7 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **editorInfoField + editorLivePreviewField + editorEditorField + editorViewField + Editor.getDoc**（editor，missing，med）— R115 已开放 registerEditorExtension 后，CM6 装饰/widget 插件靠这几个 runtime StateField 取活动文件/EditorView、并把渲染门控到 Live Preview。Geode 已有 live/source modeCompartment + activeEditor 可回填。getDoc 一行 `getDoc(){return this;}` 救 CM5-legacy 插件。
 - **~~loadMermaid（再导出）~~ + ~~renderMath/finishRenderMath~~ + sanitizeHTMLToDom**（render-search，missing，med）— ~~loadMermaid~~ ✅ **R168**；~~renderMath/finishRenderMath~~ ✅ **R170**（+ loadMathJax，新 compat/obsidian/math.ts 复用 core loadKatex，sync-return + async-finish 复刻 Obsidian MathJax 模型，maxSize:100 rule-bomb 防护，r170-e2e 12/12）；**剩** sanitizeHTMLToDom 是设置页/渲染输出常用安全 DOM 构建器（安全敏感、单拆）。
 - ~~**arrayBufferToBase64 / base64ToArrayBuffer / getBlobArrayBuffer**（utils，missing，med）~~ — ✅ **R168 完成**（util.ts 三件套桥接 core/net bytesToBase64/base64ToBytes，`.buffer` 无 slack 因 exact-size alloc）。Excalidraw/媒体附件用。
-- **MarkdownPreviewRenderer 静态 registerPostProcessor**（views/render，missing，med）— 实例版（Plugin.registerMarkdownPostProcessor，R132-R136）已做；静态类形式未导出，老插件命中 undefined。薄桥接到 R132 注册表即可。
+- ~~**MarkdownPreviewRenderer 静态 registerPostProcessor**（views/render，missing，med）~~ — ✅ **R172 完成**（plugin.ts 新静态类，registerPostProcessor/unregisterPostProcessor 桥接 R132 核心注册表[disposers Map 跟踪] + createCodeBlockPostProcessor 纯工厂；r172-e2e 6/6）。老式静态调用路径渲染插件。
 - **FileManager.getAvailablePathForAttachment + getNewFileParent + adapter.stat**（vault-files，stub，med）— paste-image/QuickAdd/Excalidraw/importer 计算去重附件路径；现 Proxy fallthrough 返 async undefined 在期望 string/TFolder 处可下游抛错。
 - **Setting.addColorPicker + ColorComponent**（ui-components，stub/missing，med）— 现 reportGap 静默丢控件。Style-Settings 邻近、callout/tag 颜色、主题微调插件用。约 120 行组件（hex↔rgb↔hsl + 原生 `<input type=color>`）即闭合。
 - **registerObsidianProtocolHandler 派发 + registerExtensions**（lifecycle/protocol，stub，med）— Geode 已有原生 obsidian:// 管线（core/obsidianUri.ts + features/editor/obsidianUriHandler.ts）但只跑内置 open/new/search；插件注册的自定义 action（Advanced URI、QuickAdd capture URI）不派发。registerExtensions 让 Excalidraw `.excalidraw`/图片/PDF 查看器关联视图。
@@ -250,6 +250,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
+
+### R172 套件回归（2026-06-21，Tier 8 D11「MarkdownPreviewRenderer 静态 post-processor 类」· compat plugin.ts · 薄桥接 R132 核心注册表 · 桌面 probe N/A）
+
+R172 = 第八梯队 **D11**（薄桥接既有 R132 核心注册表、零新依赖）。**Gate（R160 教训）**：① **D6 setIcon Lucide 撞硬边界 #5**（package.json 无 lucide、须用户拍板、本轮跳过上报）；② D9 sanitizeHTMLToDom 安全敏感 deferred；③ 选 D11（最贴薄桥接模式）。compat 缺 MarkdownPreviewRenderer；core `registerCoreMarkdownPostProcessor`（markdownPostProcessors.ts:94 返 disposer）+ `makeCodeBlockPostProcessor`（:124 纯 builder）已在。**实现**：plugin.ts 新顶层 `MarkdownPreviewRenderer`：`registerPostProcessor`（先拆旧同 pp 再 registerCore、存模块级 disposers Map）/`unregisterPostProcessor`（查 Map dispose+delete、未注册 no-op）/`createCodeBlockPostProcessor`（返 makeCodeBlockPostProcessor 纯工厂、不注册）；barrel +1。**对抗评审 8 维 → 0 confirmed defect（clean）**：registry 路由=与实例 registerMarkdownPostProcessor 调同一 core 函数（r132 11/11 不受影响双向证）；disposer Map dedup（重复注册先拆旧、与 Obsidian push 多次偏离=有意更安全 v1 nuance）+ 静态 API 无 plugin-unload 生命周期（须手动 unregister=Obsidian 同款 nuance）；createCodeBlockPostProcessor 纯工厂符合 createX/registerX 语义；实例版字节未动。简化门 **clean/skip**（纯加性薄类 + 1 import + barrel）。
+
+新增套件：`r172-e2e.mjs` **6/6**（**静态 registerPostProcessor 路由核心注册表 → reading view `.preview-content` 带 data-r172** + unregisterPostProcessor 后强制重渲[preview→live→preview] 不再带 data-r172 + **createCodeBlockPostProcessor 纯工厂**[返 function、调用时 `<pre>`→`<div>` 变换、handler 跑 source="hello"] + 无 page error）。**套件矩阵不回退**：r132 11/11（实例 post-processor 不受影响）·r134 24/24（code-block builder 复用未坏）·r171 14/14（同 fixture）·r113 10/10·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（compat registry-bridge orchestration 平台无关，同 R113/R130/R132）。**v1 nuance**：disposer Map 重复注册 dedup；静态 API 卸载后须手动 unregister（Obsidian 同款）。
 
 ### R171 套件回归（2026-06-21，Tier 8 D3「prepareFuzzySearch/prepareSimpleSearch 模块级搜索函数」· compat ui.ts · 复用私有 fuzzyMatch · 桌面 probe N/A）
 
