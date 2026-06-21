@@ -1337,6 +1337,45 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 > **第七梯队取用建议**：**C5 侧栏折叠 / A1 删除当前笔记 / C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
 
+#### 第八梯队 — compat-API 全表面再校准缺口（2026-06-21 · 13 域并行校准 + 对抗 code-verify，对照 obsidian.d.ts ≈v1.9/297 导出）
+
+> **登记口径**：用户「再做一轮 compat 全表面校准，对照权威 d.ts，诚实量化差距」。13 个域 explorer 逐成员盘点 + verifier `src/` grep 证伪。**统计**：full=215 / partial=61 / stub=23 / missing=206 / out-of-scope=62（总 567）。206 missing 被 Bases/CLI/声明式 Settings/popout 等**全新 1.10–1.13 族**主导（无当前流行插件依赖、apiVersion 1.5.0 已正确门控）。本梯队**只入队「未追踪的高/中迁移价值老缺口」**；全新族列入「T3 / 只记录」。编号续用 **D 系列**（compat-API；圈号①–㊿、A/B/C 已在第一–七梯队用尽）。**3 项 stale gap 已证伪**（见 OBSIDIAN-COMPAT.md「全表面再校准审计」staleGapsFound：L154 多光标折叠 / L140 keymap-scope no-op / layout-change 触发面），live gap 表对应行待更正，不重新入队。
+
+##### 入队（do · 零新依赖优先，按迁移价值排序）
+
+| # | 缺口 | 价值 | scope 速写 + 哪个流行插件需要 |
+|---|---|---|---|
+| **D1** | `apiVersion` 1.5.0 → 升 ≈1.8/1.9 | 高 | 一行常量改（util.ts:51）；现自报落后已实现面 → `requireApiVersion(">=1.6")` 假阴性、minAppVersion warn 误触发。**几乎所有** gate 能力的现代插件受益（removeCommand/onUserEnable/getAllFolders/footnoteRefs 等其实都已实现） |
+| **D2** | `parseLinktext` | 高 | 拆 wikilink 为 `{path,subpath}`，trivial。**Dataview / Templater** 及所有链接处理插件普遍调用；Geode 仅有 getLinkpath（path 半） |
+| **D3** | `prepareFuzzySearch` + `prepareSimpleSearch` | 高 | 模块级模糊/简单搜索函数，可上浮 ui.ts:483 私有 fuzzyMatch 升级。**Dataview / QuickAdd** 及多数 fuzzy picker 直接调用 |
+| **D4** | `AbstractInputSuggest<T>` | 高 | 输入框 type-ahead 基类，架在现有 PopoverSuggest+EditorSuggest popup 上、锚到 `<input>`。**Templater / QuickAdd / Periodic Notes** 的 FolderSuggest/FileSuggest 都 subclass；import 即 module-eval 抛错 |
+| **D5** | `Vault/DataAdapter.getResourcePath`（Tauri asset 桥） | 高 | 现返 vault 相对路径而非可加载 URI；需接 Tauri asset-protocol/convertFileSrc。**Excalidraw / image-toolkit / PDF++ / 媒体嵌入** 构建 `<img src>` 静默失败 |
+| **D6** | `setIcon` Lucide 全覆盖 | 高 | 现仅 12 手绘内置，其余 Lucide 名空 placeholder。映射常用名或打包 Lucide stroke 集；纯 UI 零 data-safety。**全生态** ribbon/command 图标可见性 |
+| **D7** | `sleep` / `nextFrame` 全局 + `Document.on/off` | 中 | 载入器仅注入 moment+app；调全局 `sleep()` 直接崩。一行修 + Document.prototype patch 复用委托监听。**QuickAdd / Templater** 用户脚本 crash-safety |
+| **D8** | `editorInfoField` + `editorLivePreviewField` + `editorEditorField` + `editorViewField` + `Editor.getDoc` | 中 | R115 开放 registerEditorExtension 后，CM6 装饰/widget 插件用这些 StateField 取活动文件/EditorView + 门控 Live Preview；Geode 已有 modeCompartment+activeEditor 可回填。getDoc 一行救 CM5-legacy。CM6-扩展类插件 |
+| **D9** | `loadMermaid` 再导出 + `renderMath`/`finishRenderMath` + `sanitizeHTMLToDom` | 中 | loadMermaid 实现已在 core/mermaid.ts:15 仅缺一行再导出；renderMath 由已打包 KaTeX 回填；sanitizeHTMLToDom 安全 DOM 构建。**图表/数学/web-clipper** 类插件 |
+| **D10** | `arrayBufferToBase64` / `base64ToArrayBuffer` / `getBlobArrayBuffer` | 中 | core/net.ts 已有 bytesToBase64/base64ToBytes，零成本桥接无新依赖。**Excalidraw / 媒体附件** 插件 |
+| **D11** | `MarkdownPreviewRenderer` 静态 `registerPostProcessor` 桥 | 中 | 实例版（R132-R136）已做，薄桥接到 R132 注册表即可。老式静态调用路径的渲染插件 |
+| **D12** | `FileManager.getAvailablePathForAttachment` + `getNewFileParent` + `adapter.stat` | 中 | 现 Proxy 返 async undefined 在期望 string/TFolder 处下游抛错。**paste-image / QuickAdd / Excalidraw / importer**（去重附件路径）、Calendar/Recent/Periodic（mtime） |
+| **D13** | `Setting.addColorPicker` + `ColorComponent` | 中 | 现 reportGap 静默丢控件；约 120 行（hex↔rgb↔hsl + 原生 `<input type=color>`）。**Style-Settings 邻近 / callout-tag 颜色 / 主题微调** 插件 |
+| **D14** | `registerObsidianProtocolHandler` 派发 + `registerExtensions` | 中 | Geode 已有原生 obsidian:// 管线（R46）但不派发插件注册 action；registerExtensions 关联自定义文件类型视图。**Advanced URI / QuickAdd**（URI capture）、**Excalidraw**（`.excalidraw`）、图片/PDF 查看器 |
+| **D15** | `Workspace.getMostRecentLeaf` + `setActiveLeaf` + `openLinkText` eState 子路径 | 中 | 「开到右 pane」+ 程序化 open 后聚焦 + #heading/^block 滚动（现 openLinkText 忽略 openViewState）。**Templater / QuickAdd** 导航、链接跟随插件 |
+| **D16** | `getLanguage` + `getIcon`/`getIconIds` + `Platform.resourcePathPrefix` + `App.lastEvent` | 中 | 本地化（core/i18n 回填）、图标 picker（getIconSvg+注册 Map）、Mod/Shift 点击检测（现 lastEvent 恒 null）。Style Settings 图标 picker、本地化插件、ctrl/cmd-click 行为 |
+
+##### T3 / 越界（只记录、不入队 · 防下轮重发现）
+
+| 缺口族 | 为何不做 |
+|---|---|
+| **`parseYaml` / `stringifyYaml`**（util，高价值但受阻） | Dataview/Templater/QuickAdd/Tasks/MetaEdit 重度依赖，**但需打包 YAML 运行时库 = §自主契约硬边界 #5（新运行时依赖）→ 须用户拍板**。备选：自研最小 YAML 子集（无新依赖）。**开工前必须用户确认** |
+| **Bases / Value / FormulaContext / QueryController / parsePropertyId**（≈54，@1.10.0） | 依赖未建的数据库引擎；canonical 流行插件零依赖。**可选 crash-safety**：导出抛友好错误的惰性占位类，避免 `extends undefined` 硬崩 |
+| **声明式 Settings 族**（SettingDefinition*/SettingControl*/SettingGroup/SettingPage 等 ≈50，@1.13.0） | apiVersion 门控 + 插件回落 display()（已全实现）；cutoff 前无流行插件采用 |
+| **SecretStorage / SecretComponent / App.secretStorage**（@1.11.4） | AI/sync/API-key niche |
+| **registerCliHandler**（@1.12.2） | CLI 面，GUI 插件无关 |
+| **popout / 多窗口**（WorkspaceWindow/Floating/moveLeafToPopout/onWindowMigrated） | 单窗口宿主天然不做 |
+| **RenderContext / TextFileView·MarkdownPreviewView / FileSystemAdapter / DisplayValueComponent·ConfirmationModal·ProgressBarComponent** | 偏 T2/T3（中央 pane 自定义视图、桌面绝对路径）或全新（1.13.x）几乎零采用 |
+
+> **第八梯队取用顺序建议**：先清 **D1（一行版本号，最高杠杆）→ D2 parseLinktext / D7 sleep 速赢 → D9 loadMermaid 再导出（一行）/ D10 base64 桥（已有内部实现）** 等零依赖速赢做 loop 燃料；再上 **D3/D4/D5/D6** 等中等一轮项。**D5 getResourcePath 接 Tauri asset-protocol、D14 registerExtensions/protocol 派发** 涉宿主接线、单独成轮。**parseYaml（高价值）须用户拍板新依赖后再做**。全部为加性 display/读取面，无 vault 写、不触发 data-safety 字节级套件（除非实现触及 markdown.ts/写 .md）。
+
 ## 已知技术债
 
 - R17 折叠/摄入显式口径（详见 ARCHITECTURE R17 节）：折叠状态不持久化（tab 重开/

@@ -137,7 +137,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | `vault.getConfig`（非公开 API） | 固定值：defaultViewMode→"source"、useMarkdownLinks→false，其余 undefined（每 key 记缺口） |
 | `App.dragManager` / `App.internalPlugins` / `App.plugins` | warn-stub 形状（dragFile→null、getEnabledPluginById→null、plugins:{} 空字典）——recent-files 拖拽降级、daily-notes 探测返回"未启用" |
 | `TFile.stat` | ctime/size 对既存文件恒为 0（Geode 树无 stats）；mtime 仅会话内跟踪本地 modify/create，加载时记一次缺口 |
-| `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**；**R22：`fileManager.processFrontMatter` 真实现**（core/properties 编辑引擎，逐 key diff 字节保留改写；opaque 条目不进 fm 对象且永不被改写、不可序列化值 TypeError reject、options/mtime 忽略——偏差见 ARCHITECTURE R22）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope 为惰性 no-op 对象 |
+| `App.fileManager` / `App.keymap` / `App.scope` | **R16：`fileManager.renameFile` 真实现**；**R22：`fileManager.processFrontMatter` 真实现**（core/properties 编辑引擎，逐 key diff 字节保留改写；opaque 条目不进 fm 对象且永不被改写、不可序列化值 TypeError reject、options/mtime 忽略——偏差见 ARCHITECTURE R22）；fileManager 其余方法仍为按访问记录缺口的 async no-op；keymap/scope **【2026-06-21 全表面校准更正：原「惰性 no-op 对象」为 stale】** 导出的 `Scope`（ui.ts:64，register/unregister 真注册、父链）/ `Keymap.isModifier`·`isModEvent`（平台感知静态法）**已做实**，仅 `app.keymap.pushScope/popScope` + `app.scope`（detached、从不派发）仍 no-op |
 | `getFileCache().links` 缺 `[[#h]]` 条目 | 偏差（R16 记录）：同文链接不进 links 索引（官方含 `link: "#h"` 形态条目） |
 | ~~`DataAdapter.readBinary` / `writeBinary`~~ | **R111+R122：桥接 core 原生二进制 IO**（readBinary 返拷贝防别名）。**R122：writeBinary 创建或覆盖**（try createBinary→catch modifyBinary 原子；连带修 R120 共享-tmp 并发撕裂写 MAJOR=唯一 tmp）。`appendBinary`/`stat`/`trash*` 仍 warn-stub；append/process/rmdir/copy 用字符串 IO 真实实现 |
 | DOM 增强 `onNodeInserted` / `onWindowMigrated` | warn-stub（单窗口宿主），返回 no-op destroyer |
@@ -151,7 +151,7 @@ R4 已完成一次全表面校准：6 个并行 agent 从官方 `obsidian.d.ts`�
 | ~~`vault.readBinary` / `createBinary` / `modifyBinary`~~ | **R111+R120 出队**：R111=readBinary/createBinary 桥接 core 原生二进制 IO（toArrayBuffer 拷贝防别名、createBinary 返 TFile、连带修 core createBinary 缺的 assertSafeRelPath）。**R120=modifyBinary**（二进制覆盖写）——新 Rust `vault_modify_binary` 原子 tmp+rename（覆盖且无截断竞态，crash 只丢 tmp）。图片/PDF/Excalidraw 类插件可读/写/改附件。`DataAdapter.writeBinary` 仍 create-only（覆盖走 Vault.modifyBinary） |
 | ~~`MarkdownView.getMode/getViewData/setViewData`~~ / ~~程序化模式切换~~ + ~~`workspace.activeEditor`~~ | **部分**：~~getMode/getViewData~~（**R116 出队**）+ ~~activeEditor~~（**R117 出队**：live getter→makeActiveMarkdownView，MarkdownFileInfo 超集）+ ~~setViewData~~（**R123 出队**：editor.setValue→CM dispatch→autosave 安全落盘，clear 忽略；**没用 handle.setText[会静默丢数据]**）+ ~~程序化模式切换~~（**R137 出队**：gate 揭示 Obsidian `MarkdownView` 无 public `setMode`[`currentMode` 是内部属性]→真 API=`WorkspaceLeaf.setViewState({type:markdown, state:{mode,source}})`；补 setViewState honor mode-only 变更→`applyViewStateMode`→setTabMode[Ctrl+E 同 sink]，preview→preview/source+source:false→live/source→source；评审修=加 viewType==markdown 守卫防盖非 md tab）。`MarkdownFileInfo.hoverPopover` 仍缺。**已知偏离**：阅读视图非 CM-backed → reading mode active MarkdownView 返 null；source bool 缺省→raw source（同 openFile collapse） |
 | ~~`MetadataCache.getTags()`~~ + ~~`CachedMetadata.embeds`~~/~~`sections`~~/~~`listItems`~~/~~`frontmatterLinks`~~ + ~~`fileManager.generateMarkdownLink`~~ | **部分**：~~getTags~~（**R114 出队**：投影 core `getTagMap`→`Record<string,number>`，大小写敏感 deferred 偏离）+ ~~embeds~~（**R119 出队**：`![[..]]` wikilink 嵌入从 links 拆出，original/position 含 `!`；**偏离 O1**：EmbedCache.link 丢 `#anchor`+无 alias 不派生 displayText[既有]；**O2**：转义 `\![[]]` 误判为 embed[罕见]）+ ~~sections~~（**R124 出队**：顶层块 segmenter，fenced code 原子、heading/thematic 单行断段、按首行分类；D2-D6 顶层近似偏离文档化）+ ~~listItems~~（**R125 出队**：行级 parser，缩进栈 parent、task、`^id`；评审揪修 2 MAJOR[fence 不感知 + `^id` 挂错连续兄弟末项]；position 单行近似文档化）+ ~~frontmatterLinks~~（**R126 出队**：属性值 `[[wikilink]]` 扫描，key=field/`field.N`，link 去 subpath 镜像 core WIKILINK_RE，displayText=alias；markdown 式属性链接 = 文档化偏离）+ ~~footnotes/footnoteRefs~~（**R127 出队**：core 补 `[^id]` 引用捕获[定义 R65 已有]，扫 `masked` 排除 code/frontmatter；compat 桥接两者 {id 无 caret, position}，跨 no-content transient；内联 `^[text]` 脚注=文档化偏离）+ getFileCache 形状余项 referenceLinks + ~~generateMarkdownLink~~（**R112 出队**） |
-| ~~`app.loadLocalStorage/saveLocalStorage/isDarkMode`~~ + `MenuItem.setSubmenu` + ~~`Editor` 完整版方法~~ | **部分**：~~loadLocalStorage/saveLocalStorage/isDarkMode~~（**R129 出队**：per-vault localStorage[key=`geode-ls:<vault>:k`，JSON round-trip，null 清除] + isDarkMode 读 resident body theme class；纯 UI 态零 data-safety）；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；~~Editor 余项~~（**R128 出队**：listSelections/setSelections/setLine/transaction/wordAt/scrollIntoView/scrollTo/getScrollInfo/exec[17 命令映射]/undo/redo/blur/refresh——直接映射 CM6，写经 dispatch→autosave；**多光标折叠**=Geode CM 无 allowMultipleSelections 文档化偏离[R57]） |
+| ~~`app.loadLocalStorage/saveLocalStorage/isDarkMode`~~ + `MenuItem.setSubmenu` + ~~`Editor` 完整版方法~~ | **部分**：~~loadLocalStorage/saveLocalStorage/isDarkMode~~（**R129 出队**：per-vault localStorage[key=`geode-ls:<vault>:k`，JSON round-trip，null 清除] + isDarkMode 读 resident body theme class；纯 UI 态零 data-safety）；Menu 二级菜单（`ui.ts` MenuItem 无 setSubmenu）；~~Editor 余项~~（**R128 出队**：listSelections/setSelections/setLine/transaction/wordAt/scrollIntoView/scrollTo/getScrollInfo/exec[17 命令映射]/undo/redo/blur/refresh——直接映射 CM6，写经 dispatch→autosave；~~**多光标折叠**=Geode CM 无 allowMultipleSelections[R57]~~ **【2026-06-21 全表面校准更正：上述 R57 注为 stale】** R63 已 `EditorState.allowMultipleSelections.of(true)`（cmExtensions.ts:651）→ 多光标实际可用、listSelections/setSelections 覆盖全 ranges；唯一残留偏差 = setSelections 漏 `main?` 索引参数（obsidian.d.ts setSelections(ranges, main?)）） |
 
 ## 验收方式（可度量，防自嗨）
 
@@ -189,6 +189,67 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 - **两根轴分流不变**：**原生功能差距**（㊵–㊿）落 ROADMAP 候选池；**插件 API 差距 = 商业主轴**落本文件「缺口表」R60 新登记 8 行（`file-menu`/`editor-menu` 右键钩子、`registerMarkdownPostProcessor`[Dataview 命脉]、`vault.readBinary`、`MarkdownView.getMode`、`app.commands`、`generateMarkdownLink` 等）。其中 `registerMarkdownPostProcessor` + `file-menu` 钩子是**插件迁移阻塞面最大**的两项，工程量也最大。
 - **设置「重复」结论（用户提问）**：Templates/Daily/Unique 三区字段重复经 code-verify **忠实于 Obsidian**（三独立核心插件各一套设置，语义不同——位置指向不同文件夹、Templates 日期格式管变量 vs Daily 管文件名）→ **不应合并**；真实缺口仅是这些 setting-item 缺 `setting-desc` 说明文字（Obsidian 每项有澄清描述），归入 ㊶。
 - **套件矩阵不回退**：本轮零代码、零 compat 调用面改动，r31/…/r57 全套不动；缺口表仅**新增** R60 8 行（未划任何旧行）。
+
+### 全表面再校准审计（2026-06-21 · 13 域并行 explorer + 对抗 code-verify · 对照权威 obsidian.d.ts ≈v1.9，297 导出）
+
+> **方法**：13 个域 explorer 逐成员对照 obsidian.d.ts（≈v1.9.x，含至 1.13.0 成员），每条「缺口」断言由 verifier 在 `src/` grep 证伪防 stale gap。**统计绝不通胀**：type-only 接口（运行时擦除、bundle 插件不 import 本仓 .d.ts）不计为可执行缺口；out-of-scope（Bases/CLI/popout/移动端）按 T3 只记录不入队。
+
+#### 13 域覆盖矩阵
+
+| 域 | full | partial | stub | missing | out-of-scope | 备注 |
+|---|---:|---:|---:|---:|---:|---|
+| global-augmentations | 25 | 1 | 2 | 8 | 1 | sleep 全局缺席=唯一 med |
+| app-plugin-lifecycle | 24 | 5 | 5 | 4 | 4 | fileManager/Command/SettingTab 三 partial 是 high |
+| vault-files | 49 | 6 | 9 | 3 | 2 | getResourcePath 是 high |
+| metadata-cache | 26 | 6 | 0 | 13 | 0 | parseLinktext 缺席=high |
+| workspace | 17 | 23 | 0 | 52 | 1 | missing 多为 popout/layout-tree=low |
+| views | 9 | 4 | 0 | 17 | 0 | TextFileView/previewMode 偏 T2/T3 |
+| editor | 6 | 4 | 1 | 11 | 0 | editorInfoField/LivePreviewField 是 med |
+| suggest-keymap | 14 | 1 | 1 | 2 | 0 | AbstractInputSuggest=high |
+| ui-components | 16 | 3 | 3 | 7 | 0 | addColorPicker/ColorComponent=med |
+| markdown-render-search | 6 | 4 | 1 | 18 | 0 | prepareFuzzySearch/loadMermaid/sanitizeHTMLToDom |
+| utils-icons-platform | 12 | 3 | 0 | 19 | 0 | parseYaml/setIcon Lucide/base64 桥 |
+| bases-values-cli | 0 | 0 | 0 | 2 | 54 | 整族 T3，仅 Tasks/DisplayValue 记为 missing |
+| settings-secrets-protocol-events | 11 | 1 | 1 | 50 | 0 | missing 多为 1.13.0 声明式 Settings |
+| **合计** | **215** | **61** | **23** | **206** | **62** | 总 567 |
+
+#### apiVersion 漂移（载入性结论，非纯文档）
+
+`apiVersion = "1.5.0"`（util.ts:51）落后于审计所对 d.ts（≈1.9，成员至 1.13.0），且 `requireApiVersion` 对此字符串做 semver 比较（util.ts:67）。**漂移是载入性的**：Geode 实际已实现远超 1.5.0 的面（removeCommand 1.7.2 · onUserEnable 1.7.2 · getFileByPath 1.5.7 · getAllFolders 1.6.6 · copy 1.8.7 · footnoteRefs 1.8.7 · frontmatterLinks 1.4.0 · setErrorMessage 1.13.0 · addComponent 1.11.0），却自报 1.5.0 → 任何 `requireApiVersion(">=1.6")` 的插件得 `false`，**静默走 legacy/禁用分支**，且 manifest `minAppVersion>=1.6` 触发载入器 warn+设置页标注。反向看 1.5.0 对「未实现的 1.10+ Bases / 1.13 声明式 Settings」是诚实的。**建议**：升到 ≈"1.8.0"/"1.9.0"（匹配已实现面、避免假阴性），同时保持对 1.10+ 全新族的诚实门控；纯字符串常量改动，semverCompare 逻辑本身正确。注意 appendBinary(1.12.3) 等未实现，故不可虚报过高版本。
+
+#### NEW 缺口清单（未在 live gap 表 L126–155 追踪 · 按迁移价值排序）
+
+**高价值（零新依赖、流行插件直接依赖）**
+- **parseLinktext**（metadata，missing）— 拆 wikilink 为 `{path,subpath}`；Dataview/Templater/链接处理插件普遍调用。Geode 仅有 getLinkpath（path 半），subpath 半丢失。本域最高价值、实现 trivial。
+- **prepareFuzzySearch + prepareSimpleSearch**（render-search，missing）— Dataview/QuickAdd/多数 fuzzy picker 直接调用的模块函数。ui.ts:483 有私有 fuzzyMatch 可上浮升级。
+- **AbstractInputSuggest&lt;T&gt;**（suggest-keymap，missing）— 输入框 type-ahead 基类（设置页 folder/file/tag picker）。Templater/QuickAdd/Periodic Notes 均 subclass；import 即在 module-eval 抛错。可架在现有 PopoverSuggest + EditorSuggest popup 机制上。
+- **Vault.getResourcePath / DataAdapter.getResourcePath**（vault-files，stub，L 高）— 现返回 vault 相对路径而非可加载 URI；全仓无 Tauri asset-protocol/convertFileSrc 桥。Excalidraw/image-toolkit/PDF++/媒体嵌入构建 `<img>/<embed> src` 静默失败。
+- **setIcon Lucide 覆盖**（utils-icons，partial，L 高）— 仅 12 个手绘内置图标，其余 Lucide 名渲染空 placeholder（不崩但无字形）。生态绝大多数 ribbon/command 图标不可见。
+- **parseYaml / stringifyYaml**（utils，missing，L 高）— Dataview/Templater/QuickAdd/Tasks/MetaEdit 读写配置/frontmatter 重度调用；**但需打包 YAML 运行时库 = §自主契约硬边界 #5（新运行时依赖），须用户拍板**，故记录但不自动入队（或评估自研 YAML 子集）。
+
+**中价值（多为已有内部能力的一行级桥接 / 速赢）**
+- **sleep（全局）+ nextFrame + Document.on/off**（global-aug，missing，med）— 载入器只注入 window.moment+window.app；插件调全局 `sleep()` 直接 ReferenceError 崩。QuickAdd/Templater 用户脚本常用。一行修：`g.sleep=ms=>new Promise(r=>setTimeout(r,ms))`，并补 window.sleep/nextFrame、Document.prototype.on/off 复用现有委托监听实现。
+- **editorInfoField + editorLivePreviewField + editorEditorField + editorViewField + Editor.getDoc**（editor，missing，med）— R115 已开放 registerEditorExtension 后，CM6 装饰/widget 插件靠这几个 runtime StateField 取活动文件/EditorView、并把渲染门控到 Live Preview。Geode 已有 live/source modeCompartment + activeEditor 可回填。getDoc 一行 `getDoc(){return this;}` 救 CM5-legacy 插件。
+- **loadMermaid（再导出）+ renderMath/finishRenderMath + sanitizeHTMLToDom**（render-search，missing，med）— loadMermaid 实现已在 core/mermaid.ts:15（mermaid@11 已打包），仅缺从 compat index 一行再导出；renderMath 可由已打包 KaTeX（core/math.ts）回填；sanitizeHTMLToDom 是设置页/渲染输出常用安全 DOM 构建器。
+- **arrayBufferToBase64 / base64ToArrayBuffer / getBlobArrayBuffer**（utils，missing，med）— core/net.ts 已有 bytesToBase64/base64ToBytes，零成本桥接、无新依赖。Excalidraw/媒体附件用。
+- **MarkdownPreviewRenderer 静态 registerPostProcessor**（views/render，missing，med）— 实例版（Plugin.registerMarkdownPostProcessor，R132-R136）已做；静态类形式未导出，老插件命中 undefined。薄桥接到 R132 注册表即可。
+- **FileManager.getAvailablePathForAttachment + getNewFileParent + adapter.stat**（vault-files，stub，med）— paste-image/QuickAdd/Excalidraw/importer 计算去重附件路径；现 Proxy fallthrough 返 async undefined 在期望 string/TFolder 处可下游抛错。
+- **Setting.addColorPicker + ColorComponent**（ui-components，stub/missing，med）— 现 reportGap 静默丢控件。Style-Settings 邻近、callout/tag 颜色、主题微调插件用。约 120 行组件（hex↔rgb↔hsl + 原生 `<input type=color>`）即闭合。
+- **registerObsidianProtocolHandler 派发 + registerExtensions**（lifecycle/protocol，stub，med）— Geode 已有原生 obsidian:// 管线（core/obsidianUri.ts + features/editor/obsidianUriHandler.ts）但只跑内置 open/new/search；插件注册的自定义 action（Advanced URI、QuickAdd capture URI）不派发。registerExtensions 让 Excalidraw `.excalidraw`/图片/PDF 查看器关联视图。
+- **Workspace.getMostRecentLeaf + setActiveLeaf + openLinkText eState 子路径**（workspace，missing/partial，med）— Templater/QuickAdd「开到右 pane」+ 程序化 open 后聚焦 + #heading/^block 子路径滚动（现 openLinkText 忽略 openViewState）。
+- **getLanguage + getIcon + getIconIds + Platform.resourcePathPrefix + App.lastEvent**（utils/lifecycle，missing/stub，med）— 本地化/图标 picker（core/i18n + getIconSvg + 注册 Map 可回填）；App.lastEvent 现恒 null 致 Mod/Shift 点击（Keymap.isModEvent）从不识别修饰键。
+
+#### 全新 API 族（T3 / out-of-scope，只记录不入队，防下轮重发现）
+
+- **Bases / Value / FormulaContext / QueryController / parsePropertyId**（≈54 导出，@1.10.0）— 依赖未建的数据库引擎；Dataview/Templater/Tasks/Calendar/Excalidraw/QuickAdd/Periodic Notes/Style Settings/Admonition 零依赖。**crash-safety 缓解（可选）**：导出抛友好错误的惰性占位类（BasesView/各 Value 子型），避免 `extends undefined` 在 class-eval 硬崩、让插件其余功能仍载入。
+- **声明式 Settings 族**（SettingDefinition*/SettingControl*/SettingGroup/SettingPage/SettingTab.getSettingDefinitions 等 ≈50，@1.13.0）— 全字段经 grep 证实一致缺席；被 apiVersion 1.5.0 门控、插件回落 display()+new Setting()（已全实现）。截至 cutoff 无流行插件采用。
+- **SecretStorage / SecretComponent / App.secretStorage**（@1.11.4）— AI/sync/API-key 插件 niche。
+- **registerCliHandler / CliFlags**（@1.12.2）— CLI 面，GUI 插件无关。
+- **popout / 多窗口**（WorkspaceWindow/WorkspaceFloating/moveLeafToPopout/openPopoutLeaf/onWindowMigrated）— 单窗口宿主天然不做。
+- **RenderContext（@1.10.0）/ TextFileView·EditableFileView·MarkdownPreviewView / FileSystemAdapter**— 偏 T2/T3（中央 pane 自定义视图宿主、桌面绝对路径），demand 低。
+- **DisplayValueComponent(1.13.1) / ConfirmationModal(1.13.0) / ProgressBarComponent / SecretComponent**— 全新、几乎零插件采用。
+
+> 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
 ### R159 套件回归（2026-06-21，compat daily-notes instance.options · 商业主轴 · 复用 R48 设置 · 纯只读 · 桌面 probe N/A）
 
