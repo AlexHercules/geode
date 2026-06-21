@@ -14,12 +14,26 @@ import { reportGap } from "./gaps";
 import { getIconSvg } from "./icons";
 import type { App } from "./plugin";
 import type { Menu } from "./ui";
+import { parseLinktext } from "./util";
 // value import is safe: view.ts only imports type-only symbols from this file
 import { FileView, type View } from "./view";
 
 type Handle = Omit<AppHandle, "ui">;
 export type PaneType = "tab" | "split" | "window";
 export type SplitDirection = "vertical" | "horizontal";
+
+/**
+ * Official `OpenViewState` (d.ts:4756) — the optional 4th arg of openLinkText.
+ * `eState` typically carries the ephemeral scroll target (subpath/line); v1 only
+ * honours the linktext subpath, so these fields are declared for type fidelity
+ * but not yet consumed (recorded deviation).
+ */
+export interface OpenViewState {
+  state?: Record<string, unknown>;
+  eState?: Record<string, unknown>;
+  active?: boolean;
+  group?: WorkspaceLeaf;
+}
 
 /**
  * R137: map an Obsidian markdown view-state mode to a Geode ViewMode and apply it to the active tab —
@@ -447,6 +461,30 @@ export class Workspace extends Events {
     }
   }
 
+  /**
+   * 'Get the most recently active leaf in a given workspace root' (d.ts:7953).
+   * Geode exposes a single active-pane facade (activeLeaf) rather than a real
+   * leaf tree, so we return it. `root` (a WorkspaceParent to scope the search)
+   * is meaningless without a multi-root split — ignored (recorded deviation).
+   */
+  getMostRecentLeaf(_root?: unknown): WorkspaceLeaf | null {
+    return this.activeLeaf;
+  }
+
+  /**
+   * 'Sets the active leaf' (d.ts:7922). A mounted sidebar leaf is brought to the
+   * foreground via the same path as revealLeaf (the only addressable leaves in
+   * the facade). Other leaves carry no pane id under the active-pane facade, so
+   * there is no main-area focus to retarget → no-op (recorded deviation). The
+   * `focus` param has no separately-focusable surface here, so it is ignored.
+   */
+  setActiveLeaf(leaf: WorkspaceLeaf, _params?: { focus?: boolean }): void {
+    if (leaf instanceof SidebarViewLeaf && leaf._panelId) {
+      if (leaf.side === "left") this.handle.workspace.setLeftPanel(leaf._panelId);
+      else this.handle.workspace.setRightPanel(leaf._panelId);
+    }
+  }
+
   iterateAllLeaves(callback: (leaf: WorkspaceLeaf) => unknown): void {
     if (this.activeLeaf) callback(this.activeLeaf);
     for (const leaf of this._sideLeaves) callback(leaf);
@@ -479,14 +517,18 @@ export class Workspace extends Events {
     linktext: string,
     sourcePath: string,
     newLeaf?: PaneType | boolean,
-    _openViewState?: unknown,
+    openViewState?: OpenViewState,
   ): Promise<void> {
-    const linkpath = linktext.split("|")[0].split("#")[0].trim();
-    if (!linkpath) return;
-    let path = this.handle.metadata.resolveLink(linkpath, sourcePath);
+    // parseLinktext keeps the leading "#"/"^" on subpath (faithful to Obsidian's
+    // substr split); the path half drives resolution + open, the subpath half the
+    // post-open reveal. Strip any alias first ([[note#H|Alias]] ⇒ "note#H").
+    const { path: linkpath, subpath } = parseLinktext(linktext.split("|")[0]);
+    const bareLink = linkpath.trim();
+    if (!bareLink) return;
+    let path = this.handle.metadata.resolveLink(bareLink, sourcePath);
     if (!path) {
-      const candidates = [`${linkpath}.md`];
-      if (linkpath.includes("/")) candidates.push(`${linkpath.split("/").pop()}.md`);
+      const candidates = [`${bareLink}.md`];
+      if (bareLink.includes("/")) candidates.push(`${bareLink.split("/").pop()}.md`);
       for (const candidate of candidates) {
         try {
           await this.handle.vault.create(candidate, "");
@@ -497,11 +539,23 @@ export class Workspace extends Events {
         }
       }
       if (!path) {
-        console.error(`[obsidian-compat] openLinkText could not create "${linkpath}.md"`);
+        console.error(`[obsidian-compat] openLinkText could not create "${bareLink}.md"`);
         return;
       }
     }
     this.handle.workspace.openFile(path, { newTab: wantsNewTab(newLeaf) });
+    // Subpath reveal AFTER openFile so the target pane already holds `path` (R14),
+    // mirroring features/editor/wikilinks. parseLinktext keeps the leading "#" so
+    // we drop it before resolveSubpath, which expects "^id" (block) or bare heading
+    // text; a "#^id" link slices to "^id", a "#Heading" link to "Heading".
+    // A freshly created (empty) note resolves to null ⇒ no reveal (the `if (span)`
+    // guard), so the create branch never scroll-jumps. openViewState's eState may
+    // also carry a subpath/line, but v1 only honours the linktext subpath; other
+    // OpenViewState fields (state.mode, active, group) are not consumed here.
+    if (subpath) {
+      const span = this.handle.metadata.resolveSubpath(path, subpath.slice(1));
+      if (span) this.handle.workspace.requestReveal(path, span.from, span.to);
+    }
   }
 
   /** 'Remove all leaves of the given type.' */

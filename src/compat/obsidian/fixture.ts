@@ -49,6 +49,10 @@
  * placeholder), this.app.fileManager.getAvailablePathForAttachment(name) (deduped path
  * string) and getNewFileParent(sourcePath) (a TFolder with a .path string); JSON results
  * land in <div data-testid="fixture-d1216-results">.
+ * R175: a one-line test stub exposing the compat App's (obsidian-shaped) workspace to
+ * window.__compatWorkspace, so the browser E2E can drive Workspace navigation —
+ * openLinkText(linktext, sourcePath) (+ #subpath reveal), getMostRecentLeaf() and
+ * setActiveLeaf() — from the page context (same shape as R172's window.__obsidianMPR).
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -523,6 +527,12 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
     // R172 — expose the static MarkdownPreviewRenderer class so the browser E2E
     // can drive its static methods from the page context (no DOM/cleanup needed).
     window.__obsidianMPR = obsidian.MarkdownPreviewRenderer;
+
+    // R175 — expose the compat App's (obsidian-shaped) workspace so the browser E2E
+    // can drive Workspace navigation (openLinkText / getMostRecentLeaf / setActiveLeaf)
+    // from the page context. this.app IS the compat App, so this.app.workspace is the
+    // obsidian-shaped workspace facade actually under test (NOT the geode-native one).
+    window.__compatWorkspace = this.app.workspace;
 
     // R173 — Tier 8 D9 sanitizeHTMLToDom: a conservative allowlist cleaner that
     // returns a DocumentFragment. SECURITY probe (XSS vector battery): every
