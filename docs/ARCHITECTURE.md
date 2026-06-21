@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 162 additions — Tier 7 C4「收藏按钮显式 UI 入口」（editor-header 星标 toggle · 复用 R27 vetted toggleFile · 单文件加性）【As-built v0.159】
+
+> **状态：As-built（已交付）。** 对抗评审 + data-safety 8 维 → **0 confirmed defect（clean）**：toggleFile RMW 同步原子（`itemsStore.get→anyFileMatches→set` 无 await、并发/快速双击安全）+ `regChain` 串行化写盘 + vault-switch 守卫；CM EditorView useEffect deps `[app,tab.id,handle,isPreview]` 不含 bookmarks → 书签变化**不重建 view**（cm-host ref 稳定）；previewHtml useMemo deps 不含 bookmarks → 不重算阅读视图；per-file 绑定正确（`EditorPane key={tab.id}`）；可见性 gate 正确（EditorPane 仅 markdown 渲染、attachment→AttachmentView/graph→GraphView、按钮根本不现于非 md pane）；icon fill none↔currentColor 切换生效（Icon `{...rest}` 覆盖默认）。简化门 skip（单文件 ~18 行加性、单用按钮，命中 <50 行/≤2 文件 skip 条件）。验收：r162-e2e 16/16、回归 r27 22/22（书签持久化）·r158 13/13（书签 instance）·typecheck 0·cargo·生产构建。**桌面 probe N/A**（按钮纯 DOM/UI 平台无关；toggleFile 写 bookmarks.json 是 R27 vetted 路径未改）。
+>
+> **Gate**：explorer 亲自 `rg` 确认无现存可见收藏按钮（只有命令 + ribbon 开面板）。R27 已有全部所需：`bookmarks.toggleFile(path)`（add/remove 二合一）、`isFileBookmarked(path)`（递归进 group）、`items` Store（可订阅）。既有命令 `bookmarks:bookmark-file`（App.tsx:423）就是同一 toggle 逻辑。**唯一缺口 = 可见 UI 入口** → 加一个 header 按钮复用这套 API。
+
+**契约（加性 · 单实现文件 · 零 core/CSS/i18n 新增）**：
+- **`features/editor/EditorPane.tsx`**：① import `bookmarks` from `@core/bookmarks`（features→core 合法）；② 顶部 `useStore(bookmarks.items)` 订阅 + `const bookmarked = tab.filePath !== null && bookmarks.isFileBookmarked(tab.filePath)`；③ `.editor-header` 内、spacer 与 `.editor-mode-group` 之间，gated `tab.filePath !== null` 渲 `<button data-testid="bookmark-toggle">`：复用 `editor-mode-btn` 类（bookmarked 加 `is-active`=accent 高亮）、`aria-pressed={bookmarked}`、title/aria-label `t(bookmarked?"cmd.unbookmarkFile":"cmd.bookmarkFile")`、onClick `if(tab.filePath) void bookmarks.toggleFile(tab.filePath)`、`<Icon name="bookmark" {...(bookmarked?{fill:"currentColor"}:{})}/>`（实心/空心）。
+- **复用既有**：CSS `editor-mode-btn`/`is-active`（无新增）、i18n `cmd.bookmarkFile`/`cmd.unbookmarkFile`（dict.bookmarks.ts，无新增）、icon `bookmark`（fill prop 切实心，无新 icon）。
+- **r162-e2e**（16）：按钮存在/可见 + 默认未收藏（aria-pressed=false/fill=none/无 is-active）+ 点击 ON（filled+accent）+ 再点 OFF + 命令路径 live-sync 刷新按钮（useStore 订阅）+ per-file 绑定（切文件星标跟随）+ graph tab 按钮 absent。
+
+**data-safety**：唯一写 = 复用 R27 vetted `toggleFile`（序列化 RMW 写 `.obsidian/bookmarks.json`，**非新写路径**）；按钮在 header 不碰 CM/autosave/mode；`useStore(items)` 只刷 header 不重建 CM（deps 隔离）。
+
+**v1 nuance / defer**：复用 `is-active`（accent 高亮）让星标与 mode 按钮同款高亮底色（Geode 自加入口、reference UI 无此星标）=设计选择；title 用整句（复用命令键、避免新 i18n）；只 file 级收藏（heading/block 仍走命令）。
+
+---
+
 ## Round 161 additions — Tier 7 A1「删除当前笔记命令」`app:delete-file`（复用 Explorer vetted flush→trash 路径 · 抽取共享 confirm · data-safety 全证伪）【As-built v0.158】
 
 > **状态：As-built（已交付）。** 对抗评审 + data-safety 9 维 → **0 confirmed defect（clean）**：删打开文件经 `file:deleted`→`handleDeleted` 反应式关 tab（命令不手动关）+ flush-before-trash 顺序正确（`.trash` 副本含最新编辑）+ recoverable 非永久删（listTrash +1 断言）+ 竞态安全（flushAll join in-flight save、`documents.handleDeleted` 取消 pending timer + `fileExists` no-resurrect 守卫、`lastActiveFile` 删后置 null）+ **bonus 正确性**（callback 在 confirm await 前先捕获 `path`，async 原生对话框期间即使活动文件变了也只删对话框所指文件）+ 对抗输入安全（`basename` 仅进 confirm 文案、`t()` split/join 非 replace 无 `$&` 注入、写路径用完整 `path`）+ Explorer 抽取逐字节零回归 + 分层合规无循环依赖。简化门 clean。验收：r161-e2e 15/15、回归 r140 18/18·r138 11/11·r93 22/22·r42 17/17（删除/回收站路径）、typecheck 0·cargo·生产构建。**桌面 probe N/A**（命令逻辑平台无关；`confirmDelete` native `ask()` + `vault.trash`→Rust `vault_trash` 是 Explorer 删除已用 vetted 路径、已由 r42-probe/r140-probe 桌面覆盖，未引入新 fs 写或平台分支）。

@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R162 套件回归（2026-06-21，Tier 7 C4 收藏按钮显式 UI 入口 · 复用 R27 vetted toggleFile · 桌面 probe N/A）
+
+R162 = Tier 7 **C4「收藏按钮显式 UI 入口」**。**Gate**：explorer 亲自 `rg` 确认无现存可见收藏按钮（只有命令 + ribbon 开面板）；R27 已有 `bookmarks.toggleFile`/`isFileBookmarked`/`items` Store 全部所需。**唯一缺口 = 可见 UI 入口** → editor-header 加星标 toggle 按钮，点击走既有 toggleFile（**R27 vetted 序列化 RMW、非新写路径**），`useStore(bookmarks.items)` 订阅实时刷新实心/空心。**对抗评审 + data-safety 8 维 → 0 confirmed defect**（toggleFile RMW 同步原子 + regChain 串行化、并发双击安全；CM EditorView/previewHtml deps 不含 bookmarks → 书签变化不重建 view/不重算阅读视图；per-file 绑定正确；attachment/graph pane 不渲此按钮）。简化门 skip（单文件 ~18 行加性单用按钮）。零 core/CSS/i18n 新增（复用 editor-mode-btn + cmd.bookmarkFile/unbookmarkFile + bookmark icon fill 切换）。
+
+新增套件：`r162-e2e.mjs` **16/16**（按钮存在/可见 + 默认未收藏[aria-pressed=false/fill=none/无 is-active] + 点击 ON[filled accent] + 再点 OFF + **命令路径 live-sync 刷新按钮**[useStore 订阅] + **per-file 绑定**[切文件星标跟随] + graph tab 按钮 absent + 无 page error）。**套件矩阵不回退**：r27 22/22（书签 bi-directional 持久化、本轮 onClick 走它）·r158 13/13（书签 instance API）·typecheck 0/cargo/生产构建。**桌面 probe N/A**（按钮纯 DOM/UI 平台无关；toggleFile 写 `.obsidian/bookmarks.json` 是 R27 vetted 路径未改）。**v1 defer**：标签页/文件树行收藏入口（仅 editor-header 一处）、heading/block 级走命令。
+
 ### R161 套件回归（2026-06-21，Tier 7 A1 删除当前笔记命令 · 复用 vetted flush→trash · data-safety · 桌面 probe N/A）
 
 R161 = Tier 7 **A1「删除当前笔记命令」`app:delete-file`**（Obsidian 真实 id）。**Gate**：explorer 亲自 `rg` 确认无现存删除命令（遵 R160 教训）。复用 Explorer 右键删除的 vetted 链 `await workspace.flushAll(); await vault.trash(path)`（R42 本地 `.trash/` 可恢复、非永久删）+ 删后 `file:deleted` 反应式关 tab/清索引。active 文件 `getActiveFile()`（markdown-only）+ callback 自守卫（`commands.execute` 不查 available）。确认弹窗抽出共享 `@core/confirm`（3 调用点：Explorer deleteNode/bulkDelete + 新命令）。**对抗评审 + data-safety 9 维 → 0 confirmed defect**（flush-before-trash 顺序、recoverable、删打开文件优雅清理、竞态[flushAll join in-flight + no-resurrect 守卫]、callback confirm-await 前捕获 path、对抗输入[basename 仅进文案、t() split/join 无注入]、Explorer 抽取零回归、分层无循环）。命令**无默认热键**（对齐 Obsidian）。
