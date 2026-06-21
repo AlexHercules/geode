@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 174 additions — Tier 8 D12+D16 中型纯 API 缺口打包（FileManager.getAvailablePathForAttachment/getNewFileParent + getLanguage + getIcon/getIconIds + Platform.resourcePathPrefix · compat · 复用既有 core/compat · 零新依赖）【As-built v0.171】
+
+> **状态：As-built（已交付）。** 对抗评审 8 维 → **1 confirmed minor（D12-6，已修）+ 红线全证伪**。**D12-6 minor（已修）**：getNewFileParent 是**纯查询** API，原 `ensureFolder(folderPath, true)` 会为磁盘上不存在的文件夹**广播 phantom `vault.on("create")` 事件**（误导监听文件夹创建的插件；Obsidian getNewFileParent 不 fire 任何事件）→ 修=`fireCreate: false`（仍返回有 .path 的 TFolder、e2e parentHasPath 不回退）。**🔴 D12-5 createFolder data-safety 红线全证伪**：① Rust `vault_mkdir`=`create_dir_all`（幂等、路径上有同名**文件**时返 Err **不删文件**）+ Memory adapter 只动 folders set 从不碰 files/binaryFiles → **绝不覆盖用户文件**；② 复用 R17/R48/R111 vetted `vault.createFolder`（经 assertSafeRelPath）非新写路径；③ 全函数零 create/modify/createBinary、不写 .md（真写由调用方插件负责）；④ 并发返同路径但实际写走 `create_new` 独占=报错非 clobber（Obsidian getAvailablePathForAttachment 本就是路径建议非预留 API）。其余全证伪：stem/ext 拆分（`.gitignore` 整体当 stem、畸形路径被 assertSafeRelPath 拦）、getFolder 而非 get（防同名文件遮蔽返 TFile）、getIcon instanceof SVGSVGElement 真验、Platform.resourcePathPrefix="" as const 兼容、makeFileManager(handle,registry) 签名改动未伤既有真方法（r97/r89/r113 回归绿）、6 签名对齐 d.ts。简化门 **clean/skip**（5 项全薄 delegation 到既有 core/compat、无 dup/死代码）。验收：r174-e2e **14/14**、回归 r173 31/31·r172 6/6·r113 10/10·**r89 16/16（newNote 位置）·r97 15/15（MoveTo/附件）**·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（唯一写 getAvailablePathForAttachment→vault.createFolder→Rust vault_mkdir 复用 R17/R48 probe-covered 路径、无新 Rust；余纯 JS、零平台分支）。
+>
+> **Gate（R160 教训：explorer 逐子项实查）**：D12/D16 是混合难度 bundle，挑出**纯 compat 零依赖可复用既有实现**的 5 子项做一轮；**defer**：D12-7 `DataAdapter.stat`（VaultAdapter + Rust 侧均无 fs metadata 能力=须新 Rust 命令）、D16-4 `App.lastEvent`（需 app-shell 全局事件捕获=越 compat 自包含）。5 项「缺」经实查属实（未导出/恒 null），非误判。
+>
+> **商业主轴价值**：paste-image/QuickAdd/Excalidraw（附件路径去重）、本地化插件（getLanguage）、图标 picker（getIcon/getIconIds）。
+
+**契约（加性 · compat 表面 · 全复用既有 core/compat）**：
+- **D12-5 `FileManager.getAvailablePathForAttachment(filename, sourcePath?): Promise<string>`**（plugin.ts makeFileManager Proxy 真方法）：拆 stem/ext → `resolveAttachmentDir(notePath, attachmentFolder.get())`[@core/attachments:55/25]（notePath=sourcePath ?? `workspace.getActiveFile()` ?? ""）→ `vault.createFolder`(若不存在)→ `uniquePath(folder, stem, ext)`[@core/vault:524 去重]。复用 R17/R97 附件管线、不动写核心。
+- **D12-6 `FileManager.getNewFileParent(sourcePath, newFilePath?): TFolder`**：`resolveNewNoteFolder(sourcePath)`[@core/newNote:58，R89「新文件位置」设置]→ 文件夹 path → `registry.get(path) ?? registry.ensureFolder(path)`[files.ts:82/111]、root=`registry.root`。**`makeFileManager(handle)` → `makeFileManager(handle, registry)`**（compat 内部 helper 签名，非跨模块契约；bridge 已持 registry plugin.ts:81-83）。
+- **D16-1 `getLanguage(): string`**（util.ts 新增）：`return locale.get()`[@core/i18n:65，`"en"|"zh"`，宽 string 兼容]。
+- **D16-2 `getIcon(iconId): SVGSVGElement | null` + `getIconIds(): string[]`**（icons.ts 新增）：`getIcon`=`getIconSvg(iconId)`[icons.ts:53 返字符串]→ `<template>` 解析取 `firstElementChild` as SVGSVGElement（null 透传）；`getIconIds`=`[...Object.keys(BUILTIN), ...registered.keys()]`[icons.ts:20/9]。
+- **D16-3 `Platform.resourcePathPrefix: string`**（util.ts Platform 对象加字段）：诚实占位 `""`（无前缀=资源走相对；真 resource-path 解析是 D5/deferred）。
+- **barrel `index.ts`**：加 `getLanguage`（from ./util）、`getIcon`/`getIconIds`（from ./icons）。
+
+**文件所有权（3 implementer 并行 · 互不重叠文件 · fixture MAIN_JS 运行时字符串零编译耦合）**：
+- **Owner A（D12）**：`src/compat/obsidian/plugin.ts`（FileManager 2 真方法 + makeFileManager 传 registry + core imports）。**不碰 index.ts**（FileManager 方法经 app.fileManager 访问、非 barrel）。
+- **Owner B（D16）**：`src/compat/obsidian/util.ts`（getLanguage + Platform.resourcePathPrefix）+ `src/compat/obsidian/icons.ts`（getIcon/getIconIds）+ `src/compat/obsidian/index.ts`（barrel 3 项）。
+- **Owner C（测试）**：`src/compat/obsidian/fixture.ts` + `.calibration/r174-e2e.mjs`。
+
+**data-safety**：D12-5 走既有 `uniquePath`+`createFolder`（R17/R97 同源、纯路径计算+建目录、不写 .md 内容）；其余纯只读/查询。**非 data-safety 轮**（但 D12-5 createFolder 是唯一副作用，对抗评审核它幂等/不覆盖）。
+
+**v1 nuance / defer**：D12-5 不叠 attachments.ts 的大小写不敏感去重（Obsidian 官方只做普通去重）；Platform.resourcePathPrefix=`""` 占位（真值待 D5 Tauri asset）；getIcon 解析内置/注册的 SVG markup。**defer**：D12-7 adapter.stat（需 Rust fs::metadata + 扩 VaultAdapter）、D16-4 App.lastEvent（需 app-shell 事件接线）。
+
 ## Round 173 additions — Tier 8 D9「`sanitizeHTMLToDom` HTML 清洗器」（compat · 保守 allowlist + 惰性 template 解析 · 零新依赖 · 🔒 安全敏感）【As-built v0.170】
 
 > **状态：As-built（已交付）。** 🔒 **heavy XSS 对抗评审 → 0 可执行绕过（clean）**——reviewer **对 live 编译代码实跑 ~50 向量电池**（每 payload adopt 进 live DOM + 300-500ms 后查 window flag），全部脚本/事件**未执行**：① 标签 FORBID_DROP 整除（script/style/iframe/object/embed/svg/math/form/audio/video…含子树）；② on\* 全覆盖（toLowerCase 前置、onERROR/ontoggle/onanimationstart…）；③ scheme allowlist 拒 javascript:/vbscript:/data:/file:/blob:/about:；④ **控制字符+实体绕过全拦**（`java\tscript:`/`\n`/`\r`/NBSP/前导空格/`&#106;avascript:`/`&#x6a;`/`&Tab;`/`JaVaScRiPt:`——getAttribute 已解码实体 + `[-  ]` strip + toLowerCase）；⑤ namespace 混淆（svg>script / svg>a xlink:href / math>script / svg>foreignObject>iframe → svg/math 整除根除）；⑥ 非 URL_ATTRS 携 URL（longdesc/srcset/formaction → 非 allowlist 剥）；⑦ unwrap 提升安全（walk 先全树收集、结构变更在 walk 后、forbid remove 先于 unwrap、未知元素自身属性随移除无害）；⑧ mXSS 规避（直返 fragment 不 re-parse）；⑨ NUL `java\x00script:` → template 解析转 U+FFFD → 当相对路径放行但浏览器 resolve 为 http 相对、**不可执行**；⑩ 5000 层深嵌套不爆栈（迭代 TreeWalker）。**假绿反证**：reviewer 元测试喂未清洗 onerror→150ms 内确实 fire，证 e2e 的 `scriptDidNotRun`/`imgOnerrorDidNotFire`/`svgScriptDidNotRun` 是真测执行非查属性。可接受 nuance（非缺陷）：协议相对 `//host`（导航非脚本）、保留 id（exotic DOM-clobber、Obsidian 同款）、拒所有 data:（含 data:image，保守）、剥 style。简化门 **clean**（紧凑纯安全函数无 dup/死代码/脚手架；allowlist/isSafeUrl/双 post-walk 循环/迭代 TreeWalker 全 load-bearing 不可减）。验收：r173-e2e **31/31**（含 3 条 did-not-execute）、回归 r172 6/6·r171 14/14·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 DOM 清洗、零 fs/Rust/平台分支、WKWebView≡Chromium）。**⚠️ 教训（文档写作）**：本节契约块的 `isSafeUrl` 正则初版误嵌**字面控制字符**（`/[ <ctrl> ]/`），令 ARCHITECTURE.md 被 `file`/`grep` 判为 binary（plain grep 找不到「Round 173」误报「节缺失」）→ 修=正则在**文档**里一律写转义形 `- `（实现 sanitize.ts 写 `\x00-\x20 ` 本就正确）；**markdown/doc 里写控制字符范围用转义、绝不嵌字面控制字节**。
