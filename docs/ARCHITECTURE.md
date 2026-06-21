@@ -71,6 +71,46 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 170 additions — Tier 8 D9「数学渲染 API 簇 `renderMath`/`finishRenderMath`/`loadMathJax`」（compat · 复用 core `loadKatex` 已打包 KaTeX · 零新依赖）【As-built v0.167】
+
+> **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）**。**关键证伪**：① **sync/async 队列竞态**=`renderMath` 在**同步段** `pending.push(promise)` 再 `return el` → consumer `el=renderMath();append;await finishRenderMath()` 后 KaTeX 必已 typeset 进 el（push 早于任何 finishRenderMath 的 `splice(0)`、无漏 await；交错 render→finish→render→finish 符合 Obsidian 全局 flush 队列模型）；② **永不抛/永不 reject**（throwOnError:false + `.catch` 设 source fallback resolve void → `Promise.all` 不 reject；loadKatex 失败 core 清缓存可重试）；③ **DoS/XSS 安全**（`maxSize:100` rule-bomb 防护与 embeds.ts 一字一致；`source` 经 `textContent` 非 innerHTML、KaTeX `output:"html"` 自转义）；④ **队列内存**=`pending` 增长的是已 resolve 的 `Promise<void>`（cheap、非真泄漏，Obsidian 队列等价 nuance）；⑤ 契约逐字匹配 d.ts:3193/3854/5423；⑥ 无意写路径全无（唯一 DOM 写是 detached `<span>` 的 textContent/katex.render）。简化门 **clean/skip**（新 ~25 行薄适配 / ≤2 文件 / 无 existing-code 重构）。验收：r170-e2e **12/12**（renderMath 同步返元素+class + 非法 LaTeX 不抛 + finishRenderMath resolve + `.katex` 子元素真实存在 + is-loaded + loadMathJax resolve）、回归 r169 11/11·r168 16/16·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS + DOM 标准 API + 动态 import KaTeX、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167/R168/R169）。
+>
+> **Gate（R160 教训：explorer 实查现状）**：compat 缺 renderMath/finishRenderMath/loadMathJax（grep 全零命中）；core 已有 `loadKatex(): Promise<typeof katex>`（`core/math.ts:16`，动态 import + 缓存 + 失败重置）；既有 KaTeX 渲染范例在 `core/embeds.ts` hydrateMath（`katex.render(tex, el, {displayMode, throwOnError:false, output, maxSize:100[rule-bomb 防护]})`）→ compat 直接复用 `loadKatex` + 自调 `katex.render`，**不耦合 embeds.ts**（feature 渲染管线）。
+>
+> **关键设计 = sync-return + async-finish（对齐 Obsidian 真实 MathJax 模型）**：Obsidian `renderMath(source, display): HTMLElement` **同步**返元素（d.ts:5420 注「Requires calling finishRenderMath when rendering is all done」），但 Geode `loadKatex()` 是 **async** → renderMath 同步返 `<span class="math math-inline/block">`（先填 source 作可读 fallback）+ 异步 `loadKatex().then(katex.render into el)` 入队、`finishRenderMath()` await 队列。完美复刻 Obsidian「立即返元素、稍后 typeset、finishRenderMath 等齐」契约。
+>
+> **商业主轴价值**：图表/数学/web-clipper 类插件（程序化渲染 LaTeX）的标准 API。
+
+**契约（加性 · 新 compat 文件 · 复用 core KaTeX）**：
+
+```ts
+// src/compat/obsidian/math.ts — 新建；import { loadKatex } from "@core/math"
+const pending: Promise<void>[] = [];   // 模块级渲染队列（mirror Obsidian MathJax 队列）
+export function renderMath(source: string, display: boolean): HTMLElement {
+  const el = document.createElement("span");
+  el.className = display ? "math math-block" : "math math-inline";
+  el.textContent = source;             // 可读 fallback，直到 typeset / loadKatex 失败兜底
+  pending.push(loadKatex().then((katex) => {
+    el.textContent = "";
+    katex.render(source, el, { displayMode: display, throwOnError: false, output: "html", maxSize: 100 });  // maxSize=R18 rule-bomb 防护
+    el.classList.add("is-loaded");
+  }).catch((err) => { console.warn("[obsidian-compat] renderMath failed", err); el.textContent = source; }));  // never throw
+  return el;
+}
+export function finishRenderMath(): Promise<void> { return Promise.all(pending.splice(0)).then(() => undefined); }  // drain + await，永不 reject（catch 已吞）
+export function loadMathJax(): Promise<void> { return loadKatex().then(() => undefined); }  // 预热别名
+```
+
+- **barrel `index.ts`**（:95 loadMermaid 再导出附近）：`export { renderMath, finishRenderMath, loadMathJax } from "./math";`。
+
+**文件所有权（owner A 实现 + owner B 测试 · fixture MAIN_JS 运行时字符串、零编译耦合 → 全并行）**：
+- **Owner A**：`src/compat/obsidian/math.ts`（新建）+ `src/compat/obsidian/index.ts`（barrel 一行）。
+- **Owner B**：`src/compat/obsidian/fixture.ts`（onload 里 `renderMath`→append→`await finishRenderMath()`→验 `.katex` 子元素 + class + is-loaded；display 模式；`\frac{` invalid throwOnError:false 不抛；`loadMathJax` resolve，结果写 `<div data-testid="fixture-d9math-results">` JSON）+ `.calibration/r170-e2e.mjs`。
+
+**data-safety**：纯渲染（KaTeX 把 LaTeX 渲成 DOM、写的是返回的 detached 元素，非 vault/.md/editor）；`maxSize:100` 防 rule-bomb DoS；`throwOnError:false` + catch 兜底永不抛 → **非 data-safety 轮**。
+
+**v1 nuance / defer**：renderMath 同步返元素但 typeset 异步（调用方须 `await finishRenderMath()` 后再看 typeset 结果——与 Obsidian 同契约）；`output:"html"`（不走 mathml，对齐 embeds.ts 默认）；KaTeX≠MathJax 故极冷僻 LaTeX 宏覆盖度有别（throwOnError:false 优雅降级）；`finishRenderMath` 若从不调用则 pending 持已 resolve 的 promise（cheap、非泄漏）。D9 `sanitizeHTMLToDom`（安全敏感）、D3 prepareFuzzySearch 留后续轮。
+
 ## Round 169 additions — Tier 8 D7「全局 `sleep`/`nextFrame` + `Document.on/off` 委托监听」（compat global/dom 表面 · crash-safety · 复用既有 HTMLElement 委托机制 · 零新依赖）【As-built v0.166】
 
 > **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）**。**关键证伪**：① **抽取零回归**=`delegatedOn`/`delegatedOff` 与原 HTMLElement 内联 on/off **字节级等价逻辑**（reviewer git diff 逐行对比：wrapped 闭包/`target instanceof Element` 守卫/`closest`/`host.contains`/`_EVENTS` 簿记/add+removeEventListener 全一字不差，唯 `this` 类型放宽 HTMLElement→`HTMLElement|Document`、运行时零漂移）+ e2e HTMLElement.on/off 回归断言（elOnFires/elOffFires）实锁；② **Document 宿主正确**（`document.contains(match)`=「文档内任意匹配元素」对齐 Obsidian 委托语义；`document._EVENTS` 实例属性与各 HTMLElement 的 _EVENTS **不串台**——`host._EVENTS ??= {}` 落在各自 `this` 实例上）；③ **sleep/nextFrame 的 `()=>resolve()` 包装必要**（裸 `setTimeout(resolve,ms)` 会把 timer-id 透传进 resolve、破 `Promise<void>` 契约——简化门亦独立确认不可简）；④ **ambient 类型无冲突**（typecheck 0；lib.dom 无 jQuery 式 `Document.on`、无全局 sleep/nextFrame → `interface Document` 纯合并增强不覆盖原生、`declare function` 无碰撞）；⑤ 无意写路径全无（纯 Promise 定时器 + 委托监听）。简化门 **clean**（净 0 行：抽取本身=减法去重[2 真实调用点]、`()=>resolve()` 不可简、`_options` 是签名对齐故意未用 param）。验收：r169-e2e **11/11**（sleep≥15ms + nextFrame resolve + Document.on fire+delegateTarget+非命中不 fire+off 后不 fire + **HTMLElement.on/off 抽取回归**）、回归 r168 16/16·r165 9/9·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS + DOM 标准 API、零 fs/Rust/平台分支、WKWebView≡Chromium，同 R165/R167/R168）。**§D 提示（非缺陷、调用方纪律）**：`nextFrame` 依赖 `requestAnimationFrame`，桌面 probe 若在 t≈10s 后 await 它可能受 App Nap 不归来——断言放加载后前几秒。
