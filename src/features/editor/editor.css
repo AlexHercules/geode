@@ -117,6 +117,29 @@
   word-break: break-word;
 }
 
+/* R164: editable inline title — display span (click to rename) + edit input that
+   inherits the H1 typography so the field looks identical to the static title */
+.inline-title-text {
+  display: block;
+  cursor: text;
+}
+
+.inline-title-input {
+  width: 100%;
+  font: inherit;
+  line-height: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  outline: none;
+}
+
+.inline-title-input.is-invalid {
+  color: var(--danger);
+}
+
 .editor-skeleton-line {
   height: 14px;
   border-radius: 4px;

@@ -24,6 +24,9 @@ import type { TabState, ViewMode } from "@core/types";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
 import { bookmarks } from "@core/bookmarks";
+import { renameWithLinkUpdate } from "@core/linkRewrite";
+import { findFolder } from "@core/explorerMove";
+import { parentPath, basename } from "@core/vault";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import {
@@ -127,6 +130,154 @@ function setSectionFolded(heading: HTMLElement, folded: boolean): void {
 function toggleHeadingFold(heading: HTMLElement): void {
   const folded = heading.classList.toggle("is-collapsed");
   setSectionFolded(heading, folded);
+}
+
+/** R164: transient toast surfacing skipped-link count on rename (D1 fix — mirrors
+ *  Explorer's showLinkUpdateNotice; feature-local, layering forbids cross-import). */
+function showLinkUpdateNotice(message: string): void {
+  document.querySelector(".link-update-notice")?.remove();
+  const el = document.createElement("div");
+  el.className = "link-update-notice";
+  el.textContent = message;
+  el.setAttribute("data-testid", "link-update-notice");
+  document.body.appendChild(el);
+  window.setTimeout(() => el.remove(), 4000);
+}
+
+/**
+ * R164: editable inline title (Obsidian "Show inline title" → click to rename).
+ * The `.inline-title` div stays resident in both display/edit modes so the cm-host
+ * sibling never remounts (R94). Commit routes through `renameWithLinkUpdate` (R16
+ * vetted: flushes dirty body first, then renames; `file:renamed` retargets the tab).
+ */
+function InlineTitle({ tab }: { tab: TabState }) {
+  const app = useApp();
+  const t = useI18n();
+  const [editing, setEditing] = useState(false);
+  const tree = useStore(app.vault.tree);
+  const path = tab.filePath ?? "";
+
+  if (!editing) {
+    return (
+      <div className="inline-title" data-testid="inline-title">
+        <span
+          className="inline-title-text"
+          role="button"
+          tabIndex={0}
+          title={t("editor.renameTitle")}
+          onClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setEditing(true);
+            }
+          }}
+        >
+          {tab.title}
+        </span>
+      </div>
+    );
+  }
+
+  const base = basename(path);
+  const dot = base.lastIndexOf(".");
+  const ext = dot > 0 ? base.slice(dot + 1) : "";
+  // mirrors Explorer.validateName: non-empty, no path separators, no case-insensitive
+  // sibling collision (excluding self) — the guard against rename-over-existing (vault
+  // .rename does NOT protect the target → would overwrite/lose data without this).
+  const validate = (value: string): boolean => {
+    const name = value.trim();
+    if (!name || /[\\/]/.test(name)) return false;
+    if (!tree) return false;
+    const fullName = ext ? `${name}.${ext}` : name;
+    const siblings = findFolder(tree, parentPath(path))?.children ?? [];
+    return !siblings.some((c) => c.path !== path && c.name.toLowerCase() === fullName.toLowerCase());
+  };
+  const commit = (name: string) => {
+    setEditing(false);
+    const fullName = ext ? `${name}.${ext}` : name;
+    const parent = parentPath(path);
+    const newPath = parent ? `${parent}/${fullName}` : fullName;
+    if (newPath === path) return;
+    void (async () => {
+      try {
+        const result = await renameWithLinkUpdate(
+          { vault: app.vault, metadata: app.metadata, documents: app.documents },
+          path,
+          newPath,
+        );
+        if (result.skipped.length > 0) {
+          showLinkUpdateNotice(t("explorer.linkUpdateSkipped", { count: result.skipped.length }));
+        }
+      } catch (err) {
+        console.error("[editor] inline title rename failed", err);
+      }
+    })();
+  };
+
+  return (
+    <div className="inline-title" data-testid="inline-title">
+      <InlineTitleInput
+        initial={tab.title}
+        validate={validate}
+        onCommit={commit}
+        onCancel={() => setEditing(false)}
+      />
+    </div>
+  );
+}
+
+/**
+ * R164: controlled single-line title input. Mirrors Explorer's RenameInput — a
+ * feature-local component that layering forbids cross-importing, so a minimal copy
+ * lives here (`<input>`, not contentEditable → no rich-text/newline contamination).
+ */
+function InlineTitleInput(props: {
+  initial: string;
+  validate: (value: string) => boolean;
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(props.initial);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const done = useRef(false);
+  const valid = props.validate(value);
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+  const commit = () => {
+    if (done.current) return;
+    done.current = true;
+    props.onCommit(value.trim());
+  };
+  const cancel = () => {
+    if (done.current) return;
+    done.current = true;
+    props.onCancel();
+  };
+  return (
+    <input
+      ref={inputRef}
+      className={`inline-title-input${valid ? "" : " is-invalid"}`}
+      data-testid="inline-title-input"
+      value={value}
+      spellCheck={false}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") {
+          if (valid) commit();
+        } else if (e.key === "Escape") {
+          cancel();
+        }
+      }}
+      onBlur={() => {
+        if (valid && value.trim() !== props.initial) commit();
+        else cancel();
+      }}
+    />
+  );
 }
 
 /**
@@ -874,14 +1025,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
   );
 
   // R94: Obsidian "Show inline title" — the note's filename (no extension) as an H1
-  // at the top of the content. Display-only in v1 (editing → rename is deferred). It
+  // at the top of the content. R164: click to rename (→ renameWithLinkUpdate). It
   // renders inside the live/source + reading bodies (below), never on empty/error/loading.
-  const inlineTitleEl =
-    inlineTitleOn && tab.filePath ? (
-      <div className="inline-title" data-testid="inline-title">
-        {tab.title}
-      </div>
-    ) : null;
+  const inlineTitleEl = inlineTitleOn && tab.filePath ? <InlineTitle tab={tab} /> : null;
 
   let body: React.ReactNode;
   if (!tab.filePath) {
