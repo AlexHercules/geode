@@ -5,6 +5,7 @@
 import type { Extension } from "@codemirror/state";
 import { bookmarks, type BookmarkItem, serializeItem } from "@core/bookmarks";
 import { getCommandName, type CommandRegistry } from "@core/commands";
+import { dailyNoteFolder, dailyNoteFormat, dailyNoteTemplate } from "@core/dailyNote";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import { basename, stripExtension } from "@core/vault";
 import {
@@ -464,13 +465,34 @@ const bookmarksInstance = {
 };
 const bookmarksPlugin = { enabled: true, instance: bookmarksInstance };
 
+/* R159: `app.internalPlugins.getPluginById("daily-notes").instance.options` — the de-facto config
+ * (folder/format/template) that obsidian-daily-notes-interface reads (Calendar / Periodic Notes
+ * depend on it). A live getter over R48's daily-note setting Stores; READ-ONLY (no writes). */
+const dailyNotesInstance = {
+  get options() {
+    return {
+      folder: dailyNoteFolder.get(), // RAW like Obsidian's instance.options (the consumer trims)
+      format: dailyNoteFormat.get(), // moment format — same lib as Obsidian
+      template: dailyNoteTemplate.get(),
+      autorun: false, // Geode has no "open daily note on startup" setting
+    };
+  },
+};
+const dailyNotesPlugin = { enabled: true, instance: dailyNotesInstance };
+
+const internalPluginsRecord: Record<string, { enabled: boolean; instance: unknown }> = {
+  bookmarks: bookmarksPlugin,
+  "daily-notes": dailyNotesPlugin,
+};
+
 const internalPluginsStub = {
-  getEnabledPluginById: (id: string): typeof bookmarksInstance | null =>
-    id === "bookmarks" ? bookmarksInstance : null,
-  getPluginById: (id: string): typeof bookmarksPlugin | null =>
-    id === "bookmarks" ? bookmarksPlugin : null,
+  // Object.hasOwn guard so getPluginById("toString")/("__proto__") don't resolve a prototype member
+  getEnabledPluginById: (id: string): unknown =>
+    Object.hasOwn(internalPluginsRecord, id) ? internalPluginsRecord[id].instance : null,
+  getPluginById: (id: string): { enabled: boolean; instance: unknown } | null =>
+    Object.hasOwn(internalPluginsRecord, id) ? internalPluginsRecord[id] : null,
   /** F6: calendar destructures app.internalPlugins.plugins["daily-notes"] */
-  plugins: {} as Record<string, unknown>,
+  plugins: internalPluginsRecord,
 };
 
 const pluginsStub = {
@@ -563,7 +585,7 @@ export class App {
   }
 
   get internalPlugins(): typeof internalPluginsStub {
-    reportGap("App", "App.internalPlugins", 'R158: "bookmarks" returns a real instance (getBookmarks/addItem/removeItem/getItemTitle); other ids warn-stub to null');
+    reportGap("App", "App.internalPlugins", 'R158/R159: "bookmarks" (getBookmarks/addItem/removeItem) + "daily-notes" (instance.options) return real instances; other ids → null');
     return internalPluginsStub;
   }
 
