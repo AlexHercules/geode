@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
-import { isTauri, parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
+import { parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
+import { confirmDelete } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
 import { explorerSort, setExplorerSort, detectAllExtensions } from "@core/appearance";
@@ -109,16 +110,6 @@ function showLinkUpdateNotice(message: string): void {
  *  it, so acting on a descendant too would double-act (→ "already gone" throw) or mis-count. */
 function toRoots(paths: string[]): string[] {
   return paths.filter((p) => !paths.some((q) => q !== p && p.startsWith(q + "/")));
-}
-
-/** R140: the delete confirmation idiom shared by deleteNode + bulkDelete (native dialog in Tauri —
- *  window.confirm is unreliable in wry webviews — else the browser confirm). */
-async function confirmDelete(message: string, title: string): Promise<boolean> {
-  if (isTauri()) {
-    const { ask } = await import("@tauri-apps/plugin-dialog");
-    return ask(message, { title, kind: "warning" });
-  }
-  return window.confirm(message);
 }
 
 function loadExpanded(): Set<string> {

@@ -36,7 +36,8 @@ import { registerComposerCommands } from "@features/editor/noteComposerCommands"
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
-import { isTauri } from "@core/vault";
+import { isTauri, basename } from "@core/vault";
+import { confirmDelete } from "@core/confirm";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { mergeTargetMode } from "@core/noteMerge";
@@ -262,6 +263,28 @@ export function App() {
         callback: () => {
           const tab = workspace.getActiveTab();
           if (tab) workspace.closeTab(tab.id);
+        },
+      }),
+      commands.register({
+        // R161: Obsidian's real id is "app:delete-file"; no default hotkey
+        // (matches Obsidian — users bind it in Hotkeys). Reuses the Explorer's
+        // vetted flush-before-trash path → recoverable .trash, reactive cleanup.
+        id: "app:delete-file",
+        name: () => t("cmd.deleteFile"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          void (async () => {
+            const path = workspace.getActiveFile();
+            if (!path) return;
+            if (!(await confirmDelete(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
+              return;
+            try {
+              await workspace.flushAll();
+              await vault.trash(path);
+            } catch (err) {
+              console.error("[app] delete-file failed", err);
+            }
+          })();
         },
       }),
       commands.register({
