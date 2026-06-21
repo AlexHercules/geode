@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R161 套件回归（2026-06-21，Tier 7 A1 删除当前笔记命令 · 复用 vetted flush→trash · data-safety · 桌面 probe N/A）
+
+R161 = Tier 7 **A1「删除当前笔记命令」`app:delete-file`**（Obsidian 真实 id）。**Gate**：explorer 亲自 `rg` 确认无现存删除命令（遵 R160 教训）。复用 Explorer 右键删除的 vetted 链 `await workspace.flushAll(); await vault.trash(path)`（R42 本地 `.trash/` 可恢复、非永久删）+ 删后 `file:deleted` 反应式关 tab/清索引。active 文件 `getActiveFile()`（markdown-only）+ callback 自守卫（`commands.execute` 不查 available）。确认弹窗抽出共享 `@core/confirm`（3 调用点：Explorer deleteNode/bulkDelete + 新命令）。**对抗评审 + data-safety 9 维 → 0 confirmed defect**（flush-before-trash 顺序、recoverable、删打开文件优雅清理、竞态[flushAll join in-flight + no-resurrect 守卫]、callback confirm-await 前捕获 path、对抗输入[basename 仅进文案、t() split/join 无注入]、Explorer 抽取零回归、分层无循环）。命令**无默认热键**（对齐 Obsidian）。
+
+新增套件：`r161-e2e.mjs` **15/15**（命令注册 + available 真[md 活动] + 取消[dismiss confirm]保文件+tab + 接受[accept]trash 文件+关 tab + **listTrash +1=可恢复非永久删** + 确认文案含文件名 + available 假[graph 活动] + callback 自守卫[无 md 时 execute 不弹框不删] + 无 page error）。**套件矩阵不回退**：r140 18/18（Explorer bulk delete）·r138 11/11（Explorer delete）·r93 22/22（Explorer 右键菜单）·r42 17/17（回收站/恢复）——**`confirmDelete` 抽取零回归**·typecheck 0/cargo/生产构建。**桌面 probe N/A**（命令逻辑平台无关；`confirmDelete` native `ask()` + `vault.trash`→Rust `vault_trash` 是 Explorer 删除已用 vetted 路径、r42-probe/r140-probe 已桌面覆盖，未引入新 fs 写/平台分支）。**v1 缺口（gap 表）**：markdown-only——`getActiveFile()` 对 attachment/PDF/graph 返 null → 命令在非 md 活动 tab 不可用；Obsidian 的 delete-file 删任意类型 active 文件。attachment 删除 defer。
+
 ### R160 套件回归（2026-06-21，Tier 7 C5 侧栏可收起 · gate 纠误 · app-shell overlay · 桌面 probe N/A）
 
 R160 = Tier 7 **C5「左右侧栏可收起」**。**Gate 纠误**：ROADMAP 第七梯队 C5「缺」是陈旧误判——explorer 实查发现 C5 **约 85% 早在 R2+ 落地**（state `leftSidebarOpen`/`rightSidebarOpen`[正向命名、已落盘]、`toggleLeftSidebar/Right`、命令 `app:toggle-left-sidebar`/`-right-sidebar`、`WorkspaceState` 持久化、`SidebarResizer` 拖拽调宽、ribbon 再点收起）。**唯一真缺口 = 没有专用可见折叠 affordance** → 本轮只补可见 toggle。**纯 app-shell DOM/CSS overlay 零 data-safety**（无 editor/vault/markdown/fs 写）。**对抗评审 7 维 → 0 critical / 0 major / 1 minor（M1=mid-height toggle 遮 editor 滚动条 → 各 toggle `margin-left/right:12px` inset 避让；关键风险「`.app-body{position:relative}` 改 containing-block」全证伪[每个 abs 后代已有更近 positioned 祖先、fixed 元素免疫]）**+ 简化门 1 减法（合并 transform 进基类）。命令**保持未绑键**（对齐 Obsidian 真实默认）。

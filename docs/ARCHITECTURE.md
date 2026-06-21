@@ -71,6 +71,25 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 161 additions — Tier 7 A1「删除当前笔记命令」`app:delete-file`（复用 Explorer vetted flush→trash 路径 · 抽取共享 confirm · data-safety 全证伪）【As-built v0.158】
+
+> **状态：As-built（已交付）。** 对抗评审 + data-safety 9 维 → **0 confirmed defect（clean）**：删打开文件经 `file:deleted`→`handleDeleted` 反应式关 tab（命令不手动关）+ flush-before-trash 顺序正确（`.trash` 副本含最新编辑）+ recoverable 非永久删（listTrash +1 断言）+ 竞态安全（flushAll join in-flight save、`documents.handleDeleted` 取消 pending timer + `fileExists` no-resurrect 守卫、`lastActiveFile` 删后置 null）+ **bonus 正确性**（callback 在 confirm await 前先捕获 `path`，async 原生对话框期间即使活动文件变了也只删对话框所指文件）+ 对抗输入安全（`basename` 仅进 confirm 文案、`t()` split/join 非 replace 无 `$&` 注入、写路径用完整 `path`）+ Explorer 抽取逐字节零回归 + 分层合规无循环依赖。简化门 clean。验收：r161-e2e 15/15、回归 r140 18/18·r138 11/11·r93 22/22·r42 17/17（删除/回收站路径）、typecheck 0·cargo·生产构建。**桌面 probe N/A**（命令逻辑平台无关；`confirmDelete` native `ask()` + `vault.trash`→Rust `vault_trash` 是 Explorer 删除已用 vetted 路径、已由 r42-probe/r140-probe 桌面覆盖，未引入新 fs 写或平台分支）。
+>
+> **Gate**：explorer 实查（遵 R160 教训亲自 `rg`）确认**无任何删除当前笔记命令**，删除能力只在 Explorer 右键路径。复用其 vetted 删除链：`Explorer.tsx` deleteNode/bulkDelete 的 `await workspace.flushAll(); await vault.trash(path);`（R42 本地 `.trash/` 可恢复）+ 删后 tab/索引由 `file:deleted` 反应式清理。active 文件经 `workspace.getActiveFile()`（仅 markdown tab、graph/attachment→null）。
+
+**契约（加性 + 一处抽取；无 core 写路径新增、无冻结签名改动）**：
+- **`core/confirm.ts`（新增）**：从 Explorer 抽出 `confirmDelete(message, title)`（Tauri `ask({kind:"warning"})` / 浏览器 `window.confirm`）= **3 真实调用点共享**（Explorer deleteNode + bulkDelete + 新命令）；`core/` 是 app 与 features 唯一公共可 import 层（features 只能 import core + app/AppContext + app/icons）。import `isTauri` from `@core/vault`（core→core 无循环）。
+- **`features/explorer/Explorer.tsx`**：删本地 `confirmDelete`、移除不再用的 `isTauri` import、改 import `@core/confirm`；2 调用点签名不变 → 行为逐字节同旧。
+- **`app/App.tsx`**：注册 `app:delete-file`（**Obsidian 真实 id**，name `()=>t("cmd.deleteFile")`，**无默认 hotkey**=对齐 Obsidian、用户自绑，`available: () => workspace.getActiveFile() !== null`）。callback：`void (async()=>{ const path=getActiveFile(); if(!path) return; if(!await confirmDelete(t("explorer.deleteConfirmFile",{name:basename(path)}), t("explorer.delete"))) return; try{ await workspace.flushAll(); await vault.trash(path);}catch(err){console.error(...)} })()`。**自守卫 `if(!path)return`**（因 `commands.execute` 直调 callback 不查 available；palette/hotkey 才查）。import `basename` from `@core/vault` + `confirmDelete` from `@core/confirm`。
+- **`core/i18n/dict.app.ts`**：新增 `cmd.deleteFile` EN「Delete current file」+ ZH「删除当前文件」。确认文案**复用既有** `explorer.deleteConfirmFile`/`explorer.delete`。
+- **r161-e2e**（15）：命令注册 + available 真（md 活动）+ 取消（dismiss）保文件+tab + 接受（accept）trash 文件+关 tab+**listTrash +1（可恢复）** + 文件名进对话框文案 + available 假（graph 活动）+ callback 自守卫（无 md 时 execute 不弹框不删）。
+
+**data-safety**：唯一写 = 复用 Explorer vetted `flushAll()→vault.trash()`（**不新起写路径**），recoverable `.trash`、删打开文件优雅反应式清理（清单 A.4）、flush-before-trash（A.2）。
+
+**v1 nuance / defer**：**markdown-only**（`getActiveFile` 对 attachment/PDF/graph 返 null → 命令在非 md 活动 tab 不可用；Obsidian 的 delete-file 删任意类型 active 文件）——保守安全选择，attachment 删除 defer（已记入 OBSIDIAN-COMPAT 缺口）；无默认快捷键（用户在 Hotkeys 自绑，对齐 Obsidian）。
+
+---
+
 ## Round 160 additions — C5 侧栏可收起：可见折叠/展开 toggle affordance（Tier 7 · gate 纠误「实为 85% 早已实现」· 纯 app-shell overlay 零 data-safety）【As-built v0.157】
 
 > **状态：As-built（已交付）。** 对抗评审 7 维 → **0 critical / 0 major / 1 minor（M1，已修）**：M1=mid-height toggle overlay 遮住 editor 右缘 CodeMirror 滚动条 36px 带（z-index 11 拦住中点拖拽）→ 修=两 toggle 各 `margin-left/right: 12px` inset 避开 10px scrollbar（各态 ≥2px gap）。**关键风险「`.app-body { position: relative }` 改变 containing-block」全证伪**（reviewer 逐一核：`.app-body` 内每个 `position:absolute` 后代都已有更近的 positioned 祖先[`.sidebar`/`.pane-resizer`/`.main-content`/`.tab` 等全 relative]、所有 `position:fixed` 元素免疫[`.app-body` 无 transform/filter/contain] → 唯一新受影响 = 两个 intended toggle）。简化门：1 处减法（合并 `.sidebar-toggle-left/right` transform 进基类，-4 行）+ 我自纠 1 处过期注释。验收：r160-e2e 24/24、r100 15/15、r81 14/14、r86 11/11、typecheck 0、cargo check、生产构建。**桌面 probe N/A**（纯 DOM/CSS overlay + localStorage、平台无关，reviewer 证 Memory adapter 与 WKWebView 同构，沿 R150-R159 DOM-only 先例）。

@@ -1297,7 +1297,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 | 功能 | 当前状态（code-verified 2026-06-21）| 范围与切入点提示 |
 |---|---|---|
-| **A1 删除当前笔记（命令 + 可绑键）** | **缺**（grep 无 `delete-file`/`delete-note` 命令；删除当前笔记只能去文件树右键）| 注册 `editor:delete-file` / `app:delete-current-file` 命令，走已有 `vault.trash`（R42 回收站，**非永久删 = 守数据安全底线**）+ 确认弹窗；Obsidian 该命令**默认无键**，提供命令即可由用户在快捷键面板自绑（也可给个默认键）。 |
+| ~~**A1 删除当前笔记（命令 + 可绑键）**~~ | ✅ **R161 完成** | 注册 **`app:delete-file`**（对齐 Obsidian 真实 id，非原写的 `app:delete-current-file`），复用 Explorer vetted 删除链 `await workspace.flushAll(); await vault.trash(path)`（R42 本地 `.trash/` 可恢复、**非永久删**）+ 确认弹窗（抽出共享 `@core/confirm`、复用 `explorer.deleteConfirmFile` 文案）。active 文件经 `getActiveFile()`（markdown-only）+ callback 自守卫。**无默认键**（对齐 Obsidian、用户自绑）。删后 tab/索引经 `file:deleted` 反应式清理。data-safety 9 维全证伪 + 15 e2e（含 listTrash +1 可恢复断言）。**v1 defer**：attachment/PDF 删除（getActiveFile markdown-only）。 |
 | **A2 全量快捷键 / 命令对照补齐（"等等"）** | **待全量盘点**（用户列「删除当前笔记等等」，其余未逐一举出）| 一轮纯调研：WebFetch 官方 Hotkeys/Commands 页 × Geode 命令注册表（`core/commands.ts` + App.tsx 各 `id:`）做 diff，列出 Geode 缺的 Obsidian 默认命令，逐项登记入本梯队（沿用第四梯队「键盘优先」排序）。 |
 
 **B · 插件体系与 Obsidian 完全对齐**
@@ -1335,7 +1335,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 > **B3 内取用顺序**：先 **③ `global` 垫片**（一行解锁 obsidian-git 等 + 普惠）→ 再 **① 补缺失超类导出**（`AbstractInputSuggest` 等，查清即加）→ 再 **② electron/fs 最小垫片**（按 clipboard/opener 可行项先做）→ **④ + webview/remote** 列远期或越界。
 
-> **第七梯队取用建议**：~~C5 侧栏折叠~~（**R160 done — gate 纠误，实为 85% 早已实现，仅补可见 toggle**）/ **A1 删除当前笔记 / C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
+> **第七梯队取用建议**：~~C5 侧栏折叠~~（R160 done）/ ~~A1 删除当前笔记~~（**R161 done**）/ **C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
 
 #### 第八梯队 — compat-API 全表面再校准缺口（2026-06-21 · 13 域并行校准 + 对抗 code-verify，对照 obsidian.d.ts ≈v1.9/297 导出）
 
