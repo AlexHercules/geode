@@ -93,6 +93,7 @@ export {
 } from "./ui";
 export { addIcon, setIcon, setTooltip, type IconName } from "./icons";
 export { loadMermaid } from "@core/mermaid";
+export { finishRenderMath, loadMathJax, renderMath } from "./math";
 export {
   apiVersion,
   arrayBufferToBase64,

@@ -24,6 +24,11 @@
  * sleep(ms)/nextFrame() and the delegated Document.on/off listeners — plus a
  * zero-regression re-check of HTMLElement.prototype.on/off (refactored to a
  * shared impl this round); JSON results land in <div data-testid="fixture-d7-results">.
+ * R170: a one-shot async IIFE exercising the Tier 8 D9 math surface —
+ * renderMath(source, display) (sync HTMLElement fallback → KaTeX typeset),
+ * finishRenderMath() (await the render queue), loadMathJax() (prewarm), and the
+ * throwOnError:false invariant (invalid LaTeX must not throw); JSON results land
+ * in <div data-testid="fixture-d9math-results">.
  */
 import type { ObsidianPluginSource } from "@core/vault";
 
@@ -402,6 +407,50 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
         out.error = String(e);
       }
       d7El.textContent = JSON.stringify(out);
+    })();
+
+    // R170 — Tier 8 D9 math: renderMath(source, display) returns a SYNC
+    // HTMLElement (textContent=source fallback, then KaTeX typesets into it),
+    // finishRenderMath() awaits the render queue, loadMathJax() prewarms KaTeX.
+    // throwOnError:false → invalid LaTeX (\\frac{) must NOT throw on render and
+    // finishRenderMath must still resolve. Same async-IIFE + live <div> pattern.
+    var d9El = document.createElement("div");
+    d9El.setAttribute("data-testid", "fixture-d9math-results");
+    document.body.appendChild(d9El);
+    this.register(function () { d9El.remove(); });
+    (async function () {
+      var out = {};
+      try {
+        // inline math
+        var inlineEl = obsidian.renderMath("x^2", false);
+        out.inlineIsElement = (inlineEl instanceof HTMLElement);
+        out.inlineClass = inlineEl.className;          // expect "math math-inline"
+        document.body.appendChild(inlineEl);
+        // display (block) math — KaTeX receives \\frac{1}{2} at runtime
+        var blockEl = obsidian.renderMath("\\\\frac{1}{2}", true);
+        out.blockClass = blockEl.className;            // expect "math math-block"
+        document.body.appendChild(blockEl);
+        // invalid LaTeX must NOT throw on render (throwOnError:false)
+        var badEl = obsidian.renderMath("\\\\frac{", false);
+        document.body.appendChild(badEl);
+        out.invalidNoThrowOnRender = true;             // reached = render didn't throw
+        // finish — await the render queue
+        await obsidian.finishRenderMath();
+        out.finishResolved = true;
+        out.inlineHasKatex = !!inlineEl.querySelector(".katex");
+        out.inlineIsLoaded = inlineEl.classList.contains("is-loaded");
+        out.blockHasKatex = !!blockEl.querySelector(".katex");
+        // loadMathJax — prewarm
+        await obsidian.loadMathJax();
+        out.loadMathJaxResolved = true;
+        // cleanup the appended math els
+        inlineEl.remove(); blockEl.remove(); badEl.remove();
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      d9El.textContent = JSON.stringify(out);
     })();
 
     this.addSettingTab(new FixtureSettingTab(this.app, this));
