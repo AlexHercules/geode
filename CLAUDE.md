@@ -86,6 +86,7 @@ typecheck → 浏览器 E2E → 桌面 probe → cargo check / build
 | 改某历轮模块前 | `docs/ARCHITECTURE.md` 对应「Round XX additions」节 |
 | 每轮节奏 / 数据安全清单 / 环境细则 | `docs/DEVELOPMENT.md` + data-safety skill |
 | Obsidian 兼容 Tier 表 / 套件矩阵 / 缺口 | `docs/OBSIDIAN-COMPAT.md` |
+| 复刻 Obsidian UI（**像素级界面** + 选项/菜单/快捷键） | `reference/`：`00-界面复刻规范.md`（配色取主题变量/布局/控件样式/排版，截图=视觉验收标准）+ `01`–`08` 逐页文字结构；标注对接第七梯队条目号 |
 | 发布 / 签名 / 更新链路（仅参考） | `docs/DISTRIBUTION.md` |
 
 > `ARCHITECTURE.md` 很大（>250KB）——永远按上表只读相关节，别一次性全读，省下的上下文留给写代码。

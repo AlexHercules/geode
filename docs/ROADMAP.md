@@ -1290,6 +1290,8 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 > 已实现 / 部分实现的据实标注，避免假缺口。编号改用 **A/B/C + 序号**（圈号 ①–㊿ 已在第一–六梯队用尽）。
 > 执行口径沿用历轮：逐项按序自主推进，验收 = 四条底线 + 官方校准（docs.obsidian.md）+ 双端 probe 不回退。
 > **标 ⚠️ 者需先与用户确认诉求或先 code-verify，再开工。**
+>
+> **视觉/文案事实来源**：复刻本梯队条目前对照 `reference/`——42 张 Obsidian 官方截图逐页提取的体系化 md（八类：编辑器/文件与链接/外观/热键/核心插件/第三方插件/通用-账户-库/右键菜单），各文档表头标注对接的本梯队条目号。**目标 = 像素级界面复刻**：截图是视觉验收的事实标准，跨屏视觉规范（配色/布局/控件样式/排版/验收）见 `reference/00-界面复刻规范.md`。与 `docs/OBSIDIAN-COMPAT.md`（插件 API 兼容）互补：一个管「长什么样、有哪些选项」，一个管「插件 API 怎么对齐」。
 
 **A · 快捷键 / 命令缺口**
 
@@ -1317,6 +1319,8 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **C4 收藏功能（收藏夹有、收藏动作"缺"）** | **部分**（**已有命令** `bookmarks:bookmark-file`/`-heading`/`-block` + 书签面板 R27；i18n 提示「从命令面板或右键收藏」）| 功能在、缺**显式 UI 入口**：在编辑区 / 标签页 / 文件树行上加可见「收藏 / 星标」按钮（toggle），不止命令面板；点击走既有 `bookmarks.toggleFile`。 |
 | **C5 左右侧栏可收起** | **缺**（grep 无 toggle-sidebar 命令；仅 ribbon 静态显示开关 R94 在外观设置，非运行时折叠）| workspace 加 `leftSidebarCollapsed`/`rightSidebarCollapsed` 状态 + 折叠箭头 / 按钮 + 命令 `app:toggle-left-sidebar`/`app:toggle-right-sidebar`（+ 默认键，对齐 Obsidian）；持久化进布局。 |
 | **C6 开发者模式（三件套，用户 2026-06-21 确认）** | **缺 / 低优先（用户可搁置）**（Geode 已支持 `.geode/plugins` 本地加载 = 部分开发者能力）| 三部分，均"接线为主"、可拆三小项分轮：**(a) DevTools / 控制台**——命令 + 快捷键开 webview 检查器（Tauri dev `WebviewWindow.open_devtools`；生产需开 `devtools` feature）；**(b) 插件热重载**——监听 `.geode/plugins` + `.obsidian/plugins` 的 `.js` 变化 → 自动 unload/reload（loader 已有 unregister/register 生命周期 + Rust notify watcher 可复用）；**(c) 详细日志开关**——输出插件加载诊断 + 越级 API warn-stub 到控制台（复用 `gaps.ts` warn-once/report）。 |
+| **C7 红色关闭按钮无法关闭程序** | ⚠️ **待复现**（用户实测，自疑 dev 模式所致）。code-verify：`src` / `src-tauri` **未见** close-requested / prevent-close 拦截（仅 main.tsx:219 关窗 flush），tauri.conf.json 无关闭配置 → 窗口本应正常关闭 | 先分清 dev 还是生产：① `tauri dev` 关窗后终端 dev 进程不退 ≈ 用户所见，非生产 bug；② macOS 约定红钮 = 关窗口、App 驻留 Dock（需 Cmd+Q 退出）——定期望行为（最后窗口关即退 / 关到托盘 / Dock 点击重开）并在 Rust `on_window_event(CloseRequested)` 实现 + 处理 reopen；③ 排查 flush / 插件钩子是否阻断关闭。 |
+| **C8 Cmd +/− 无法缩放** | **有 bug**（缩放命令存在 R50：`app:zoom-in/out/reset` 绑 `Mod+=`/`Mod+-`/`Mod+0` → `setFontSize`，App.tsx:215-230；**但仅改正文字号 ±1px、非整体 UI 缩放**）| 三处修：① **键匹配**——`Mod+=` 匹配不到 Cmd+「+」（= Cmd+Shift+=，多带 Shift）→ 补绑 `Mod+Shift+=` / `Mod+Plus`，对齐 Obsidian 同收 Cmd+= 与 Cmd++；② **力度/范围**——`setFontSize±1` 只动正文 → 改应用级缩放（Tauri webview zoom 或 root 缩放变量，连 UI chrome 一起缩）；③ 验证桌面 WKWebView 下 Cmd+=/− 是否被 webview 原生缩放抢走。 |
 
 **B3-附 · 实测加载失败插件清单（2026-06-21 用户桌面实测 · 报错为 WKWebView/JSC 原文 · 逐条 code-verify）**
 
@@ -1331,7 +1335,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 > **B3 内取用顺序**：先 **③ `global` 垫片**（一行解锁 obsidian-git 等 + 普惠）→ 再 **① 补缺失超类导出**（`AbstractInputSuggest` 等，查清即加）→ 再 **② electron/fs 最小垫片**（按 clipboard/opener 可行项先做）→ **④ + webview/remote** 列远期或越界。
 
-> **第七梯队取用建议**：**C5 侧栏折叠 / A1 删除当前笔记 / C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）。
+> **第七梯队取用建议**：**C5 侧栏折叠 / A1 删除当前笔记 / C4 收藏按钮 / B2 插件设置分 Tab / C2 inline 改名** 均零依赖、低成本、用户高频可见，宜先取作 loop 燃料；**B3 ③ `global` 垫片**也是一行级高杠杆速赢（解锁 obsidian-git 等 Node bundle 加载）；**B1 插件管理面板**中等一轮；**B3 ②④ electron/remote/window.require** 类多为越界或远期；**C3 左右分屏 / C1 vault 切换器 / C4 收藏入口 / C6 开发者模式** 开工前先与用户确认诉求（已实现入口发现性，或可搁置）；**C8 缩放**（键匹配 + 仅正文字号，已 code-verify）可随手修，**C7 关窗**先复现确认是否仅 dev 模式现象。
 
 ## 已知技术债
 

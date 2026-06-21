@@ -12,6 +12,9 @@ bench-vault/
 .calibration/**/*-results.md
 .calibration/__*/
 .calibration/*-vault/
+# vendored Obsidian type defs / extracts — legal boundary: NEVER commit (OBSIDIAN-COMPAT.md §法律边界)
+.calibration/obsidian.d.ts
+.calibration/API-REFERENCE.md
 compat-vault/
 # updater signing keypair — NEVER commit the private key
 .tauri-keys/
