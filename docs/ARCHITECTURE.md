@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 159 additions — compat `app.internalPlugins.getPluginById("daily-notes").instance.options`（商业主轴 · 复用 R48 daily-note 设置 · 纯只读零 data-safety）【As-built v0.156】
+
+> **状态：As-built（已交付）。** 对抗评审 6 维全 CONFIRMED clean → **0 confirmed defect**（reviewer 证 record 重构对 bookmarks 零回归[同对象引用]+ `Object.hasOwn` 守卫两 method 都在[防 getPluginById("toString") 命中原型]+ live getter 真[改设置 options 跟变无 reload]+ folder RAW 匹配 Obsidian instance.options[消费 lib 自 trim]+ 全仓零 `.plugins` 迭代者[populated record 不破 calendar]+ 纯只读零写面）+ 简化门 clean。验收：r159-e2e 14/14、r158 13/13[record 重构零回归]、r113 10/10、r43 22/22[daily-note]、typecheck/cargo。**桌面 probe N/A**（纯 JS API shim 平台无关、同 R158/R113）。
+>
+> 续 R158 internalPlugins instance 模式（bounded niche compat，用户未重定向）。**Gate**：`obsidian-daily-notes-interface` 库（Calendar / Periodic Notes 等插件依赖）的 `getDailyNoteSettings()` 读 `app.internalPlugins.getPluginById("daily-notes")?.instance?.options = {folder, format, template, autorun}`；R48 已有 `core/dailyNote.ts` `dailyNoteFolder`/`dailyNoteFormat`(moment 格式，**与 Obsidian 同 lib**)/`dailyNoteTemplate` Stores → 直接暴露。当前 stub `plugins["daily-notes"]` 空（calendar 注释 F6 destructure 它）。**纯只读 options**（无写方法）→ 比 R158 更安全、零 data-safety。
+
+**契约（加性；只动 `compat/obsidian/plugin.ts` + r159-e2e）**：
+- **`compat/obsidian/plugin.ts`**：① 新 `dailyNotesInstance = { get options() { return { folder: dailyNoteFolder.get(), format: dailyNoteFormat.get(), template: dailyNoteTemplate.get(), autorun: false } } }`（live getter 读 Store；folder RAW 匹配 Obsidian instance.options、消费 lib 自 trim；autorun=false Geode 无此设置）+ `dailyNotesPlugin = { enabled:true, instance }`。② **重构 R158 两-id inline 为查找 record**：`internalPluginsRecord = { bookmarks: bookmarksPlugin, "daily-notes": dailyNotesPlugin }`；`getPluginById(id)`=`Object.hasOwn(record,id) ? record[id] : null`（**`Object.hasOwn` 守卫防 `getPluginById("toString")` 命中原型方法**，R104 先例）；`getEnabledPluginById(id)`=同守卫返 `.instance`；`plugins`=record（calendar `plugins["daily-notes"]` 现得真 wrapper）。import `dailyNoteFolder/Format/Template` from `@core/dailyNote`。
+- **r159-e2e**：getPluginById("daily-notes")→{enabled,instance}；instance.options={folder,format,template,autorun} 反映设置；改设置→options 跟变（live getter）；getPluginById("toString")===null（原型守卫）；plugins["daily-notes"]===getPluginById 同 wrapper；R158 bookmarks 仍工作（record 重构零回归）。
+
+**数据安全**：纯只读 options（读 3 个 setting Store），**零写、零 vault/.md、零 markdown.ts** = 零 data-safety 面（比 R158 还干净，无 add/remove）。
+
+**双端**：浏览器 e2e（r159）+ 回归 r158 13/13（record 重构不回退 bookmarks instance）。桌面 probe N/A（纯 JS API shim、平台无关，同 R158/R113）。
+
+**v1 nuance / defer**：非公开 API de-facto 形状；autorun 恒 false（Geode 无「启动开今日笔记」设置）；不暴露 instance 方法（getDailyNote 等=消费 lib 自 options+vault 算，非 instance）；periodic-notes plugin 检测 defer。
+
+---
+
 ## Round 158 additions — compat `app.internalPlugins.getPluginById("bookmarks").instance` 程序化 API（商业主轴 · 复用 R27 原生书签库 · 写走 vetted opChain）【As-built v0.155】
 
 > **状态：As-built（已交付）。** 对抗评审 6 维 → **3 确认修+e2e 锁**：**D1 MAJOR（init 序）**=`main.tsx` `bookmarks.init(vault)` 在插件 load 之后→插件 onload 期书签库空（regVault null、addItem 丢失被 init clobber）→**修=hoist `await bookmarks.init(vault)` 到 BUILTIN_PLUGINS/loadExternal 之前**（书签 API 在 onload 即可用，同 Obsidian）；**D2 MINOR（getItemTitle 扩展名）**=file case 返 basename **带 .md**，偏离 Obsidian TFile.basename / 自身 BookmarksPanel（strip ext）→修=file/heading/block 用 `stripExtension(basename())`、folder 不变 + e2e 断言改 "Ideas"；**D3 MINOR（内部 sentinel 泄漏）**=R27 把未知类型存为 carrier `{type:"__geode_unknown_type__", _extra}`，getBookmarks 原样暴露+getItemTitle 返 sentinel 字面量→修=**export `serializeItem`、getBookmarks 经它 map**（重建 carrier 成 canonical Obsidian wire 形 + defensive copy）。验收：r158-e2e 13/13、r27 22/22（书签持久化未回退）、r113 10/10（插件 boot 未扰）、typecheck/cargo。**桌面 probe N/A**（纯 JS API shim、平台无关，同 R113/R116/R130）。
