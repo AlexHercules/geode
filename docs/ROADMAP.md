@@ -1357,7 +1357,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**D10**~~ | ~~`arrayBufferToBase64` / `base64ToArrayBuffer` / `getBlobArrayBuffer`~~ | ✅ **R168 完成**（v0.165）| `util.ts` 三件套桥接 `@core/net`（bytesToBase64/base64ToBytes）：`arrayBufferToBase64(buf)=bytesToBase64(new Uint8Array(buf))`、`base64ToArrayBuffer(b64)=base64ToBytes(b64).buffer`（exact-size alloc→`.buffer` 无 slack）、`getBlobArrayBuffer(blob)=blob.arrayBuffer()`。零新依赖。Excalidraw/媒体附件用。 |
 | ~~**D11**~~ | ~~`MarkdownPreviewRenderer` 静态 `registerPostProcessor` 桥~~ | ✅ **R172 完成**（v0.169）| plugin.ts 新顶层 `MarkdownPreviewRenderer` 静态类：`registerPostProcessor`/`unregisterPostProcessor`（模块级 disposers Map 跟踪、重复注册 dedup）桥接 `registerCoreMarkdownPostProcessor`（R132 同一注册表）+ `createCodeBlockPostProcessor`=纯工厂返 `makeCodeBlockPostProcessor`。对抗评审 8 维 0 confirmed（registry 路由同实例版、r132 11/11 不破）。r172-e2e 6/6。老式静态调用路径渲染插件。 |
 | **D12** | ~~`getAvailablePathForAttachment` + `getNewFileParent`~~ + `adapter.stat` ⏸ | 中 | ✅ **R174**：getAvailablePathForAttachment（拆 stem/ext→resolveAttachmentDir→createFolder→uniquePath）+ getNewFileParent（resolveNewNoteFolder→registry.getFolder/ensureFolder(false)）接进 makeFileManager Proxy；createFolder data-safety 红线证伪、getNewFileParent fireCreate=false（查询不 fire 事件）；r174-e2e 14/14。**剩 D12-7 `adapter.stat` ⏸**=须新 Rust fs::metadata + 扩 VaultAdapter（defer）。**paste-image/QuickAdd/Excalidraw**（去重附件路径） |
-| **D13** | `Setting.addColorPicker` + `ColorComponent` | 中 | 现 reportGap 静默丢控件；约 120 行（hex↔rgb↔hsl + 原生 `<input type=color>`）。**Style-Settings 邻近 / callout-tag 颜色 / 主题微调** 插件 |
+| ~~**D13**~~ | ~~`Setting.addColorPicker` + `ColorComponent`~~ | ✅ **R176 完成**（v0.173）| ui.ts 新增 `ColorComponent extends ValueComponent<string>`（原生 `<input type=color>` = hex source-of-truth、`change`→changeCallback）+ `RGB`/`HSL`/`HexString` 类型（逐字匹配 d.ts）+ 4 自写转换 helper（hexToRgb/rgbToHex/rgbToHsl/hslToRgb + clampByte）；`addColorPicker` stub→`addControl(new ColorComponent())`；barrel +4。**冻结不变量「setValue 绝不 fire onChange」**成立（三 setter 仅写 colorEl.value）。对抗评审 7 维 0 confirmed（颜色数学人工验算全对、纯色/灰阶/hue 边界/round-trip 无损）、简化门 clean、r176-e2e **16/16**。**Style-Settings/callout-tag 颜色/主题微调** 插件。v1 nuance：原生 input 仅接 `#rrggbb`（非法值回落 `#000000`）、onChange 绑 `change` 非 `input`。 |
 | **D14** | `registerObsidianProtocolHandler` 派发 + `registerExtensions` | 中 | Geode 已有原生 obsidian:// 管线（R46）但不派发插件注册 action；registerExtensions 关联自定义文件类型视图。**Advanced URI / QuickAdd**（URI capture）、**Excalidraw**（`.excalidraw`）、图片/PDF 查看器 |
 | ~~**D15**~~ | ~~`Workspace.getMostRecentLeaf` + `setActiveLeaf` + `openLinkText` eState 子路径~~ | ✅ **R175 完成**（v0.172）| openLinkText 用 parseLinktext 拆 {path,subpath}、openFile 后 resolveSubpath(subpath.slice(1))→requestReveal（#heading/^block 滚动，镜像 wikilinks.ts、vault.create 分支未动）；getMostRecentLeaf=activeLeaf facade；setActiveLeaf=sidebar→reveal/否则 no-op。对抗评审 8 维 0 confirmed、红线全证伪、r175-e2e 10/10。**Templater/QuickAdd 导航**。v1 nuance：纯 subpath 自链接早退、openViewState 不消费 eState、未测 ^blockid。 |
 | **D16** | ~~`getLanguage` + `getIcon`/`getIconIds` + `Platform.resourcePathPrefix`~~ + `App.lastEvent` ⏸ | 中 | ✅ **R174**：getLanguage=locale.get()；getIcon=getIconSvg→template 解析→SVGSVGElement 守卫；getIconIds=BUILTIN+registered keys；Platform.resourcePathPrefix=""（占位、真值待 D5）；r174-e2e 14/14。**剩 D16-4 `App.lastEvent` ⏸**=须 app-shell 全局事件捕获（越 compat 自包含、defer）。本地化插件、图标 picker |
@@ -1374,7 +1374,51 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **popout / 多窗口**（WorkspaceWindow/Floating/moveLeafToPopout/onWindowMigrated） | 单窗口宿主天然不做 |
 | **RenderContext / TextFileView·MarkdownPreviewView / FileSystemAdapter / DisplayValueComponent·ConfirmationModal·ProgressBarComponent** | 偏 T2/T3（中央 pane 自定义视图、桌面绝对路径）或全新（1.13.x）几乎零采用 |
 
-> **第八梯队取用顺序建议**：~~D1 版本号 / D2 parseLinktext / D9 loadMermaid / D10 base64~~（**R168 打包 done**）+ ~~D4 AbstractInputSuggest~~（R167）→ ~~D7 sleep/nextFrame/Document.on/off~~（**R169 done**）→ ~~D9 renderMath/finishRenderMath/loadMathJax~~（**R170 done**）→ ~~D3 prepareFuzzySearch/prepareSimpleSearch~~（**R171 done**）→ ~~D11 MarkdownPreviewRenderer 静态桥~~（**R172 done**）→ ~~D9 sanitizeHTMLToDom~~（**R173 done**）→ ~~D12-5/6 + D16-1/2/3~~（**R174 done**）→ ~~D15 Workspace 导航~~（**R175 done**）。**🛑🛑 第八梯队【可纯自主 compat 完成的项全部清空】（R167→R175 九轮零回归）→ loop 在 R175 后暂停、交回用户定大方向**：剩余 D6 lucide（硬边界#5）/ D5 Tauri asset（Rust/host）/ D8 CM6 StateField（跨层 features/editor 喂值）/ D12-7 adapter.stat（Rust fs::metadata）/ D16-4 App.lastEvent（app-shell 事件捕获）/ D14 protocol 派发（host）—— 每项均须用户拍板（新依赖）或跨层/host 大集成；C3/C1/C6/C7/C8 须先确认诉求。**用户选向后再 /continue。****D5 getResourcePath 接 Tauri asset-protocol、D14 registerExtensions/protocol 派发** 涉宿主接线、单独成轮。**parseYaml（高价值）须用户拍板新依赖后再做**。全部为加性 display/读取面，无 vault 写、不触发 data-safety 字节级套件（除非实现触及 markdown.ts/写 .md）。
+> **第八梯队取用顺序建议**：~~D1 版本号 / D2 parseLinktext / D9 loadMermaid / D10 base64~~（**R168 打包 done**）+ ~~D4 AbstractInputSuggest~~（R167）→ ~~D7 sleep/nextFrame/Document.on/off~~（**R169 done**）→ ~~D9 renderMath/finishRenderMath/loadMathJax~~（**R170 done**）→ ~~D3 prepareFuzzySearch/prepareSimpleSearch~~（**R171 done**）→ ~~D11 MarkdownPreviewRenderer 静态桥~~（**R172 done**）→ ~~D9 sanitizeHTMLToDom~~（**R173 done**）→ ~~D12-5/6 + D16-1/2/3~~（**R174 done**）→ ~~D15 Workspace 导航~~（**R175 done**）→ ~~D13 addColorPicker/ColorComponent~~（**R176 done**，v0.173，2026-06-22 漏登的最后一个纯前端零依赖速赢）。**🛑🛑 第八梯队【可纯自主 compat 完成的项现已真·全部清空】（R167→R176 十轮零回归，含补登的 D13）**：剩余 D6 lucide（硬边界#5）/ D5 Tauri asset（Rust/host）/ D8 CM6 StateField（跨层 features/editor 喂值）/ D12-7 adapter.stat（Rust fs::metadata）/ D16-4 App.lastEvent（app-shell 事件捕获）/ D14 protocol 派发（host）—— 每项均须用户拍板（新依赖）或跨层/host 大集成；C3/C1/C6/C7/C8 须先确认诉求。**D13 已 R176 完成，第八梯队 bounded 项无残留。** **后续 loop 燃料转「候选池补充」节的 E4（图谱联动卡片，方案已定）/ E9（硬忽略，软忽略基建已有）等 bounded 项；其余 E 项 + Canvas/Bases/stacked-tabs 须先消解设计空白或用户拍板。****D5 getResourcePath 接 Tauri asset-protocol、D14 registerExtensions/protocol 派发** 涉宿主接线、单独成轮。**parseYaml（高价值）须用户拍板新依赖后再做**。全部为加性 display/读取面，无 vault 写、不触发 data-safety 字节级套件（除非实现触及 markdown.ts/写 .md）。
+
+---
+
+## 候选池补充 · 复刻剩余大件 + 差异化延伸（2026-06-22 登记）
+
+> 背景：前八梯队（①–㊿ / A–D）已把 **Obsidian 复刻的 bounded compat 面**基本清空（R175 止，仅余须拍板/跨层项）。
+> 本节把两类此前**未进实现候选池**的工作正式登记，使候选池完整：
+> **(A)** 复刻剩余大件（散落各梯队的"待拍板大件"汇总 + 白板 Canvas 展开）；
+> **(B)** geode 差异化「延伸」路线（E 系列，来源 `geode-设计讨论/` 00–14＋99，对应项目定位「Obsidian 复刻 **＋ 延伸**」的"延伸"半）。
+> ⚠️ 与前八梯队不同：本节多数项**需先完成设计（见 `geode-设计讨论/99-待设计清单`）或用户拍板大方向**，**非即取即做的 loop 燃料**。
+
+### A · Obsidian 复刻剩余大件（须用户拍板 scope / 偏重工程）
+
+| 项 | 现状 | 工程量 / 前置 |
+|---|---|---|
+| **白板 Canvas（`.canvas`）** ★用户点名 | 缺（#⑰ 仅一行登记）| 独立编辑器级大工程，子项展开见下 |
+| Bases（库内数据库视图，Obsidian 2025 新核心）| 缺（T3）| 需先建数据库/查询引擎；与 R22 Properties 体系衔接 |
+| Stacked tabs 标签堆叠 + linked view | 部分（#⑧ pinned 已 R39）| 内容级横向 cascade，需多 EditorPane 同挂＝data-safety 大轮 |
+| 独立标签面板（tag pane）| 部分（搜索面板已有标签浏览模式）| 独立侧栏面板未做，中等 |
+| Vim mode / Audio recorder / Web viewer / Format converter / Footnotes view | 缺（#㉑ 小众核心插件）| Footnotes / Format converter 零依赖较清爽可先；Vim / 录音 / Web viewer 需新能力或撞硬边界#5 |
+| `parseYaml` / `stringifyYaml` | 缺（T3，高价值）| 需 YAML 运行时依赖＝硬边界#5；或自研最小子集（无新依赖）|
+| Pop-out 多窗口（#⑯）| 显式不做 | 单窗口宿主天然不做（已决策，列此备查）|
+
+**Canvas 子项**（JSONCanvas 开放格式，`09-索引与存储技术选型` 已引为存储先例）：① 无限画布视图（缩放 / 平移 / 框选）；② 卡片节点四型——文本卡 / 笔记嵌入卡（实时渲染，复用阅读视图管线）/ 媒体卡 / 网页卡；③ 节点连线（方向箭头 + 标签 + 颜色）；④ 分组框 group；⑤ `.canvas` JSON 读写（开放标准，与 `.md` 同级一等公民）；⑥ 复用候选 **Excalidraw**（MIT，参考交互，见 `14-现有插件复用与许可证`）或自建轻量画布。**建议**：拆多轮、单独立项，开工前用户拍板启动顺序。
+
+### B · 差异化「延伸」路线（E 系列 · 来源 `geode-设计讨论/`）
+
+| 编号 | 项 | 状态 | 前置 / 依赖 | 设计来源 |
+|---|---|---|---|---|
+| **E1** | 核心许可证选定（MIT / Apache-2.0）| 🛑 **前置阻断** | 用户拍板（仓库当前无 LICENSE，卡住「吸收源码 / 开源定位 / 外部贡献」三项）| 14 / 99 |
+| **E2** | **Chain 链式视图**（知识＝节点，图谱重在路径；单链滚动＝编辑页按序拼接，入口在左侧功能栏）| 已定 5 项决策、**6 项待设计** | 主视图渲染形态（大纲 / 滚动长文 / 卡片列车）等最大未设计区 | 01 / 99 |
+| **E3** | 一键划取产生分支（默认 alias wikilink、父子 / 兄弟）| 已定 3 项、2 项待设计 | 依赖 E2 chain 面板 | 02 / 99 |
+| **E4** | 知识图谱节点 → 联动分屏可编辑卡片 | **方案已定**（只做联动分屏 C 方案）| 相对可落地（接近 bounded）| 03 |
+| **E5** | 项目库（多 root，而非文件夹）＋ 统一插件库 | 部分（插件加载优先级已定：库内 .geode ＞ .obsidian ＞ 全局 ~/.geode）| 跨 root wikilink 落盘格式定稿 | 04 / 99 |
+| **E6** | 云端库三档（只读远程库 → 云端 wikilink → 协作设施）| 需设计 / 远期 | L2 挂载协议 endpoint 草案 | 05 / 10 / 99 |
+| **E7** | Git 同步与版本控制（本地 git ＋ 自带远程，自建 libgit2 sidecar）| 需拍板 ＋ 设计 | git2-rs vs gitoxide 选型、冲突 UI、非交互鉴权 | 13 / 99 |
+| **E8** | 网页剪藏（窄版 Web Clipper，HTML→md）| 需依赖评估 | 复用 **defuddle**（MIT，许可证单独核实）；不移植 Surfing（依赖 Electron webview）| 07 / 14 |
+| **E9** | 硬忽略 ＋ 索引范围（`@index` 放弃索引）| 部分（软忽略已 R96）| 12 待设计 4 项；统一「规则 × 作用域」| 12 / 99 |
+| **E10** | AI 与 CLI 集成 | 远期 | 依赖 06 方向 | 06 |
+| **E11** | 账户体系（OIDC）＋ 生态身份层 | 远期 | 依赖 08；与本地优先的张力需先表态 | 08 |
+
+> **取用纪律**：E 系列多数**不是 loop 的 bounded 燃料**——E1 是前置阻断、E2/E3/E6/E7 须先在 `99-待设计清单` 消解设计空白、E10/E11 远期。**loop 可即取的延伸项仅 E4（方案已定）/ E9（软忽略基建已有，补硬忽略）接近 bounded**，其余开工前先选定方向 + 用户拍板。**（注：2026-06-22 补登提示里的 D13 已 R176 完成出队；compat 侧 bounded 项现已真·清空，下一个 loop 即取项落到 E4 / E9。）****TODO**：E2 启动前回 DeepNotion（已克隆 `../deepnotion`）提取切换 / 分屏交互参考（01-D4）。
+
+---
 
 ## 已知技术债
 

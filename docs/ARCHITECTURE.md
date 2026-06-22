@@ -71,6 +71,34 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 176 additions — Tier 8 D13「`Setting.addColorPicker` + `ColorComponent` 颜色选择控件」（compat · 原生 `<input type=color>` + 自写 hex↔rgb↔hsl 转换 · 零新依赖）【As-built v0.173】
+
+> **状态：As-built（已交付）。** 简化门 **clean**（无死代码/无脚手架/无 ≥8 行重复、零编辑）。对抗评审 7 维 → **0 confirmed defect（clean）**：① 契约逐字匹配 obsidian.d.ts（方法名/返回类型/barrel 值-vs-type 全对、loader `import *` 自动暴露 `obsidian.ColorComponent`）；② **冻结不变量「setValue 绝不 fire onChange」成立**（三 setter 仅写 `colorEl.value`、唯一 changeCallback 路径=构造器的原生 `change` 监听，程序化 `.value=` 不派发 change）；③ **颜色数学人工验算全对**（纯色/灰阶 d===0 不 NaN/hslToRgb hp∈[0,6) 无缺档重档/h=360 wrap/round-trip 损失证 e2e 选值无损非脆弱）；④ 原生 input `#rrggbb`-only 回落 `#000000` 已记 nuance、fixture 只喂合法 6 位 hex 故无假绿；⑤ 分层 clean（helper 留 compat、零 features/app import、零 core 污染）；⑥ 回归面 clean（reportGap 其它调用方不动、无符号碰撞、IIFE try/catch 包裹不中断 onload）；⑦ **零写路径**（纯 DOM input + 内存颜色转换、不碰 vault/.md/editor/markdown.ts）=非 data-safety 轮。验收：r176-e2e **16/16**（控件渲染[旧 stub 静默丢] + ColorComponent 实例 + setValue→getValue/Rgb/Hsl + **setValue 静默** + setValueRgb/Hsl round-trip + 原生 change 触发 onChange 一次 + setDisabled 反映）、回归 r174 14/14·r168 16/16·r167 25/25·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯 JS+DOM+标准 web API 零 fs/Rust/平台分支、WKWebView/Safari 18 支持 type=color、同 R167–R175 compat-shim 先例）。
+>
+> **背景**：第八梯队「全部清空」漏登的唯一纯前端零依赖速赢（2026-06-22 核实）。原 `Setting.addColorPicker` 是静默 stub（`reportGap("Setting","addColorPicker","control omitted")` 后丢控件、回调参 `never`），`ColorComponent` 类不存在。**商业主轴价值**：Style-Settings / callout-tag 颜色 / 主题微调类插件用 `Setting.addColorPicker` 渲染颜色控件。
+>
+> **Gate（R160 教训：explorer 实查）**：`addColorPicker` 确为空 stub（非误判，grep `ColorComponent`/`type=color` compat 零命中）；`ValueComponent<T>`(ui.ts:776) + `ToggleComponent`/`SliderComponent`(原生 input 直读范例) 可直接 extends/镜像；项目有 2 处原生 `<input type=color>` 先例（SettingsModal accent / GraphView 分组色，均直取 `e.target.value` 的规范化 hex）；**hex↔rgb↔hsl 转换全仓零现成** → 6 个转换本轮自写（module-level helper，compat 自包含、不进 core）。
+
+**契约（加性 · compat 自包含 · 复用既有 ValueComponent + addControl 工厂）**：
+- **`ColorComponent extends ValueComponent<string>`**（ui.ts，与 ToggleComponent/SliderComponent 同级新增）：构造 `(containerEl)` new 原生 `<input type="color">`（append 进 containerEl，`change` 事件→内联 `changeCallback?.(getValue())`）；`colorEl` 是 **hex source-of-truth**（浏览器规范化为 `#rrggbb` 小写）。
+  - `getValue(): HexString` = `colorEl.value`；`setValue(hex): this` = `colorEl.value = hex`（**冻结契约：setValue 只更新 UI，绝不 fire onChange**，ui.ts:4/782-783）。
+  - `getValueRgb(): RGB` = `hexToRgb(getValue())`；`getValueHsl(): HSL` = `rgbToHsl(getValueRgb())`。
+  - `setValueRgb(rgb): this` = `setValue(rgbToHex(rgb))`；`setValueHsl(hsl): this` = `setValue(rgbToHex(hslToRgb(hsl)))`。
+  - `setDisabled(disabled): this` override = 设 `this.disabled` + `colorEl.disabled`；`onChange(cb): this` = 存 changeCallback（仅 input 的 `change` 事件经 `fire()` 触发）。
+- **`addColorPicker(cb: (component: ColorComponent) => unknown): this`**（ui.ts:1313 改）= `return this.addControl(new ColorComponent(this.controlEl), cb)`（删 reportGap stub；`reportGap` import 保留，addProgressBar/addDisplayValue 仍用）。
+- **类型**（ui.ts 定义 + barrel re-export）：`type HexString = string`、`interface RGB {r,g,b}`（0-255 整数）、`interface HSL {h,s,l}`（h 0-360、s/l 0-100 整数）——逐字匹配 obsidian.d.ts:3417/3498/5506。
+- **转换 helper**（ui.ts module-level、不导出）：`hexToRgb`/`rgbToHex`/`rgbToHsl`/`hslToRgb`（标准算法、`Math.round` 取整对齐 Obsidian 整数口径、`rgbToHex` clamp+padStart 2）。
+
+**文件所有权（单 implementer 串行 · 改面极小 3 文件紧耦合无并行收益）**：
+- `src/compat/obsidian/ui.ts` — 新增 RGB/HSL/HexString 类型 + 4 转换 helper + `ColorComponent` 类 + 重写 `addColorPicker`（删 stub）。
+- `src/compat/obsidian/index.ts` — barrel 加 `ColorComponent`（值导出，`ButtonComponent` 后）+ `type HexString`/`type HSL`/`type RGB`（类型导出）。
+- `src/compat/obsidian/fixture.ts` — D13 探针 IIFE（`new Setting(host).addColorPicker` 捕获 component → setValue/setValueRgb/setValueHsl round-trip + setValue 静默 + input change 触发 onChange + setDisabled 反映）写 `data-testid="fixture-d13color-results"`。
+- `.calibration/r176-e2e.mjs`（新建，独立产物无冲突）。
+
+**data-safety**：纯 compat UI 控件（原生 input + 内存内颜色转换），**不写 vault/.md、不触 editor/markdown 管线** → 非 data-safety 轮（仍走 typecheck→浏览器 e2e→cargo check 验证顺序）。
+
+**v1 nuance**：① 原生 `<input type=color>` 仅接受 `#rrggbb`——`setValue` 传 3 位 hex / 命名色 / 非法值时浏览器回落 `#000000`（`setValueRgb/Hsl` 经 `rgbToHex` 必产 `#rrggbb` 故不受影响）；② onChange 绑 `change` 事件（用户提交时），不绑 `input`（拖拽中连续触发）——对齐 Obsidian ColorComponent 真实语义。
+
 ## Round 175 additions — Tier 8 D15「Workspace 导航：getMostRecentLeaf + setActiveLeaf + openLinkText eState 子路径滚动」（compat · 复用 R14 reveal 基建 + R171 parseLinktext · 零新依赖）【As-built v0.172】
 
 > **状态：As-built（已交付）。** 对抗评审 8 维 → **0 confirmed defect（clean）+ 红线全证伪**。**关键证伪**：① openLinkText subpath reveal=`parseLinktext` 拆 {path,subpath}（subpath 带 `#`）→ `subpath.slice(1)` 去 `#`（`#Heading`→`Heading`、`#^id`→`^id`、`^` 保留）→ `resolveSubpath(resolvedPath, ...)` → `if(span)` 守卫 → `requestReveal(resolvedPath, from, to)`，**# 形 + resolvedPath + openFile 后时序全对齐 vetted wikilinks.ts:29-38**（cmExtensions/livePreview 均取 `#` 后文本，resolveSubpath 期望去 `#` 形）；② **vault.create 未解析分支字节未变**（仅 `linkpath`→`bareLink` 重命名、候选名构造/重试/alias 剥离 `.split("|")[0]` 全保留，r71 17/17 回归证链接导航未坏）；③ 纯 subpath 自链接 `#h`（path=""）早退不导航=acceptable nuance（与改动前一致、契约范围仅 resolved 目标）；④ 新建空文件 resolveSubpath 返 null 不 reveal；⑤ getMostRecentLeaf 返非 null active-pane facade、setActiveLeaf sidebar→reveal/否则 no-op（单 active-pane 模型 recorded deviation）；⑥ openViewState v1 不消费 eState（subpath 来自 linktext 主源、recorded nuance）；⑦ 分层 compat→core（resolveSubpath/requestReveal via handle、parseLinktext via util）、无 features import、两层 shim 共享同一 core Workspace。简化门 **删 1 行**（`void openViewState` no-op，noUnusedParameters:false 无 lint gate）。验收：r175-e2e **10/10**（getMostRecentLeaf 非 null + openLinkText 开正确文件 + **subpath reveal 经 revealTarget Store 捕获断言 path 匹配 + 数值 span**[from>0,to>=from] + setActiveLeaf 不抛）、回归 r71 17/17（md 链接导航）·r107 12/12·r64 15/15（reveal 机制）·r174 14/14·r113 10/10·typecheck 0·cargo check·**生产构建成功**。**桌面 probe N/A**（纯导航/reveal 编排、reveal 滚动几何经 r64-probe[同 requestReveal 路径]覆盖、openLinkText 平台无关）。**v1 coverage 备注**：e2e 只测 `#heading` 未测 `#^blockid`（逻辑 slice(1) 保 `^`→resolveSubpath block 分支正确、下轮可补一条断言）。
