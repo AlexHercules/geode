@@ -665,6 +665,61 @@ var GeodeCompatFixture = class extends obsidian.Plugin {
       d1216El.textContent = JSON.stringify(out);
     })();
 
+    // R176 — Tier 8 D13: Setting.addColorPicker(cb) + ColorComponent. The native
+    // <input type=color> is the hex source-of-truth; getValueRgb/Hsl derive from it
+    // and setValueRgb/Hsl convert back through hex. FROZEN invariant: setValue updates
+    // the UI but must NOT fire onChange — only the input's native 'change' event does.
+    // Purely synchronous, so a plain IIFE writes the JSON immediately.
+    var d13El = document.createElement("div");
+    d13El.setAttribute("data-testid", "fixture-d13color-results");
+    document.body.appendChild(d13El);
+    var colorHost = document.createElement("div");
+    document.body.appendChild(colorHost);
+    this.register(function () { d13El.remove(); colorHost.remove(); });
+    (function () {
+      var out = {};
+      try {
+        var cc = null;
+        var changeFires = 0;
+        var lastChangeVal = null;
+        new obsidian.Setting(colorHost).addColorPicker(function (c) {
+          cc = c;
+          c.onChange(function (v) { changeFires++; lastChangeVal = v; });
+        });
+        // control actually rendered (the old stub silently dropped it)
+        out.inputRendered = !!colorHost.querySelector("input[type=color]");
+        out.isColorComponent = (cc instanceof obsidian.ColorComponent);
+        // setValue(hex) → getValue normalized hex; conversions derive from it
+        cc.setValue("#ff0000");
+        out.hex = cc.getValue();              // "#ff0000"
+        out.rgb = cc.getValueRgb();           // {r:255,g:0,b:0}
+        out.hsl = cc.getValueHsl();           // {h:0,s:100,l:50}
+        out.setValueDidNotFire = (changeFires === 0);   // setValue is silent
+        // setValueRgb → hex round-trip
+        cc.setValueRgb({ r: 0, g: 255, b: 0 });
+        out.hexFromRgb = cc.getValue();       // "#00ff00"
+        out.hslFromRgb = cc.getValueHsl();    // {h:120,s:100,l:50}
+        // setValueHsl → hex round-trip
+        cc.setValueHsl({ h: 240, s: 100, l: 50 });
+        out.hexFromHsl = cc.getValue();       // "#0000ff"
+        out.rgbFromHsl = cc.getValueRgb();    // {r:0,g:0,b:255}
+        // user interaction (the input's native 'change') DOES fire onChange
+        var inputEl = colorHost.querySelector("input[type=color]");
+        inputEl.value = "#123456";
+        inputEl.dispatchEvent(new Event("change"));
+        out.changeFiresOnInput = (changeFires === 1);
+        out.changeValue = lastChangeVal;      // "#123456"
+        // setDisabled toggles the native input's disabled
+        cc.setDisabled(true);
+        out.disabledReflected = (inputEl.disabled === true);
+        out.ok = true;
+      } catch (e) {
+        out.ok = false;
+        out.error = String(e);
+      }
+      d13El.textContent = JSON.stringify(out);
+    })();
+
     this.addSettingTab(new FixtureSettingTab(this.app, this));
   }
   onunload() {

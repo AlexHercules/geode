@@ -1178,6 +1178,129 @@ export class SliderComponent extends ValueComponent<number> {
   }
 }
 
+/* ---------------- ColorComponent (R176 — Tier 8 D13) ---------------- */
+
+/** A hex color string, e.g. "#rrggbb". */
+export type HexString = string;
+/** Red/green/blue, each an integer 0-255. */
+export interface RGB {
+  r: number;
+  g: number;
+  b: number;
+}
+/** Hue (0-360), saturation/lightness (0-100), all integers. */
+export interface HSL {
+  h: number;
+  s: number;
+  l: number;
+}
+
+function clampByte(n: number): number {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+function hexToRgb(hex: string): RGB {
+  let h = hex.replace(/^#/, "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+
+function rgbToHex(rgb: RGB): HexString {
+  const to2 = (v: number): string => clampByte(v).toString(16).padStart(2, "0");
+  return `#${to2(rgb.r)}${to2(rgb.g)}${to2(rgb.b)}`;
+}
+
+function rgbToHsl({ r, g, b }: RGB): HSL {
+  const rf = r / 255;
+  const gf = g / 255;
+  const bf = b / 255;
+  const max = Math.max(rf, gf, bf);
+  const min = Math.min(rf, gf, bf);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rf) h = ((gf - bf) / d) % 6;
+    else if (max === gf) h = (bf - rf) / d + 2;
+    else h = (rf - gf) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  const l = (max + min) / 2;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
+}
+
+function hslToRgb({ h, s, l }: HSL): RGB {
+  const sf = s / 100;
+  const lf = l / 100;
+  const c = (1 - Math.abs(2 * lf - 1)) * sf;
+  const hp = ((((h % 360) + 360) % 360) / 60);
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  const m = lf - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hp < 1) { r = c; g = x; }
+  else if (hp < 2) { r = x; g = c; }
+  else if (hp < 3) { g = c; b = x; }
+  else if (hp < 4) { g = x; b = c; }
+  else if (hp < 5) { r = x; b = c; }
+  else { r = c; b = x; }
+  return { r: clampByte((r + m) * 255), g: clampByte((g + m) * 255), b: clampByte((b + m) * 255) };
+}
+
+export class ColorComponent extends ValueComponent<string> {
+  colorEl: HTMLInputElement;
+  private changeCallback: ((value: string) => unknown) | null = null;
+
+  constructor(containerEl: HTMLElement) {
+    super();
+    this.colorEl = document.createElement("input");
+    this.colorEl.type = "color";
+    containerEl.appendChild(this.colorEl);
+    this.colorEl.addEventListener("change", () => {
+      this.changeCallback?.(this.getValue());
+    });
+  }
+
+  override setDisabled(disabled: boolean): this {
+    this.disabled = disabled;
+    this.colorEl.disabled = disabled;
+    return this;
+  }
+
+  getValue(): HexString {
+    return this.colorEl.value;
+  }
+
+  getValueRgb(): RGB {
+    return hexToRgb(this.getValue());
+  }
+
+  getValueHsl(): HSL {
+    return rgbToHsl(this.getValueRgb());
+  }
+
+  setValue(value: HexString): this {
+    this.colorEl.value = value;
+    return this;
+  }
+
+  setValueRgb(rgb: RGB): this {
+    return this.setValue(rgbToHex(rgb));
+  }
+
+  setValueHsl(hsl: HSL): this {
+    return this.setValue(rgbToHex(hslToRgb(hsl)));
+  }
+
+  onChange(callback: (value: string) => unknown): this {
+    this.changeCallback = callback;
+    return this;
+  }
+}
+
 /* ---------------- Setting ---------------- */
 
 export class Setting {
@@ -1310,9 +1433,8 @@ export class Setting {
     return this;
   }
 
-  addColorPicker(_cb: (component: never) => unknown): this {
-    reportGap("Setting", "addColorPicker", "control omitted");
-    return this;
+  addColorPicker(cb: (component: ColorComponent) => unknown): this {
+    return this.addControl(new ColorComponent(this.controlEl), cb);
   }
 
   addProgressBar(_cb: (component: never) => unknown): this {
