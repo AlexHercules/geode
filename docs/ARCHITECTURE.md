@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 179 additions — G4-a「文件右键菜单：复制库内路径 + 复制 Obsidian 链接」（纯前端 · 复用 R46 obsidianUri + R77 剪贴板 + 既有 toast · 零新依赖）【As-built v0.176】
+
+> **状态：As-built（已交付）。** 表面复刻主线 G 系列（G4「右键菜单补齐」的纯前端可先补子片）。**为何 G4 而非 G3**：R160 纪律 explorer 实查发现命令面**远比审计「90 vs 280」标题富**——编辑格式（bold/italic/highlight/inline-code/heading/lists/callout，R33 `formatCommands.ts`）、标签导航（next/prev/go-to-tab-N，App.tsx）等高频命令**早已存在**；G3「280 总表」的正确下一步是先建命令复刻矩阵，而该矩阵的权威源 `reference/04-热键命令` **当前不在仓库**（见 G2-a 教训）。故本轮取**确认缺失**（grep 零命中 copy-vault/copy-obsidian）、Obsidian 原生即右键项、纯前端、可验证的 G4 子片。**契约（一处新 core 导出，无跨模块接口变更）**：
+> - **`core/obsidianUri.ts` 新增纯函数 `buildOpenUri(vaultName, path): string`**（R46 parser 的伴生 builder）：`path.replace(/\.md$/i,"")` 去 .md（对齐 Obsidian「Copy Obsidian URL」），返 `obsidian://open?vault=<enc>&file=<enc>`（`encodeURIComponent` 编 `/`→`%2F`），**经 `parseObsidianUri` + `metadata.resolveLink` 回环**（resolveLink 含 `/` 走 exact-path 分支解析）。非 markdown 扩展名保留。
+> - **`features/explorer/Explorer.tsx`** 文件右键菜单（`node.kind==="file"` 块、make-copy 之后）新增两项 `explorerctx-copy-path`（复制 `node.path` 含扩展名）+ `explorerctx-copy-obsidian-url`（复制 `buildOpenUri(app.vault.vaultName, node.path)`）；两个薄处理器 `copyVaultPath`/`copyObsidianLink` 走 `navigator.clipboard.writeText`（try/catch 吞 headless/denied，对齐 R77 blockRefCommands/codeCopy 既有约定）+ **复用既有 `showLinkUpdateNotice` toast**（非新建通知机制）。图标 `copy`/`link`（均已注册非 fallback）。
+> - **i18n** dict.panels.ts 加 explorer.copyPath/copyObsidianUrl（菜单标签）+ copiedPath/copiedUrl（toast），en+zh。
+> - **分档：逻辑档**（新增导出 buildOpenUri + 新 handler/剪贴板·URL 构造控制流）；**未碰数据安全面**（读路径 + 剪贴板写，**无 vault/doc 写**——非 data-safety 轮）。简化门 **clean**（新代码=单薄包装[buildOpenUri 单调用点纯构造 + 2 薄处理器]；两处 3 行剪贴板样板 <8 行阈值不抽；无死代码/脚手架）。**对抗评审 7 维 → 0 confirmed defect**（buildOpenUri 回环 + `.md` 去除边角[`.md.md` 单次去除=Obsidian 同款 / `.MD` / 非 md 保留] + encodeURIComponent `/`/空格/`#`/CJK 正确 + 分层 core 纯/features→core 合规 + 零 vault 写 + i18n en+zh 齐 + 图标已注册 + vaultName 真 getter 有 fallback 非 undefined）。
+> - **v1 defer**：仅文件、文件夹右键暂无「复制库内路径」（Obsidian 文件夹亦有，下子轮可补，与 make-copy file-only 一致）；命令版（palette/hotkey）未做（Obsidian 这两项本即菜单-only，faithful）；标签/编辑器「更多」菜单未加同项。**toast 在 clipboard 失败时仍显示**（headless/denied 才发生，沿 blockRefCommands 约定，若改须全仓一致）。
+
 ## Round 178 additions — G2-a「设置弹窗视觉校准」（纯前端 · 修浅色整窗蓝 focus ring + 主题 segmented→下拉 + 弹窗/左栏加宽 + 段标题分隔线 · 零新依赖）【As-built v0.175】
 
 > **状态：As-built（已交付）。** 表面复刻主线 G 系列第二项（G2「设置页视觉像素级校准」的**首个可验证子片**；用户 ✅「完整复刻·表面优先」G1→G2→G3）。**契约（前端内部 + 一处全局 modal CSS，无跨模块接口变更）**：

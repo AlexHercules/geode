@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R179 套件回归（2026-06-23，G4-a「文件右键菜单：复制库内路径 + 复制 Obsidian 链接」· 表面复刻 G 系列 · 纯前端、零 compat 调用面改动 · 桌面 probe N/A）
+
+R179 = 表面复刻 **G 系列**（G4「右键菜单补齐」纯前端可先补子片）。**非 compat-API 轮**。**R160 纪律收获**：explorer 实查证命令面远比审计「90 vs 280」标题富——编辑格式（R33 formatCommands）/ 标签导航（go-to-tab-N）早已存在；G3「280 总表」正确下一步是先建命令矩阵、但权威源 `reference/04-热键命令` 当前不在仓库，故取**确认缺失**（grep 零命中）的 G4 copy 菜单子片。**实现/根因详见 ARCHITECTURE「Round 179 additions」**：core 新增纯 `buildOpenUri`（去 .md + encodeURIComponent，回环 parseObsidianUri+resolveLink）；Explorer 文件菜单 +2 项复用 R77 剪贴板 + 既有 toast；i18n en+zh +4 键。
+
+新增套件：`r179-e2e.mjs` **10/10**（右键文件开菜单 + 含 copy-path/copy-obsidian-url 两项 + **Copy path→剪贴板得含 .md 的库内路径 + toast 现** + **Copy URL→`obsidian://open?vault&file` 且 .md 去除、vault 匹配 vaultName、`/`→%2F** + **file-only：文件夹菜单无此两项** + 无 page error；剪贴板用 R77 monkeypatch 捕获）。**套件矩阵不回退**：r93 22/22·r140 18/18·r97 15/15（Explorer 右键菜单结构回归）· typecheck 0/cargo check/生产构建。**桌面 probe N/A**（剪贴板 writeText + DOM 菜单 + 纯 URL builder、零 fs/Rust/平台分支；`navigator.clipboard.writeText` 在 WKWebView 经菜单点击用户手势可用，同 R77/R164 先例）。**分档逻辑档 → 对抗评审 7 维 0 confirmed defect**（回环/`.md` 边角/编码/分层/零 vault 写/i18n/图标/vaultName 全 clean）。简化门 **clean**（单薄包装、3 行样板 <8 阈值不抽）。**v1 defer**：文件夹右键此两项、命令版（菜单-only=faithful）、标签/编辑器菜单同项；toast 在 clipboard 失败仍显示（沿 blockRefCommands 约定）。
+
 ### R178 套件回归（2026-06-23，G2-a「设置弹窗视觉校准」· 表面复刻主线 G 系列第二项 · 纯前端、零 compat 调用面改动 · 桌面 probe N/A）
 
 R178 = 表面复刻 **G 系列第二项**（G2「设置页视觉像素级校准」首个可验证子片）。**非 compat-API 轮**——不动 obsidian 兼容层调用面，只改 `features/settings` 设置弹窗的视觉 + 一处全局 modal CSS。**对 compat 套件矩阵零影响**。**实现/根因详见 ARCHITECTURE「Round 178 additions」**：① 修浅色「整窗蓝 focus ring」bug（`.modal-panel:focus{outline:none}`，根因＝`tabIndex=-1` 容器开窗 `.focus()` 触 WebKit UA outline；作用于所有 modal 根容器、交互子元素 focus 样式不受影响）；② 主题控件 segmented→原生 `<select data-testid=settings-theme-select>`（对齐 Obsidian「基础颜色方案」下拉、调既有 `setTheme`、移除旧 3 testid）；③ 弹窗 760→900 / 左栏 170→200 / 段标题加分隔线（颜色走 CSS 变量）。**⚠️ 根因教训（承接 R177）**：换设置控件型破 `r177`/`r79` 两套件 → 改 `r177` testid 断言 + `r79` `.click()`→`selectOption`；**G2 续做凡换控件型必同步扫引用该 testid 的旧套件**。
