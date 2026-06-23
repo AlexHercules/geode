@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R180 套件回归（2026-06-23，G4-b「Reveal active file in navigation 命令」· 表面复刻 G 系列 · 纯 UI、零 compat 调用面改动 · 桌面 probe N/A）
+
+R180 = 表面复刻 **G 系列**（G4 续片 + 一条真 handler 命令）。**非 compat-API 轮**。**Gate（R160）**：explorer 实查证 Explorer 仅高亮活动文件、无「展开+选中+滚动到活动文件」命令（滚动 effect 由 selected 驱动非 activeFile）→ 命令完全缺失（grep 零）。**实现/根因详见 ARCHITECTURE「Round 180 additions」**：workspace 新增 `revealInExplorer` 一次性 Store（R14 同型）+ `requestRevealInExplorer`（setLeftPanel("explorer")+set）；命令 `file-explorer:reveal-active-file`（Obsidian 同 id、available=getActiveFile!==null）；Explorer 消费 effect expandAncestors+selectOnly+rAF 强制滚动；i18n en+zh +1 键。
+
+新增套件：`r180-e2e.mjs` **12/12**（前置：折叠夹+嵌套文件行不在 DOM + openFile 后仍不自动露出 → **执行命令后：左栏切 explorer + 嵌套文件行渲染[祖先展开] + 行 is-selected + 一次性 Store 消费后清 null** + **available() 在无活动文件[graph tab]时为 false** + 无 page error）。**套件矩阵不回退**：r93 22/22·r140 18/18·r97 15/15·r179 10/10（Explorer 选择/菜单/上轮回归）· typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 UI expand/select/scroll + setLeftPanel + Store，零 fs/Rust/平台分支，同 R164/R179 先例）。**分档逻辑档 → 对抗评审 8 维 1 minor confirmed（已修：reveal 在「已选中但滚出视野」时 no-op → rAF 强制滚动）+ 余证伪**。简化门 **clean**（diff 35 行 <50 阈值）。**v1 nuance**：虚拟化+已选中+滚出视野三重边角 rAF 找不到行时不滚（极罕见）。
+
 ### R179 套件回归（2026-06-23，G4-a「文件右键菜单：复制库内路径 + 复制 Obsidian 链接」· 表面复刻 G 系列 · 纯前端、零 compat 调用面改动 · 桌面 probe N/A）
 
 R179 = 表面复刻 **G 系列**（G4「右键菜单补齐」纯前端可先补子片）。**非 compat-API 轮**。**R160 纪律收获**：explorer 实查证命令面远比审计「90 vs 280」标题富——编辑格式（R33 formatCommands）/ 标签导航（go-to-tab-N）早已存在；G3「280 总表」正确下一步是先建命令矩阵、但权威源 `reference/04-热键命令` 当前不在仓库，故取**确认缺失**（grep 零命中）的 G4 copy 菜单子片。**实现/根因详见 ARCHITECTURE「Round 179 additions」**：core 新增纯 `buildOpenUri`（去 .md + encodeURIComponent，回环 parseObsidianUri+resolveLink）；Explorer 文件菜单 +2 项复用 R77 剪贴板 + 既有 toast；i18n en+zh +4 键。

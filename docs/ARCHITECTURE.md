@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 180 additions — G4-b「Reveal active file in navigation 命令」（列表中显示当前文件 · 纯 UI · 复用 R14 一次性 Store 模式 + Explorer expandAncestors/selectOnly · 零新依赖）【As-built v0.177】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列（G4 续片 + 一条真 handler 命令，呼应 FUNCTIONAL「热键须真 handler 非空行」）。**Gate（R160）**：explorer 实查证 Explorer 仅**高亮**活动文件（`isActive` 行样式），但无「展开祖先+选中+滚动到活动文件」的命令——经 quick-switcher/链接打开折叠夹中的文件时不会自动展开露出（滚动 effect 由 `selected` 驱动、非 `activeFile`）。命令完全缺失（grep 零）。**契约（一处新 core Store + 方法，无跨模块签名破坏）**：
+> - **`core/workspace.ts`**：新增 `readonly revealInExplorer = new Store<string|null>(null)`（R14 `revealTarget` 一次性请求 Store 同型）+ `requestRevealInExplorer(path)`（先 `setLeftPanel("explorer")` 打开/切到资源管理器侧栏[setLeftPanel 同时置 `leftSidebarOpen:true`，对齐 Obsidian reveal 行为]，再 `revealInExplorer.set(path)`）。
+> - **`app/App.tsx`**：注册命令 `file-explorer:reveal-active-file`（Obsidian 同 id）；`available: ()=>getActiveFile()!==null`；callback 先取 `getActiveFile()`、`if(path)` 守卫后 `requestRevealInExplorer(path)`。
+> - **`features/explorer/Explorer.tsx`**：消费 effect `useStore(revealInExplorer)` →（一次性置 null 防重入[Store.set Object.is 短路]）→ `expandAncestors`（functional `setExpanded((prev)=>…)` 无陈旧闭包）+ `selectOnly` + **rAF 强制滚动**（`treeRef.querySelector(data-path).scrollIntoView` + 置 `lastScrolledSelected.current` 防选择 effect 二次滚动）。
+> - **i18n** dict.app.ts +`cmd.revealActiveFile` en+zh。
+> - **分档：逻辑档**（新 Store+方法+命令+消费 effect 控制流；**未碰数据安全面**＝纯 UI expand/select/scroll，无 vault/文件 IO）。简化门 **clean**（diff 35 行 <50 阈值、无死代码/脚手架/重复）。**对抗评审 8 维 → 1 minor confirmed（已修）**：minor＝reveal 在「文件已是选中 lead 但滚出视野」时为 no-op（selectOnly 同值不重渲 + 选择滚动 effect 幂等守卫 `lastScrolledSelected===selected`）→ **修＝reveal effect 内 rAF 直接强制滚动**（不依赖幂等的选择 effect），余 7 维全证伪（一次性消费无限循环[Store.set Object.is 短路收敛]、hook 顺序[新 hook 前无条件 return]、闭包非陈旧、setLeftPanel 同开侧栏正确、分层 core 纯/features→core 合规、available 双取无害、i18n en+zh 齐）。
+> - **v1 nuance**：虚拟化 + 已选中 + 滚出视野的三重边角，rAF querySelector 找不到行时不滚（选择 effect 的 index-scroll 仅在 selected 变化时覆盖虚拟化）——极罕见、记录在案。
+
 ## Round 179 additions — G4-a「文件右键菜单：复制库内路径 + 复制 Obsidian 链接」（纯前端 · 复用 R46 obsidianUri + R77 剪贴板 + 既有 toast · 零新依赖）【As-built v0.176】
 
 > **状态：As-built（已交付）。** 表面复刻主线 G 系列（G4「右键菜单补齐」的纯前端可先补子片）。**为何 G4 而非 G3**：R160 纪律 explorer 实查发现命令面**远比审计「90 vs 280」标题富**——编辑格式（bold/italic/highlight/inline-code/heading/lists/callout，R33 `formatCommands.ts`）、标签导航（next/prev/go-to-tab-N，App.tsx）等高频命令**早已存在**；G3「280 总表」的正确下一步是先建命令复刻矩阵，而该矩阵的权威源 `reference/04-热键命令` **当前不在仓库**（见 G2-a 教训）。故本轮取**确认缺失**（grep 零命中 copy-vault/copy-obsidian）、Obsidian 原生即右键项、纯前端、可验证的 G4 子片。**契约（一处新 core 导出，无跨模块接口变更）**：
