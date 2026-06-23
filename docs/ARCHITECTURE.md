@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 178 additions — G2-a「设置弹窗视觉校准」（纯前端 · 修浅色整窗蓝 focus ring + 主题 segmented→下拉 + 弹窗/左栏加宽 + 段标题分隔线 · 零新依赖）【As-built v0.175】
+
+> **状态：As-built（已交付）。** 表面复刻主线 G 系列第二项（G2「设置页视觉像素级校准」的**首个可验证子片**；用户 ✅「完整复刻·表面优先」G1→G2→G3）。**契约（前端内部 + 一处全局 modal CSS，无跨模块接口变更）**：
+> - **修复浅色「整窗蓝 focus ring」bug（根因）**：`.modal-panel` 根容器带 `tabIndex={-1}` 且开窗时 `panelRef.current?.focus()`（把击键焦点从背后编辑器移开，R163 起的不变量）→ WebKit 对获焦的 `tabindex` 容器画 UA 默认 outline，浅色下表现为包住整窗的蓝环（Obsidian 从不显此态）。修＝`src/styles/app.css` 加 `.modal-panel:focus, .modal-panel:focus-visible { outline: none }`。**作用域＝所有 modal 的根容器**（settings/recovery/workspaces/move-to/command-palette/template-selector/quick-switcher 全受益），只压制不需要的容器 outline，**交互子元素（按钮/输入/select）各自的 focus 样式不受影响**（`:focus` 只命中容器根，不级联到子节点）。
+> - **主题控件 segmented → 原生 `<select>` 下拉**：`SettingsModal.tsx` 外观段把「深色/浅色/跟随系统」3 按钮 segmented 换成 `<select data-testid="settings-theme-select">`（对齐 Obsidian「基础颜色方案」下拉；选项顺序＝跟随系统/浅色/深色）。`value={ws.theme}`（受控）+ `onChange={(e)=>app.workspace.setTheme(e.target.value as ThemeKind)}`（调既有 `workspace.setTheme`，未新增 store action）。复用既有 `.settings-select` 样式类（语言/Obsidian 主题选择器同款）；`import type { ThemeKind } from "@core/types"`。**旧 3 个 testid（settings-theme-dark/light/system）移除**。
+> - **视觉密度对齐**（`settings.css`，纯样式）：弹窗宽 `min(760px,94vw)`→`min(900px,94vw)`（审计「弹窗整体更窄」）；左栏 `170px`→`200px`（长条目如「文件与链接」不再省略号）；`.settings-heading` 段标题加 `border-bottom: 1px solid var(--border)` + `padding-bottom`（审计「section/card 分隔感较弱」）。颜色全走 CSS 变量。
+> - **分档：机械档**（diff 76 行/3 源文件；主体＝主题控件型替换 segmented→原生 select 调同一既有 setter[反减 3 个三元] + 焦点环/宽度/分隔线纯 CSS；无新承载逻辑控制流·未新增 store action/导出签名·未碰数据安全面·零新依赖）→ 简化门跳过（0 可简化面）；Step 4 = scoped 窄域 review（testid/绑定/i18n/图标），0 confirmed defect。
+> - **⚠️ 根因教训（承接 R177）**：本轮把主题控件换型 → 破 `r177`/`r79` 两个直接点旧 segmented 按钮 testid 的套件 → 改 `r177` 断言 `settings-theme-dark`→`settings-theme-select`、`r79` 改 `.click()` 为 `selectOption("system")`。**G2 续做（字体管理弹窗/控件原生观感/G3 热键）凡换设置控件型，必同步扫引用该控件 testid 的旧套件**（R177 已立此纪律，R178 复验有效）。
+> - **v1 defer（G2 余项）**：字体选择「管理」弹窗（现为文本框，需系统字体枚举 = 一个功能，非纯视觉，下子轮 G2-b）；下拉/管理按钮/图标按钮/取色器/开关的「原生桌面阴影尺寸」细抛光（无 reference 截图、低置信，留后续按需）；浅深主题逐项细校。**G2 当前＝partial（视觉校准首片已交付）**。
+
 ## Round 177 additions — G1「SettingsModal 三段式 IA 重构」（纯前端 · 12 段 + 三组导航 · 控件迁回 Obsidian 同名页 · 零新依赖）【As-built v0.174】
 
 > **状态：As-built（已交付）。** 表面复刻主线 G 系列首项（用户 ✅「完整复刻·表面优先」G1→G2→G3）。**契约（前端内部，无跨模块接口变更）**：
