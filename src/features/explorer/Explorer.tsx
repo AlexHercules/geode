@@ -10,6 +10,7 @@ import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
+import { buildOpenUri } from "@core/obsidianUri";
 import { findActiveTab } from "@core/workspace";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
@@ -432,6 +433,28 @@ export function Explorer() {
     expandAncestors(dest);
     selectOnly(dest);
     if (node.extension === "md") app.workspace.openFile(dest);
+  };
+
+  /** R179 (G4): copy the file's vault-relative path incl. extension (Obsidian
+   *  "复制库内路径"). Pure read + clipboard write — no vault write path. */
+  const copyVaultPath = async (node: VaultNode) => {
+    try {
+      await navigator.clipboard.writeText(node.path);
+    } catch {
+      /* clipboard unavailable (headless / denied) */
+    }
+    showLinkUpdateNotice(t("explorer.copiedPath"));
+  };
+
+  /** R179 (G4): copy the file's obsidian://open URL (Obsidian "复制 Obsidian 链接").
+   *  buildOpenUri strips .md so it round-trips via parseObsidianUri + resolveLink. */
+  const copyObsidianLink = async (node: VaultNode) => {
+    try {
+      await navigator.clipboard.writeText(buildOpenUri(app.vault.vaultName, node.path));
+    } catch {
+      /* clipboard unavailable (headless / denied) */
+    }
+    showLinkUpdateNotice(t("explorer.copiedUrl"));
   };
 
   const validateName = (node: VaultNode, value: string): boolean => {
@@ -1032,6 +1055,26 @@ export function Explorer() {
                     >
                       <Icon name="copy" size={14} />
                       {t("explorer.makeCopy")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-copy-path"
+                      onClick={() => {
+                        setMenu(null);
+                        void copyVaultPath(node);
+                      }}
+                    >
+                      <Icon name="copy" size={14} />
+                      {t("explorer.copyPath")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-copy-obsidian-url"
+                      onClick={() => {
+                        setMenu(null);
+                        void copyObsidianLink(node);
+                      }}
+                    >
+                      <Icon name="link" size={14} />
+                      {t("explorer.copyObsidianUrl")}
                     </button>
                     <div className="explorer-menu-sep" />
                   </>

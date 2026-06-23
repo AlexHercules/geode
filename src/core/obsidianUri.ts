@@ -10,6 +10,18 @@ export type ObsidianAction =
   | { kind: "search"; vault?: string; query?: string }
   | { kind: "unknown"; action: string; params: Record<string, string> };
 
+/**
+ * R179 (G4): build the `obsidian://open` URI for a vault-relative file path —
+ * the companion builder to the parser below, used by "Copy Obsidian URL".
+ * Mirrors Obsidian: the `.md` extension is stripped from the `file` param
+ * (non-markdown extensions are kept), so the URL round-trips back through
+ * parseObsidianUri + metadata.resolveLink.
+ */
+export function buildOpenUri(vaultName: string, path: string): string {
+  const file = path.replace(/\.md$/i, "");
+  return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(file)}`;
+}
+
 export function parseObsidianUri(uri: string): ObsidianAction | null {
   let url: URL;
   try {
