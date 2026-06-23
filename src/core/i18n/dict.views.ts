@@ -9,10 +9,15 @@ export const en = {
   "settings.close": "Close settings",
   "settings.navAria": "Settings sections",
   "settings.section.appearance": "Appearance",
-  "settings.section.plugins": "Plugins",
+  "settings.section.plugins": "Community plugins",
   "settings.section.hotkeys": "Hotkeys",
   "settings.section.commandPalette": "Command palette",
   "settings.section.about": "About",
+  "settings.section.keychain": "Keychain",
+  "settings.navGroup.options": "Options",
+  "settings.navGroup.corePlugins": "Core plugins",
+  "settings.keychainEmpty":
+    "No keys yet. Keys store API keys and passwords used by plugins.",
 
   // ---- settings: appearance ----
   "settings.theme": "Theme",
@@ -336,10 +341,14 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.close": "关闭设置",
   "settings.navAria": "设置分区",
   "settings.section.appearance": "外观",
-  "settings.section.plugins": "插件",
+  "settings.section.plugins": "第三方插件",
   "settings.section.hotkeys": "快捷键",
   "settings.section.commandPalette": "命令面板",
   "settings.section.about": "关于",
+  "settings.section.keychain": "钥匙串",
+  "settings.navGroup.options": "选项",
+  "settings.navGroup.corePlugins": "核心插件",
+  "settings.keychainEmpty": "尚未添加密钥。密钥用于存储插件使用的 API 密钥和密码等信息。",
 
   // ---- settings: appearance ----
   "settings.theme": "主题",

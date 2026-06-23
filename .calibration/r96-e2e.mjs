@@ -41,6 +41,8 @@ const rowExcluded = (path) => app(([p]) => {
 }, [path]);
 const setPatterns = async (raw) => {
   await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
+  await page.click('[data-testid="settings-nav-files-and-links"]');
+  await new Promise((r) => setTimeout(r, 80));
   await page.fill('[data-testid="settings-excluded-files"]', raw);
   await wait(120);
   await app(() => window.__app.workspace.closeModal());

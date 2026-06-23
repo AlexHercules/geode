@@ -57,6 +57,8 @@ const typeOpenParen = async () => {
 // toggle the setting via the Settings UI (Appearance section), then return to the editor
 const toggleAutoPair = async () => {
   await app(() => window.__app.workspace.openModal("settings"));
+  await page.click('[data-testid="settings-nav-editor"]');
+  await new Promise((r) => setTimeout(r, 80));
   await page.waitForSelector("[data-testid=settings-autopair-toggle]", { timeout: 3000 });
   await page.click("[data-testid=settings-autopair-toggle]");
   await wait(60);
@@ -77,6 +79,8 @@ console.log("— toggle OFF: typing a bracket does NOT auto-close —");
 await toggleAutoPair();
 ok("the toggle is now off (aria-checked false)", await app(async () => {
   window.__app.workspace.openModal("settings");
+  await new Promise((r) => setTimeout(r, 80));
+  document.querySelector('[data-testid="settings-nav-editor"]')?.click();
   await new Promise((r) => setTimeout(r, 80));
   const v = document.querySelector("[data-testid=settings-autopair-toggle]")?.getAttribute("aria-checked");
   window.__app.workspace.closeModal();

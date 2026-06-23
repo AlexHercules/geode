@@ -165,6 +165,8 @@ ok("probe returns null for an unresolved target", probeNull === null);
 console.log("— settings toggle disables / re-enables previews —");
 await openMode("HoverSource.md", "preview");
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-page-preview"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector('[data-testid="settings-page-preview"]');
 ok("page-preview toggle present in settings", true);
 ok("require-modifier toggle present in settings", (await page.$('[data-testid="settings-page-preview-modifier"]')) !== null);
@@ -178,6 +180,8 @@ ok("no card when page preview disabled", await noCard(500));
 await moveAway();
 // re-enable for a clean end state
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-page-preview"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector('[data-testid="settings-page-preview"]');
 await page.click('[data-testid="settings-page-preview"]'); // turn ON
 await app(() => window.__app.workspace.closeModal());

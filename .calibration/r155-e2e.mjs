@@ -51,6 +51,8 @@ const extBadge = (path) => app((p) => {
 }, path);
 const toggleSetting = async () => {
   await app(() => window.__app.workspace.openModal("settings"));
+  await page.click('[data-testid="settings-nav-files-and-links"]');
+  await new Promise((r) => setTimeout(r, 80));
   await page.waitForSelector("[data-testid=settings-detect-extensions-toggle]", { timeout: 3000 });
   await page.click("[data-testid=settings-detect-extensions-toggle]");
   await wait(60);
@@ -71,6 +73,8 @@ ok("ON: .md note row now shows 'md' badge", (await extBadge("r155-note.md")) ===
 ok("ON: .png attachment row still shows 'png' badge", (await extBadge("r155-pic.png")) === "png");
 ok("the toggle reads on (aria-checked true)", await app(async () => {
   window.__app.workspace.openModal("settings");
+  await new Promise((r) => setTimeout(r, 80));
+  document.querySelector('[data-testid="settings-nav-files-and-links"]')?.click();
   await new Promise((r) => setTimeout(r, 80));
   const v = document.querySelector("[data-testid=settings-detect-extensions-toggle]")?.getAttribute("aria-checked");
   window.__app.workspace.closeModal();

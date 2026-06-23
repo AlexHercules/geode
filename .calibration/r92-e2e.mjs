@@ -111,6 +111,8 @@ ok("indent-using-tabs persists (false)", (await ls("geode.indentUsingTabs")) ===
 // ── settings UI ─────────────────────────────────────────────────────────────
 console.log("— settings UI —");
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 ok("indent-using-tabs toggle present", await app(() => !!document.querySelector('[data-testid="settings-indent-tabs-toggle"]')));
 ok("tab-size segmented present (2/4/8)", await app(() =>
   !!document.querySelector('[data-testid="settings-tabsize-2"]') &&

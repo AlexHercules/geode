@@ -49,6 +49,8 @@ await app(async () => {
 console.log("— line-number gutter —");
 ok("no line-number gutter by default (Obsidian default OFF)", !(await hasLineNumbers()));
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 ok("line-numbers toggle present", await app(() => !!document.querySelector('[data-testid="settings-line-numbers-toggle"]')));
 await page.click('[data-testid="settings-line-numbers-toggle"]');
 await wait(120);
@@ -65,6 +67,8 @@ ok("line-number gutter coexists with the fold gutter, leftmost", await app(() =>
 }));
 // toggle off → gutter gone
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 200)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.click('[data-testid="settings-line-numbers-toggle"]');
 await wait(120);
 await app(() => window.__app.workspace.closeModal());
@@ -84,6 +88,8 @@ ok("default-mode live → new tab opens in live", (await app(([p]) => window.__g
 
 // via the settings segmented UI → openFile newTab
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 200)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 ok("default-mode segmented control present", await app(() => !!document.querySelector('[data-testid="settings-newtab-reading"]')));
 await page.click('[data-testid="settings-newtab-reading"]');
 await wait(120);

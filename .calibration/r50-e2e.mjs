@@ -88,6 +88,8 @@ ok("zoom-reset → 16 + --editor-font-size var", (await app(() => window.__app.w
 // ── D. settings UI toggles ───────────────────────────────────────────────────
 console.log("D. settings UI toggles");
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector("[data-testid=settings-readable-toggle]", { timeout: 4000 });
 await wait(80);
 await app(() => document.querySelector("[data-testid=settings-readable-toggle]")?.click());

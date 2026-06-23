@@ -107,9 +107,21 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.173.0";
+const APP_VERSION = "0.174.0";
 
-type SectionId = "appearance" | "plugins" | "hotkeys" | "command-palette" | "about";
+type SectionId =
+  | "about"
+  | "editor"
+  | "files-and-links"
+  | "appearance"
+  | "hotkeys"
+  | "keychain"
+  | "plugins"
+  | "command-palette"
+  | "templates"
+  | "daily-notes"
+  | "unique-notes"
+  | "page-preview";
 
 /**
  * Set by the `app:check-updates` command right before it opens the settings
@@ -123,13 +135,37 @@ export function requestUpdateAutoCheck(): void {
   pendingAutoCheck = true;
 }
 
-/* labels are i18n keys, resolved at render time via useI18n() */
-const SECTIONS: Array<{ id: SectionId; labelKey: I18nKey; icon: string }> = [
-  { id: "appearance", labelKey: "settings.section.appearance", icon: "sun" },
-  { id: "plugins", labelKey: "settings.section.plugins", icon: "puzzle" },
-  { id: "hotkeys", labelKey: "settings.section.hotkeys", icon: "command" },
-  { id: "command-palette", labelKey: "settings.section.commandPalette", icon: "pin" },
-  { id: "about", labelKey: "settings.section.about", icon: "book-open" },
+/* G1: three-group left-nav IA (Obsidian "Options" / "Core plugins" + per-plugin tabs).
+   labels are i18n keys, resolved at render time via useI18n(). */
+const NAV_GROUPS: Array<{
+  titleKey: I18nKey;
+  testid: string;
+  items: Array<{ id: SectionId; labelKey: I18nKey; icon: string }>;
+}> = [
+  {
+    titleKey: "settings.navGroup.options",
+    testid: "settings-navgroup-options",
+    items: [
+      { id: "about", labelKey: "settings.section.about", icon: "book-open" },
+      { id: "editor", labelKey: "settings.editorHeading", icon: "file-text" },
+      { id: "files-and-links", labelKey: "settings.filesAndLinks", icon: "file-text" },
+      { id: "appearance", labelKey: "settings.section.appearance", icon: "sun" },
+      { id: "hotkeys", labelKey: "settings.section.hotkeys", icon: "command" },
+      { id: "keychain", labelKey: "settings.section.keychain", icon: "key" },
+      { id: "plugins", labelKey: "settings.section.plugins", icon: "puzzle" },
+    ],
+  },
+  {
+    titleKey: "settings.navGroup.corePlugins",
+    testid: "settings-navgroup-core-plugins",
+    items: [
+      { id: "command-palette", labelKey: "settings.section.commandPalette", icon: "pin" },
+      { id: "templates", labelKey: "settings.templates", icon: "file-text" },
+      { id: "daily-notes", labelKey: "settings.dailyNotes", icon: "file-text" },
+      { id: "unique-notes", labelKey: "settings.uniqueNotes", icon: "file-text" },
+      { id: "page-preview", labelKey: "settings.pagePreviewHeading", icon: "file-text" },
+    ],
+  },
 ];
 
 export function SettingsModal() {
@@ -188,16 +224,24 @@ export function SettingsModal() {
 
         <nav className="settings-nav" aria-label={t("settings.navAria")}>
           <div className="settings-nav-title">{t("settings.title")}</div>
-          {SECTIONS.map((s) => (
-            <button
-              key={s.id}
-              className={`settings-nav-item${section === s.id ? " is-active" : ""}`}
-              data-testid={`settings-nav-${s.id}`}
-              onClick={() => setSection(s.id)}
-            >
-              <Icon name={s.icon} size={15} />
-              <span>{t(s.labelKey)}</span>
-            </button>
+          {/* G1: each fixed nav group renders a sub-title then its items */}
+          {NAV_GROUPS.map((group) => (
+            <div key={group.testid}>
+              <div className="settings-nav-title settings-nav-subtitle" data-testid={group.testid}>
+                {t(group.titleKey)}
+              </div>
+              {group.items.map((s) => (
+                <button
+                  key={s.id}
+                  className={`settings-nav-item${section === s.id ? " is-active" : ""}`}
+                  data-testid={`settings-nav-${s.id}`}
+                  onClick={() => setSection(s.id)}
+                >
+                  <Icon name={s.icon} size={15} />
+                  <span>{t(s.labelKey)}</span>
+                </button>
+              ))}
+            </div>
           ))}
           {/* R163: one left-nav entry per enabled plugin's settings tab */}
           {pluginTabs.length > 0 && (
@@ -221,11 +265,18 @@ export function SettingsModal() {
         </nav>
 
         <div className="settings-content" data-testid={`settings-section-${section}`}>
-          {section === "appearance" && <AppearanceSection />}
-          {section === "plugins" && <PluginsSection />}
-          {section === "hotkeys" && <HotkeysSection />}
-          {section === "command-palette" && <CommandPaletteSection />}
           {section === "about" && <AboutSection />}
+          {section === "editor" && <EditorSection />}
+          {section === "files-and-links" && <FilesAndLinksSection />}
+          {section === "appearance" && <AppearanceSection />}
+          {section === "hotkeys" && <HotkeysSection />}
+          {section === "keychain" && <KeychainSection />}
+          {section === "plugins" && <PluginsSection />}
+          {section === "command-palette" && <CommandPaletteSection />}
+          {section === "templates" && <TemplatesSection />}
+          {section === "daily-notes" && <DailyNotesSection />}
+          {section === "unique-notes" && <UniqueNotesSection />}
+          {section === "page-preview" && <PagePreviewSection />}
           {/* R163: per-plugin settings tab (Obsidian "one plugin, one tab") */}
           {pluginTab && (
             <section>
@@ -256,27 +307,12 @@ function AppearanceSection() {
   const app = useApp();
   const t = useI18n();
   const ws = useStore(app.workspace.state);
-  const currentLocale = useStore(locale);
-  /* R50: appearance toggles — readable line length + editor spellcheck */
-  const readable = useStore(readableLineLength);
-  const spell = useStore(spellcheckEnabled);
-  const strict = useStore(strictLineBreaks);
-  const lineNo = useStore(showLineNumbers);
-  const autoPair = useStore(autoPairBrackets);
-  const backlinksInDoc = useStore(showBacklinksInDocument);
-  const foldH = useStore(foldHeading);
-  const newTabMode = useStore(defaultNewTabMode);
-  /* R92: editor indentation — indent using tabs + tab indent size */
-  const useTabs = useStore(indentUsingTabs);
-  const indentSize = useStore(tabIndentSize);
   /* R94: interface — show inline title + show ribbon */
   const inlineTitle = useStore(showInlineTitle);
   const ribbon = useStore(showRibbon);
   /* R100: interface — show tab title bar + show status bar */
   const tabTitleBar = useStore(showTabTitleBar);
   const statusBar = useStore(showStatusBar);
-  /* R96: excluded files (search/graph/explorer filter) */
-  const excluded = useStore(excludedRaw);
   const accent = useStore(accentColor);
   // the <input type=color> needs a literal hex; with no override, reflect the
   // theme's actual --accent (read live) rather than hardcoding a color value.
@@ -285,31 +321,6 @@ function AppearanceSection() {
   const iFont = useStore(interfaceFont);
   const tFont = useStore(textFont);
   const mFont = useStore(monospaceFont);
-  const autoUpdate = useStore(autoUpdateLinks);
-  const detectExt = useStore(detectAllExtensions);
-  const useMdLinks = useStore(linkUseMarkdown);
-  const linkPath = useStore(linkPathFormat);
-  const attachFolder = useStore(attachmentFolder);
-  /* R89: default location for new notes */
-  const newNoteLoc = useStore(newNoteLocation);
-  const newNoteFolderVal = useStore(newNoteFolder);
-  /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
-  const tplFolder = useStore(templateFolder);
-  const tplDateFormat = useStore(templateDateFormat);
-  const tplTimeFormat = useStore(templateTimeFormat);
-  /* R48: daily notes — folder / date format / template, stored verbatim (R17/R23 precedent) */
-  const dailyFolder = useStore(dailyNoteFolder);
-  const dailyFormat = useStore(dailyNoteFormat);
-  const dailyTemplate = useStore(dailyNoteTemplate);
-  /* R53: unique note creator — folder / prefix format / template, stored verbatim */
-  const uniqueFolder = useStore(uniqueNoteFolder);
-  const uniqueFormat = useStore(uniqueNoteFormat);
-  const uniqueTemplate = useStore(uniqueNoteTemplate);
-  /* R22: in-document properties display (visible | hidden | source) */
-  const propsDisplay = useStore(app.workspace.propertiesInDocument);
-  /* R25: page preview (hover) — settings Stores from core/hover */
-  const pagePreview = useStore(pagePreviewEnabled);
-  const pagePreviewModifier = useStore(pagePreviewRequireModifier);
   /* R20: Obsidian CSS compat — via the AppContext handle (features never import @compat) */
   const obsidianCss = useStore(app.obsidianCss.state);
   const obsidianEnabled = obsidianCss.enabled;
@@ -452,58 +463,6 @@ function AppearanceSection() {
         </div>
       </div>
 
-      {/* R50: readable line length — caps the body column width (default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.readableLineLength")}</div>
-        </div>
-        <button
-          className={`settings-toggle${readable ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={readable}
-          aria-label={t("settings.readableLineLength")}
-          data-testid="settings-readable-toggle"
-          onClick={() => setReadableLineLength(!readable)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default OFF) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.spellcheck")}</div>
-        </div>
-        <button
-          className={`settings-toggle${spell ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={spell}
-          aria-label={t("settings.spellcheck")}
-          data-testid="settings-spellcheck-toggle"
-          onClick={() => setSpellcheckEnabled(!spell)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R87: strict line breaks (reading view); OFF = single newline → <br> (Obsidian default) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.strictLineBreaks")}</div>
-          <div className="setting-desc">{t("settings.strictLineBreaksDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${strict ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={strict}
-          aria-label={t("settings.strictLineBreaks")}
-          data-testid="settings-strict-linebreaks-toggle"
-          onClick={() => setStrictLineBreaks(!strict)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
       {/* R94: show inline title (filename as H1 atop the note, default ON) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -571,6 +530,179 @@ function AppearanceSection() {
           aria-label={t("settings.showStatusBar")}
           data-testid="settings-status-bar-toggle"
           onClick={() => setShowStatusBar(!statusBar)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* ---- Obsidian CSS compat (R20) ---- */}
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianCss")}</div>
+          <div className="setting-desc">{t("settings.obsidianCssDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${obsidianEnabled ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={obsidianEnabled}
+          aria-label={t("settings.obsidianCss")}
+          data-testid="obsidian-css-toggle"
+          onClick={() =>
+            void app.obsidianCss
+              .setEnabled(!obsidianEnabled)
+              .catch((err) => console.warn("[settings] obsidian css toggle failed", err))
+          }
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianTheme")}</div>
+          <div className="setting-desc">{t("settings.obsidianThemeDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="obsidian-theme-select"
+          value={obsidianCss.activeTheme}
+          aria-label={t("settings.obsidianTheme")}
+          disabled={!obsidianEnabled}
+          aria-disabled={!obsidianEnabled}
+          onChange={(e) =>
+            void app.obsidianCss
+              .setTheme(e.target.value)
+              .catch((err) => console.warn("[settings] obsidian theme change failed", err))
+          }
+        >
+          <option value="">{t("settings.obsidianThemeNone")}</option>
+          {obsidianCss.themes.map((th) => (
+            <option key={th.dir} value={th.dir}>
+              {th.name}
+            </option>
+          ))}
+          {/* active theme missing from the discovery list (e.g. files deleted):
+              still shown so the persisted value stays visible (Obsidian口径) */}
+          {!activeThemeListed && (
+            <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
+          )}
+        </select>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.obsidianSnippets")}</div>
+          <div className="setting-desc">{t("settings.obsidianSnippetsDesc")}</div>
+        </div>
+      </div>
+      {obsidianCss.snippets.length === 0 ? (
+        <div className="setting-item" data-testid="obsidian-snippets-empty">
+          <div className="setting-info">
+            <div className="setting-desc">{t("settings.obsidianSnippetsEmpty")}</div>
+          </div>
+        </div>
+      ) : (
+        obsidianCss.snippets.map((sn) => (
+          <div className="setting-item" key={sn.name}>
+            <div className="setting-info">
+              <div className="setting-name">{sn.name}</div>
+            </div>
+            <button
+              className={`settings-toggle${sn.enabled ? " is-on" : ""}`}
+              role="switch"
+              aria-checked={sn.enabled}
+              aria-label={sn.name}
+              disabled={!obsidianEnabled}
+              aria-disabled={!obsidianEnabled}
+              data-testid={`obsidian-snippet-toggle-${sn.name}`}
+              onClick={() => {
+                void app.obsidianCss
+                  .setSnippet(sn.name, !sn.enabled)
+                  .catch((err) => console.warn("[settings] obsidian snippet toggle failed", err));
+              }}
+            >
+              <span className="settings-toggle-thumb" />
+            </button>
+          </div>
+        ))
+      )}
+
+    </section>
+  );
+}
+
+/* ---------------- Editor ---------------- */
+
+function EditorSection() {
+  const app = useApp();
+  const t = useI18n();
+  /* R50: appearance toggles — readable line length + editor spellcheck */
+  const readable = useStore(readableLineLength);
+  const spell = useStore(spellcheckEnabled);
+  const strict = useStore(strictLineBreaks);
+  const lineNo = useStore(showLineNumbers);
+  const autoPair = useStore(autoPairBrackets);
+  const backlinksInDoc = useStore(showBacklinksInDocument);
+  const foldH = useStore(foldHeading);
+  const newTabMode = useStore(defaultNewTabMode);
+  /* R92: editor indentation — indent using tabs + tab indent size */
+  const useTabs = useStore(indentUsingTabs);
+  const indentSize = useStore(tabIndentSize);
+  /* R22: in-document properties display (visible | hidden | source) */
+  const propsDisplay = useStore(app.workspace.propertiesInDocument);
+
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
+
+      {/* R50: readable line length — caps the body column width (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.readableLineLength")}</div>
+        </div>
+        <button
+          className={`settings-toggle${readable ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={readable}
+          aria-label={t("settings.readableLineLength")}
+          data-testid="settings-readable-toggle"
+          onClick={() => setReadableLineLength(!readable)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.spellcheck")}</div>
+        </div>
+        <button
+          className={`settings-toggle${spell ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={spell}
+          aria-label={t("settings.spellcheck")}
+          data-testid="settings-spellcheck-toggle"
+          onClick={() => setSpellcheckEnabled(!spell)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R87: strict line breaks (reading view); OFF = single newline → <br> (Obsidian default) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.strictLineBreaks")}</div>
+          <div className="setting-desc">{t("settings.strictLineBreaksDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${strict ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={strict}
+          aria-label={t("settings.strictLineBreaks")}
+          data-testid="settings-strict-linebreaks-toggle"
+          onClick={() => setStrictLineBreaks(!strict)}
         >
           <span className="settings-toggle-thumb" />
         </button>
@@ -721,119 +853,6 @@ function AppearanceSection() {
         </div>
       </div>
 
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.language")}</div>
-          <div className="setting-desc">{t("settings.languageDesc")}</div>
-        </div>
-        <select
-          className="settings-select"
-          data-testid="settings-language"
-          value={currentLocale}
-          aria-label={t("settings.language")}
-          onChange={(e) => setLocale(e.target.value === "zh" ? "zh" : "en")}
-        >
-          {/* option labels are self-named — never translated */}
-          <option value="en">English</option>
-          <option value="zh">中文</option>
-        </select>
-      </div>
-
-      {/* ---- Obsidian CSS compat (R20) ---- */}
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianCss")}</div>
-          <div className="setting-desc">{t("settings.obsidianCssDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${obsidianEnabled ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={obsidianEnabled}
-          aria-label={t("settings.obsidianCss")}
-          data-testid="obsidian-css-toggle"
-          onClick={() =>
-            void app.obsidianCss
-              .setEnabled(!obsidianEnabled)
-              .catch((err) => console.warn("[settings] obsidian css toggle failed", err))
-          }
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianTheme")}</div>
-          <div className="setting-desc">{t("settings.obsidianThemeDesc")}</div>
-        </div>
-        <select
-          className="settings-select"
-          data-testid="obsidian-theme-select"
-          value={obsidianCss.activeTheme}
-          aria-label={t("settings.obsidianTheme")}
-          disabled={!obsidianEnabled}
-          aria-disabled={!obsidianEnabled}
-          onChange={(e) =>
-            void app.obsidianCss
-              .setTheme(e.target.value)
-              .catch((err) => console.warn("[settings] obsidian theme change failed", err))
-          }
-        >
-          <option value="">{t("settings.obsidianThemeNone")}</option>
-          {obsidianCss.themes.map((th) => (
-            <option key={th.dir} value={th.dir}>
-              {th.name}
-            </option>
-          ))}
-          {/* active theme missing from the discovery list (e.g. files deleted):
-              still shown so the persisted value stays visible (Obsidian口径) */}
-          {!activeThemeListed && (
-            <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
-          )}
-        </select>
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianSnippets")}</div>
-          <div className="setting-desc">{t("settings.obsidianSnippetsDesc")}</div>
-        </div>
-      </div>
-      {obsidianCss.snippets.length === 0 ? (
-        <div className="setting-item" data-testid="obsidian-snippets-empty">
-          <div className="setting-info">
-            <div className="setting-desc">{t("settings.obsidianSnippetsEmpty")}</div>
-          </div>
-        </div>
-      ) : (
-        obsidianCss.snippets.map((sn) => (
-          <div className="setting-item" key={sn.name}>
-            <div className="setting-info">
-              <div className="setting-name">{sn.name}</div>
-            </div>
-            <button
-              className={`settings-toggle${sn.enabled ? " is-on" : ""}`}
-              role="switch"
-              aria-checked={sn.enabled}
-              aria-label={sn.name}
-              disabled={!obsidianEnabled}
-              aria-disabled={!obsidianEnabled}
-              data-testid={`obsidian-snippet-toggle-${sn.name}`}
-              onClick={() => {
-                void app.obsidianCss
-                  .setSnippet(sn.name, !sn.enabled)
-                  .catch((err) => console.warn("[settings] obsidian snippet toggle failed", err));
-              }}
-            >
-              <span className="settings-toggle-thumb" />
-            </button>
-          </div>
-        ))
-      )}
-
-      <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
-
       {/* ---- R22: in-document properties display ---- */}
       <div className="setting-item">
         <div className="setting-info">
@@ -856,44 +875,27 @@ function AppearanceSection() {
           <option value="source">{t("settings.propertiesSource")}</option>
         </select>
       </div>
+    </section>
+  );
+}
 
-      {/* ---- R25: page preview (hover) ---- */}
-      <h2 className="settings-heading">{t("settings.pagePreviewHeading")}</h2>
+/* ---------------- Files & links ---------------- */
 
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.pagePreview")}</div>
-          <div className="setting-desc">{t("settings.pagePreviewDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${pagePreview ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={pagePreview}
-          aria-label={t("settings.pagePreview")}
-          data-testid="settings-page-preview"
-          onClick={() => setPagePreviewEnabled(!pagePreview)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
+function FilesAndLinksSection() {
+  const t = useI18n();
+  const detectExt = useStore(detectAllExtensions);
+  const autoUpdate = useStore(autoUpdateLinks);
+  const useMdLinks = useStore(linkUseMarkdown);
+  const linkPath = useStore(linkPathFormat);
+  /* R89: default location for new notes */
+  const newNoteLoc = useStore(newNoteLocation);
+  const newNoteFolderVal = useStore(newNoteFolder);
+  const attachFolder = useStore(attachmentFolder);
+  /* R96: excluded files (search/graph/explorer filter) */
+  const excluded = useStore(excludedRaw);
 
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.pagePreviewModifier")}</div>
-          <div className="setting-desc">{t("settings.pagePreviewModifierDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${pagePreviewModifier ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={pagePreviewModifier}
-          aria-label={t("settings.pagePreviewModifier")}
-          data-testid="settings-page-preview-modifier"
-          onClick={() => setPagePreviewRequireModifier(!pagePreviewModifier)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
+  return (
+    <section>
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
 
       {/* R155: show every file's extension in the explorer, incl .md (Obsidian "Detect all
@@ -1057,7 +1059,21 @@ function AppearanceSection() {
           onChange={(e) => setExcludedFiles(e.target.value)}
         />
       </div>
+    </section>
+  );
+}
 
+/* ---------------- Templates ---------------- */
+
+function TemplatesSection() {
+  const t = useI18n();
+  /* R23: templates — stored verbatim (no trim), consumers trim (R17 precedent) */
+  const tplFolder = useStore(templateFolder);
+  const tplDateFormat = useStore(templateDateFormat);
+  const tplTimeFormat = useStore(templateTimeFormat);
+
+  return (
+    <section>
       <h2 className="settings-heading">{t("settings.templates")}</h2>
 
       <div className="setting-item">
@@ -1107,7 +1123,21 @@ function AppearanceSection() {
           onChange={(e) => setTemplateTimeFormat(e.target.value)}
         />
       </div>
+    </section>
+  );
+}
 
+/* ---------------- Daily notes ---------------- */
+
+function DailyNotesSection() {
+  const t = useI18n();
+  /* R48: daily notes — folder / date format / template, stored verbatim (R17/R23 precedent) */
+  const dailyFolder = useStore(dailyNoteFolder);
+  const dailyFormat = useStore(dailyNoteFormat);
+  const dailyTemplate = useStore(dailyNoteTemplate);
+
+  return (
+    <section>
       <h2 className="settings-heading">{t("settings.dailyNotes")}</h2>
 
       <div className="setting-item">
@@ -1157,7 +1187,21 @@ function AppearanceSection() {
           onChange={(e) => setDailyNoteTemplate(e.target.value)}
         />
       </div>
+    </section>
+  );
+}
 
+/* ---------------- Unique notes ---------------- */
+
+function UniqueNotesSection() {
+  const t = useI18n();
+  /* R53: unique note creator — folder / prefix format / template, stored verbatim */
+  const uniqueFolder = useStore(uniqueNoteFolder);
+  const uniqueFormat = useStore(uniqueNoteFormat);
+  const uniqueTemplate = useStore(uniqueNoteTemplate);
+
+  return (
+    <section>
       <h2 className="settings-heading">{t("settings.uniqueNotes")}</h2>
 
       <div className="setting-item">
@@ -1206,6 +1250,71 @@ function AppearanceSection() {
           data-testid="settings-unique-template"
           onChange={(e) => setUniqueNoteTemplate(e.target.value)}
         />
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Page preview ---------------- */
+
+function PagePreviewSection() {
+  const t = useI18n();
+  /* R25: page preview (hover) — settings Stores from core/hover */
+  const pagePreview = useStore(pagePreviewEnabled);
+  const pagePreviewModifier = useStore(pagePreviewRequireModifier);
+
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.pagePreviewHeading")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.pagePreview")}</div>
+          <div className="setting-desc">{t("settings.pagePreviewDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${pagePreview ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={pagePreview}
+          aria-label={t("settings.pagePreview")}
+          data-testid="settings-page-preview"
+          onClick={() => setPagePreviewEnabled(!pagePreview)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.pagePreviewModifier")}</div>
+          <div className="setting-desc">{t("settings.pagePreviewModifierDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${pagePreviewModifier ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={pagePreviewModifier}
+          aria-label={t("settings.pagePreviewModifier")}
+          data-testid="settings-page-preview-modifier"
+          onClick={() => setPagePreviewRequireModifier(!pagePreviewModifier)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+    </section>
+  );
+}
+
+/* ---------------- Keychain ---------------- */
+
+function KeychainSection() {
+  const t = useI18n();
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.section.keychain")}</h2>
+      <div className="setting-item" data-testid="settings-keychain-empty">
+        <div className="setting-info">
+          <div className="setting-desc">{t("settings.keychainEmpty")}</div>
+        </div>
       </div>
     </section>
   );
@@ -1749,6 +1858,7 @@ function CommandPaletteSection() {
 
 function AboutSection() {
   const t = useI18n();
+  const currentLocale = useStore(locale);
   return (
     <section>
       <h2 className="settings-heading">{t("settings.section.about")}</h2>
@@ -1760,6 +1870,24 @@ function AboutSection() {
         </div>
         <p className="about-desc">{t("settings.aboutDesc")}</p>
         <p className="about-stack">{t("settings.aboutStack")}</p>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.language")}</div>
+          <div className="setting-desc">{t("settings.languageDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-language"
+          value={currentLocale}
+          aria-label={t("settings.language")}
+          onChange={(e) => setLocale(e.target.value === "zh" ? "zh" : "en")}
+        >
+          {/* option labels are self-named — never translated */}
+          <option value="en">English</option>
+          <option value="zh">中文</option>
+        </select>
       </div>
     </section>
   );

@@ -63,6 +63,8 @@ ok("reading view shows <br> by default (single newline)", await previewHasBr());
 
 // open settings, toggle strict ON
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 ok("strict-line-breaks toggle present", await app(() => !!document.querySelector('[data-testid="settings-strict-linebreaks-toggle"]')));
 await page.click('[data-testid="settings-strict-linebreaks-toggle"]');
 await wait(120);
@@ -74,6 +76,8 @@ ok("reading view re-renders WITHOUT <br> after enabling strict", !(await preview
 
 // toggle back off → <br> returns
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 200)); });
+await page.click('[data-testid="settings-nav-editor"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.click('[data-testid="settings-strict-linebreaks-toggle"]');
 await wait(120);
 await app(() => window.__app.workspace.closeModal());

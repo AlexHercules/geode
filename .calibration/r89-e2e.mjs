@@ -64,6 +64,8 @@ ok("collision gets a uniquePath suffix", p4 === "AtRoot 1.md", p4);
 // ── settings segmented + folder input ───────────────────────────────────────
 console.log("— settings UI —");
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
+await page.click('[data-testid="settings-nav-files-and-links"]');
+await new Promise((r) => setTimeout(r, 80));
 ok("location segmented present", await app(() =>
   !!document.querySelector('[data-testid="settings-newnote-root"]') &&
   !!document.querySelector('[data-testid="settings-newnote-current"]') &&

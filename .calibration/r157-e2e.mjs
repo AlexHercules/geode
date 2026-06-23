@@ -55,6 +55,8 @@ const openReading = async (path) => {
 };
 const toggleSetting = async () => {
   await app(() => window.__app.workspace.openModal("settings"));
+  await page.click('[data-testid="settings-nav-editor"]');
+  await new Promise((r) => setTimeout(r, 80));
   await page.waitForSelector("[data-testid=settings-backlinks-indoc-toggle]", { timeout: 3000 });
   await page.click("[data-testid=settings-backlinks-indoc-toggle]");
   await wait(60);

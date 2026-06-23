@@ -67,6 +67,8 @@ const toggleFoldAtLine = async (lineNo) => {
 };
 const toggleSetting = async () => {
   await app(() => window.__app.workspace.openModal("settings"));
+  await page.click('[data-testid="settings-nav-editor"]');
+  await new Promise((r) => setTimeout(r, 80));
   await page.waitForSelector("[data-testid=settings-fold-heading-toggle]", { timeout: 3000 });
   await page.click("[data-testid=settings-fold-heading-toggle]");
   await wait(60);
@@ -99,6 +101,8 @@ ok("list unfolds", (await placeholders()) === 0);
 ok("geode.foldHeading persisted as 'false'", (await app(() => localStorage.getItem("geode.foldHeading"))) === "false");
 ok("the toggle reads off (aria-checked false)", await app(async () => {
   window.__app.workspace.openModal("settings");
+  await new Promise((r) => setTimeout(r, 80));
+  document.querySelector('[data-testid="settings-nav-editor"]')?.click();
   await new Promise((r) => setTimeout(r, 80));
   const v = document.querySelector("[data-testid=settings-fold-heading-toggle]")?.getAttribute("aria-checked");
   window.__app.workspace.closeModal();

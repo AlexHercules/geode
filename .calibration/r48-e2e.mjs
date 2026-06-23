@@ -59,6 +59,8 @@ await wait(40);
 // ── B. settings UI drives the Stores ─────────────────────────────────────────
 console.log("B. settings UI drives the format Store");
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-daily-notes"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector("[data-testid=settings-daily-format]", { timeout: 4000 });
 await page.fill("[data-testid=settings-daily-format]", "YYYY.MM.DD");
 await wait(150);
@@ -87,6 +89,8 @@ await wait(40);
 await app(() => window.__app.vault.create("DailyTpl.md", "Journal for {{title}}\n\n## Tasks\n").catch(() => {}));
 await wait(80);
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-daily-notes"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector("[data-testid=settings-daily-template]", { timeout: 4000 });
 await page.fill("[data-testid=settings-daily-template]", "DailyTpl");
 await wait(120);
@@ -103,6 +107,8 @@ ok("open-today applies the configured template (expanded)", !!tplContent && tplC
 // reset
 await app(() => window.__geodeDaily.setFolder("Daily Notes"));
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-daily-notes"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector("[data-testid=settings-daily-template]", { timeout: 4000 });
 await page.fill("[data-testid=settings-daily-template]", "");
 await wait(120);

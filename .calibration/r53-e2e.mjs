@@ -73,6 +73,8 @@ ok("same-tick double create → two distinct notes", racePaths.a !== racePaths.b
 // ── C. settings UI wiring (folder field → Store → path) ──────────────────────
 console.log("C. settings UI wiring");
 await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-unique-notes"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector('[data-testid="settings-unique-folder"]', { timeout: 4000 });
 await page.fill('[data-testid="settings-unique-folder"]', "Inbox");
 await wait(60);

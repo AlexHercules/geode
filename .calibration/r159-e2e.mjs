@@ -53,6 +53,8 @@ ok("options.autorun is false (Geode has no startup-open setting)", (await dnOpti
 
 console.log("— options is a LIVE getter over the setting Stores —");
 await ev(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-daily-notes"]');
+await new Promise((r) => setTimeout(r, 80));
 await page.waitForSelector("[data-testid=settings-daily-folder]", { timeout: 3000 });
 await page.fill("[data-testid=settings-daily-folder]", "Journal/Days");
 await page.fill("[data-testid=settings-daily-format]", "YYYY/MM/DD");
