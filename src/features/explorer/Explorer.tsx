@@ -288,6 +288,27 @@ export function Explorer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, rows, virtual]);
 
+  /* R180 (G4-b): consume the one-shot "reveal active file in navigation" request —
+     expand the file's ancestor folders, select it, and force-scroll it into view.
+     A reveal must always scroll (even if the file is already the selected lead but
+     scrolled off-screen), so it can't rely on the idempotent selection-scroll effect
+     above; it scrolls directly on the next frame, after the expanded rows render. */
+  const revealReq = useStore(app.workspace.revealInExplorer);
+  useEffect(() => {
+    if (!revealReq) return;
+    app.workspace.revealInExplorer.set(null);
+    expandAncestors(revealReq);
+    selectOnly(revealReq);
+    requestAnimationFrame(() => {
+      const el = treeRef.current?.querySelector(`[data-path="${CSS.escape(revealReq)}"]`);
+      if (el) {
+        lastScrolledSelected.current = revealReq; // mark scrolled so the selection effect won't double-scroll
+        el.scrollIntoView({ block: "nearest" });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revealReq]);
+
   /* close context menu on click-elsewhere / Escape */
   useEffect(() => {
     if (!menu) return;

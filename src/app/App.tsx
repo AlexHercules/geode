@@ -189,6 +189,16 @@ export function App() {
         callback: () => workspace.openModal("slides"),
       }),
       commands.register({
+        // R180 (G4-b): Obsidian "Reveal active file in navigation"
+        id: "file-explorer:reveal-active-file",
+        name: () => t("cmd.revealActiveFile"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (path) workspace.requestRevealInExplorer(path);
+        },
+      }),
+      commands.register({
         id: "app:reload-plugins",
         name: () => t("cmd.reloadPlugins"),
         callback: () =>

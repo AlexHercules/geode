@@ -241,6 +241,10 @@ export class Workspace {
    *  then clears it back to null. Session-only — not persisted. Set AFTER
    *  openFile so the consuming pane already targets `path`. */
   readonly revealTarget = new Store<{ path: string; from: number; to: number } | null>(null);
+  /** R180 (G4-b): one-shot "reveal file in the explorer tree" request — the
+   *  "Reveal active file in navigation" command sets it; the Explorer consumes it
+   *  (expand ancestors + select + scroll into view) then clears. Session-only. */
+  readonly revealInExplorer = new Store<string | null>(null);
   /** R41: one-shot search request — the Tags pane (or any caller) seeds a query
    *  and opens the search panel; SearchPanel consumes it then clears. Session-only. */
   readonly searchRequest = new Store<string | null>(null);
@@ -347,6 +351,14 @@ export class Workspace {
    *  effects; call AFTER openFile(path) so the target pane is already there. */
   requestReveal(path: string, from: number, to: number): void {
     this.revealTarget.set({ path, from, to });
+  }
+
+  /** R180 (G4-b): request the Explorer to reveal `path` (expand ancestors +
+   *  select + scroll into view). Opens the left explorer panel so the tree is
+   *  visible, then sets the one-shot store the Explorer consumes. */
+  requestRevealInExplorer(path: string): void {
+    this.setLeftPanel("explorer");
+    this.revealInExplorer.set(path);
   }
 
   /** Open the left search panel seeded with `query` (e.g. `#tag` from the Tags pane). */
