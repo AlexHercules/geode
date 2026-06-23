@@ -266,6 +266,39 @@ export function App() {
         name: () => t("cmd.showFootnotes"),
         callback: () => workspace.setRightPanel("footnotes"),
       }),
+      // R181 (G3): per-view "Show X" commands — open/focus an existing sidebar
+      // panel (setLeft/RightPanel also opens the sidebar). Real handlers, no empty
+      // rows; mirrors Obsidian's "Backlinks: Show backlinks" / "Outline: Show outline" etc.
+      commands.register({
+        id: "app:show-file-explorer",
+        name: () => t("cmd.showFileExplorer"),
+        callback: () => workspace.setLeftPanel("explorer"),
+      }),
+      commands.register({
+        id: "app:show-search",
+        name: () => t("cmd.showSearch"),
+        callback: () => workspace.setLeftPanel("search"),
+      }),
+      commands.register({
+        id: "app:show-backlinks",
+        name: () => t("cmd.showBacklinks"),
+        callback: () => workspace.setRightPanel("backlinks"),
+      }),
+      commands.register({
+        id: "app:show-outline",
+        name: () => t("cmd.showOutline"),
+        callback: () => workspace.setRightPanel("outline"),
+      }),
+      commands.register({
+        id: "app:show-tags",
+        name: () => t("cmd.showTags"),
+        callback: () => workspace.setRightPanel("tags"),
+      }),
+      commands.register({
+        id: "app:show-all-properties",
+        name: () => t("cmd.showAllProperties"),
+        callback: () => workspace.setRightPanel("allproperties"),
+      }),
       commands.register({
         id: "app:close-tab",
         name: () => t("cmd.closeTab"),
