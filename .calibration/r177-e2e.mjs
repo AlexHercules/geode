@@ -73,7 +73,7 @@ console.log("— default section is still Appearance (r163 invariant) —");
 ok("appearance nav active on open",
   await ev(() => document.querySelector('[data-testid="settings-nav-appearance"]')?.className.includes("is-active")));
 ok("appearance keeps theme + accent + font controls",
-  (await present(tid("settings-theme-dark"))) &&
+  (await present(tid("settings-theme-select"))) &&
   (await present(tid("settings-accent-color"))) &&
   (await present(tid("settings-font-size"))) &&
   (await present(tid("settings-inline-title-toggle"))));
@@ -90,7 +90,7 @@ for (const id of ["settings-readable-toggle", "settings-spellcheck-toggle", "set
   "settings-newtab-reading", "settings-tabsize-4", "settings-properties-display"]) {
   ok(`editor has ${id}`, await present(tid(id)));
 }
-ok("editor does NOT show appearance theme control", !(await present(tid("settings-theme-dark"))));
+ok("editor does NOT show appearance theme control", !(await present(tid("settings-theme-select"))));
 
 console.log("— Files & links page hosts migrated file/link controls —");
 await nav("files-and-links");

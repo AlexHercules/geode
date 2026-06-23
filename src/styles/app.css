@@ -775,6 +775,16 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* G2: the modal root takes programmatic focus on open (tabIndex=-1 + .focus()
+   to pull keystrokes off the editor behind it). It's a container, not an
+   interactive control, so it must never paint a focus ring — WebKit's UA
+   outline otherwise drew a blue ring around the whole panel in light mode,
+   a state Obsidian never shows. */
+.modal-panel:focus,
+.modal-panel:focus-visible {
+  outline: none;
+}
+
 /* ============ shared panel header (sidebars) ============ */
 
 .panel-header {

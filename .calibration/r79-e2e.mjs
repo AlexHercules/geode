@@ -84,12 +84,12 @@ ok("explicit light → dataset.theme=light", (await dataset()) === "light");
 // ── settings panel exposes the controls ─────────────────────────────────────
 console.log("— settings panel —");
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
-ok("system theme button present", await app(() => !!document.querySelector('[data-testid="settings-theme-system"]')));
+ok("theme select present", await app(() => !!document.querySelector('[data-testid="settings-theme-select"]')));
 ok("accent color input present", await app(() => !!document.querySelector('[data-testid="settings-accent-color"]')));
 ok("accent reset button present", await app(() => !!document.querySelector('[data-testid="settings-accent-reset"]')));
-await page.locator('[data-testid="settings-theme-system"]').click();
+await page.locator('[data-testid="settings-theme-select"]').selectOption("system");
 await wait(80);
-ok("clicking system button sets workspace theme=system", await app(() => window.__app.workspace.state.get().theme === "system"));
+ok("selecting system in dropdown sets workspace theme=system", await app(() => window.__app.workspace.state.get().theme === "system"));
 
 // ── R45 invariant holds for "system": layout never carries/changes theme ────
 console.log("— R45 × system: layout excludes theme —");

@@ -1,7 +1,9 @@
 /* ============ Settings modal ============ */
 
 .modal-panel.settings-panel {
-  width: min(760px, 94vw);
+  /* G2: Obsidian's settings window is markedly wider than a regular modal —
+     bumped 760→900 to match its content density (audit: "弹窗整体更窄"). */
+  width: min(900px, 94vw);
   height: 70vh;
   max-height: 70vh;
   flex-direction: row;
@@ -29,7 +31,9 @@
 /* ---------- left nav ---------- */
 
 .settings-nav {
-  width: 170px;
+  /* G2: 170→200 so longer entries (e.g. "文件与链接") read without ellipsis,
+     matching Obsidian's roomier left rail. */
+  width: 200px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -91,7 +95,11 @@
 }
 
 .settings-heading {
-  margin: 0 0 14px;
+  /* G2: a divider under the page title gives each section a clear visual
+     boundary (audit: "section/card 分隔感较弱"). */
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
   font-size: 17px;
   font-weight: 600;
   color: var(--text-normal);

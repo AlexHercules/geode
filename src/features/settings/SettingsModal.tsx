@@ -75,6 +75,7 @@ import {
   setPagePreviewRequireModifier,
 } from "@core/hover";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
+import type { ThemeKind } from "@core/types";
 import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
 import {
   linkPathFormat,
@@ -107,7 +108,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.174.0";
+const APP_VERSION = "0.175.0";
 
 type SectionId =
   | "about"
@@ -337,35 +338,18 @@ function AppearanceSection() {
           <div className="setting-name">{t("settings.theme")}</div>
           <div className="setting-desc">{t("settings.themeDesc")}</div>
         </div>
-        <div className="settings-segmented" role="group" aria-label={t("settings.theme")}>
-          <button
-            className={ws.theme === "dark" ? "is-active" : ""}
-            aria-pressed={ws.theme === "dark"}
-            data-testid="settings-theme-dark"
-            onClick={() => app.workspace.setTheme("dark")}
-          >
-            <Icon name="moon" size={13} />
-            {t("settings.themeDark")}
-          </button>
-          <button
-            className={ws.theme === "light" ? "is-active" : ""}
-            aria-pressed={ws.theme === "light"}
-            data-testid="settings-theme-light"
-            onClick={() => app.workspace.setTheme("light")}
-          >
-            <Icon name="sun" size={13} />
-            {t("settings.themeLight")}
-          </button>
-          <button
-            className={ws.theme === "system" ? "is-active" : ""}
-            aria-pressed={ws.theme === "system"}
-            data-testid="settings-theme-system"
-            onClick={() => app.workspace.setTheme("system")}
-          >
-            <Icon name="monitor" size={13} />
-            {t("settings.themeSystem")}
-          </button>
-        </div>
+        {/* G2: Obsidian「基础颜色方案」is a dropdown (跟随系统/浅色/深色), not segmented */}
+        <select
+          className="settings-select"
+          value={ws.theme}
+          aria-label={t("settings.theme")}
+          data-testid="settings-theme-select"
+          onChange={(e) => app.workspace.setTheme(e.target.value as ThemeKind)}
+        >
+          <option value="system">{t("settings.themeSystem")}</option>
+          <option value="light">{t("settings.themeLight")}</option>
+          <option value="dark">{t("settings.themeDark")}</option>
+        </select>
       </div>
 
       <div className="setting-item">
