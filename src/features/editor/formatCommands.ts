@@ -51,6 +51,8 @@ const FORMAT_COMMANDS: ReadonlyArray<FormatCommandSpec> = [
   { id: "editor:toggle-bold", nameKey: "cmd.toggleBold", op: "bold", hotkey: "Mod+B" },
   { id: "editor:toggle-italic", nameKey: "cmd.toggleItalic", op: "italic", hotkey: "Mod+I" },
   { id: "editor:insert-link", nameKey: "cmd.insertLink", op: "link", hotkey: "Mod+K" },
+  // R189: Obsidian "Insert wikilink" (`[[]]`), distinct from the Markdown link above (no default key)
+  { id: "editor:insert-wikilink", nameKey: "cmd.insertWikilink", op: "wikilink" },
   { id: "editor:toggle-strikethrough", nameKey: "cmd.toggleStrikethrough", op: "strikethrough" },
   { id: "editor:toggle-highlight", nameKey: "cmd.toggleHighlight", op: "highlight" },
   { id: "editor:toggle-inline-code", nameKey: "cmd.toggleInlineCode", op: "inline-code" },

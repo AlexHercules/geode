@@ -37,6 +37,7 @@ export type FormatOp =
   | "highlight"
   | "inline-code"
   | "link"
+  | "wikilink"
   | "heading"
   | "blockquote"
   | "bullet-list"
@@ -144,6 +145,23 @@ export function insertLink(text: string, from: number, to: number): FormatEdit {
   const insert = `[${selected}]()`;
   const paren = from + 1 + selected.length + 2; // just after "[sel]("
   return { from, to, insert, selFrom: paren, selTo: paren };
+}
+
+/**
+ * R189: insert an internal (wiki) link (Obsidian "Insert wikilink"):
+ *  - empty selection → `[[]]`, cursor between the brackets (type/autocomplete the target);
+ *  - otherwise → `[[selected]]`, cursor just after the closing `]]`.
+ * Always returns an edit (never a no-op). Only the [from,to] range is replaced — bytes
+ * outside the selection are untouched. Does NOT unwrap existing links (insert, not toggle).
+ */
+export function insertWikilink(text: string, from: number, to: number): FormatEdit {
+  const selected = text.slice(from, to);
+  if (selected.length === 0) {
+    return { from, to, insert: "[[]]", selFrom: from + 2, selTo: from + 2 };
+  }
+  const insert = `[[${selected}]]`;
+  const end = from + insert.length;
+  return { from, to, insert, selFrom: end, selTo: end };
 }
 
 /** Expand a selection to whole-line boundaries [start, end). When the selection
@@ -382,6 +400,8 @@ export function applyFormatOp(
       return toggleWrap(text, from, to, WRAP_MARKERS[op]);
     case "link":
       return insertLink(text, from, to);
+    case "wikilink":
+      return insertWikilink(text, from, to);
     case "heading":
       return toggleHeading(text, from, to);
     case "blockquote":
