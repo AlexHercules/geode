@@ -42,6 +42,7 @@ import { registerFormatCommands } from "@features/editor/formatCommands";
 import { registerLinkCommands } from "@features/editor/linkCommands";
 import { registerTableCommands } from "@features/editor/tableCommands";
 import { registerAttachCommand } from "@features/editor/attachCommand";
+import { togglePropertiesFold } from "@features/editor/foldProperties";
 import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
@@ -49,7 +50,7 @@ import { registerEditorEditCommands } from "@features/editor/editorEditCommands"
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri, basename } from "@core/vault";
 import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
-import { buildClearProperties } from "@core/properties";
+import { buildClearProperties, parseProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
 import { confirmDelete } from "@core/confirm";
 import { expandTemplate, templatePickerMode } from "@core/templates";
@@ -247,6 +248,26 @@ export function App() {
         id: "app:toggle-theme",
         name: () => t("cmd.toggleTheme"),
         callback: () => workspace.toggleTheme(),
+      }),
+      // R210 (G3 §10 missing→done): fold/unfold the current note's properties panel.
+      // Pure view state (per-path), never touches the document; the panel itself
+      // re-measures the CM heightmap via its onLayoutChange.
+      commands.register({
+        id: "editor:toggle-fold-properties",
+        name: () => t("cmd.toggleFoldProperties"),
+        // only when the active note actually has a properties block — otherwise the
+        // toggle would store fold state for a path with no panel, hiding a later-added
+        // property (review fix). parseProperties matches the panel's own render gate.
+        available: () => {
+          const a = getActiveFileEditorView(app);
+          return a !== null && parseProperties(a.view.state.doc.toString()) !== null;
+        },
+        callback: () => {
+          const active = getActiveFileEditorView(app);
+          if (active && parseProperties(active.view.state.doc.toString()) !== null) {
+            togglePropertiesFold(active.path);
+          }
+        },
       }),
       // R185 (G3 partial→done): view/appearance toggle commands — flip an existing
       // appearance setting via its setter (pure display: line-number gutter / line

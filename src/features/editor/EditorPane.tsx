@@ -401,6 +401,10 @@ export function EditorPane({ tab }: { tab: TabState }) {
     viewRef.current?.dispatch({ changes: edit, userEvent: "input" });
   }, []);
 
+  // R210: stable so the properties panel's layout effect re-measures the CM
+  // heightmap only on a fold toggle, not on every portaled re-render.
+  const onPropertiesLayoutChange = useCallback(() => viewRef.current?.requestMeasure(), []);
+
   /** preview-mode splice — task-checkbox precedent: apply to the handle's
    *  canonical text, sync every attached view via setText (NOT the undo
    *  history — preview edits don't undo, recorded口径), persist via modify */
@@ -1074,6 +1078,9 @@ export function EditorPane({ tab }: { tab: TabState }) {
               applyEdit={applyLiveEdit}
               path={handle.path}
               revision={docRevision}
+              // R210: folding is a pure-view height change (no doc transaction), so
+              // the CM block widget heightmap won't re-measure on its own — nudge it
+              onLayoutChange={onPropertiesLayoutChange}
             />,
             propertiesHostRef.current,
           )}

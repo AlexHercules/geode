@@ -1533,6 +1533,41 @@ mark {
   background: var(--bg-hover);
 }
 
+/* R210: properties fold toggle (Obsidian "toggle properties folding") */
+.properties-fold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  margin: 0 0 2px -4px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.properties-fold-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+.properties-fold-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.1s ease;
+}
+.properties-panel.is-collapsed .properties-fold-toggle svg {
+  transform: rotate(-90deg);
+}
+/* collapsed: hide everything except the toggle (rows stay in the DOM, just hidden) */
+.properties-panel.is-collapsed > :not(.properties-fold-toggle) {
+  display: none;
+}
+.properties-panel.is-collapsed {
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
 /* R83 (㊼): keyboard-focused row (rows are a Tab stop; ↑/↓ move between them) */
 .property-row:focus-visible {
   outline: 2px solid var(--accent);

@@ -23,6 +23,7 @@ import type { I18nKey } from "@core/i18n";
 import { useStore } from "@core/store";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
+import { foldedPropertiesPaths, togglePropertiesFold } from "./foldProperties";
 
 /**
  * PropertiesPanel (R22) — structured frontmatter editor rendered at the top of
@@ -490,6 +491,9 @@ export function PropertiesPanel(props: {
   applyEdit: (edit: PropertyEdit, focusAfter?: boolean) => void;
   path: string; // tag/key autocompletion + registry
   revision: number; // handle.revision mirror — triggers re-render
+  /** R210: live mode passes view.requestMeasure() so the CM heightmap re-measures
+   *  when the panel folds/unfolds (pure-view height change, no doc transaction). */
+  onLayoutChange?: () => void;
 }): JSX.Element | null {
   const app = useApp();
   const t = useI18n();
@@ -497,6 +501,12 @@ export function PropertiesPanel(props: {
   // (datalist suggestions); props.revision covers document text changes
   useStore(propertyTypes.revision);
   const metaRev = useStore(app.metadata.revision);
+  // R210: per-note fold state (pure view; never mutates the document)
+  const collapsed = useStore(foldedPropertiesPaths).has(props.path);
+  const onLayoutChange = props.onLayoutChange;
+  useLayoutEffect(() => {
+    onLayoutChange?.();
+  }, [collapsed, onLayoutChange]);
 
   const [, setBumpCount] = useState(0);
   const [adding, setAdding] = useState(false);
@@ -718,7 +728,24 @@ export function PropertiesPanel(props: {
   if (!parsed) return null;
 
   return (
-    <div className="properties-panel" data-testid="properties-panel" ref={rootRef}>
+    <div
+      className={"properties-panel" + (collapsed ? " is-collapsed" : "")}
+      data-testid="properties-panel"
+      ref={rootRef}
+    >
+      {/* R210: fold toggle (Obsidian "toggle properties folding"); collapsed hides
+          the rows via CSS — entries stay in the DOM so their testids persist */}
+      <button
+        type="button"
+        className="properties-fold-toggle"
+        data-testid="properties-fold-toggle"
+        aria-label={t("cmd.toggleFoldProperties")}
+        aria-expanded={!collapsed}
+        onClick={() => togglePropertiesFold(props.path)}
+      >
+        <Icon name="chevron-down" />
+        {collapsed && <span className="properties-fold-label">{t("editor.propertiesFoldLabel")}</span>}
+      </button>
       <datalist id={nameListId}>
         {propertyNames.map((name) => (
           <option key={name} value={name} />

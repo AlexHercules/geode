@@ -305,6 +305,7 @@ export const en = {
   "editor.typeTags": "Tags",
   "editor.typeAliases": "Aliases",
   "editor.propertiesOpaqueHint": "This entry can't be edited here — edit it in source mode.",
+  "editor.propertiesFoldLabel": "Properties",
 
   "editor.embedCircular": "Circular embed: {name}",
   "editor.embedMissingHeading": 'Heading "{heading}" not found in {name}',
@@ -624,6 +625,7 @@ export const zh: Record<keyof typeof en, string> = {
   "editor.typeTags": "标签",
   "editor.typeAliases": "别名",
   "editor.propertiesOpaqueHint": "此条目无法在面板中编辑——请在源码模式中编辑。",
+  "editor.propertiesFoldLabel": "属性",
 
   "editor.embedCircular": "循环嵌入：{name}",
   "editor.embedMissingHeading": "在 {name} 中找不到标题 \"{heading}\"",
