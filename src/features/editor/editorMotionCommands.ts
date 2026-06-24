@@ -12,12 +12,32 @@
  * now palette-discoverable + user-rebindable instead of hard-wired in defaultKeymap.
  * (Mod+Shift+Arrow was avoided: on macOS it shadows the native select-to-doc-edge.)
  *
- * No new write path — every command is a single CM transaction (dirty → autosave).
+ * No new write path: the line-motion commands are a single CM transaction (dirty →
+ * autosave); the R191 add-cursor commands change ONLY the selection (no doc change).
  */
 import { copyLineDown, copyLineUp, moveLineDown, moveLineUp } from "@codemirror/commands";
+import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { t, type I18nKey } from "@core/i18n";
+
+/**
+ * R191: add a collapsed cursor one line above/below the main cursor (Obsidian
+ * editor:add-cursor-above / -below). view.moveVertically respects the goal column,
+ * wrapped lines, and tab widths. No-op at the doc edge (the move stays on the same
+ * line) or when a cursor already sits there. Selection-only — no document change.
+ */
+function addCursorVertical(view: EditorView, forward: boolean): boolean {
+  const { state } = view;
+  const main = state.selection.main;
+  const moved = view.moveVertically(EditorSelection.cursor(main.head), forward);
+  if (state.doc.lineAt(moved.head).number === state.doc.lineAt(main.head).number) return false;
+  if (state.selection.ranges.some((r) => r.empty && r.head === moved.head)) return false;
+  const ranges = [...state.selection.ranges, EditorSelection.cursor(moved.head)];
+  // new cursor becomes main → repeated presses cascade further in the same direction
+  view.dispatch({ selection: EditorSelection.create(ranges, ranges.length - 1), scrollIntoView: true });
+  return true;
+}
 
 interface MotionSpec {
   id: string;
@@ -31,6 +51,9 @@ const MOTION_COMMANDS: ReadonlyArray<MotionSpec> = [
   { id: "editor:move-line-down", nameKey: "cmd.moveLineDown", cmd: moveLineDown, hotkey: "Alt+ArrowDown" },
   { id: "editor:copy-line-up", nameKey: "cmd.copyLineUp", cmd: copyLineUp, hotkey: "Shift+Alt+ArrowUp" },
   { id: "editor:copy-line-down", nameKey: "cmd.copyLineDown", cmd: copyLineDown, hotkey: "Shift+Alt+ArrowDown" },
+  // R191: multi-cursor (no default key — Obsidian leaves these unbound)
+  { id: "editor:add-cursor-above", nameKey: "cmd.addCursorAbove", cmd: (v) => addCursorVertical(v, false) },
+  { id: "editor:add-cursor-below", nameKey: "cmd.addCursorBelow", cmd: (v) => addCursorVertical(v, true) },
 ];
 
 /**
