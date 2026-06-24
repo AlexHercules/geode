@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 190 additions — G3 ui-only→done「关闭其他标签页 / 关闭此标签页分组」（2 命令 app:close-others / app:close-tab-group · 复用 vetted closeOtherTabs/closeAllTabs · 逻辑档[tab 生命周期·flush]·无新写路径 · 零新依赖）【As-built v0.186】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §4「关闭其他标签页」「关闭此标签页分组」（Obsidian `workspace:close-others` / `workspace:close-tab-group`）。矩阵原标 missing，实为 **ui-only**：`closeOtherTabs`/`closeAllTabs` 已是 vetted workspace 方法、由标签右键菜单（`tabctx-close-others`/`tabctx-close-all`）调用，仅缺注册成命令。**契约（纯命令注册 + i18n，无跨模块签名变更、无新方法）**：
+> - **`app/App.tsx`** 紧邻既有 `app:close-tab` 注册 2 命令，**镜像其 `getActiveTab()` 守卫**（`const tab = workspace.getActiveTab(); if (tab) ...`）：
+>   - `app:close-others` → `workspace.closeOtherTabs(tab.id)`（关闭活动组内其他标签页；Geode 单 leaf=单 tab 组，故同时覆盖 Obsidian `close-others-tab-group` 语义）。
+>   - `app:close-tab-group` → `workspace.closeAllTabs(tab.id)`（关闭活动组全部标签页 = 关闭该组）。
+>   - 两者**无默认键**（Obsidian 未设置）；**复用 vetted `closeTab` 路径**（R81/R4：保 neighbor 激活 / recently-closed 入栈 / **关闭前 flush 未存编辑** / 跳过 pinned），**无新写/关闭路径**。
+> - i18n dict.app +2 `cmd.closeOthers`/`cmd.closeTabGroup` 键 en+zh。
+> - **分档：逻辑档**——命令触达标签关闭 = 文档生命周期（closeTab flush 未存 .md 编辑），虽 diff 仅 App.tsx+i18n、不碰红线文件，仍按 data-safety 谨慎档：跑 data-safety skill 确认复用的 closeOtherTabs/closeAllTabs 经 vetted closeTab flush 路径、未存编辑不丢、跳过 pinned；**无新写路径**（零 workspace.ts 方法改动）。
+> - **v1 defer**：matrix `partial` 余（panel「新标签页」变体[需主区视图类型] / theme:switch[语义待定]）；`missing` 纯编辑（清除格式[字节风险高单独轮] / 多光标）；`管理仓库`/`切换仓库`（C1）。
+
 ## Round 189 additions — G3 partial→done「插入内部链接（wikilink）」（1 命令 editor:insert-wikilink · 扩展 R33 format 引擎 insertWikilink · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.185】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `partial`「插入内部链接」（Obsidian `editor:insert-wikilink`，此前 Geode 仅 `editor:insert-link`=Markdown 链接 `[text](url)`、无 wikilink `[[]]` 变体）。沿用 R186 同款「扩展既有 R33 format 引擎」模式（无跨模块签名破坏）：

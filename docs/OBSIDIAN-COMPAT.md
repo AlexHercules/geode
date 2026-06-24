@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R190 套件回归（2026-06-24，G3 ui-only→done「关闭其他标签页 / 关闭此标签页分组」· 表面复刻 G 系列 · 逻辑档[tab flush]·无新写路径、零 compat 调用面改动 · 桌面 probe N/A）
+
+R190 = 按 R182 矩阵收割 §4「关闭其他标签页」「关闭此标签页分组」（Obsidian `workspace:close-others`/`workspace:close-tab-group`）。矩阵原标 missing，实为 **ui-only**（closeOtherTabs/closeAllTabs 早是 vetted workspace 方法、由标签右键菜单调用）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 190 additions」**：`app/App.tsx` 紧邻 `app:close-tab` 注册 2 命令（镜像 getActiveTab 守卫、无默认键、复用 vetted closeOtherTabs/closeAllTabs，**零 workspace.ts 方法改动**）；i18n +2 键 en+zh。
+
+新增套件：`r190-e2e.mjs` **14/14**（2 命令注册+名称解析非裸键+无默认键 + close-others 保活动 tab[3→1] + **close-others 跳 pinned[pin ra·active rc→保 ra+rc·闭 rb]** + close-tab-group 清空活动组[→0] + close 后 reopen-closed-tab 可恢复[recently-closed 由 close 路径喂] + 无 page error）。**套件矩阵不回退**：**r81 14/14（close-tabs 逻辑 tabIdsToClose 跳 pinned）**·r36 47/47·r37 36/36·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯命令路由平台无关 + close→flush 复用既有 vetted autosave 路径[r81/r16/r42 桌面已覆盖]、无新 fs 写路径，同 R184）。**分档逻辑档（tab 生命周期·flush）→ data-safety skill 已跑**：reviewer 追全链 close→`release()`→deferred-drop `flush()`（documents.ts:293-308=R16 type-then-close race 修复点）证关闭前 flush 未存编辑不丢 + 非活动 tab 早 flush（App.tsx:1496 仅渲活动 tab EditorPane）+ 批量关闭 id 先快照（closeTabBatch）无遍历竞态 + **无新写路径**。**对抗评审 6 维 → 0 confirmed defect**（data-safety 全链证 / getActiveTab 作用活动组 / 空·单·全 pinned no-op / id 唯一·无 hotkey·i18n / Obsidian 忠实[单 leaf=单组覆盖 close-others-tab-group]）。简化门 **clean**（getActiveTab 守卫=既有命令注册习语、抽 helper 越界+加抽象层驳回）。**v1 defer**：panel 新标签页变体 / theme:switch / missing 纯编辑（清除格式·多光标）/ 管理仓库 C1。
+
 ### R189 套件回归（2026-06-24，G3 partial→done「插入内部链接 wikilink」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归、零 compat 调用面改动 · 桌面 probe N/A）
 
 R189 = 按 R182 矩阵收割 §2 `partial`「插入内部链接」（Obsidian `editor:insert-wikilink`=`[[]]`，此前 Geode 仅 `editor:insert-link`=Markdown 链接）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 189 additions」**（R186 同款扩 R33 引擎）：`core/format.ts` 新增纯 `insertWikilink`（镜像 insertLink、只替换 [from,to]、绝不 unwrap）+ FormatOp `wikilink` + applyFormatOp case；`formatCommands.ts` +1 spec（无默认键、Mod+K 仍归 insert-link）经既有 applyFormat 派发；i18n +1 键 en+zh。
