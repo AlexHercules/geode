@@ -65,7 +65,10 @@ export type FormatOp =
   // (header + body row, 2 columns) at the cursor; pure insert, never consumes
   // the selection (collapses to `to`, like horizontal-rule), reads no state.
   // Named by content (`table`) like its siblings, verb lives in the command id.
-  | "table";
+  | "table"
+  // R208: Obsidian "Insert embed" — inserts `![[]]` (mirror of `wikilink` with a
+  // leading `!`); pure insert, never unwraps, reads no Lezer/overlay state.
+  | "embed";
 
 /** Inline wrap markers (Obsidian-faithful: asterisks for emphasis, never `_`). */
 const WRAP_MARKERS: Record<string, string> = {
@@ -171,6 +174,23 @@ export function insertWikilink(text: string, from: number, to: number): FormatEd
     return { from, to, insert: "[[]]", selFrom: from + 2, selTo: from + 2 };
   }
   const insert = `[[${selected}]]`;
+  const end = from + insert.length;
+  return { from, to, insert, selFrom: end, selTo: end };
+}
+
+/**
+ * R208: insert an embed (Obsidian "Insert embed"). Mirrors {@link insertWikilink}
+ * with a leading `!`:
+ *  - empty selection → `![[]]`, cursor between the brackets (`from+3`);
+ *  - otherwise → `![[selected]]`, cursor just after the closing `]]`.
+ * Pure insert (never unwraps); only the [from,to] range is replaced.
+ */
+export function insertEmbed(text: string, from: number, to: number): FormatEdit {
+  const selected = text.slice(from, to);
+  if (selected.length === 0) {
+    return { from, to, insert: "![[]]", selFrom: from + 3, selTo: from + 3 };
+  }
+  const insert = `![[${selected}]]`;
   const end = from + insert.length;
   return { from, to, insert, selFrom: end, selTo: end };
 }
@@ -538,6 +558,8 @@ export function applyFormatOp(
       return insertLink(text, from, to);
     case "wikilink":
       return insertWikilink(text, from, to);
+    case "embed":
+      return insertEmbed(text, from, to);
     case "heading":
       return toggleHeading(text, from, to);
     case "blockquote":
