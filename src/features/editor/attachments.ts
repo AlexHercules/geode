@@ -69,7 +69,7 @@ interface PendingFile {
  * length (the user may have kept editing meanwhile — conservative clamp).
  * A single failed file is logged and skipped; it never blocks the rest.
  */
-async function ingestFiles(
+export async function ingestFiles(
   app: GeodeApp,
   getPath: () => string,
   view: EditorView,

@@ -136,11 +136,12 @@ async function doImport(
     stem = sanitized.slice(0, dot);
     ext = sanitized.slice(dot + 1);
   } else {
-    // Callers must supply an extension (paste names are generated with one,
-    // drop keeps the original file name). Degrade defensively.
-    console.warn(`[attachments] baseName without extension: "${baseName}" — defaulting to .png`);
+    // No extension (e.g. an attached "Makefile" / "LICENSE"). Preserve the name
+    // verbatim — Obsidian keeps it as-is. Before R209 only image paste/drop reached
+    // here so this defaulted to .png; the any-file attach picker (R209) made
+    // extensionless names reachable, where forcing .png is a fidelity bug.
     stem = sanitized;
-    ext = "png";
+    ext = "";
   }
 
   const setting = attachmentFolder.get();
@@ -158,9 +159,10 @@ async function doImport(
   const lower = new Set(deps.vault.getFiles().map((f) => f.path.toLowerCase()));
   if (lower.has(path.toLowerCase())) {
     const prefix = dir ? `${dir}/` : "";
+    const suffix = ext ? `.${ext}` : ""; // extensionless → no trailing dot (matches uniquePath)
     let n = 1;
-    while (lower.has(`${prefix}${stem} ${n}.${ext}`.toLowerCase())) n++;
-    path = `${prefix}${stem} ${n}.${ext}`;
+    while (lower.has(`${prefix}${stem} ${n}${suffix}`.toLowerCase())) n++;
+    path = `${prefix}${stem} ${n}${suffix}`;
   }
   await deps.vault.createBinary(path, data);
 

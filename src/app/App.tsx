@@ -41,6 +41,7 @@ import { foldAllInView, foldAtCursor, toggleFoldAtCursor, unfoldAllInView, unfol
 import { registerFormatCommands } from "@features/editor/formatCommands";
 import { registerLinkCommands } from "@features/editor/linkCommands";
 import { registerTableCommands } from "@features/editor/tableCommands";
+import { registerAttachCommand } from "@features/editor/attachCommand";
 import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
@@ -779,6 +780,8 @@ export function App() {
       ...registerLinkCommands(app, () => getActiveFileEditorView(app)),
       // R206: GFM table structural edits (insert/delete row & column)
       ...registerTableCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+      // R209: attach file — pick a file, import to vault, insert `![[]]` (needs the path)
+      ...registerAttachCommand(app, () => getActiveFileEditorView(app)),
     );
     // R34 in-editor find/replace commands (Mod+F search; replace = no default key,
     // macOS reserves Cmd+H). Same active-file gating as format commands.
