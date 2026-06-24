@@ -591,6 +591,19 @@ export function buildRemoveProperty(content: string, key: string): PropertyEdit 
   return { from: entry.from, to: entry.to, insert: "" };
 }
 
+/**
+ * R194: clear all note properties (Obsidian editor:clear-metadata-properties) by removing
+ * the WHOLE frontmatter block. Mirrors buildRemoveProperty's last-entry path; reuses the
+ * R22-vetted parseInternal/findBlock bounds. Returns null (no-op) when there is no
+ * parseable block or it has no entries — nothing to clear. Only `[from, to)` (the block)
+ * is removed; the note body is byte-preserved.
+ */
+export function buildClearProperties(content: string): PropertyEdit | null {
+  const parsed = parseInternal(content);
+  if (!parsed || parsed.entries.length === 0) return null;
+  return { from: parsed.from, to: parsed.to, insert: "" };
+}
+
 /* ---------------- type inference ---------------- */
 
 export function inferPropertyType(value: PropertyValue): PropertyType {

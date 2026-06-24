@@ -42,6 +42,7 @@ import { registerEditorMotionCommands } from "@features/editor/editorMotionComma
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri, basename } from "@core/vault";
+import { buildClearProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
 import { confirmDelete } from "@core/confirm";
 import { expandTemplate, templatePickerMode } from "@core/templates";
@@ -557,6 +558,22 @@ export function App() {
           // request after mount, creates an empty frontmatter block when
           // missing and focuses the add-name input
           workspace.requestAddProperty(tab.id, tab.filePath);
+        },
+      }),
+      commands.register({
+        // R194: Obsidian editor:clear-metadata-properties — remove the whole frontmatter
+        // block. Reuses the R22-vetted properties bounds; the change is a normal CM
+        // transaction (undoable, dirty → autosave). No-op when there are no properties.
+        id: "editor:clear-metadata-properties",
+        name: () => t("cmd.clearProperties"),
+        available: () => getActiveFileEditorView(app) !== null,
+        callback: () => {
+          const view = getActiveFileEditorView(app)?.view;
+          if (!view) return;
+          const edit = buildClearProperties(view.state.doc.toString());
+          if (!edit) return;
+          view.dispatch({ changes: { from: edit.from, to: edit.to, insert: edit.insert }, userEvent: "input" });
+          view.focus();
         },
       }),
       commands.register({
