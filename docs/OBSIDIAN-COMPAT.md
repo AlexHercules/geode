@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R193 套件回归（2026-06-24，G3 missing→done「书签命令组：移除当前文件书签 + 收藏所有标签页」· 表面复刻 G 系列 · 逻辑档[书签 persist 非 .md]·复用 vetted store、零 compat 调用面改动 · 桌面 probe N/A）
+
+R193 = 按 R182 矩阵收割 §11「移除当前文件的书签」「收藏所有标签页」（Obsidian `bookmarks:unbookmark`/`bookmark-all-tabs`）。**非 compat-API 轮**（但 r158 书签 compat 套件复跑核验不退）。**详见 ARCHITECTURE「Round 193 additions」**：`app/App.tsx` 注册 2 命令复用 vetted 书签 store（unbookmark available=isFileBookmarked·复用 toggleFile；bookmark-all-tabs allTabs filePath 去重·复用 add 幂等，**零 core/bookmarks.ts 改动**）；i18n +1 键 en+zh。
+
+新增套件：`r193-e2e.mjs` **17/17**（2 命令注册+名称解析非裸键+无默认键 + unbookmark 门控[未收藏 unavailable→收藏后 available→移除→再 unavailable] + unbookmark 非收藏 no-op 绝不误加 + bookmark-all-tabs 收藏 bm1/bm2/Welcome 全开标签 + **再运行无重复[幂等]** + 无 page error）。**套件矩阵不回退**：**r158 13/13（书签 compat internalPlugins）**·r190 14/14·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（命令路由平台无关 + 书签 persist 复用 R27/R158 vetted 路径[regEnqueue 串行化·vault-switch 守卫已覆盖]、无新 fs 写路径，同 R190）。**分档逻辑档→ data-safety skill 已跑**：书签写全复用 vetted persist（写 `.obsidian/bookmarks.json`=vault 文件 IO 非用户 .md）、零新写机制、循环 for-await add 无 persist 互踩（regEnqueue 单链串行）、add 容器级 dedup 幂等。**对抗评审 6 维 → 0 confirmed defect**（data-safety 全证 / unbookmark 双门控绝不误加 / bookmark-all-tabs allTabs·filter·Set 去重·空集 no-op / 命令+i18n / Obsidian 忠实 / 分层）。简化门 **clean**。**reviewer 记非缺陷 honest gap**：add 容器级 dedup vs isFileBookmarked 全树（文件仅在某分组已收藏时顶层再加=Obsidian 同文件可跨 group 并存既有行为）。**v1 defer**：bookmark-search（搜索 query 集成）。
+
 ### R192 套件回归（2026-06-24，G3 missing→done「清除格式」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归·**对抗评审揪 2 CRITICAL 字节损坏全修**、零 compat 调用面改动 · 桌面 probe N/A）
 
 R192 = 按 R182 矩阵收割 §2「清除格式」（Obsidian `editor:clear-formatting`）。**「字节风险高、单独轮」名副其实**。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 192 additions」**：`formatCommands.ts` `clearFormatting(view)` syntaxTree 节点级删完整包含选区的 Emphasis/Strong/Strikethrough/InlineCode 子 mark + **Geode overlay 排除**（hasLinkAncestor wikilink/embed/alias + protectedSpans frontmatter/findMathBlockRanges 块math/commentSpans[fence 感知]/inline math 正则）；i18n +1 键 en+zh。

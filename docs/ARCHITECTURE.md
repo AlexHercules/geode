@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 193 additions — G3 missing→done「书签命令组：移除当前文件书签 + 收藏所有标签页」（2 命令 bookmarks:unbookmark / bookmarks:bookmark-all-tabs · 复用 vetted 书签 store · 零新依赖）【As-built v0.189】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §11 `missing`「移除当前文件的书签」「收藏所有标签页」（Obsidian `bookmarks:unbookmark` / `bookmarks:bookmark-all-tabs`）。**契约（纯命令注册 + i18n，无跨模块签名变更、无新 store 方法）**：
+> - **`app/App.tsx`** 紧邻既有书签命令注册 2 命令（复用 vetted `bookmarks` store，**零 core/bookmarks.ts 改动**）：
+>   - `bookmarks:unbookmark` → `available: getActiveFile()!==null && bookmarks.isFileBookmarked(p)`（仅当已收藏才可用，Obsidian-faithful 专用移除≠toggle）；callback `if(p && isFileBookmarked(p)) toggleFile(p)`（已收藏时 toggleFile=removeAllFiles 移除）。
+>   - `bookmarks:bookmark-all-tabs` → callback 收集 `allTabs(workspace.state.get().root)` 中 `filePath` 非空的去重路径，逐个 `bookmarks.add({type:"file",path,ctime})`（`add` 对已在容器内的文件 early-return 不 persist=幂等去重，无重复）。
+>   - 两者**无默认键**（Obsidian 未设置）。import `allTabs` from `@core/workspace`。
+> - i18n dict.bookmarks +1 `cmd.bookmarkAllTabs` 键 en+zh（`cmd.unbookmarkFile` 已存在，复用）。
+> - **分档：逻辑档**——命令触达书签 `persist()`（写 `.obsidian/bookmarks.json`=vault 文件 IO，**非用户 .md 内容**），复用既有 vetted add/toggleFile 路径、无新写机制；diff 仅 App.tsx+i18n。跑 data-safety skill 确认书签写复用 vetted persist、无新写路径、active-file 门控。
+> - **v1 defer**：`bookmarks:bookmark-search`（收藏当前搜索，需搜索面板当前 query 集成）；其余 missing 纯编辑（删除段落/添加别名·标签/清除笔记属性）；`partial` 余（panel「新标签页」变体/theme:switch）；`管理仓库` C1。
+
 ## Round 192 additions — G3 missing→done「清除格式」（1 命令 editor:clear-formatting · syntaxTree 仅删完整包含节点的 mark token · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.188】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing`「清除格式」（Obsidian `editor:clear-formatting`）。**字节风险高、单独轮**（ROADMAP 早标记，名副其实——本轮对抗评审揪出 **2 个 CRITICAL 字节损坏**，全修后方交付）。**契约（扩 R33 formatCommands，无跨模块签名破坏）**：
