@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 184 additions — G3 ui-only→done「文件操作命令化」（duplicate/rename/move/new-folder · 一次性 Store bridge → 既有 vetted Explorer 处理器 · data-safety 逻辑档 · 零新依赖）【As-built v0.180】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 命令矩阵收割 `ui-only→done` 的**余四项文件操作**（duplicate/rename/move/new-folder，矩阵列右键/按钮已有、未注册成命令）。**契约（一处新 Store + 方法，无跨模块签名破坏）**：
+> - **`core/workspace.ts`** +`explorerFileAction` 一次性 Store（`{action,path}|null`）+`requestExplorerFileAction(action,path)`（`setLeftPanel("explorer")` 挂载 Explorer + set）。
+> - **`app/App.tsx`** 注册矩阵指定 4 id：`file-explorer:duplicate-file`/`workspace:edit-file-title`(rename)/`file-explorer:move-file`（皆 `available=getActiveFile!==null`、callback 捕获 active path）+ `file-explorer:new-folder`（无 gate、path=null）；命令名复用 R179 `explorer.makeCopy/rename/moveTo/newFolder`（**零新 i18n**）。
+> - **`features/explorer/Explorer.tsx`** +top-level `findNode(root,path)`（递归精确路径匹配，把 active path 解析成 makeCopy/startRename 需要的 VaultNode）+ 消费 effect：路由到既有 **vetted 处理器**（duplicate→makeCopy R42 · rename→startRename→RenameInput→renameWithLinkUpdate R16 · move→setMovePath→MoveToModal R28 · new-folder→newFolder→createFolder R17）。**无新写路径**——bridge 仅路由 active-file path 给现有处理器。
+> - **分档：逻辑档（data-safety）**——触发 vault 写（makeCopy createBinary / newFolder createFolder），强制逻辑档 + 跑 data-safety skill：A.3 rename 走 R16 flush+ref-update 不丢编辑 / duplicate flushAll-before-copy 字节拷贝源不动 / R23 active-view 门控=命令捕获 path 入 Store、消费用捕获 path 无 stale-latch / 无新写路径。简化门 **clean**（fresh code-simplifier：3 命令近似但抽 helper=加抽象+违约定+更难读 SIMPLIFY-NO⑤，余皆 load-bearing）。
+> - **⚠️ 本轮根因（对抗评审 10 维 → 1 MAJOR confirmed 已修）**：消费 effect 原**按闭包捕获的 `fileAction` 派发**而非 `.get()` 读现值 → React StrictMode（dev）在命令**挂载 Explorer**（setLeftPanel 从 search/bookmarks/关 → 挂载）时 effect 双触发、`.set(null)` 短路但不 gate 动作 → **duplicate/new-folder 写两次**（多出 `<name> 2.md`/`New folder 1`；生产构建免疫[Vite 剥 StrictMode]、rename/move 幂等不受影响）。**根因＝写型一次性消费抄了幂等型 `revealInExplorer` 闭包读法，应抄写安全的 `addPropertyRequest.get()` 法**。**修＝effect 内 `const req=explorerFileAction.get(); if(!req) return;` 现读再派发**——第 2 次 invoke 读到 null 即 bail。+r184-e2e 加 mount-path 守卫断言（切走 explorer 面板→exec duplicate→断言无 `<name> 2.md`）。
+> - **r184-e2e 22/22**（4 命令注册+名称解析+gating + duplicate 建 `<name> 1.md` 源不动 + rename 开 inline input 命中 active 行 + Escape 取消文件不变 + move 开 modal + new-folder 建文件夹+rename input + **StrictMode mount-path 单触发守卫** + graph 无 active 时 gating false + 无 page error）+回归 r93/r140/r97/r180/r183/r179 全绿。**桌面 probe N/A**（写经 makeCopy→createBinary[r42-probe]/newFolder→createFolder[R17]/rename→R16[r70-probe]/move→R28 vetted 已覆盖、bridge 无新 fs 路径、命令路由平台无关）。
+> - **v1 nuance**：new-folder 用 `targetFolder()`（选中文件夹/选中文件父/root，与工具栏按钮一致，非按 active file）；move-without-tree 早退静默丢请求（active file⇒vault 已载，几不可达）。**至此矩阵 ui-only 6 项全清（R183 纯 2 + R184 余 4）→ done**；下一项 = `partial` 校准（show-search 默认键等）或 `missing` 纯编辑（设为小标题 1-6 等）。
+
 ## Round 183 additions — G3 ui-only→done「复制路径 / 复制 Obsidian URL 命令化」（2 个 active-file 命令 · 复用 R46 buildOpenUri · 纯前端非数据安全 · 零新依赖）【As-built v0.179】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——首次按 **R182 命令矩阵**（用户交付 `docs/G3-命令复刻矩阵.md`）的 §推进建议收割「ui-only→done」最快档。**Gate**：矩阵列 6 个 ui-only（功能在右键/按钮、未注册命令），本轮取其中**纯档两项**（无 vault 写）；写/UI-bridge 四项（复制文件/重命名/移动/新建文件夹 = data-safety + Explorer-node-bridge）留 R184。**契约（无跨模块签名变更，纯命令注册 + app-local toast）**：`app/App.tsx` 注册 2 命令（矩阵指定 id）：

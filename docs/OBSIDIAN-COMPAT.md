@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R184 套件回归（2026-06-24，G3 ui-only→done「文件操作命令化 duplicate/rename/move/new-folder」· 表面复刻 G 系列 · data-safety 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R184 = 按 R182 命令矩阵收割 `ui-only→done` **余四项文件操作**——至此矩阵 ui-only 6 项全清（R183 纯 2 + R184 余 4）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 184 additions」**：workspace +`explorerFileAction` 一次性 Store + 4 命令（矩阵指定 id）→ Explorer `findNode` + 消费 effect 路由到既有 vetted 处理器（makeCopy R42 / startRename→R16 / setMovePath→R28 / newFolder R17），**无新写路径**；命令名复用 R179 i18n（零新增）。
+
+新增套件：`r184-e2e.mjs` **22/22**（4 命令注册+名称解析+gating[3 active-file 门控、new-folder 不门控] + duplicate 经 makeCopy 建 `<name> 1.md` 源不动 + rename 开 inline input 命中 active 行 + Escape 取消文件不变 + move 开 move-to-modal + Escape 关 + new-folder 经 createFolder 建文件夹+rename input + **StrictMode mount-path 单触发守卫**[切走 explorer→exec duplicate→无 `<name> 2.md`] + graph 无 active gating false + 无 page error）。**套件矩阵不回退**：r93 22/22·r140 18/18·r97 15/15·r180 12/12·r183 11/11·r179 10/10·typecheck 0/cargo check/生产构建 + 命令面板截图。**桌面 probe N/A**（写经 makeCopy createBinary[r42-probe]/newFolder createFolder/rename R16[r70-probe]/move R28 vetted 已覆盖、bridge 无新 fs 路径、命令路由平台无关，同 R161）。**data-safety skill 已跑**（A.3 rename 不丢编辑/duplicate flushAll 字节拷贝源不动/R23 捕获 path 无 stale-latch/无新写路径）。**对抗评审 10 维 → 1 MAJOR confirmed 已修**：StrictMode mount 双触发写型一次性消费（闭包读→`.get()` 现读修复）+ mount-path 守卫断言。简化门 **clean**（fresh code-simplifier：3 命令抽 helper=SIMPLIFY-NO⑤ 加抽象+违约定）。
+
 ### R183 套件回归（2026-06-24，G3 ui-only→done「复制路径/复制 Obsidian URL 命令化」· 表面复刻 G 系列 · 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R183 = 首次按 **R182 命令矩阵**（用户交付 `docs/G3-命令复刻矩阵.md`，权威源 `../reference/` 16 张热键截图——reference/ 在仓库上一级、磁盘可读，R179-181「不在仓库」系发现性误报）收割 ui-only→done 最快档的**纯档两项**。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 183 additions」**：`app/App.tsx` 注册 `file-explorer:copy-path` + `workspace:copy-url`（矩阵指定 id），active-file + 复用 R179 core `buildOpenUri` + R179 i18n 键，app-local `command-notice` toast（独立 class 防与 Explorer toast 互删）。
