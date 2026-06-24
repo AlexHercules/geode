@@ -18,8 +18,11 @@ export function FootnotesPanel() {
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
 
+  // R213: non-markdown active tab (graph or a main-area aux view) → follow the last active
+  // markdown file so the panel stays populated, aligned with backlinks/outgoing/outline.
+  const lastActive = useStore(app.workspace.lastActiveFile);
   const activeTab = findActiveTab(ws);
-  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
+  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : lastActive;
 
   const footnotes = useMemo(() => {
     void rev; // re-derive whenever the metadata index changes

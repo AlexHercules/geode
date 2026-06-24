@@ -19,9 +19,14 @@ export function FilePropertiesPanel() {
   const app = useApp();
   const t = useI18n();
   const ws = useStore(app.workspace.state);
+  // R213: non-markdown active tab → follow the last active markdown file (Obsidian's
+  // Properties view follows the active file), aligned with the sibling aux panels. This is
+  // an editable writer, but the shared DocumentHandle (path-keyed) makes editing lastActive
+  // safe regardless of whether it is the active tab; acquire-fail (file deleted) → fp-empty.
+  const lastActive = useStore(app.workspace.lastActiveFile);
 
   const activeTab = findActiveTab(ws);
-  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
+  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : lastActive;
 
   // acquire the shared handle for the active file (refcounted; release on change)
   const [handle, setHandle] = useState<DocumentHandle | null>(null);

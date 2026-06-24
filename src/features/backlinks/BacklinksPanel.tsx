@@ -329,9 +329,12 @@ export function BacklinksPanel() {
         groups.push({ sourcePath: sourceMeta.path, items });
       }
       if (cancelled) return;
-      // stale guard: discard if the active file changed mid-scan
+      // stale guard: discard if the active file changed mid-scan. Must mirror the render
+      // fallback (line ~193) — use lastActiveFile when the active tab is non-markdown, else
+      // following lastActive on a graph/main-area-view tab makes livePath null !== activePath
+      // and the scan never completes (stuck "Scanning…"). R213: align with the render path.
       const liveTab = findActiveTab(app.workspace.state.get());
-      const livePath = liveTab?.viewType === "markdown" ? liveTab.filePath : null;
+      const livePath = liveTab?.viewType === "markdown" ? liveTab.filePath : app.workspace.lastActiveFile.get();
       if (livePath !== activePath) return;
       setUnlinked(groups);
       setScanning(false);
