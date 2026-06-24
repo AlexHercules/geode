@@ -71,7 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 199 additions — G3 missing→done「插入脚注」（1 命令 editor:insert-footnote · 双址插 `[^N]`+`[^N]:` + 自动编号 + 双向跳转 · core/format.ts 纯函数 insertFootnote · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.195】
+## Round 200 additions — G3 missing→done「编辑器光标处上下文菜单」（编辑器右键原生 Cut/Copy/Paste + 总是显示 · 完成 R131 延后片 · 扩 compat/obsidian/editorMenu.ts · data-safety 逻辑档[cut/paste 写] + 零新依赖）【As-built v0.196】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 末项「光标处上下文菜单」（Obsidian 编辑器右键菜单）。**这正是 R131 当时显式延后的片**（R131 建了 `editor-menu` 事件 + 真 compat `Menu`，但 contextmenu handler **仅当插件贡献项才替换浏览器菜单**、无原生项）。R200 = 补**原生 Cut/Copy/Paste + 总是显示**。**Path A（最小 diff·与 R131 设计一致）**：编辑器上下文菜单本就是 compat 的 `editor-menu` 实现面（R131 设计），扩 `compat/obsidian/editorMenu.ts` 一处即可，editor feature + core 零改（compat→core 允许、features 绝不 import compat 不破）。**契约（扩 R131 handler，无跨模块签名破坏）**：
+> - **`compat/obsidian/editorMenu.ts`** `editorContextMenuExtension`：`contextmenu(evt, view)`（加 CM `view` 第二参 = 被右击的 EditorView）→ `new Menu()` → **加原生 3 项**（文本 only·compat BUILTIN 图标集无 scissors/copy/clipboard → v1 不挂图标）：
+>   - **Cut**（`t("editorMenu.cut")`·`setDisabled(选区空)`）：onClick 读 fresh `view.state.selection.main` → `navigator.clipboard.writeText(sliceDoc(from,to)).then(写成功才 dispatch 删 [from,to])`（**copy 成功才删 = 底线①，clipboard 失败不删避免无副本丢字**）→ `view.focus()`。
+>   - **Copy**（`setDisabled(选区空)`）：`writeText(sliceDoc(from,to))`（只读·无变更）。
+>   - **Paste**：onClick `navigator.clipboard.readText().then(text => text && dispatch 插 text 于 fresh 选区, selection 落插入末)`（读失败 no-op·无损）。
+>   - 三项均**读 fresh `view.state.selection.main`**（菜单开期编辑器无交互、选区不变、offset 恒 in-bounds）。
+>   - 然后 `menu.addSeparator()` → `workspace.trigger("editor-menu", menu, info.editor, info)`（插件 append 项）→ **若末子节点仍是 `.menu-separator`（无插件项）则 remove**（避免尾随分隔线）→ **总是 `evt.preventDefault() + showAtMouseEvent`**（R200 改 R131 的「仅插件项才 show」为「总显示」）。`info = workspace.activeEditor`；无 active editor 时仍可 fallback（用 `view` 直接操作）——v1 保留 `if(!info)` 早退给浏览器菜单（无 active markdown 视图时不接管）。
+> - **`core/i18n/dict.app.ts`** +3 键 `editorMenu.cut/copy/paste` en（Cut/Copy/Paste）+ zh（剪切/复制/粘贴）。
+> - **R131 行为变更（更新既有套件）**：`r131-e2e.mjs` 2 断言据实改——① 插件贡献时菜单含原生 3 项 + 插件项（非仅 1）；② 无插件贡献时菜单**仍显示**（原生项），非浏览器默认。
+> - **分档：逻辑档（data-safety）**——cut/paste 经 `view.dispatch` 改 .md（undo-safe·绝不裸写 vault）。**字节安全**：cut = copy 成功才删（clipboard 失败不丢字）、paste 读失败 no-op、copy 只读、均 fresh 选区 in-bounds、单事务单 undo、走既有 R23 active-file 编辑→autosave 路径无新写机制。
+> - **桌面 probe N/A**：右键菜单 DOM + clipboard（同 R183「clipboard + CM dispatch 仅 browser-E2E」既定口径，clipboard 从不 desktop-probe）；菜单逻辑纯 compat/CM 平台无关。**v1 偏差/defer**：原生项无图标（compat BUILTIN 集缺 scissors/copy/clipboard）；无 active markdown editor 时不接管（保留浏览器菜单）；selection-aware 仅 cut/copy 禁用态（paste 总启用）。
+> - **⚠️ 对抗评审结论（Ultracode 4 lens[data-safety-clipboard/menu-lifecycle/fidelity/wiring-layering] + skeptic synthesis · verdict=deliverable · 0 critical/0 major）**：lens 实证——Cut「writeText().then(删).catch(不删)」次序成立（clipboard 失败绝不丢字）、**追进 documents.ts 证 delete.cut/input.paste 走既有 updateListener→scheduleSave 无新写路径**、Paste 读 fresh 选区 anchor 可证 in-bounds、菜单生命周期（mousedown 先关旧菜单无泄漏·throwing 插件经 tryTrigger 隔离）、分层（compat→core only·无 feature import compat）、i18n en+zh 齐。
+>   - **3 confirmed 已修**：① **(nit·data-safety 硬化) Cut 复用 await 前选区 vs Paste 读 fresh**——理论上 clipboard 写 await 窗口内外部 reload 移位会删错范围（仅合成注入可达、undo 可恢复）→ 修=镜像 Paste：`copied=sliceDoc` 后 `.then` 内 `if(sliceDoc(sel)!==copied) return`（只删拷过的字节、否则跳过）；② **(nit) 单 `if` 去分隔线**——插件只贡献裸 separator 时留尾随孤儿/相邻双线 → 修=`childElementCount` 边界判定只在插件加非分隔节点时插一条 rule + `for` 循环剥所有尾随 separator（r200-e2e §F 锁裸分隔线无孤儿）；③ **(minor) editor-menu JSDoc 过期**（workspace.ts/context.ts 仍写「仅插件贡献才显」）→ 据 R200 改写。
+>   - **1 minor 记为 v1 已知限制（不修）**：**总是 preventDefault 抑制浏览器原生拼写建议菜单**——R50 拼写检查开（默认关）的用户右击拼错词，原本浏览器菜单给纠正建议，R200 后只见 Cut/Copy/Paste（Obsidian 把拼写建议并入自身菜单、Geode v1 未做）。属忠实/UX 缺口、窄 cohort（非默认偏好），记 OBSIDIAN-COMPAT 缺口；完整修=把平台拼写建议作为菜单项注入（更大件、defer）。
+>   - **refuted**：原生项无图标=任务既定 v1（compat BUILTIN 缺·setIcon 降级空 span 非错图标）。
+> - **r200-e2e 21/21**（总显示 + 原生 Cut/Copy/Paste 序 + 选区禁用态 + Copy 写剪贴不改文 + Cut 删选区+写剪贴+undoable + Paste 插光标 + 插件项在原生+分隔线后 + 无插件无尾分隔线 + **裸分隔线插件无孤儿**）+ 改测 **r131-e2e 8/8**（行为变更：菜单含原生项+总显示）+ r144-e2e 7/7（Menu 不退）+ typecheck 0/cargo/生产构建。
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing`「插入脚注」（Obsidian `editor:insert-footnote`，v1.8.9 引入，**双向**）。**双址非单 contiguous → 走 clear-formatting(R192)/delete-paragraph(R197) 标准命令注册（非 FormatOp）**；纯逻辑落 `core/format.ts` `insertFootnote(text,from,to)` 返判别 union（probe 可测、字节可断言）。**契约（扩 R33 引擎 + 1 探针，无跨模块签名破坏）**：
 > - **`core/format.ts`** 新增 `FootnoteAction` 判别 union + `insertFootnote(text,from,to)` 纯函数：
