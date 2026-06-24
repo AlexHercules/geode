@@ -340,6 +340,40 @@ export function App() {
           showCommandNotice(t("explorer.copiedUrl"));
         },
       }),
+      // R184 (G3 ui-only→done): file-op commands route the active file to the
+      // Explorer's existing vetted handlers via a one-shot store (no new write path).
+      commands.register({
+        id: "file-explorer:duplicate-file",
+        name: () => t("explorer.makeCopy"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (path) workspace.requestExplorerFileAction("duplicate", path);
+        },
+      }),
+      commands.register({
+        id: "workspace:edit-file-title",
+        name: () => t("explorer.rename"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (path) workspace.requestExplorerFileAction("rename", path);
+        },
+      }),
+      commands.register({
+        id: "file-explorer:move-file",
+        name: () => t("explorer.moveTo"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (path) workspace.requestExplorerFileAction("move", path);
+        },
+      }),
+      commands.register({
+        id: "file-explorer:new-folder",
+        name: () => t("explorer.newFolder"),
+        callback: () => workspace.requestExplorerFileAction("new-folder", null),
+      }),
       commands.register({
         id: "app:close-tab",
         name: () => t("cmd.closeTab"),

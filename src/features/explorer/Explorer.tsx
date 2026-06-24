@@ -82,6 +82,20 @@ function uniqueFolderPath(root: FolderNode, parent: string, base: string): strin
   return parent ? `${parent}/${name}` : name;
 }
 
+/** R184: find a node (file or folder) by vault-relative path in the tree. Used to
+ *  route an active-file command (which only knows a path) to a handler that needs
+ *  the VaultNode (makeCopy / startRename). */
+function findNode(root: FolderNode, path: string): VaultNode | null {
+  for (const child of root.children) {
+    if (child.path === path) return child;
+    if (child.kind === "folder") {
+      const found = findNode(child, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 /** remap a path set after a rename (folder renames move descendants too) */
 function remapPaths(set: Set<string>, oldPath: string, newPath: string): Set<string> {
   const out = new Set<string>();
@@ -308,6 +322,34 @@ export function Explorer() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealReq]);
+
+  /* R184 (G3 ui-only→done): consume a one-shot file-op request from the active-file
+     commands (duplicate/rename/move/new-folder) by routing to the existing vetted
+     handlers. The command only knows a path; findNode resolves the VaultNode that
+     makeCopy/startRename need. Writes go through the same paths as the right-click
+     menu (makeCopy R42 / newFolder R17 / rename R16 / move R28) — no new write path. */
+  const fileAction = useStore(app.workspace.explorerFileAction);
+  useEffect(() => {
+    if (!fileAction) return;
+    // Read the request FRESH (not the closure value) so StrictMode's mount
+    // double-invoke — which fires when a command mounts the Explorer via
+    // setLeftPanel — runs the write-causing action only ONCE: the 1st invoke
+    // clears the store, the 2nd sees null and bails (mirrors addPropertyRequest).
+    const req = app.workspace.explorerFileAction.get();
+    if (!req) return;
+    app.workspace.explorerFileAction.set(null); // one-shot consume
+    const { action, path } = req;
+    if (action === "new-folder") { void newFolder(); return; }
+    if (!path) return;
+    expandAncestors(path); // reveal ancestors so the rename inline-input row renders
+    if (action === "move") { setMovePath(path); return; }
+    if (!tree) return;
+    const node = findNode(tree, path);
+    if (!node) return;
+    if (action === "duplicate") void makeCopy(node);
+    else if (action === "rename") startRename(node);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileAction]);
 
   /* close context menu on click-elsewhere / Escape */
   useEffect(() => {

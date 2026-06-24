@@ -245,6 +245,13 @@ export class Workspace {
    *  "Reveal active file in navigation" command sets it; the Explorer consumes it
    *  (expand ancestors + select + scroll into view) then clears. Session-only. */
   readonly revealInExplorer = new Store<string | null>(null);
+  /** R184 (G3 ui-only→done): one-shot "run a file op on the active file" request —
+   *  the file-op commands (duplicate/rename/move/new-folder) set it; the Explorer
+   *  consumes it by routing to its existing vetted handlers (makeCopy/startRename/
+   *  setMovePath/newFolder) then clears. `path` is null for new-folder. Session-only. */
+  readonly explorerFileAction = new Store<
+    { action: "duplicate" | "rename" | "move" | "new-folder"; path: string | null } | null
+  >(null);
   /** R41: one-shot search request — the Tags pane (or any caller) seeds a query
    *  and opens the search panel; SearchPanel consumes it then clears. Session-only. */
   readonly searchRequest = new Store<string | null>(null);
@@ -359,6 +366,17 @@ export class Workspace {
   requestRevealInExplorer(path: string): void {
     this.setLeftPanel("explorer");
     this.revealInExplorer.set(path);
+  }
+
+  /** R184 (G3): request a file op (duplicate/rename/move/new-folder) on `path`
+   *  (null for new-folder). Opens the explorer so its tree + inline inputs are
+   *  visible, then sets the one-shot store the Explorer routes to vetted handlers. */
+  requestExplorerFileAction(
+    action: "duplicate" | "rename" | "move" | "new-folder",
+    path: string | null,
+  ): void {
+    this.setLeftPanel("explorer");
+    this.explorerFileAction.set({ action, path });
   }
 
   /** Open the left search panel seeded with `query` (e.g. `#tag` from the Tags pane). */
