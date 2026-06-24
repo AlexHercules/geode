@@ -38,6 +38,7 @@ import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, foldAtCursor, toggleFoldAtCursor, unfoldAllInView, unfoldAtCursor } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
+import { registerLinkCommands } from "@features/editor/linkCommands";
 import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
@@ -771,6 +772,8 @@ export function App() {
       ...registerComposerCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerEditorMotionCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       ...registerEditorEditCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
+      // R201: follow-link (⌥Enter) / open-link-in-new-leaf (⌘Enter) — need the path too
+      ...registerLinkCommands(app, () => getActiveFileEditorView(app)),
     );
     // R34 in-editor find/replace commands (Mod+F search; replace = no default key,
     // macOS reserves Cmd+H). Same active-file gating as format commands.

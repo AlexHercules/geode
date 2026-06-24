@@ -22,17 +22,19 @@ export async function openWikilink(
   target: string,
   fromPath: string,
   subpath?: string,
+  opts: { newTab?: boolean } = {},
 ): Promise<void> {
+  const { newTab } = opts; // R201: editor:open-link-in-new-leaf opens in a new tab
   if (target === "") {
     if (!subpath) return; // defensive: an empty link never navigates/creates
-    app.workspace.openFile(fromPath);
+    app.workspace.openFile(fromPath, { newTab });
     const span = app.metadata.resolveSubpath(fromPath, subpath);
     if (span) app.workspace.requestReveal(fromPath, span.from, span.to);
     return;
   }
   const resolved = app.metadata.resolveLink(target, fromPath);
   if (resolved) {
-    app.workspace.openFile(resolved);
+    app.workspace.openFile(resolved, { newTab });
     if (subpath) {
       const span = app.metadata.resolveSubpath(resolved, subpath);
       if (span) app.workspace.requestReveal(resolved, span.from, span.to);
@@ -44,7 +46,7 @@ export async function openWikilink(
     // "current folder" = the note that holds this link (fromPath), not whatever
     // tab happens to be active (they differ for obsidian:// URI handling).
     const path = await createNewNote(app.vault, name, fromPath, `# ${name}\n`);
-    app.workspace.openFile(path);
+    app.workspace.openFile(path, { newTab });
   } catch (err) {
     console.error(`[editor] failed to create note for link "${target}"`, err);
   }
