@@ -162,6 +162,7 @@ export const en = {
   "cmd.insertMath": "Insert inline math",
   "cmd.insertMathBlock": "Insert math block",
   "cmd.insertHorizontalRule": "Insert horizontal rule",
+  "cmd.insertTable": "Insert table",
   "cmd.insertFootnote": "Insert footnote",
   "cmd.clearFormatting": "Clear formatting",
 
@@ -388,6 +389,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.insertMath": "插入行内公式",
   "cmd.insertMathBlock": "插入数学块",
   "cmd.insertHorizontalRule": "插入分隔线",
+  "cmd.insertTable": "插入表格",
   "cmd.insertFootnote": "插入脚注",
   "cmd.clearFormatting": "清除格式",
 

@@ -246,6 +246,8 @@ const FORMAT_COMMANDS: ReadonlyArray<FormatCommandSpec> = [
   { id: "editor:insert-math", nameKey: "cmd.insertMath", op: "inline-math" },
   { id: "editor:insert-math-block", nameKey: "cmd.insertMathBlock", op: "math-block" },
   { id: "editor:insert-horizontal-rule", nameKey: "cmd.insertHorizontalRule", op: "horizontal-rule" },
+  // R205: Obsidian "Insert table" — empty 2×2 GFM skeleton (no default key)
+  { id: "editor:insert-table", nameKey: "cmd.insertTable", op: "table" },
 ];
 
 /**

@@ -60,7 +60,12 @@ export type FormatOp =
   // Lezer/overlay state and only touch the [from,to] range.
   | "inline-math"
   | "math-block"
-  | "horizontal-rule";
+  | "horizontal-rule"
+  // R205: Obsidian "Insert table" — inserts an empty 2×2 GFM table skeleton
+  // (header + body row, 2 columns) at the cursor; pure insert, never consumes
+  // the selection (collapses to `to`, like horizontal-rule), reads no state.
+  // Named by content (`table`) like its siblings, verb lives in the command id.
+  | "table";
 
 /** Inline wrap markers (Obsidian-faithful: asterisks for emphasis, never `_`). */
 const WRAP_MARKERS: Record<string, string> = {
@@ -433,6 +438,28 @@ export function insertHorizontalRule(text: string, _from: number, to: number): F
   return { from: to, to, insert, selFrom: end, selTo: end };
 }
 
+/**
+ * R205: insert an empty table skeleton (Obsidian "Insert table"). Like
+ * {@link insertHorizontalRule} it does NOT consume the selection — it collapses
+ * to `to` and inserts there, so selected text is never silently deleted (底线①).
+ * Obsidian inserts a 2-column table with a header row + one body row and drops
+ * the cursor in the first header cell; we mirror that with an aligned GFM
+ * skeleton (cells padded to the `---` separator width). A leading `\n` is added
+ * only when the table would not already start its own line. A trailing blank
+ * line is added when non-blank text follows on the next line: unlike `***` a
+ * GFM table is NOT self-terminating — markdown-it greedily absorbs the next
+ * non-blank line as another body row, so the fence keeps it from swallowing the
+ * paragraph below (reading-view fidelity; bytes are still preserved either way).
+ */
+export function insertTable(text: string, _from: number, to: number): FormatEdit {
+  const lead = to === 0 || text[to - 1] === "\n" ? "" : "\n";
+  const trail = to < text.length && text[to] !== "\n" ? "\n" : "";
+  const insert = lead + "|     |     |\n| --- | --- |\n|     |     |\n" + trail;
+  // cursor inside the first header cell, just past the leading "| "
+  const cell = to + lead.length + 2;
+  return { from: to, to, insert, selFrom: cell, selTo: cell };
+}
+
 /** R199: footnote definition-line shape — id charset mirrors `FOOTNOTE_DEF_RE`
  *  in markdown.ts:725 (`[^\s[\]]+`, no whitespace/brackets). The `[ ]{0,3}`
  *  lead mirrors the reading-view def block rule, which strips up to 3 spaces of
@@ -542,6 +569,8 @@ export function applyFormatOp(
       return insertMathBlock(text, from, to);
     case "horizontal-rule":
       return insertHorizontalRule(text, from, to);
+    case "table":
+      return insertTable(text, from, to);
     default: {
       // exhaustiveness: a new FormatOp without a case fails to compile here
       const _exhaustive: never = op;
