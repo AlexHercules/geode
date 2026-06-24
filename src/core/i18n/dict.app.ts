@@ -163,9 +163,10 @@ export const en = {
   "editorMenu.copy": "Copy",
   "editorMenu.paste": "Paste",
 
-  // ---- link navigation (R201) ----
+  // ---- link navigation (R201/R202) ----
   "cmd.followLink": "Follow link under cursor",
   "cmd.openLinkNewLeaf": "Open link under cursor in new tab",
+  "cmd.openLinkNewSplit": "Open link under cursor to the right",
 
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "Search current file",
@@ -381,9 +382,10 @@ export const zh: Record<keyof typeof en, string> = {
   "editorMenu.copy": "复制",
   "editorMenu.paste": "粘贴",
 
-  // ---- link navigation (R201) ----
+  // ---- link navigation (R201/R202) ----
   "cmd.followLink": "打开光标处的链接",
   "cmd.openLinkNewLeaf": "在新标签页中打开光标处链接",
+  "cmd.openLinkNewSplit": "在新标签组中打开光标处链接",
 
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "在当前文件中查找",
