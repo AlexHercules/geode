@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R192 套件回归（2026-06-24，G3 missing→done「清除格式」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归·**对抗评审揪 2 CRITICAL 字节损坏全修**、零 compat 调用面改动 · 桌面 probe N/A）
+
+R192 = 按 R182 矩阵收割 §2「清除格式」（Obsidian `editor:clear-formatting`）。**「字节风险高、单独轮」名副其实**。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 192 additions」**：`formatCommands.ts` `clearFormatting(view)` syntaxTree 节点级删完整包含选区的 Emphasis/Strong/Strikethrough/InlineCode 子 mark + **Geode overlay 排除**（hasLinkAncestor wikilink/embed/alias + protectedSpans frontmatter/findMathBlockRanges 块math/commentSpans[fence 感知]/inline math 正则）；i18n +1 键 en+zh。
+
+新增套件：`r192-e2e.mjs` **28/28**（字节级 live CM view：GFM 原生 bold/italic/strike/code + **代码跨距字面 `*` 保[`` `a*b*c` ``→`a*b*c`]** + 部分选中不变[防残半标记] + 嵌套 `***bi***`→`bi` + **7 overlay 损坏场景全保**[`[[**x**]]`/`[[a|**b**]]`/`![[**x**]]`/`$a*b*c$`/`$a**b**$`/`$$..$$`/frontmatter `k: **v**`] + 混合 `[[**x**]] **y**`→`[[**x**]] y` + **3 comment[单行/跨行块/混合] + fence-内孤立 `%%` 不 over-protect** + highlight `==` defer 不动 + no-op + 无 page error）。**套件矩阵不回退**：**r33 37/37（format 引擎字节锁不退）**·r189 17/17·r191 15/15·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（syntaxTree+view.dispatch 复用 R33 派发[r33-probe 覆盖]、overlay 排除纯 JS 字符串/树扫描、无 fs/Rust/平台分支）。**分档逻辑档（data-safety）→ data-safety skill 已跑**。**对抗评审（同一 reviewer 三轮深挖）→ 2 CRITICAL confirmed 全修闭合**：① wikilink/math/frontmatter/embed/alias 内字面 `*` 误删（裸 syntaxTree 信 Lezer GFM 树、忽略 Geode 正则 overlay）→ hasLinkAncestor + protectedSpans 修；② `%%comment%%` 内字面 `*` 误删（同根因第二实例，第一轮修漏、第二轮补）→ commentSpans 修。**+2 minor**（均 under-removal 安全方向、非 corruption）：highlight `==` 不剥除=feature gap[Lezer 不误判 `==`]；INLINE_MATH_RE 过匹配 currency[已记录]，commentSpans-fence over-protect[已修]。简化门 **clean（2 遍）**。**方法论根因**：overlay 权威清单=reading-view pre-pass 的全部 literal 结构，补排除须逐项对照勿临时枚举（本轮典型打地鼠：漏 comment）。**v1 honest gap**：highlight `==` 剥除 / INLINE_MATH_RE currency over-match。
+
 ### R191 套件回归（2026-06-24，G3 missing→done「在上方/下方添加光标 多光标」· 表面复刻 G 系列 · 逻辑档[editor]·selection-only 无 .md 写、零 compat 调用面改动 · 桌面 probe N/A）
 
 R191 = 按 R182 矩阵收割 §3「在上方/下方添加光标」（Obsidian `editor:add-cursor-above`/`-below`）。Geode 编辑器早开 `allowMultipleSelections`，仅缺命令入口。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 191 additions」**：`editorMotionCommands.ts` 新增 `addCursorVertical`（view.moveVertically 加副光标·边界 no-op·去重·新光标设 main 级联）+ 2 spec（无默认键）经既有 registerEditorMotionCommands 自动注册；i18n +2 键 en+zh。**仅改 selection 无 doc 写**。
