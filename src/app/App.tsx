@@ -1,7 +1,12 @@
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
-import { showRibbon, showStatusBar, showTabTitleBar } from "@core/appearance";
+import {
+  showRibbon, showStatusBar, showTabTitleBar, setShowRibbon,
+  showLineNumbers, setShowLineNumbers,
+  readableLineLength, setReadableLineLength,
+  spellcheckEnabled, setSpellcheckEnabled,
+} from "@core/appearance";
 import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
@@ -235,6 +240,30 @@ export function App() {
         name: () => t("cmd.toggleTheme"),
         callback: () => workspace.toggleTheme(),
       }),
+      // R185 (G3 partial→done): view/appearance toggle commands — flip an existing
+      // appearance setting via its setter (pure display: line-number gutter / line
+      // width / spellcheck attr / ribbon — no document/vault write). Mirrors Obsidian's
+      // "Toggle line numbers" etc. which previously had a settings switch but no command.
+      commands.register({
+        id: "editor:toggle-line-numbers",
+        name: () => t("cmd.toggleLineNumbers"),
+        callback: () => setShowLineNumbers(!showLineNumbers.get()),
+      }),
+      commands.register({
+        id: "editor:toggle-readable-line-length",
+        name: () => t("cmd.toggleReadableLineLength"),
+        callback: () => setReadableLineLength(!readableLineLength.get()),
+      }),
+      commands.register({
+        id: "editor:toggle-spellcheck",
+        name: () => t("cmd.toggleSpellcheck"),
+        callback: () => setSpellcheckEnabled(!spellcheckEnabled.get()),
+      }),
+      commands.register({
+        id: "app:toggle-ribbon",
+        name: () => t("cmd.toggleRibbon"),
+        callback: () => setShowRibbon(!showRibbon.get()),
+      }),
       // R50 zoom — adjust the editor/preview font size (workspace.setFontSize
       // clamps + drives --editor-font-size). Mod+= / Mod+- / Mod+0 mirror the
       // Obsidian-canonical zoom keys; reset returns to the 16px default.
@@ -293,6 +322,7 @@ export function App() {
       commands.register({
         id: "app:show-search",
         name: () => t("cmd.showSearch"),
+        hotkey: "Mod+Shift+F", // R185: Obsidian global-search default key (calibration)
         callback: () => workspace.setLeftPanel("search"),
       }),
       commands.register({
