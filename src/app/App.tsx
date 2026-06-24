@@ -370,6 +370,13 @@ export function App() {
         name: () => t("cmd.showBacklinks"),
         callback: () => workspace.setRightPanel("backlinks"),
       }),
+      // R211 (G3 §8): open backlinks as a main-area tab (Obsidian "Open backlinks
+      // for the current file") — a singleton view tab, like the graph
+      commands.register({
+        id: "backlink:open-backlinks",
+        name: () => t("cmd.openBacklinks"),
+        callback: () => workspace.openBacklinks(),
+      }),
       commands.register({
         id: "app:show-outline",
         name: () => t("cmd.showOutline"),
@@ -1619,6 +1626,8 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
         {activeTab ? (
           activeTab.viewType === "graph" ? (
             <GraphView />
+          ) : activeTab.viewType === "backlinks" ? (
+            <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
           ) : activeTab.viewType === "attachment" ? (
             <AttachmentView key={activeTab.id} tab={activeTab} />
           ) : (
@@ -1761,7 +1770,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         /* the graph tab's stored title is persisted in workspace state —
            ignore it at render time so the label follows the UI locale;
            file tabs keep the basename verbatim */
-        const title = tab.viewType === "graph" ? t("app.graphTab") : tab.title;
+        const title = tab.viewType === "graph" ? t("app.graphTab") : tab.viewType === "backlinks" ? t("app.backlinksTab") : tab.title;
         return (
         <div
           key={tab.id}
@@ -1790,6 +1799,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           title={tab.filePath ?? title}
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
+          {tab.viewType === "backlinks" && <Icon name="link" size={14} />}
           {tab.viewType === "attachment" && <Icon name="file-text" size={14} />}
           {tab.pinned && (
             <span className="tab-pin" aria-label={t("app.pinnedTab")} title={t("app.pinnedTab")}>
@@ -1848,7 +1858,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           <button
             role="menuitem"
             data-testid="tabctx-split-right"
-            disabled={menuTab.viewType === "graph"}
+            disabled={menuTab.viewType === "graph" || menuTab.viewType === "backlinks"}
             onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("row"); })}
           >
             {t("app.tabSplitRight")}
@@ -1856,7 +1866,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           <button
             role="menuitem"
             data-testid="tabctx-split-down"
-            disabled={menuTab.viewType === "graph"}
+            disabled={menuTab.viewType === "graph" || menuTab.viewType === "backlinks"}
             onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("column"); })}
           >
             {t("app.tabSplitDown")}

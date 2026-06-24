@@ -69,7 +69,7 @@ interface NavHistory {
 
 /** A user-closed tab, captured for reopen (Mod+Shift+T). Session-only. */
 interface ClosedTab {
-  viewType: "markdown" | "graph" | "attachment";
+  viewType: "markdown" | "graph" | "attachment" | "backlinks";
   filePath: string | null;
   mode: ViewMode;
   /** the pane it was closed from — reopen prefers it if it still exists */
@@ -484,6 +484,31 @@ export class Workspace {
     this.emitActiveFile();
   }
 
+  /** R211: open the backlinks panel as a main-area tab (Obsidian "Open backlinks
+   *  for the current file"). A single global tab, like the graph view — it has no
+   *  file of its own and follows lastActiveFile (BacklinksPanel). */
+  openBacklinks() {
+    this.update((s) => {
+      const holder = flattenLeaves(s.root).find((l) => l.tabs.some((t) => t.viewType === "backlinks"));
+      if (holder) {
+        const blTab = holder.tabs.find((t) => t.viewType === "backlinks")!;
+        const root = mapLeaf(s.root, holder.id, (l) => ({ ...l, activeTabId: blTab.id }));
+        return { ...s, root, activePaneId: holder.id, modal: null };
+      }
+      const tab: TabState = {
+        id: newTabId(),
+        viewType: "backlinks",
+        filePath: null,
+        mode: "preview",
+        title: "Backlinks",
+      };
+      const pane = this.resolveActiveLeaf(s);
+      const root = mapLeaf(s.root, pane.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));
+      return { ...s, root, activePaneId: pane.id, modal: null };
+    });
+    this.emitActiveFile();
+  }
+
   closeTab(id: string) {
     // capture BEFORE the mutation so Mod+Shift+T can reopen it (LIFO). Only an
     // explicit user close feeds this stack — reactive cleanups purge instead.
@@ -657,8 +682,8 @@ export class Workspace {
   splitActivePane(direction: SplitDirection): string | null {
     const source = this.getActivePane();
     const srcTab = source?.tabs.find((t) => t.id === source.activeTabId);
-    // graph view is a global singleton tab — duplicating it would break openGraph
-    if (!source || !srcTab || srcTab.viewType === "graph") return null;
+    // graph/backlinks are global singleton tabs — duplicating one would break its openX
+    if (!source || !srcTab || srcTab.viewType === "graph" || srcTab.viewType === "backlinks") return null;
     // a split copy is a NEW tab instance → it does not inherit the source's pin
     // (R39 review; Obsidian pins are per-tab-instance, mirrors R37 "split doesn't
     // copy nav history").
@@ -815,6 +840,10 @@ export class Workspace {
     if (!entry) return false;
     if (entry.viewType === "graph") {
       this.openGraph();
+      return true;
+    }
+    if (entry.viewType === "backlinks") {
+      this.openBacklinks();
       return true;
     }
     if (entry.filePath === null) return false;
@@ -1339,7 +1368,7 @@ function sanitizeTab(raw: unknown): TabState | null {
   if (typeof raw !== "object" || raw === null) return null;
   const t = raw as Record<string, unknown>;
   if (typeof t.id !== "string" || typeof t.title !== "string") return null;
-  if (t.viewType !== "markdown" && t.viewType !== "graph" && t.viewType !== "attachment") return null;
+  if (t.viewType !== "markdown" && t.viewType !== "graph" && t.viewType !== "attachment" && t.viewType !== "backlinks") return null;
   // migrate pre-R2 "edit" mode to live preview
   const mode: ViewMode =
     t.mode === "preview" ? "preview" : t.mode === "source" ? "source" : "live";
@@ -1348,9 +1377,15 @@ function sanitizeTab(raw: unknown): TabState | null {
   // R102: RE-derive a file-backed tab's viewType from its path (not the persisted value),
   // so a pre-R102 blob that stored a .png as an editable "markdown" tab — or a file whose
   // type changed while the app was closed — can never restore into the editable/autosave
-  // path (binary corruption on edit). graph keeps its persisted type (filePath === null).
+  // path (binary corruption on edit). graph/backlinks keep their persisted type (the
+  // filePath-less singleton views — R211: missing backlinks here re-typed it to a phantom
+  // empty markdown tab on restart).
   const viewType: TabState["viewType"] =
-    t.viewType === "graph" ? "graph" : filePath !== null ? fileViewType(filePath) : "markdown";
+    t.viewType === "graph" || t.viewType === "backlinks"
+      ? t.viewType
+      : filePath !== null
+        ? fileViewType(filePath)
+        : "markdown";
   const tab: TabState = { id: t.id, viewType, filePath, mode, title: t.title };
   if (t.pinned === true) tab.pinned = true; // R39: persist pin state (omit when false)
   return tab;

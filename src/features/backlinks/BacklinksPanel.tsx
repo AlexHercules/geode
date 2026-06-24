@@ -184,9 +184,13 @@ export function BacklinksPanel() {
   const t = useI18n();
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
+  // R211: when the active tab is NOT markdown (the graph or main-area backlinks
+  // tab), fall back to the last active markdown file so the panel keeps showing
+  // its backlinks (Obsidian-faithful; required for the main-area backlinks view).
+  const lastActive = useStore(app.workspace.lastActiveFile);
 
   const activeTab = findActiveTab(ws);
-  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
+  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : lastActive;
 
   // unlinked starts collapsed (Obsidian default); seeding it true means the
   // toggle's `!c[key]` flips it to false on the first click (an unseeded

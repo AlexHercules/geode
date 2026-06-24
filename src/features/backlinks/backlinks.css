@@ -1,5 +1,15 @@
 /* ============ Backlinks panel ============ */
 
+/* R211: the main-area backlinks tab wrapper must fill the pane as a column-flex
+   child so .backlinks-panel{height:100%} resolves to a bounded viewport and
+   .bl-scroll scrolls (graph/editor fill height as direct flex children; without
+   flex:1 the wrapper collapses to content height and a tall list is clipped). */
+.main-backlinks-view {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px;
+}
+
 .backlinks-panel {
   display: flex;
   flex-direction: column;

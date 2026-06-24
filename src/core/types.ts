@@ -160,8 +160,9 @@ export type ViewMode = "live" | "source" | "preview";
 export interface TabState {
   id: string;
   /** "markdown" tabs show an editable file; "graph" shows global graph; R102
-   *  "attachment" shows a non-md file READ-ONLY (image/binary, never autosaved). */
-  viewType: "markdown" | "graph" | "attachment";
+   *  "attachment" shows a non-md file READ-ONLY (image/binary, never autosaved);
+   *  R211 "backlinks" shows the backlinks panel in the main area (singleton, like graph). */
+  viewType: "markdown" | "graph" | "attachment" | "backlinks";
   filePath: string | null;
   mode: ViewMode;
   title: string;

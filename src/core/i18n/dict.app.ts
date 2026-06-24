@@ -6,6 +6,7 @@
 export const en = {
   // ---- app shell (App.tsx / main.tsx) ----
   "app.graphTab": "Graph view",
+  "app.backlinksTab": "Backlinks",
   "app.ribbonAria": "Primary",
   "app.ribbonExplorer": "File explorer",
   "app.ribbonSearch": "Search",
@@ -74,6 +75,7 @@ export const en = {
   "cmd.showFileExplorer": "Files: Show file explorer",
   "cmd.showSearch": "Search: Search in all files",
   "cmd.showBacklinks": "Backlinks: Show backlinks pane",
+  "cmd.openBacklinks": "Backlinks: Open backlinks for the current file",
   "cmd.showOutline": "Outline: Show outline pane",
   "cmd.showTags": "Tags view: Show tags pane",
   "cmd.showAllProperties": "Properties view: Show all properties",
@@ -251,6 +253,7 @@ export const en = {
 export const zh: Record<keyof typeof en, string> = {
   // ---- app shell (App.tsx / main.tsx) ----
   "app.graphTab": "关系图谱",
+  "app.backlinksTab": "反向链接",
   "app.ribbonAria": "主功能区",
   "app.ribbonExplorer": "文件列表",
   "app.ribbonSearch": "搜索",
@@ -319,6 +322,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.showFileExplorer": "文件：显示文件列表",
   "cmd.showSearch": "搜索：在所有文件中搜索",
   "cmd.showBacklinks": "反向链接：显示反链面板",
+  "cmd.openBacklinks": "反向链接：打开当前文件的反向链接",
   "cmd.showOutline": "大纲：显示大纲面板",
   "cmd.showTags": "标签：显示标签面板",
   "cmd.showAllProperties": "属性视图：显示所有属性",
