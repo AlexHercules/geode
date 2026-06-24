@@ -129,6 +129,82 @@ export function findActiveTab(state: WorkspaceState): TabState | null {
   return leaf.tabs.find((t) => t.id === leaf.activeTabId) ?? null;
 }
 
+/* ---------- R187: directional pane focus (Obsidian focus-{left,right,top,bottom}-tab-group) ---------- */
+
+/** A spatial neighbour direction — mirrors `moveTabToEdge`'s edge vocabulary. */
+export type FocusDirection = "left" | "right" | "top" | "bottom";
+
+/** A leaf's normalized geometry within the split tree, each coordinate in [0,1]. */
+export interface LeafRect {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Compute every leaf's normalized rect by recursively subdividing `rect` along each
+ *  split's axis ("row" → side by side on x, "column" → stacked on y) by its `sizes`
+ *  fractions. Pure — exported for the e2e/probe truth-table. */
+export function leafRects(node: PaneNode, rect: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: 1, h: 1 }): LeafRect[] {
+  if (node.kind === "leaf") return [{ id: node.id, ...rect }];
+  const out: LeafRect[] = [];
+  let off = 0;
+  node.children.forEach((c, i) => {
+    const frac = node.sizes[i] ?? 1 / node.children.length;
+    const childRect =
+      node.direction === "row"
+        ? { x: rect.x + off * rect.w, y: rect.y, w: frac * rect.w, h: rect.h }
+        : { x: rect.x, y: rect.y + off * rect.h, w: rect.w, h: frac * rect.h };
+    out.push(...leafRects(c, childRect));
+    off += frac;
+  });
+  return out;
+}
+
+/** The nearest pane in a spatial `direction` from the active pane, or null when none lies
+ *  that way. Candidates must sit on the requested side (by edge) AND overlap the active
+ *  pane on the cross axis (so we pick a true edge-neighbour). Ties resolve by main-axis
+ *  centre distance → cross-axis centre distance → layout order, making the result fully
+ *  deterministic (e.g. a full-height right pane focusing left picks the topmost left
+ *  neighbour). Pure — exported for the e2e/probe truth-table. */
+export function directionalPaneTarget(root: PaneNode, activePaneId: string, direction: FocusDirection): string | null {
+  const EPS = 1e-6;
+  const rects = leafRects(root);
+  const active = rects.find((r) => r.id === activePaneId);
+  if (!active) return null;
+  const aCx = active.x + active.w / 2;
+  const aCy = active.y + active.h / 2;
+  const horizontal = direction === "left" || direction === "right";
+  let best: { id: string; primary: number; cross: number; order: number } | null = null;
+  rects.forEach((r, order) => {
+    if (r.id === activePaneId) return;
+    // on the requested side (compare the relevant edges)
+    if (direction === "left" && r.x + r.w > active.x + EPS) return;
+    if (direction === "right" && r.x < active.x + active.w - EPS) return;
+    if (direction === "top" && r.y + r.h > active.y + EPS) return;
+    if (direction === "bottom" && r.y < active.y + active.h - EPS) return;
+    // require cross-axis overlap so the neighbour shares an edge band
+    const overlap = horizontal
+      ? Math.min(active.y + active.h, r.y + r.h) - Math.max(active.y, r.y)
+      : Math.min(active.x + active.w, r.x + r.w) - Math.max(active.x, r.x);
+    if (overlap <= EPS) return;
+    const rCx = r.x + r.w / 2;
+    const rCy = r.y + r.h / 2;
+    const primary = horizontal ? Math.abs(rCx - aCx) : Math.abs(rCy - aCy);
+    const cross = horizontal ? Math.abs(rCy - aCy) : Math.abs(rCx - aCx);
+    if (
+      !best ||
+      primary < best.primary - EPS ||
+      (Math.abs(primary - best.primary) <= EPS && cross < best.cross - EPS) ||
+      (Math.abs(primary - best.primary) <= EPS && Math.abs(cross - best.cross) <= EPS && order < best.order)
+    ) {
+      best = { id: r.id, primary, cross, order };
+    }
+  });
+  return best ? (best as { id: string }).id : null;
+}
+
 /** Replace one leaf in the tree (identity-preserving elsewhere). */
 function mapLeaf(node: PaneNode, paneId: string, fn: (leaf: PaneLeaf) => PaneNode): PaneNode {
   if (node.kind === "leaf") return node.id === paneId ? fn(node) : node;
@@ -692,6 +768,14 @@ export class Workspace {
     const idx = leaves.findIndex((l) => l.id === s.activePaneId);
     const next = leaves[(idx + delta + leaves.length) % leaves.length];
     this.setActivePane(next.id);
+  }
+
+  /** R187: focus the nearest pane in a spatial direction (Obsidian
+   *  focus-{left,right,top,bottom}-tab-group). No-op when no pane lies that way. */
+  focusDirectionalPane(direction: FocusDirection) {
+    const s = this.state.get();
+    const target = directionalPaneTarget(s.root, s.activePaneId, direction);
+    if (target) this.setActivePane(target);
   }
 
   /* ---------- tab navigation (R36) ---------- */

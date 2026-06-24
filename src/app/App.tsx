@@ -458,6 +458,26 @@ export function App() {
         callback: () => workspace.focusAdjacentPane(-1),
       }),
       commands.register({
+        id: "app:focus-left-pane",
+        name: () => t("cmd.focusLeftPane"),
+        callback: () => workspace.focusDirectionalPane("left"),
+      }),
+      commands.register({
+        id: "app:focus-right-pane",
+        name: () => t("cmd.focusRightPane"),
+        callback: () => workspace.focusDirectionalPane("right"),
+      }),
+      commands.register({
+        id: "app:focus-top-pane",
+        name: () => t("cmd.focusTopPane"),
+        callback: () => workspace.focusDirectionalPane("top"),
+      }),
+      commands.register({
+        id: "app:focus-bottom-pane",
+        name: () => t("cmd.focusBottomPane"),
+        callback: () => workspace.focusDirectionalPane("bottom"),
+      }),
+      commands.register({
         id: "editor:toggle-fold",
         name: () => t("cmd.toggleFold"),
         callback: () => {
