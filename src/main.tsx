@@ -75,6 +75,7 @@ import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
 import { applyFormatOp, insertFootnote, type FootnoteAction, type FormatEdit, type FormatOp } from "@core/format";
+import { applyTableOp, type TableOp } from "@core/tableEditor";
 import { linkAtCursor, type LinkAtCursor } from "@core/linkAtCursor";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
@@ -1061,6 +1062,18 @@ async function bootstrap() {
     __geodeRenameHeading?: (text: string, pos: number, newText: string) => HeadingChange[] | null;
   };
   renameHeadingHost.__geodeRenameHeading = renameHeadingAt;
+
+  // R206: table-edit probe — exposes the pure structural-edit computation (parse → op →
+  // serialize) so E2E asserts the table byte rewrite + caret offset deterministically (the
+  // live editor:table-* commands are also E2E'd via __geodeTable.ranges + a real CM view).
+  const tableEditHost = globalThis as typeof globalThis & {
+    __geodeTableEdit?: (
+      op: TableOp,
+      tableText: string,
+      offset: number,
+    ) => { text: string; cursorOffsetInTable: number } | null;
+  };
+  tableEditHost.__geodeTableEdit = applyTableOp;
 
   // always-on line-motion probe (R51): runs the CM move/copy-line StateCommands on
   // a throwaway EditorState so the transform is asserted deterministically (the live

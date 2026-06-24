@@ -40,6 +40,7 @@ import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
 import { foldAllInView, foldAtCursor, toggleFoldAtCursor, unfoldAllInView, unfoldAtCursor } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
 import { registerLinkCommands } from "@features/editor/linkCommands";
+import { registerTableCommands } from "@features/editor/tableCommands";
 import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
@@ -776,6 +777,8 @@ export function App() {
       ...registerEditorEditCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
       // R201: follow-link (⌥Enter) / open-link-in-new-leaf (⌘Enter) — need the path too
       ...registerLinkCommands(app, () => getActiveFileEditorView(app)),
+      // R206: GFM table structural edits (insert/delete row & column)
+      ...registerTableCommands(app, () => getActiveFileEditorView(app)?.view ?? null),
     );
     // R34 in-editor find/replace commands (Mod+F search; replace = no default key,
     // macOS reserves Cmd+H). Same active-file gating as format commands.
