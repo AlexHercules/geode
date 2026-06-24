@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 186 additions — G3 missing→done「设为小标题 1-6 + 移除小标题」（7 编辑器命令 · 扩展 R33 format 引擎 setHeadingLevel · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.182】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `missing` 纯编辑「最高价值缺口」（设为小标题 1-6 / 移除小标题；纯编辑 bounded 无大件依赖）。**契约（扩展既有 format 引擎，无跨模块签名破坏）**：
+> - **`core/format.ts`** 新增纯 `setHeadingLevel(text, from, to, level)`（固定级 1-6、level 0=移除，vs 既有 cycling `toggleHeading`）：复用 `lineBounds` + `^#{1,6} ?` 去标记 + `lineEdit`；**仅改前导 `#` 前缀、行 body 逐字保留**；全空行/已是该级（`result===current`）→ null（不派发内容相同事务、不产生多余 undo）。FormatOp += `heading-1..6`|`remove-heading`；applyFormatOp 加 cases（`Number(op.slice(8))` 取级、remove 单独 case→0；`never` 穷尽门强制全覆盖）。
+> - **`features/editor/formatCommands.ts`** +7 specs（`editor:set-heading-1..6` + `editor:remove-heading`，op=新 FormatOp、无默认键），经既有 registerFormatCommands 注册（available=active-file view、callback applyFormat→既有 R33 派发路径=CM 事务→documents dirty→autosave，**无新写路径**）。
+> - i18n dict.app +7 `cmd.setHeading*`/`removeHeading` 键 en+zh。
+> - **分档：逻辑档（data-safety）**——core/format.ts=编辑器写路径，跑 data-safety skill：内容保留（仅前缀）/ idempotent no-op 守卫 / 复用 applyFormat vetted 派发无新写路径 / 命令 R23 双门控只写 active-file view / 字节回归 r186-e2e 27/27 + r33 37/37 不退。简化门 **clean**（fresh code-simplifier：toggleHeading→setHeadingLevel 委托=out-of-round[改 R33 既有码]+相似非相同 SIMPLIFY-NO⑥ 驳回；余皆最小）。**对抗评审 8 维 → 0 confirmed R186 defect**（内容保留[bold/wikilink/code/math/CJK/emoji 逐字] / dispatch[op.slice(8) 取级·remove 单独 case·穷尽] / R23 门控·multi-line lineBounds 正确 / no-op 守卫合 applyFormat null 契约 / selection 后落点合理 / id 唯一·i18n en+zh·无 hotkey 冲突）。
+> - **⚠️ 继承自 R33 的限制（非 R186 新引入、记录在案）**：`setHeadingLevel` 与 `toggleHeading` 共用 `^#{1,6} ?` 去标记，对「行首 `#tag`（无空格的标签）/ frontmatter 行 / 代码围栏内」会误加/误剥 `#`（无块上下文守卫）——cycle 命令早有此行为；若未来修须在共享去标记处一并修两命令（防 cycle 与 set 行为分叉）。
+> - **v1 defer**：清除格式（emphasis 剥离、对 wikilink/code-span 字节风险高，留单独轮 + 字节回归）；多光标上/下；matrix partial 余项（panel「新标签页」变体/方向性聚焦/fold-unfold 分拆）。
+
 ## Round 185 additions — G3 partial 校准「视图/外观切换命令 + 搜索默认键」（4 toggle 命令 + show-search hotkey · 机械档 · 复用既有 appearance setters · 零新依赖）【As-built v0.181】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `partial` 校准档（命令在但缺默认键/变体）的**纯前端子片**。**契约（纯命令注册 + i18n，无跨模块签名变更）**：`app/App.tsx` 注册 4 个视图/外观切换命令（矩阵指定 id），回调 `setX(!X.get())` 翻转**既有 appearance 设置**（纯显示、无 vault/doc 写）：

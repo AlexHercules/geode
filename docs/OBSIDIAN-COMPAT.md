@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R186 套件回归（2026-06-24，G3 missing→done「设为小标题 1-6 + 移除小标题」· 表面复刻 G 系列 · data-safety 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R186 = 按 R182 矩阵收割 `missing` 纯编辑最高价值缺口（设为小标题 1-6 / 移除小标题）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 186 additions」**：`core/format.ts` 扩 `setHeadingLevel`（固定级、复用 R33 去标记+lineEdit、仅改前缀 body 保留、no-op 守卫）+ FormatOp `heading-1..6`/`remove-heading`；formatCommands +7 specs 经既有 applyFormat 派发（无新写路径）；i18n +7 键 en+zh。
+
+新增套件：`r186-e2e.mjs` **27/27**（A 字节级纯 `__geodeFormat.apply` 探针：set-1/3/6/重定级/移除/无标题移除 null/已是级 idempotent null/全空 null/**内容保留 `**b** x`→`## **b** x`**/多行/FormatEdit 整行 span + B 7 命令注册+名称解析非裸键 + 无 page error）。**套件矩阵不回退**：**r33 37/37（format 引擎字节锁不退）**·r32 24/24·r161 15/15·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯函数 transform 字节探针验证 + 派发复用 R33 applyFormat→CM→autosave[r33-probe 覆盖]、无新 fs/Rust/平台分支）。**data-safety skill 已跑**（内容保留仅前缀/idempotent no-op 守卫/复用 vetted 派发无新写路径/R23 双门控只写 active-file/字节回归全绿）。**对抗评审 8 维 → 0 confirmed R186 defect**。简化门 **clean**（toggleHeading 委托 out-of-round 驳回）。**继承 R33 限制（非新引入）**：`#tag`/frontmatter/代码围栏行误加 # 无块守卫（cycle 命令早有）。**v1 defer**：清除格式（字节风险高）、多光标。
+
 ### R185 套件回归（2026-06-24，G3 partial 校准「视图/外观切换命令 + 搜索默认键」· 表面复刻 G 系列 · 机械档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R185 = 按 R182 矩阵收割 `partial` 校准档纯前端子片。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 185 additions」**：`app/App.tsx` 注册 4 视图/外观切换命令（editor:toggle-line-numbers/readable-line-length/spellcheck + app:toggle-ribbon，回调 `setX(!X.get())` 翻转既有 appearance 设置）+ `app:show-search` 加默认键 Mod+Shift+F；i18n +4 键 en+zh。
