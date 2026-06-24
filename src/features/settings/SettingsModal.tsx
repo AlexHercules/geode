@@ -108,7 +108,7 @@ import {
 import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
-const APP_VERSION = "0.181.0";
+const APP_VERSION = "0.182.0";
 
 type SectionId =
   | "about"

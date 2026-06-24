@@ -44,7 +44,16 @@ export type FormatOp =
   | "checklist"
   | "code-block"
   | "callout"
-  | "toggle-task";
+  | "toggle-task"
+  // R186: set a fixed heading level (1-6) or remove the heading (Obsidian
+  // "Set heading 1".."6" / "Remove heading"), vs the cycling "heading" above.
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "heading-4"
+  | "heading-5"
+  | "heading-6"
+  | "remove-heading";
 
 /** Inline wrap markers (Obsidian-faithful: asterisks for emphasis, never `_`). */
 const WRAP_MARKERS: Record<string, string> = {
@@ -289,6 +298,32 @@ export function toggleHeading(text: string, from: number, to: number): FormatEdi
 }
 
 /**
+ * R186: set the selected lines' heading to a FIXED level (1-6), or remove the
+ * heading (level 0). Shares toggleHeading's marker-stripping (`^#{1,6} ?`) but
+ * applies a fixed level instead of cycling — Obsidian "Set heading 1".."6" /
+ * "Remove heading". Returns null on no-op (already at that level) or all-blank
+ * selection so the caller never dispatches a content-identical transaction.
+ */
+export function setHeadingLevel(
+  text: string,
+  from: number,
+  to: number,
+  level: number,
+): FormatEdit | null {
+  const { start, end } = lineBounds(text, from, to);
+  const current = text.slice(start, end);
+  const lines = current.split("\n");
+  if (!lines.some((l) => l.trim() !== "")) return null;
+  const prefix = level === 0 ? "" : "#".repeat(level) + " ";
+  const out = lines.map((line) =>
+    line.trim() === "" ? line : prefix + line.replace(/^#{1,6} ?/, ""),
+  );
+  const result = out.join("\n");
+  if (result === current) return null;
+  return lineEdit(start, end, result);
+}
+
+/**
  * Toggle a fenced code block around the selected lines. If the block is already
  * fenced (first + last lines are ``` fences) → unwrap; otherwise wrap with
  * ```\n…\n``` and select the inner content.
@@ -363,6 +398,15 @@ export function applyFormatOp(
       return toggleCallout(text, from, to);
     case "toggle-task":
       return toggleTaskStatus(text, from, to);
+    case "heading-1":
+    case "heading-2":
+    case "heading-3":
+    case "heading-4":
+    case "heading-5":
+    case "heading-6":
+      return setHeadingLevel(text, from, to, Number(op.slice(8)));
+    case "remove-heading":
+      return setHeadingLevel(text, from, to, 0);
     default: {
       // exhaustiveness: a new FormatOp without a case fails to compile here
       const _exhaustive: never = op;
