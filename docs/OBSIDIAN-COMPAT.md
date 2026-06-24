@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R187 套件回归（2026-06-24，G3 partial→done「方向性聚焦标签页组」· 表面复刻 G 系列 · 非数据安全逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R187 = 按 R182 矩阵收割 §4 `partial`「聚焦上方/下方/左侧/右侧标签页组」（Obsidian `workspace:focus-{top,bottom,left,right}-tab-group`）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 187 additions」**：`core/workspace.ts` 新增纯 `FocusDirection`/`LeafRect` + 纯 `leafRects`（split 树→归一化矩形）+ 纯 `directionalPaneTarget`（方向边界判据 + 跨轴重叠选最近邻 + (主距,跨距,布局序) 稳定排序）+ 方法 `focusDirectionalPane`（复用既有 setActivePane、无该向邻居 no-op）；App.tsx +4 命令（无默认键）；i18n +4 键 en+zh。
+
+新增套件：`r187-e2e.mjs` **29/29**（4 命令注册+名称解析非裸键 + 4 命令无默认热键[Obsidian parity] + 单窗格 no-op + 构 `row[col[A,C],B]` 布局 + 几何独立重算交叉验证[A 左上/C 左下/B 右满高] + 11 条方向焦点[A→右=B·下=C·左·上 no-op / C→上=A·右=B·下·左 no-op / B→左=A 布局序 tiebreak·上·右 no-op] + 无 page error）。**套件矩阵不回退**：r185 19/19·r36 47/47·r37 36/36·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 in-memory 窗格状态算法、adapter 无关[MemoryVaultAdapter≡TauriVaultAdapter 窗格树同构]、零 fs/Rust/平台分支、非数据安全，同 R183–R186 纯命令轮先例）。**分档逻辑档（非数据安全：workspace.ts 仅读 root/写 activePaneId，未碰 markdown/vault/documents/editor 管线/文件 IO）→ data-safety skill 不触发；新增几何算法 → 满跑对抗评审 8 维 → 0 confirmed defect**（reviewer 构 `row[col[A,C],col[D,B]]` 角接触反例证 `overlap<=EPS` 剔除对角 pane / tiebreak 布局序确定性 / no-op 短路零副作用 / 复用 setActivePane 无回归 / 命令+i18n 对齐 / Obsidian 词汇映射无错位 / 分层 clean）。简化门 **clean**（冻结公共纯函数不得内联 / 4 register 块 <8 行结构各异抽 helper=加间接驳回）。**v1 defer**：panel 新标签页变体 / theme:switch[语义待定] / fold-unfold 分拆 / insert-wikilink 分拆 / missing 纯编辑（清除格式·多光标）。
+
 ### R186 套件回归（2026-06-24，G3 missing→done「设为小标题 1-6 + 移除小标题」· 表面复刻 G 系列 · data-safety 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R186 = 按 R182 矩阵收割 `missing` 纯编辑最高价值缺口（设为小标题 1-6 / 移除小标题）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 186 additions」**：`core/format.ts` 扩 `setHeadingLevel`（固定级、复用 R33 去标记+lineEdit、仅改前缀 body 保留、no-op 守卫）+ FormatOp `heading-1..6`/`remove-heading`；formatCommands +7 specs 经既有 applyFormat 派发（无新写路径）；i18n +7 键 en+zh。

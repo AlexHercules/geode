@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 187 additions — G3 partial→done「方向性聚焦标签页组」（4 命令 focus-left/right/top/bottom-pane · 纯 core 几何算法 · 非数据安全逻辑档 · 零新依赖）【As-built v0.183】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `partial` 校准档：§4「聚焦上方/下方/左侧/右侧标签页组」（Obsidian `workspace:focus-{top,bottom,left,right}-tab-group`），矩阵此前标 partial（Geode 仅 `app:focus-next-pane`=布局序循环、无方向性）。**契约（纯 core 几何 + 命令注册 + i18n，无跨模块签名破坏）**：
+> - **`core/workspace.ts`** 新增纯导出 `FocusDirection = "left"|"right"|"top"|"bottom"`（复用 `moveTabToEdge` 的 edge 词汇，非另造 up/down）+ 两个纯函数：
+>   - `leafRects(node, rect={x:0,y:0,w:1,h:1})`：从 split 树 + `sizes` 递归算每个 leaf 的归一化矩形（`direction==="row"`→沿 x 分、`"column"`→沿 y 分）。纯、导出供 e2e/probe 真值表。
+>   - `directionalPaneTarget(root, activePaneId, direction)`：算 active 矩形，按方向收集「该侧 leaf」（边界判据 + 跨轴重叠 `>EPS` 才算共享边带）→ 按 `(主轴中心距 asc, 跨轴中心距 asc, 布局序 asc)` 稳定排序取首 → 返回 paneId 或 `null`（无该向邻居）。布局序 final tiebreak 保证全等距时确定性（如右满高 pane 向左在上下两 leaf 间取布局序靠前者）。
+> - **`core/workspace.ts`** 新增方法 `focusDirectionalPane(direction)`：读 state→`directionalPaneTarget`→有则 `setActivePane`（复用既有焦点路径），无则 no-op。
+> - **`app/App.tsx`** 注册 4 命令 `app:focus-left-pane`/`-right-pane`/`-top-pane`/`-bottom-pane`（紧邻既有 `app:focus-next/previous-pane`；与 Obsidian 一致**无默认键**，避免键冲突），callback=`workspace.focusDirectionalPane(dir)`。i18n dict.app +4 `cmd.focus{Left,Right,Top,Bottom}Pane` 键 en+zh。
+> - **分档：逻辑档（非数据安全）**——`workspace.ts` 是窗格/标签状态、**不在数据安全红线**（markdown.ts/vault*/documents*/editor 管线/文件 IO 均未碰；本轮只读 root + 写 `activePaneId`，零 vault/doc 写）。故 data-safety skill 不触发；新增几何算法→逻辑档满跑对抗评审。
+> - **v1 defer**：matrix partial 余项（panel「新标签页」变体 / theme:switch[语义待定] / fold-unfold 分拆 / insert-wikilink 分拆）；`missing` 纯编辑余（清除格式[字节风险高单独轮] / 多光标）。
+
 ## Round 186 additions — G3 missing→done「设为小标题 1-6 + 移除小标题」（7 编辑器命令 · 扩展 R33 format 引擎 setHeadingLevel · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.182】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `missing` 纯编辑「最高价值缺口」（设为小标题 1-6 / 移除小标题；纯编辑 bounded 无大件依赖）。**契约（扩展既有 format 引擎，无跨模块签名破坏）**：
