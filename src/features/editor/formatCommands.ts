@@ -19,7 +19,7 @@ import type { SyntaxNode } from "@lezer/common";
 import type { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
-import { applyFormatOp, type FormatOp } from "@core/format";
+import { applyFormatOp, insertFootnote, type FormatOp } from "@core/format";
 import { t, type I18nKey } from "@core/i18n";
 import { findMathBlockRanges } from "./liveMath";
 
@@ -282,6 +282,33 @@ export function registerFormatCommands(
         const view = getView();
         if (!view) return;
         clearFormatting(view);
+        view.focus();
+      },
+    }),
+  );
+  // R199: insert-footnote is a two-site edit (ref `[^N]` at caret + def `[^N]: ` on
+  // the last line) with bidirectional jump, so it is registered directly (not a
+  // single-contiguous FormatOp). No default key (Obsidian leaves it unset).
+  disposers.push(
+    app.commands.register({
+      id: "editor:insert-footnote",
+      name: () => t("cmd.insertFootnote"),
+      available: () => getView() !== null,
+      callback: () => {
+        const view = getView();
+        if (!view) return;
+        const { from, to } = view.state.selection.main;
+        const action = insertFootnote(view.state.doc.toString(), from, to);
+        if (action.kind === "jump") {
+          view.dispatch({ selection: { anchor: action.selTarget }, scrollIntoView: true });
+        } else {
+          view.dispatch({
+            changes: action.changes,
+            selection: { anchor: action.selTarget },
+            scrollIntoView: true,
+            userEvent: "input.insert.footnote",
+          });
+        }
         view.focus();
       },
     }),

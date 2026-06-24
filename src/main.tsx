@@ -72,7 +72,7 @@ import { ensureSyntaxTree } from "@codemirror/language";
 import { renderMarkdownToHtml } from "@core/markdown";
 import { markdownWrapInput, type WrapEdit } from "@core/bracketWrap";
 import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/switcherSearch";
-import { applyFormatOp, type FormatEdit, type FormatOp } from "@core/format";
+import { applyFormatOp, insertFootnote, type FootnoteAction, type FormatEdit, type FormatOp } from "@core/format";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
@@ -1028,6 +1028,14 @@ async function bootstrap() {
   formatHost.__geodeFormat = {
     apply: (op, text, from, to) => applyFormatOp(op, text, from, to),
   };
+
+  // R199: footnote probe — exposes the pure insertFootnote action so E2E can
+  // assert the two-site insert (ref + def) bytes and the def→ref jump
+  // deterministically (the live editor:insert-footnote command is also E2E'd).
+  const footnoteHost = globalThis as typeof globalThis & {
+    __geodeFootnote?: (text: string, from: number, to: number) => FootnoteAction;
+  };
+  footnoteHost.__geodeFootnote = (text, from, to) => insertFootnote(text, from, to);
 
   // always-on line-motion probe (R51): runs the CM move/copy-line StateCommands on
   // a throwaway EditorState so the transform is asserted deterministically (the live

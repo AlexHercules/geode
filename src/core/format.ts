@@ -433,6 +433,62 @@ export function insertHorizontalRule(text: string, _from: number, to: number): F
   return { from: to, to, insert, selFrom: end, selTo: end };
 }
 
+/** R199: footnote definition-line shape — id charset mirrors `FOOTNOTE_DEF_RE`
+ *  in markdown.ts:725 (`[^\s[\]]+`, no whitespace/brackets). The `[ ]{0,3}`
+ *  lead mirrors the reading-view def block rule, which strips up to 3 spaces of
+ *  indent (`tShift`, markdown.ts:739) before matching (4+ = indented code) — so
+ *  Mode B detection agrees with what the renderer accepts as a definition. */
+const FOOTNOTE_DEF_LINE_RE = /^ {0,3}\[\^([^\s[\]]+)\]:/;
+
+/** The result of {@link insertFootnote}: either a two-site insert (ref + def) or
+ *  a pure caret jump (no doc change). Offsets absolute; `selTarget` is the
+ *  post-edit caret. */
+export type FootnoteAction =
+  | { kind: "insert"; changes: Array<{ from: number; insert: string }>; selTarget: number }
+  | { kind: "jump"; selTarget: number };
+
+/**
+ * R199: Obsidian "Insert footnote" (`editor:insert-footnote`, bidirectional).
+ *  - Mode B (jump): when the caret sits on a `[^id]:` DEFINITION line, jump the
+ *    caret to just after the first `[^id]` REFERENCE in the body (no doc change).
+ *  - Mode A (insert): otherwise insert a `[^N]` ref at the caret (N = highest
+ *    existing numeric label + 1) and append a `[^N]: ` definition on the last
+ *    line, leaving the caret at the end of the def marker (ready to type).
+ * Mode A never deletes — both edits are insertions, so a selection is preserved
+ * (the ref is added at its end `to`). max+1 numbering is collision-safe.
+ */
+export function insertFootnote(text: string, _from: number, to: number): FootnoteAction {
+  // Mode B: caret on a definition line → jump to the first body reference
+  const { start, end } = lineBounds(text, to, to);
+  const defOnLine = FOOTNOTE_DEF_LINE_RE.exec(text.slice(start, end));
+  if (defOnLine) {
+    const ref = `[^${defOnLine[1]}]`; // literal indexOf; closing `]` blocks `[^1]`⊂`[^10]`
+    for (let i = text.indexOf(ref); i !== -1; i = text.indexOf(ref, i + ref.length)) {
+      if (text[i + ref.length] !== ":") return { kind: "jump", selTarget: i + ref.length };
+    }
+    return { kind: "jump", selTarget: to };
+  }
+  // Mode A: insert a new numbered footnote (ref at caret + def on the last line)
+  let max = 0;
+  const numRe = /\[\^(\d+)\]/g;
+  for (let m = numRe.exec(text); m; m = numRe.exec(text)) {
+    const n = Number(m[1]);
+    if (n > max) max = n;
+  }
+  const refInsert = `[^${max + 1}]`;
+  const L = text.length;
+  const leadNL = L > 0 && text[L - 1] === "\n" ? "" : "\n";
+  const defInsert = `${leadNL}[^${max + 1}]: `;
+  return {
+    kind: "insert",
+    changes: [
+      { from: to, insert: refInsert },
+      { from: L, insert: defInsert },
+    ],
+    selTarget: L + refInsert.length + defInsert.length,
+  };
+}
+
 /**
  * Dispatch a {@link FormatOp} to its transform. The single entry point used by
  * both the editor command layer (features/editor/formatCommands.ts) and the
