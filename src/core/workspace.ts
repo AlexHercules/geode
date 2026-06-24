@@ -69,7 +69,7 @@ interface NavHistory {
 
 /** A user-closed tab, captured for reopen (Mod+Shift+T). Session-only. */
 interface ClosedTab {
-  viewType: "markdown" | "graph" | "attachment" | "backlinks";
+  viewType: TabState["viewType"];
   filePath: string | null;
   mode: ViewMode;
   /** the pane it was closed from — reopen prefers it if it still exists */
@@ -97,6 +97,19 @@ function isBenchSession(): boolean {
 export const MIN_PANE_FRACTION = 0.12;
 
 /* ================= pane tree helpers (pure, exported for UI/features) ================= */
+
+/**
+ * R211/R212: a "fileless singleton view" — a main-area tab with no backing file
+ * (filePath null), of which there is at most one (graph / backlinks / outgoing
+ * links / outline). The single source of truth for the touch-points that treat
+ * these views uniformly: the sanitizeTab reject-gate AND viewType re-derivation
+ * (so a persisted such tab restores AS its type, not a phantom markdown editor —
+ * R211 root cause was missing the re-derivation), the duplicate guard, and split.
+ * Adding a new such view = add it here (+ openX / render / title / icon / command).
+ */
+export function isFilelessSingletonView(vt: unknown): vt is "graph" | "backlinks" | "outgoinglinks" | "outline" {
+  return vt === "graph" || vt === "backlinks" || vt === "outgoinglinks" || vt === "outline";
+}
 
 export function makeLeaf(tabs: TabState[] = [], activeTabId: string | null = null): PaneLeaf {
   return { kind: "leaf", id: newPaneId(), tabs, activeTabId };
@@ -461,22 +474,19 @@ export class Workspace {
     this.setLeftPanel("search");
   }
 
-  openGraph() {
+  /** R211/R212: open a fileless singleton main-area view (graph / backlinks /
+   *  outgoing links / outline) — focus the existing one wherever it lives, else
+   *  create it in the active pane. The aux panels have no file of their own and
+   *  follow lastActiveFile. The persisted title is overridden by i18n at render. */
+  private openSingletonView(viewType: TabState["viewType"], title: string) {
     this.update((s) => {
-      // a single global graph tab — focus it wherever it lives
-      const holder = flattenLeaves(s.root).find((l) => l.tabs.some((t) => t.viewType === "graph"));
+      const holder = flattenLeaves(s.root).find((l) => l.tabs.some((t) => t.viewType === viewType));
       if (holder) {
-        const graphTab = holder.tabs.find((t) => t.viewType === "graph")!;
-        const root = mapLeaf(s.root, holder.id, (l) => ({ ...l, activeTabId: graphTab.id }));
+        const existing = holder.tabs.find((t) => t.viewType === viewType)!;
+        const root = mapLeaf(s.root, holder.id, (l) => ({ ...l, activeTabId: existing.id }));
         return { ...s, root, activePaneId: holder.id, modal: null };
       }
-      const tab: TabState = {
-        id: newTabId(),
-        viewType: "graph",
-        filePath: null,
-        mode: "preview",
-        title: "Graph view",
-      };
+      const tab: TabState = { id: newTabId(), viewType, filePath: null, mode: "preview", title };
       const pane = this.resolveActiveLeaf(s);
       const root = mapLeaf(s.root, pane.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));
       return { ...s, root, activePaneId: pane.id, modal: null };
@@ -484,29 +494,20 @@ export class Workspace {
     this.emitActiveFile();
   }
 
-  /** R211: open the backlinks panel as a main-area tab (Obsidian "Open backlinks
-   *  for the current file"). A single global tab, like the graph view — it has no
-   *  file of its own and follows lastActiveFile (BacklinksPanel). */
+  openGraph() {
+    this.openSingletonView("graph", "Graph view");
+  }
+  /** R211: backlinks panel as a main-area tab (Obsidian "Open backlinks for the current file"). */
   openBacklinks() {
-    this.update((s) => {
-      const holder = flattenLeaves(s.root).find((l) => l.tabs.some((t) => t.viewType === "backlinks"));
-      if (holder) {
-        const blTab = holder.tabs.find((t) => t.viewType === "backlinks")!;
-        const root = mapLeaf(s.root, holder.id, (l) => ({ ...l, activeTabId: blTab.id }));
-        return { ...s, root, activePaneId: holder.id, modal: null };
-      }
-      const tab: TabState = {
-        id: newTabId(),
-        viewType: "backlinks",
-        filePath: null,
-        mode: "preview",
-        title: "Backlinks",
-      };
-      const pane = this.resolveActiveLeaf(s);
-      const root = mapLeaf(s.root, pane.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));
-      return { ...s, root, activePaneId: pane.id, modal: null };
-    });
-    this.emitActiveFile();
+    this.openSingletonView("backlinks", "Backlinks");
+  }
+  /** R212: outgoing-links panel as a main-area tab. */
+  openOutgoingLinks() {
+    this.openSingletonView("outgoinglinks", "Outgoing links");
+  }
+  /** R212: outline panel as a main-area tab. */
+  openOutline() {
+    this.openSingletonView("outline", "Outline");
   }
 
   closeTab(id: string) {
@@ -682,8 +683,8 @@ export class Workspace {
   splitActivePane(direction: SplitDirection): string | null {
     const source = this.getActivePane();
     const srcTab = source?.tabs.find((t) => t.id === source.activeTabId);
-    // graph/backlinks are global singleton tabs — duplicating one would break its openX
-    if (!source || !srcTab || srcTab.viewType === "graph" || srcTab.viewType === "backlinks") return null;
+    // fileless singleton tabs (graph/backlinks/outgoing/outline) — duplicating one breaks its openX
+    if (!source || !srcTab || isFilelessSingletonView(srcTab.viewType)) return null;
     // a split copy is a NEW tab instance → it does not inherit the source's pin
     // (R39 review; Obsidian pins are per-tab-instance, mirrors R37 "split doesn't
     // copy nav history").
@@ -838,12 +839,12 @@ export class Workspace {
   reopenClosedTab(): boolean {
     const entry = this.recentlyClosed.pop();
     if (!entry) return false;
-    if (entry.viewType === "graph") {
-      this.openGraph();
-      return true;
-    }
-    if (entry.viewType === "backlinks") {
-      this.openBacklinks();
+    // R212: route every fileless singleton through the one helper (same source of truth as
+    // the sanitizeTab gate/re-derivation, duplicate guard and split) so a future singleton
+    // can never silently no-op its reopen here. Title is cosmetic — the TabBar derives these
+    // views' labels from viewType via i18n (App.tsx), never from tab.title.
+    if (isFilelessSingletonView(entry.viewType)) {
+      this.openSingletonView(entry.viewType, entry.viewType);
       return true;
     }
     if (entry.filePath === null) return false;
@@ -1368,7 +1369,7 @@ function sanitizeTab(raw: unknown): TabState | null {
   if (typeof raw !== "object" || raw === null) return null;
   const t = raw as Record<string, unknown>;
   if (typeof t.id !== "string" || typeof t.title !== "string") return null;
-  if (t.viewType !== "markdown" && t.viewType !== "graph" && t.viewType !== "attachment" && t.viewType !== "backlinks") return null;
+  if (t.viewType !== "markdown" && t.viewType !== "attachment" && !isFilelessSingletonView(t.viewType)) return null;
   // migrate pre-R2 "edit" mode to live preview
   const mode: ViewMode =
     t.mode === "preview" ? "preview" : t.mode === "source" ? "source" : "live";
@@ -1377,15 +1378,15 @@ function sanitizeTab(raw: unknown): TabState | null {
   // R102: RE-derive a file-backed tab's viewType from its path (not the persisted value),
   // so a pre-R102 blob that stored a .png as an editable "markdown" tab — or a file whose
   // type changed while the app was closed — can never restore into the editable/autosave
-  // path (binary corruption on edit). graph/backlinks keep their persisted type (the
-  // filePath-less singleton views — R211: missing backlinks here re-typed it to a phantom
-  // empty markdown tab on restart).
-  const viewType: TabState["viewType"] =
-    t.viewType === "graph" || t.viewType === "backlinks"
-      ? t.viewType
-      : filePath !== null
-        ? fileViewType(filePath)
-        : "markdown";
+  // path (binary corruption on edit). The fileless singleton views keep their persisted
+  // type (R211: omitting a singleton type here re-typed its tab to a phantom empty markdown
+  // tab on restart — R212 routes both this site and the reject-gate above through
+  // isFilelessSingletonView so adding a view can never miss only one of the two).
+  const viewType: TabState["viewType"] = isFilelessSingletonView(t.viewType)
+    ? t.viewType
+    : filePath !== null
+      ? fileViewType(filePath)
+      : "markdown";
   const tab: TabState = { id: t.id, viewType, filePath, mode, title: t.title };
   if (t.pinned === true) tab.pinned = true; // R39: persist pin state (omit when false)
   return tab;

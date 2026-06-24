@@ -447,6 +447,16 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* R212: main-area aux-panel wrappers (outgoing links / outline) must fill the pane
+   as a column-flex child so the panel's height:100% resolves to a bounded scrollable
+   viewport (same fix as R211 .main-backlinks-view in backlinks.css). */
+.main-outgoinglinks-view,
+.main-outline-view {
+  flex: 1;
+  min-height: 0;
+  padding: 0 8px;
+}
+
 /* five-zone drop overlay shown while a tab drag is in flight */
 .pane-drop-overlay {
   position: absolute;

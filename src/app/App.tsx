@@ -10,7 +10,7 @@ import {
   defaultNewTabMode, setDefaultNewTabMode,
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
-import { MIN_PANE_FRACTION, allTabs, findTabLeaf } from "@core/workspace";
+import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
 import { Icon } from "./icons";
@@ -376,6 +376,17 @@ export function App() {
         id: "backlink:open-backlinks",
         name: () => t("cmd.openBacklinks"),
         callback: () => workspace.openBacklinks(),
+      }),
+      // R212 (G3 §8): open outgoing-links / outline as a main-area tab (reuse the host)
+      commands.register({
+        id: "outgoing-links:open-outgoing-links",
+        name: () => t("cmd.openOutgoingLinks"),
+        callback: () => workspace.openOutgoingLinks(),
+      }),
+      commands.register({
+        id: "outline:open-outline",
+        name: () => t("cmd.openOutline"),
+        callback: () => workspace.openOutline(),
       }),
       commands.register({
         id: "app:show-outline",
@@ -1628,6 +1639,10 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
             <GraphView />
           ) : activeTab.viewType === "backlinks" ? (
             <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
+          ) : activeTab.viewType === "outgoinglinks" ? (
+            <div className="main-outgoinglinks-view markdown-reading-view"><OutgoingLinksPanel /></div>
+          ) : activeTab.viewType === "outline" ? (
+            <div className="main-outline-view markdown-reading-view"><OutlinePanel /></div>
           ) : activeTab.viewType === "attachment" ? (
             <AttachmentView key={activeTab.id} tab={activeTab} />
           ) : (
@@ -1770,7 +1785,12 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         /* the graph tab's stored title is persisted in workspace state —
            ignore it at render time so the label follows the UI locale;
            file tabs keep the basename verbatim */
-        const title = tab.viewType === "graph" ? t("app.graphTab") : tab.viewType === "backlinks" ? t("app.backlinksTab") : tab.title;
+        const title =
+          tab.viewType === "graph" ? t("app.graphTab")
+          : tab.viewType === "backlinks" ? t("app.backlinksTab")
+          : tab.viewType === "outgoinglinks" ? t("app.outgoingLinksTab")
+          : tab.viewType === "outline" ? t("app.outlineTab")
+          : tab.title;
         return (
         <div
           key={tab.id}
@@ -1800,6 +1820,8 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         >
           {tab.viewType === "graph" && <Icon name="graph" size={14} />}
           {tab.viewType === "backlinks" && <Icon name="link" size={14} />}
+          {tab.viewType === "outgoinglinks" && <Icon name="external-link" size={14} />}
+          {tab.viewType === "outline" && <Icon name="list" size={14} />}
           {tab.viewType === "attachment" && <Icon name="file-text" size={14} />}
           {tab.pinned && (
             <span className="tab-pin" aria-label={t("app.pinnedTab")} title={t("app.pinnedTab")}>
@@ -1858,7 +1880,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           <button
             role="menuitem"
             data-testid="tabctx-split-right"
-            disabled={menuTab.viewType === "graph" || menuTab.viewType === "backlinks"}
+            disabled={isFilelessSingletonView(menuTab.viewType)}
             onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("row"); })}
           >
             {t("app.tabSplitRight")}
@@ -1866,7 +1888,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           <button
             role="menuitem"
             data-testid="tabctx-split-down"
-            disabled={menuTab.viewType === "graph" || menuTab.viewType === "backlinks"}
+            disabled={isFilelessSingletonView(menuTab.viewType)}
             onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("column"); })}
           >
             {t("app.tabSplitDown")}

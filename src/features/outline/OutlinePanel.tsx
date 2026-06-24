@@ -80,9 +80,12 @@ export function OutlinePanel() {
   const t = useI18n();
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
+  // R212: non-markdown active tab (graph or the main-area outline/backlinks/outgoing
+  // tab) → follow the last active markdown file so the panel stays populated.
+  const lastActive = useStore(app.workspace.lastActiveFile);
 
   const activeTab = findActiveTab(ws);
-  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
+  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : lastActive;
 
   // Collapse state keyed by heading index; reset whenever the file changes.
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());

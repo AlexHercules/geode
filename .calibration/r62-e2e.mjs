@@ -88,14 +88,18 @@ ok("Alpha.md has 0 outgoing link rows", emptyRows === 0, String(emptyRows));
 const noLinks = await page.$('[data-testid="outgoinglinks-panel"] .ol-empty-sub');
 ok("shows a 'no links' empty-sub message", noLinks !== null);
 
-console.log("— true no-active-file empty state (ol-empty) —");
-// graph view has no markdown file → activePath null → the ol-empty container
+console.log("— R212: non-markdown active tab FOLLOWS lastActiveFile (not the no-file empty) —");
+// the graph view has no markdown file of its own, but R212 the panel now follows
+// lastActiveFile (Alpha.md, which has 0 outgoing links) — the same Obsidian-faithful
+// fallback R211 gave backlinks. So it shows the no-LINKS empty-sub (Alpha), NOT the
+// no-FILE ol-empty container.
 await page.evaluate(() => window.__app.workspace.openGraph());
 await page.waitForTimeout(150);
 await page.evaluate(() => window.__app.commands.execute("app:show-outgoing-links"));
-await page.waitForSelector('[data-testid="ol-empty"]', { timeout: 3000 }).catch(() => {});
-ok("no active markdown file → ol-empty container shown", (await page.$('[data-testid="ol-empty"]')) !== null);
-ok("no link rows when no file active", (await page.$$eval('[data-testid="ol-link"]', (e) => e.length).catch(() => -1)) === 0);
+await page.waitForTimeout(200);
+ok("graph tab → panel follows lastActiveFile (Alpha) → no-links empty-sub, NOT no-file ol-empty",
+  (await page.$('[data-testid="outgoinglinks-panel"] .ol-empty-sub')) !== null && (await page.$('[data-testid="ol-empty"]')) === null);
+ok("still 0 link rows (Alpha has no outgoing links)", (await page.$$eval('[data-testid="ol-link"]', (e) => e.length).catch(() => -1)) === 0);
 
 console.log(`\nR62 E2E: ${passed} passed, ${failed} failed`);
 if (failed) console.log("FAILED:", fails.join(", "));

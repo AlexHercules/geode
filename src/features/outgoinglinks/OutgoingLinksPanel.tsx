@@ -57,9 +57,12 @@ export function OutgoingLinksPanel() {
   const t = useI18n();
   const ws = useStore(app.workspace.state);
   const rev = useStore(app.metadata.revision);
+  // R212: non-markdown active tab (graph or the main-area outgoing-links/backlinks/
+  // outline tab) → follow the last active markdown file so the panel stays populated.
+  const lastActive = useStore(app.workspace.lastActiveFile);
 
   const activeTab = findActiveTab(ws);
-  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : null;
+  const activePath = activeTab?.viewType === "markdown" ? activeTab.filePath : lastActive;
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
