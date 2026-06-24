@@ -6,7 +6,9 @@ import {
   showLineNumbers, setShowLineNumbers,
   readableLineLength, setReadableLineLength,
   spellcheckEnabled, setSpellcheckEnabled,
+  defaultNewTabMode, setDefaultNewTabMode,
 } from "@core/appearance";
+import type { NewTabMode } from "@core/appearance";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
@@ -264,6 +266,17 @@ export function App() {
         id: "app:toggle-ribbon",
         name: () => t("cmd.toggleRibbon"),
         callback: () => setShowRibbon(!showRibbon.get()),
+      }),
+      commands.register({
+        // R195: Obsidian app:toggle-default-new-tab-view. Geode merges Obsidian's
+        // view + editing-mode settings into one NewTabMode tri-state, so the single
+        // command cycles all three (live → source → preview). Pure appearance setting.
+        id: "app:toggle-default-new-tab-view",
+        name: () => t("cmd.toggleDefaultNewTabView"),
+        callback: () => {
+          const order: NewTabMode[] = ["live", "source", "preview"];
+          setDefaultNewTabMode(order[(order.indexOf(defaultNewTabMode.get()) + 1) % order.length]);
+        },
       }),
       // R50 zoom — adjust the editor/preview font size (workspace.setFontSize
       // clamps + drives --editor-font-size). Mod+= / Mod+- / Mod+0 mirror the
