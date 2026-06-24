@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 183 additions — G3 ui-only→done「复制路径 / 复制 Obsidian URL 命令化」（2 个 active-file 命令 · 复用 R46 buildOpenUri · 纯前端非数据安全 · 零新依赖）【As-built v0.179】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——首次按 **R182 命令矩阵**（用户交付 `docs/G3-命令复刻矩阵.md`）的 §推进建议收割「ui-only→done」最快档。**Gate**：矩阵列 6 个 ui-only（功能在右键/按钮、未注册命令），本轮取其中**纯档两项**（无 vault 写）；写/UI-bridge 四项（复制文件/重命名/移动/新建文件夹 = data-safety + Explorer-node-bridge）留 R184。**契约（无跨模块签名变更，纯命令注册 + app-local toast）**：`app/App.tsx` 注册 2 命令（矩阵指定 id）：
+> - `file-explorer:copy-path` → 复制 `workspace.getActiveFile()`（含扩展名的库内路径）；`workspace:copy-url` → 复制 `buildOpenUri(vault.vaultName, activeFile)`（R179 core 纯函数、去 .md 回环）。两者 `available=getActiveFile()!==null`、callback 取 path+守卫、`clipboard.writeText`（try/catch 吞 headless）。
+> - 新 app-local `showCommandNotice`（瞬态底部 toast，**独立 class `command-notice`** + explorer.css 并列选择器复用样式；按 testid 清理——与 Explorer `.link-update-notice`[按 class 清理] 隔离防互删）。
+> - **i18n 零新增**：复用 R179 `explorer.copyPath/copyObsidianUrl`（命令名）+ `copiedPath/copiedUrl`（toast）en+zh。
+> - **分档：逻辑档**（新 showCommandNotice + 2 命令 handler 控制流；**未碰数据安全面**＝读 active path + 剪贴板写、无 vault/doc 写）→ 简化门 **clean**（diff 39 行 <50、薄包装、2 回调 <8 行非 token 同不抽）。**对抗评审 7 维 → 1 minor confirmed（已修）+ 余证伪**：minor＝command toast 原用 `.link-update-notice` 同 class，Explorer 按 class 清理会误删尚显的 command toast（罕见重叠窗口、仅 toast 早消）→ **修＝改用独立 `command-notice` class + CSS 并列选择器**；余证伪＝纯无 vault 写 / buildOpenUri 回环 + vaultName 真 getter / available 双取良性 / i18n 跨命名空间 t() 合法 / id 唯一对齐矩阵 / 分层合规。
+> - **v1 nuance**：toast 沿用 `--danger` 红样式表「已复制」（承 R179 既定取舍、未改）。**下一项 R184**：矩阵 ui-only 余四项（duplicate/rename/move/new-folder）= Explorer-node-bridge + data-safety（抽 makeCopy 等 vetted 处理器为共享 + 一次性 Store 路由 active-file）。
+
 ## Round 181 additions — G3「侧栏面板 Show 命令组」（6 个 `app:show-*` 命令 · 复用既有 setLeft/RightPanel · 零新依赖）【As-built v0.178】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列（向 G3「热键 90→280」推进——补真 handler 命令、不做空行）。**Gate（R160）**：命令清单实查（grep 全 82 个 id）证 Geode 面板齐全（左 explorer/search/bookmarks；右 backlinks/outline/tags/allproperties/fileproperties/footnotes/outgoinglinks/calendar）但仅 `app:show-footnotes`/`app:show-outgoing-links` 两个有命令——Obsidian 每个视图都有「Show X」命令。**契约（无跨模块签名变更，纯命令注册）**：`app/App.tsx` 在 show-footnotes 块后注册 6 命令，回调皆单调用既有方法（`setLeftPanel`/`setRightPanel` 同时置 `*SidebarOpen:true`，故命令既切面板又开侧栏）：

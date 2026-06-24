@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R183 套件回归（2026-06-24，G3 ui-only→done「复制路径/复制 Obsidian URL 命令化」· 表面复刻 G 系列 · 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R183 = 首次按 **R182 命令矩阵**（用户交付 `docs/G3-命令复刻矩阵.md`，权威源 `../reference/` 16 张热键截图——reference/ 在仓库上一级、磁盘可读，R179-181「不在仓库」系发现性误报）收割 ui-only→done 最快档的**纯档两项**。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 183 additions」**：`app/App.tsx` 注册 `file-explorer:copy-path` + `workspace:copy-url`（矩阵指定 id），active-file + 复用 R179 core `buildOpenUri` + R179 i18n 键，app-local `command-notice` toast（独立 class 防与 Explorer toast 互删）。
+
+新增套件：`r183-e2e.mjs` **11/11**（2 命令注册 + 名称解析非裸键 + copy-path→剪贴板得库内路径 + command toast 现 + copy-url→`obsidian://open?vault&file`[.md 去除·vault 匹配·`/`→%2F] + available 在 graph tab 无活动文件为 false + 无 page error；剪贴板 R77 monkeypatch 捕获）。**套件矩阵不回退**：r181 26/26·r179 10/10（Explorer copy toast 仍工作）·r32 24/24·r161 15/15（命令面板/注册）· typecheck 0/cargo check/生产构建 + 命令面板截图证。**桌面 probe N/A**（纯 app-level 命令=读 active path+剪贴板+DOM toast、零 fs/Rust/平台分支，同 R179/R181）。**分档逻辑档 → 对抗评审 7 维 1 minor confirmed（已修：toast class 互删→独立 command-notice class）+ 余证伪**。简化门 **clean**。**v1 defer（R184）**：矩阵 ui-only 余四项 duplicate/rename/move/new-folder（data-safety + Explorer-node-bridge）。
+
 ### R181 套件回归（2026-06-23，G3「侧栏面板 Show 命令组」· 表面复刻 G 系列 · 机械档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R181 = 表面复刻 **G 系列**（向 G3「热键 90→280」推进——补真 handler 命令、不做空行）。**非 compat-API 轮**。**Gate（R160）**：命令清单实查（grep 全 82 id）证面板齐全但仅 footnotes/outgoing-links 有命令 → 补 6 个 `app:show-*`（file-explorer/search/backlinks/outline/tags/all-properties），回调单调用既有 setLeft/RightPanel（同开侧栏）。**详见 ARCHITECTURE「Round 181 additions」**。
