@@ -52,8 +52,13 @@ const FENCE_OPEN_RE = /^(`{3,}|~{3,})/;
  *  literal — their `*`/`~` must not be stripped. Mirrors core/markdown's R18 comment scan,
  *  including fence-awareness: a lone `%%` inside a fenced code block is literal, not a
  *  comment opener (else it would over-protect the rest of the doc). A comment already open
- *  takes precedence (a fence line inside it is comment content). */
-function commentSpans(state: EditorState): Array<{ from: number; to: number }> {
+ *  takes precedence (a fence line inside it is comment content). Exported (R197) so
+ *  delete-paragraph can treat a multi-line comment as one block.
+ *  `pairedOnly` (R197) drops the trailing UNPAIRED `%%` opener's run-to-EOF span: that span
+ *  exists only for clearFormatting's over-protection (harmless there), but delete-paragraph
+ *  must not expand a deletion to EOF for a half-written comment — an unpaired `%%` has no
+ *  closer to orphan, so the plain block delete is already byte-safe. */
+export function commentSpans(state: EditorState, pairedOnly = false): Array<{ from: number; to: number }> {
   const doc = state.doc;
   const spans: Array<{ from: number; to: number }> = [];
   let open = -1; // doc offset of an unclosed `%%` opener, or -1
@@ -83,7 +88,7 @@ function commentSpans(state: EditorState): Array<{ from: number; to: number }> {
     for (; k + 1 < offs.length; k += 2) spans.push({ from: offs[k], to: offs[k + 1] + 2 });
     if (k < offs.length) open = offs[k]; // unpaired opener → block continues
   }
-  if (open >= 0) spans.push({ from: open, to: doc.length });
+  if (open >= 0 && !pairedOnly) spans.push({ from: open, to: doc.length });
   return spans;
 }
 
