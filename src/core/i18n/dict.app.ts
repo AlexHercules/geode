@@ -147,6 +147,7 @@ export const en = {
   "cmd.selectLine": "Select current line",
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
+  "cmd.clearFormatting": "Clear formatting",
 
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "Search current file",
@@ -346,6 +347,7 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.selectLine": "选中当前行",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
+  "cmd.clearFormatting": "清除格式",
 
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "在当前文件中查找",

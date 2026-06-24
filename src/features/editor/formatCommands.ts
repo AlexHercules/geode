@@ -14,10 +14,172 @@
  * write guards). `getView` resolves the ACTIVE-FILE view only, so a format
  * command can never mutate a background/non-active file (R23 DS-1).
  */
+import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
+import type { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { applyFormatOp, type FormatOp } from "@core/format";
 import { t, type I18nKey } from "@core/i18n";
+import { findMathBlockRanges } from "./liveMath";
+
+/** Inline math (`$…$`), conservatively: a single-line `$…$` with non-space-led content.
+ *  Over-matching prose `$` only OVER-protects (skips clearing there) — never corrupts. */
+const INLINE_MATH_RE = /\$(?!\s)(?:\\\$|[^$\n])+?\$/g;
+
+/** `%%` delimiter offsets in a line's non-code (backtick-even) segments — mirrors
+ *  core/markdown.ts commentDelimOffsets so a `%%` inside `` `code` `` never opens a comment. */
+function commentDelims(line: string): number[] {
+  const offsets: number[] = [];
+  let base = 0;
+  line.split(/(`+[^`]*`+)/g).forEach((seg, i) => {
+    if (i % 2 === 0) {
+      let at = seg.indexOf("%%");
+      while (at >= 0) {
+        offsets.push(base + at);
+        at = seg.indexOf("%%", at + 2);
+      }
+    }
+    base += seg.length;
+  });
+  return offsets;
+}
+
+const FENCE_OPEN_RE = /^(`{3,}|~{3,})/;
+
+/** `%%comment%%` spans (single-line + cross-line blocks), pairing `%%` delimiters
+ *  left-to-right; an unpaired opener runs to the next closer (or EOF). Comment bodies are
+ *  literal — their `*`/`~` must not be stripped. Mirrors core/markdown's R18 comment scan,
+ *  including fence-awareness: a lone `%%` inside a fenced code block is literal, not a
+ *  comment opener (else it would over-protect the rest of the doc). A comment already open
+ *  takes precedence (a fence line inside it is comment content). */
+function commentSpans(state: EditorState): Array<{ from: number; to: number }> {
+  const doc = state.doc;
+  const spans: Array<{ from: number; to: number }> = [];
+  let open = -1; // doc offset of an unclosed `%%` opener, or -1
+  let fence = ""; // active code-fence marker (``` / ~~~), or "" outside a fence
+  for (let i = 1; i <= doc.lines; i++) {
+    const line = doc.line(i);
+    const offs = commentDelims(line.text).map((o) => line.from + o);
+    let k = 0;
+    if (open >= 0) {
+      if (offs.length === 0) continue; // whole line inside the block — covered by the close span
+      spans.push({ from: open, to: offs[0] + 2 });
+      open = -1;
+      k = 1;
+    } else {
+      // outside a comment, fenced code makes `%%` literal (skip pairing on fence lines)
+      const trimmed = line.text.trim();
+      const fm = FENCE_OPEN_RE.exec(trimmed);
+      if (fence) {
+        if (fm && trimmed.startsWith(fence)) fence = "";
+        continue;
+      }
+      if (fm) {
+        fence = fm[1];
+        continue;
+      }
+    }
+    for (; k + 1 < offs.length; k += 2) spans.push({ from: offs[k], to: offs[k + 1] + 2 });
+    if (k < offs.length) open = offs[k]; // unpaired opener → block continues
+  }
+  if (open >= 0) spans.push({ from: open, to: doc.length });
+  return spans;
+}
+
+/** R192: spans Geode renders as LITERAL but the Lezer GFM parser does not model, so it
+ *  mis-parses their inner `*` / `~` as emphasis. Excluding any mark inside one keeps
+ *  clear-formatting from corrupting math (`$a*b*c$`) or frontmatter values. Wikilinks /
+ *  embeds / aliases ARE Lezer `Link`/`Image` nodes → handled by hasLinkAncestor instead. */
+function protectedSpans(state: EditorState, from: number, to: number): Array<{ from: number; to: number }> {
+  const doc = state.doc;
+  const spans: Array<{ from: number; to: number }> = [];
+  // frontmatter block (--- … --- / …) — values are literal YAML
+  if (doc.lines >= 1 && doc.line(1).text === "---") {
+    for (let i = 2; i <= doc.lines; i++) {
+      const lt = doc.line(i).text;
+      if (lt === "---" || lt === "...") {
+        spans.push({ from: 0, to: doc.line(i).to });
+        break;
+      }
+    }
+  }
+  // block math ($$…$$) — reuse the vetted detector==renderer scan
+  for (const r of findMathBlockRanges(state)) spans.push(r);
+  // %%comment%% bodies are literal (single-line + cross-line blocks)
+  for (const r of commentSpans(state)) spans.push(r);
+  // inline math ($…$) on each line the selection touches
+  for (let ln = doc.lineAt(from).number; ln <= doc.lineAt(to).number; ln++) {
+    const line = doc.line(ln);
+    INLINE_MATH_RE.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = INLINE_MATH_RE.exec(line.text)) !== null) {
+      spans.push({ from: line.from + m.index, to: line.from + m.index + m[0].length });
+    }
+  }
+  return spans;
+}
+
+/** True when the node sits inside a Lezer Link/Image (wikilink `[[**x**]]`, embed
+ *  `![[**x**]]`, alias `[[a|**b**]]`) — Geode treats the link target/alias as literal. */
+function hasLinkAncestor(node: SyntaxNode): boolean {
+  for (let p = node.parent; p; p = p.parent) {
+    if (p.name === "Link" || p.name === "Image") return true;
+  }
+  return false;
+}
+
+/**
+ * R192: clear inline formatting (bold/italic/strikethrough/inline code) from the
+ * selection (Obsidian editor:clear-formatting). Walks the syntax tree so ONLY real mark
+ * tokens are removed — and only for emphasis/code nodes FULLY inside the selection, so a
+ * partial selection can never leave a half marker (no corruption). Because literal `*`
+ * inside an InlineCode span is not an EmphasisMark, `` `a*b*c` `` clears to `a*b*c`, not
+ * `abc`. Marks inside Geode's regex-overlay structures (wikilink/embed/alias via Link
+ * ancestor; math / frontmatter / %%comment%% via protectedSpans) are EXCLUDED — Lezer
+ * mis-parses their literal `*` as emphasis and removing it would corrupt link targets /
+ * math / metadata / comment bodies (the overlay list mirrors the reading-view pre-pass).
+ * Highlight (==) is regex-rendered (not a Lezer node) → deferred. Selection maps through
+ * the deletions automatically. No-op (returns false) when nothing is stripped.
+ */
+export function clearFormatting(view: EditorView): boolean {
+  const { state } = view;
+  const sel = state.selection.main;
+  if (sel.empty) return false;
+  const spans = protectedSpans(state, sel.from, sel.to);
+  const inProtected = (f: number, t2: number) => spans.some((s) => f < s.to && t2 > s.from);
+  const removals: { from: number; to: number }[] = [];
+  syntaxTree(state).iterate({
+    from: sel.from,
+    to: sel.to,
+    enter(node) {
+      if (
+        node.name === "Emphasis" ||
+        node.name === "StrongEmphasis" ||
+        node.name === "Strikethrough" ||
+        node.name === "InlineCode"
+      ) {
+        // fully inside the selection only — a partial node would unbalance its markers
+        if (node.from < sel.from || node.to > sel.to) return;
+        if (hasLinkAncestor(node.node)) return; // [[**x**]] / ![[..]] / [[a|**b**]]
+        for (let c = node.node.firstChild; c; c = c.nextSibling) {
+          if (
+            (c.name === "EmphasisMark" || c.name === "StrikethroughMark" || c.name === "CodeMark") &&
+            !inProtected(c.from, c.to)
+          ) {
+            removals.push({ from: c.from, to: c.to });
+          }
+        }
+      }
+    },
+  });
+  if (removals.length === 0) return false;
+  // nested emphasis (***x***) yields an outer node's marks before its inner node's marks,
+  // so sort by position — the changes array must be ordered + non-overlapping (marks never overlap).
+  removals.sort((a, b) => a.from - b.from);
+  view.dispatch({ changes: removals, userEvent: "input.format", scrollIntoView: true });
+  return true;
+}
 
 /**
  * Apply a formatting op to the view's current selection. Reads the doc + main
@@ -85,7 +247,7 @@ export function registerFormatCommands(
   app: GeodeApp,
   getView: () => EditorView | null,
 ): Array<() => void> {
-  return FORMAT_COMMANDS.map((spec) =>
+  const disposers = FORMAT_COMMANDS.map((spec) =>
     app.commands.register({
       id: spec.id,
       name: () => t(spec.nameKey),
@@ -99,4 +261,20 @@ export function registerFormatCommands(
       },
     }),
   );
+  // R192: clear-formatting is syntax-tree based (not a pure FormatOp), so it is registered
+  // here directly rather than via the op-dispatch path. No default key (Obsidian leaves it unset).
+  disposers.push(
+    app.commands.register({
+      id: "editor:clear-formatting",
+      name: () => t("cmd.clearFormatting"),
+      available: () => getView() !== null,
+      callback: () => {
+        const view = getView();
+        if (!view) return;
+        clearFormatting(view);
+        view.focus();
+      },
+    }),
+  );
+  return disposers;
 }
