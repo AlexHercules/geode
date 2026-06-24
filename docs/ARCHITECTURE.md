@@ -71,6 +71,23 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 199 additions — G3 missing→done「插入脚注」（1 命令 editor:insert-footnote · 双址插 `[^N]`+`[^N]:` + 自动编号 + 双向跳转 · core/format.ts 纯函数 insertFootnote · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.195】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing`「插入脚注」（Obsidian `editor:insert-footnote`，v1.8.9 引入，**双向**）。**双址非单 contiguous → 走 clear-formatting(R192)/delete-paragraph(R197) 标准命令注册（非 FormatOp）**；纯逻辑落 `core/format.ts` `insertFootnote(text,from,to)` 返判别 union（probe 可测、字节可断言）。**契约（扩 R33 引擎 + 1 探针，无跨模块签名破坏）**：
+> - **`core/format.ts`** 新增 `FootnoteAction` 判别 union + `insertFootnote(text,from,to)` 纯函数：
+>   - `type FootnoteAction = { kind:"insert"; changes:Array<{from:number;insert:string}>; selTarget:number } | { kind:"jump"; selTarget:number }`。
+>   - **Mode B（跳转·零变更）优先判**：光标行匹配 `FOOTNOTE_DEF_RE_LOCAL = /^\[\^([^\s[\]]+)\]:/`（id charset 镜像 markdown.ts:725 的 `[^\s[\]]+`）→ 在全文 `indexOf` 找首个**非定义** `[^id]` ref（其后字符 ≠ `:`；闭合 `]` 防 `[^1]` 撞 `[^10]` 前缀）→ `{kind:"jump", selTarget: idx+ref.length}`（光标跳到 body ref 后）；无 ref → `{kind:"jump", selTarget: to}`（停留，no-op-ish）。
+>   - **Mode A（插入）**：编号 `n = max(全文 \[\^(\d+)\] 数字 label) + 1`（**过扫安全**：码块内 `[^3]` 计入只抬高 n、绝不撞号；默认 1）。ref 插在 `to`（选区尾·**不消选区**=底线①，选区文本保留、ref 接其后）；def 插在 `L=doc.length`（末行）：`leadNL = (L>0 && text[L-1]==="\n") ? "" : "\n"`（空文档/无尾换行→`\n`、有尾换行→`""` 落到末空行不产空行）；`defInsert = leadNL + "[^"+n+"]: "`（冒号+空格、cursor 随即键入定义）。`changes=[{from:to,insert:"[^"+n+"]"},{from:L,insert:defInsert}]`；`selTarget = L + refInsert.length + defInsert.length`（= 新文档末尾、`[^N]: ` 之后）。
+> - **`features/editor/formatCommands.ts`** registerFormatCommands 内 +1 standalone 注册（同 clear-formatting 路径，无默认键）：`editor:insert-footnote` callback 读 `selection.main.{from,to}` → `insertFootnote` → `kind==="jump"` 派 `{selection:{anchor:selTarget},scrollIntoView}`（零 changes）、`kind==="insert"` 派 `{changes, selection:{anchor:selTarget}, scrollIntoView, userEvent:"input.insert.footnote"}`（双 change 原子事务、单次 undo）。
+> - **`core/i18n/dict.app.ts`** +1 键 `cmd.insertFootnote` en "Insert footnote" / zh "插入脚注"。
+> - **`src/main.tsx`** +1 探针 `__geodeFootnote(text,from,to) => insertFootnote(...)`（紧邻 `__geodeFormat`，bootstrap 前装），供 E2E 字节断言 FootnoteAction。
+> - **分档：逻辑档（data-safety）**——`core/format.ts`=编辑器写引擎产 .md 字节 + view.dispatch 写路径。**字节安全论证**：Mode A 仅**双 INSERT**（绝不删，选区不消）、原子单 undo；编号 max+1 collision-safe；def append 末行；Mode B 纯 selection 零变更。走既有 R33 dispatch→autosave。**唯一新增风险**=光标在码块/frontmatter 内插 ref（字节忠实、与 Obsidian 同）。
+> - **桌面 probe N/A**：纯 core 引擎 + view.dispatch 复用 R33/R23 写路径，`__geodeFootnote` 浏览器侧已直驱纯函数。**v1 偏差/defer**：选区时 ref 插 `to`（非 head·罕见）；Mode「body ref→def」反向跳转 defer（Obsidian 文档仅明述 def→ref，本轮实现 def→ref）；编号 max+1 不填空缺（gap 不复用，与 Obsidian 同）。
+> - **⚠️ 对抗评审结论（Ultracode 4 lens[byte-offset/data-safety/footnote-semantics/wiring] + skeptic synthesis · verdict=deliverable · 0 critical/0 major）**：lens 实证——offset 全对（含 selTarget=新文档长度、leadNL 三态）；**data-safety lens 追进 CM6 `ChangeSet.of` 源码**证同位置（caret==docEnd）双 insert **按数组序合成 ref-then-def、绝不抛/不重排**（唯一 throw 是 `from>to||<0||>len`，本轮 `to≤L===len` 不触），CRLF 经 CM `DefaultSplit` 在建 doc 时 →LF；空 def `[^N]: ` 经 markdown.ts:756 注册（空内容也存）→ ref 仍渲 `sup.footnote-ref`（已 probe 实证）；编号 max+1 collision-safe（过扫只抬 N）；选区不消（ref 插 `to`）。
+>   - **2 confirmed nit（均已修）**：① **`FOOTNOTE_DEF_LINE_RE` 列 0 锚 vs 渲染器 tShift 容缩进**——缩进 1-3 空格的 def 行（渲染器认、`tShift` strip）被列 0 正则漏判 → 走 Mode A 多插一个脚注而非 Mode B 跳转（byte-safe 无损，但命令/渲染器对「什么是 def 行」不一致）。修 = 正则放宽 `/^ {0,3}\[\^…/`（镜像 CommonMark 块缩进 ≤3 空格、tab=4 列=码块故仅空格）+ e2e 加缩进 def 跳转用例。② **r199-e2e 渲染证用了带空行布局**（`see [^1]\n\n[^1]: my note`），非命令实出的无空行字节（`alpha[^1]\n[^1]: `）——测试卫生（实出已独立 probe 证可渲）。修 = 加一条对实出字节的渲染断言。
+>   - **refuted**：无（2 nit 全采纳并修）。
+> - **r199-e2e 23/23**（Mode A 字节[空文档/无尾换行/有尾换行] + 编号[max+1·gap 不填·named 忽略] + 底线①选区不消 + Mode B[def→ref 跳转·无 ref 停留·`[^1]`⊄`[^10]` 前缀守卫·**缩进 def 行也跳转**] + 渲染证[含内容 + **实出无空行空 def**] + 注册 + live[插入+双向跳转+同位置变更 `x`→`x[^1]\n[^1]: `]）+回归 r33 37/37·r198 34/34·r192 28/28·typecheck 0/cargo/生产构建。
+
 ## Round 198 additions — G3 missing→done「行内数学 + 插入数学块 + 插入分隔线」（3 命令 editor:insert-math / insert-math-block / insert-horizontal-rule · 扩 R33 format 引擎 3 纯插入 op · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.194】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing` insert 家族 3 项（Obsidian `editor:insert-math` 行内数学 / `editor:insert-math-block` 插入数学块 / `editor:insert-horizontal-rule` 插入分隔线）。与 R189 `insertWikilink`、R186 `setHeadingLevel` 同槽——**扩 R33 纯函数 format 引擎（`core/format.ts`），不读 Lezer 树、只替换 [from,to]，纯插入（非 toggle，不 unwrap）→ 天然回避 R192/R197 的「overlay 腰斩/保护翻转」损坏族**（那族源于删/改既有 overlay；本轮只新增分隔符）。**契约（扩 R33，无跨模块签名破坏）**：
