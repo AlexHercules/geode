@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R214 套件回归（2026-06-25，G3 §10 收尾 · 表面复刻 G 系列 · app:show-file-properties 命令揭示 R86 FilePropertiesPanel · 机械档[命令注册镜像 5 兄弟·复用 vetted setRightPanel·无写] · scoped review · 桌面 probe N/A）
+
+R214 = G3 矩阵 §10 唯一 partial「显示当前笔记的属性列表」(`file-properties:open`) 收尾。**web 实证**：Obsidian Properties 核心插件有两命令——「Show file properties」(当前笔记) + 「Show all properties」(全库)。Geode 有 `app:show-all-properties` 但缺前者，尽管 R86 早已建 FilePropertiesPanel（右侧栏 fileproperties tab·仅 right-tab 可达·无命令）。**详见 ARCHITECTURE「Round 214 additions」**：加 `app:show-file-properties`（name "Show file properties"·callback setRightPanel("fileproperties")·逐字镜像 app:show-all-properties·无默认键）+ i18n 键 cmd.showFileProperties（en/zh）。矩阵旧注「无当前笔记属性面板」stale（R86 已有）→ 真实 gap = 缺命令。
+
+新增套件：`r214-e2e.mjs` **10/10**（A 命令注册[name 解析为 "Properties view: Show file properties"·无默认键] · B 执行揭示 FilePropertiesPanel[right-tab-fileproperties is-active·显当前笔记 property-row-count] · C 与 app:show-all-properties 互斥切换[file↔all 来回]）。**套件矩阵不回退**：**r86 11/11[fileproperties 第二写者]·r213 13/13[aux 面板 lastActiveFile]·r211 12/12·r212 17/17**·typecheck 0/cargo/生产构建。**桌面 probe N/A 浏览器可验证**（纯命令注册揭示侧栏面板·复用 vetted setRightPanel·同 R181 app:show-* 兄弟无 Rust/fs）。**分档机械档（命令注册镜像兄弟·无新逻辑·未碰数据安全面）→ scoped review**（命令 id 唯一 · i18n 键 en+zh 真实存在 · callback panel 名 "fileproperties" 与 right-tab 对齐 · typecheck 验 RightPanel 类型合法）·**简化门机械档跳过**。**教训续**：做矩阵 partial 前 web 实证真 Obsidian 命令（[[geode-verify-obsidian-command-real]]）——本轮证 file-properties:open 是真命令（非 theme:switch 式 phantom）·且 Geode 侧 stale 注（R86 面板已存在·仅缺命令）。
+
 ### R213 套件回归（2026-06-25，G3 §8 收尾 · 表面复刻 G 系列 · FootnotesPanel + FilePropertiesPanel 跟随 lastActiveFile + 修 R211 BacklinksPanel unlinked 扫描卡死 · data-safety 逻辑档[FilePropertiesPanel 可写第二写者]·**Ultracode 2-lens+skeptic 对抗评审 deliverable·0 crit/major·1 confirmed minor[R211 遗留缺陷·本轮主动修]**·桌面 probe N/A）
 
 R213 = 收尾 R212 评审 deferred minor。R211/R212 给 backlinks/outgoing/outline 加了 lastActiveFile 回退（非 markdown active tab 跟随最后活动 markdown），但 footnotes/properties 仍 `: null`→同侧栏 5 面板不对称。**详见 ARCHITECTURE「Round 213 additions」**：两 Panel activePath 改 `: lastActive`（镜像 R212 OutlinePanel）。FootnotesPanel 纯读；FilePropertiesPanel 可写第二写者（DocumentHandle·激活「非 markdown tab 编辑 lastActiveFile 属性」写路径·机制=vetted R86 不变·仅文件选择变）。

@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 214 additions — G3 §10：app:show-file-properties 命令（揭示 R86 FilePropertiesPanel·补 Obsidian「Show file properties」核心命令·机械档·零新依赖）【As-built v0.210】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §10 唯一 partial「显示当前笔记的属性列表」(`file-properties:open`) 收尾。**web 实证**：Obsidian Properties 核心插件有 **两个** 命令——「Show file properties」(当前笔记) + 「Show all properties」(全库)。Geode 有 `app:show-all-properties`（揭示 AllProperties 面板）但**缺**「Show file properties」——尽管 R86 早已建 FilePropertiesPanel（右侧栏 `fileproperties` tab，仅 right-tab 可达、无命令）。矩阵旧注「无当前笔记属性面板」**stale**（R86 已有面板）→ 真实 gap = 缺命令。
+> **契约（纯加 1 命令 + 1 i18n 键·镜像既有 5 个 app:show-* 兄弟·零逻辑·零写）**：
+> - **`app/App.tsx`**：`commands.register({ id: "app:show-file-properties", name: () => t("cmd.showFileProperties"), callback: () => workspace.setRightPanel("fileproperties") })`（逐字镜像 app:show-all-properties·复用 vetted setRightPanel·无默认键）。
+> - **`core/i18n/dict.app.ts`**：`cmd.showFileProperties`（en "Show file properties" / zh "显示当前笔记的属性列表"）。
+> - **分档：机械档**（命令注册镜像 5 兄弟·复用 vetted setRightPanel·无新逻辑/控制流·无写·无数据安全面）→ scoped review（命令 id 唯一·i18n 键真实存在·callback 目标 panel 名 "fileproperties" 与 right-tab 对齐）。
+> - **桌面 probe N/A 浏览器可验证**。
+
 ## Round 213 additions — G3 §8 收尾：FootnotesPanel + FilePropertiesPanel 跟随 lastActiveFile + 修 R211 BacklinksPanel unlinked 扫描卡死（消 R212 评审 deferred minor·5 个右侧栏 aux 面板行为对齐·data-safety 逻辑档[FilePropertiesPanel 是可写第二写者]+零新依赖）【As-built v0.209】
 
 > **状态：As-built（已交付）。** 收尾 R212 评审 deferred minor：R211/R212 给 backlinks/outgoing/outline 三个右侧栏 aux 面板加了 `lastActiveFile` 回退（非 markdown active tab 时跟随最后活动 markdown 文件），但 footnotes/properties 两个兄弟面板仍 `: null`（非 markdown active tab 时空白）→ 同一侧栏 5 面板行为不对称。本轮把两者对齐到同一回退·更忠实 Obsidian（Obsidian Properties view 跟随活动文件）。
