@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R196 套件回归（2026-06-24，G3 missing→done「添加别名 + 添加标签」· 表面复刻 G 系列 · data-safety 逻辑档·复用 vetted submitAdd 写路径、零 compat 调用面改动 · 桌面 probe N/A）
+
+R196 = 按 R182 矩阵收割 §3「添加别名」「添加标签」（Obsidian `editor:add-alias`/`add-tag`）。**非 compat-API 轮**（r30 properties 面板 + r126 frontmatter compat 复跑核验不退）。**详见 ARCHITECTURE「Round 196 additions」**：`workspace.ts` addPropertyRequest Store +`key?`；`PropertiesPanel.tsx` tryConsume 加 `if(req.key) submitAdd(req.key)`（复用 vetted submitAdd）；`app/App.tsx` +2 命令镜像 add-property body 带 key；i18n +2 键 en+zh。
+
+新增套件：`r196-e2e.mjs` **15/15**（2 命令注册+名称解析非裸键+无默认键 + add-alias 无 frontmatter→create+加 aliases·body 保留 + add-tag 加 tags 不覆盖 aliases + **同名再 add-alias dedup 不重复**[submitAdd 同名聚焦] + graph tab no-op + 无 page error）。**套件矩阵不回退**：**r30 25/25（properties 面板·确认 add-property 流不退）**·r126 11/11（frontmatter compat）·r194 12/12·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（frontmatter 写复用 R22/R30 buildSetProperty→applyEdit→autosave[已覆盖]、无新 fs 写路径，同 R194）。**分档逻辑档（data-safety）→ data-safety skill 已跑**：reviewer 证全复用 vetted submitAdd→buildSetProperty→applyEdit 无新写机制；**R22 stale-tab/file-mismatch 守卫[tryConsume:638/642/648]全在 key 分支前→stale 请求先 discard 绝不写错文件**；frontmatter-ensure 后 submitAdd 重读 getDoc fresh 无 TOCTOU；opaque aliases→buildSetProperty 返 null 不 clobber；StrictMode 读 .get() fresh 单次写。**对抗评审 6 维 → 0 confirmed defect**（data-safety 全证 / 向后兼容 key=undefined 原行为零回归 / 同名 dedup·add-tag 不覆盖 / 命令+i18n / Obsidian 忠实）。简化门 **clean**（2 callback 块 token 相同但低于阈值·放置约束→保 inline）。**非阻塞 minor（继承自既有 add-property、非新引入）**：preview 模式+无 frontmatter 两步 applyPreviewEdit 真 fs 理论瞬时竞态留空块=非 corruption（payload 含全文 body·自愈·底线①不破）；命令 source→live 翻 + live 默认 debounce 单保存=干净。**v1 nuance**：属性 null 值加入（不预设 aliases/tags 的 list 型）。
+
 ### R195 套件回归（2026-06-24，G3 missing→done「切换新标签页的默认视图」· 表面复刻 G 系列 · 逻辑档[非数据安全 appearance]、零 compat 调用面改动 · 桌面 probe N/A）
 
 R195 = 按 R182 矩阵收割 §5「切换新标签页的默认视图」（Obsidian `app:toggle-default-new-tab-view`，R185 当时 defer 为「三态非布尔 cycle」）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 195 additions」**：`app/App.tsx` 紧邻 R185 既有 `app:toggle-ribbon` +1 命令，循环 `defaultNewTabMode` 三态 `["live","source","preview"]`（复用 vetted setDefaultNewTabMode、纯 appearance 设置无 vault/doc 写）；i18n +1 键 en+zh。**映射偏差**：Obsidian 拆 view+editing-mode 两设置、Geode 合并单一 NewTabMode 三态故循环全 3 态。

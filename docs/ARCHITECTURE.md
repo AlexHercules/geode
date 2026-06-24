@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 196 additions — G3 missing→done「添加别名 + 添加标签」（2 命令 editor:add-alias / editor:add-tag · 扩 R22 add-property 一次性 Store 带 key · 复用 submitAdd vetted 写路径 · data-safety 逻辑档 · 零新依赖）【As-built v0.192】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 `missing`「添加别名」「添加标签」（Obsidian `editor:add-alias` / `editor:add-tag`）。**契约（扩 R22 add-property 一次性 Store 带可选 key，无新写机制）**：
+> - **`core/workspace.ts`** `addPropertyRequest` 形状 `{tabId, filePath}` → `{tabId, filePath, key?: string}`；`requestAddProperty(tabId, filePath, key?)` 加可选 key（默认 undefined=原 add-property 行为，零回归）。
+> - **`features/editor/PropertiesPanel.tsx`** tryConsume 消费后（沿用 R22 stale-tab/file-mismatch 守卫 + frontmatter-ensure）：`if (req.key) submitAdd(req.key); else { pendingFocusRef={kind:"add"}; setAdding(true); rerender() }`。**复用既有 vetted `submitAdd(name)`**（已含：同名 dedup→聚焦既有值 / `buildSetProperty(doc,name,null)` 加属性 + `pendingFocusRef={kind:"value",key}` 聚焦值 / applyEdit）——**零新写机制**。
+> - **`app/App.tsx`** +2 命令 `editor:add-alias`（key `"aliases"`）/ `editor:add-tag`（key `"tags"`），镜像既有 `editor:add-property` body（getActiveTab gated→source 翻 live→propertiesInDocument 设 visible→`requestAddProperty(tab.id, tab.filePath, key)`）。无默认键（Obsidian 未设置）。i18n dict.app +2 `cmd.addAlias`/`cmd.addTag` 键 en+zh。
+> - **分档：逻辑档（data-safety）**——碰 PropertiesPanel + 写 frontmatter（buildSetProperty 经 vetted applyEdit→documents dirty→autosave、R22 INT-2/SEC-03 stale-tab 守卫仍前置），跑 data-safety skill + 既有 properties 套件不退。
+> - **v1 nuance**：① 属性以 null 值加入（`buildSetProperty(doc,name,null)`）、聚焦值供输入——aliases/tags 在 Obsidian 是 list 型，Geode 此处不预设 list 型（用户输入值时由面板处理），faithful-enough（加属性+聚焦）。② **继承自既有 add-property 的口径（非 R196 新引入）**：无 frontmatter 时 tryConsume 两步 applyEdit（create block + submitAdd），**preview 模式**下两次同步 applyPreviewEdit 在真 fs 理论上可瞬时竞态留空块（**非 corruption——两 payload 均含全文 body、内存 canonical 正确、下次编辑自愈、底线①不破**）；命令 source→live 翻转 + live 默认模式下两编辑 debounce 成单次保存=干净。同 add-property 既有行为。**v1 defer**：删除段落[需 frontmatter 感知]；§11 bookmark-search；`partial` theme:switch；`管理仓库` C1。
+
 ## Round 195 additions — G3 missing→done「切换新标签页的默认视图」（1 命令 app:toggle-default-new-tab-view · 循环 defaultNewTabMode 三态 · 非数据安全 · 零新依赖）【As-built v0.191】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §5 `missing`「切换新标签页的默认视图」（Obsidian `app:toggle-default-new-tab-view`，R185 当时 defer 为「三态非布尔 cycle」）。**契约（纯命令注册 + i18n，无跨模块签名变更）**：
