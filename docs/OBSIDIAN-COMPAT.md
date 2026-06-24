@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R197 套件回归（2026-06-24，G3 missing→done「删除段落」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归·**Ultracode 多 agent 对抗评审揪 4 字节损坏全修**、零 compat 调用面改动 · 桌面 probe N/A）
+
+R197 = 按 R182 矩阵收割 §3「删除段落」（Obsidian `editor:delete-paragraph`）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 197 additions」**：`editorEditCommands.ts` `deleteParagraph`（syntaxTree 顶层块 + frontmatter 守卫 + overlay 交集展开 fixpoint[blockMathRanges 缩进≤3·commentSpans pairedOnly] + 缩进码行首 snap + F2 块末行尾 retry）；`commentSpans` 改 export + `pairedOnly` 参；i18n +1 键。
+
+新增套件：`r197-e2e.mjs` **28/28**（段落/列表/标题整删 + body 保留 + **代码围栏含空行整删不切** + frontmatter no-op + **多行 frontmatter 值 no-op** + body 后段独立 + **A 缩进码不残留缩进** + **B 缩进≤3 block math 整删不腰斩** + **C 跨界 comment 不留孤儿** + **未配对 `%%` 不吞 EOF** + F2 块末行尾删 + undoable + graph tab no-op + 无 page error）。**套件矩阵不回退**：**r33 37/37·r192 28/28（commentSpans export+pairedOnly 参不退）**·r52 12/12·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（syntaxTree+view.dispatch 复用 R23 编辑→autosave 路径、无新 fs 写路径；byte 全覆于 28 e2e）。**分档逻辑档（data-safety）→ data-safety skill 已跑**。**⭐ Ultracode 多 agent 对抗评审（Workflow 4 lens[overlay-hunt/algorithm/data-safety/faithfulness]并行 probe + synthesis skeptic 复审，再 2 轮定向复审）→ 揪 4 个字节损坏全修闭合、0 残留**：① probe 自查 block math/comment 含空行被 Lezer 腰斩；② A 缩进码 node.from 非行首残留缩进；③ B findMathBlockRanges indent===0 漏检缩进≤3 math；④ C overlay 守卫光标成员判定漏判跨界 comment；⑤ C 修引入 over-expansion（未配对 `%%` 的 clearFormatting 保护 span 喂进删除路径翻转成删到 EOF）。**方法论铁律**：删/改 .md 块的命令，多行 Geode overlay（math 缩进≤3/comment/frontmatter）必逐一查 Lezer 空行腰斩 + 保护 span 翻转过删——**单 probe 4 缺陷里 3 个没抓到、对抗评审 fan-out 才扫净**。简化门 **clean（3 遍）**。**v1 偏差（记录非 corruption）**：列表删整个列表 / frontmatter no-op / 消所有尾随 \n。
+
 ### R196 套件回归（2026-06-24，G3 missing→done「添加别名 + 添加标签」· 表面复刻 G 系列 · data-safety 逻辑档·复用 vetted submitAdd 写路径、零 compat 调用面改动 · 桌面 probe N/A）
 
 R196 = 按 R182 矩阵收割 §3「添加别名」「添加标签」（Obsidian `editor:add-alias`/`add-tag`）。**非 compat-API 轮**（r30 properties 面板 + r126 frontmatter compat 复跑核验不退）。**详见 ARCHITECTURE「Round 196 additions」**：`workspace.ts` addPropertyRequest Store +`key?`；`PropertiesPanel.tsx` tryConsume 加 `if(req.key) submitAdd(req.key)`（复用 vetted submitAdd）；`app/App.tsx` +2 命令镜像 add-property body 带 key；i18n +2 键 en+zh。

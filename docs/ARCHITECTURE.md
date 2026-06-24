@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 197 additions — G3 missing→done「删除段落」（1 命令 editor:delete-paragraph · syntaxTree 顶层块边界 + frontmatter 守卫 · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.193】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 `missing`「删除段落」（Obsidian `editor:delete-paragraph`）。**字节安全核心：用 syntaxTree 顶层块边界，非行级**（行级「连续非空行」会把**多行 frontmatter 值 / 含空行的代码围栏**从中间切断 = 损坏；syntaxTree 把 FencedCode/List 当整块）。**契约（扩 R52 editorEditCommands，无跨模块签名破坏）**：
+> - **`features/editor/editorEditCommands.ts`** 新增 `frontmatterEnd(doc)`（首行 `---` + 找闭合 `---`/`...` 返其行尾、否则 0）+ `blockMathRanges(doc)`（**缩进≤3** 的 `$$…$$` 扫描，逐项镜像 `core/markdown.ts:835-897` geode-math-block 阅读视图规则——**非**复用 liveMath 的 `findMathBlockRanges`[indent===0，为 live widget]）+ `deleteParagraph(view)`（CM `Command`）：**① frontmatter 守卫** `pos < frontmatterEnd → no-op`；② `syntaxTree.resolveInner(pos,1)` 上溯到 `parent.name==="Document"` 的**顶层块**；③ **F2**：得 Document 且 `pos>0 && doc[pos-1]!=="\n"`（光标在块末行尾、非真空隙）→ `resolveInner(pos,-1)` 重试偏向前块；④ Document（真空隙）→ no-op；⑤ **overlay 交集展开（R192 教训）**：`overlays=[...blockMathRanges(doc), ...commentSpans(state,true)]`，fixpoint 对每个 `r` 若 `r.from<to && r.to>from`（**交集**，非光标成员）且 `r.from<from||r.to>to`（超出 Lezer 块）→ `from=min,to=max`（block math/comment 含空行整删不腰斩）；⑥ **行首 snap** `from=lineAt(from).from`（缩进码不残留缩进）；⑦ 删 `[from, to+连续尾随\n]`。+1 EDIT_COMMANDS spec（无默认键）。`commentSpans`（formatCommands）R197 改 **export + 加 `pairedOnly` 参**。i18n dict.app +1 键 en+zh。
+> - **⚠️⚠️ 根因教训（多 agent 对抗评审揪出 4 个字节损坏、逐个 probe 实证后修——R192「Lezer GFM 树 ≠ Geode overlay」同一族的延伸）**：
+>   - **(probe 自查) block math/comment 含内部空行被 Lezer 腰斩**：`$$\na\n\nb\n$$`→`b\n$$`（孤儿 `$$`）。
+>   - **A**：缩进代码块 `node.from` 是首个非缩进列、非行首 → 删后残留 `    ` 与下文熔成新缩进码块。修 = 行首 snap。
+>   - **B**：`findMathBlockRanges` 要 indent===0，但阅读视图收 indent≤3 → 缩进 1-3 的 block math 漏检被腰斩。修 = 自建 `blockMathRanges`（缩进≤3）。
+>   - **C**：overlay 守卫凭**光标成员**判定，但光标落在跨空行注释**周边可见文本（span 外）**时漏判 → 留孤儿 `%%`。修 = **交集**（非成员）+ fixpoint。
+>   - **(C 修引入的回旋镖) over-expansion**：`commentSpans` 对**未配对** `%%`（半写注释，常态瞬时态）返 `{open, doc.length}`run-to-EOF span（为 clearFormatting 的**保护**语义设计=过覆盖无害）；喂进交集展开后**保护翻转成删除**→ 删「光标块→EOF」整篇。修 = `commentSpans(state,true)` 仅 gate 末尾未配对 opener 的 run-to-EOF push（未配对 `%%` 无 closer 可孤儿、不需展开）；clearFormatting 仍默认 false。
+> - **方法论铁律（再次验证）**：碰任何会删/改 .md 块的编辑命令，**多行 Geode overlay（block math 缩进≤3 / `%%comment%%` / frontmatter）必逐一对照「会否被 Lezer 在空行腰斩」+「保护语义的 span 喂进删除路径会否翻转成过删」**——单 probe 易漏，对抗评审 fan-out 才扫得净（本轮 4 缺陷里 3 个单 probe 没抓到）。
+> - **分档：逻辑档（data-safety）**——editorEditCommands.ts=编辑器写路径（删 .md），跑 data-safety skill + byte 回归 **r197-e2e 28/28**（段落/列表/代码围栏/标题整删·body 保留·frontmatter no-op·**缩进码不残留缩进**·**缩进≤3 math 整删**·**block math/comment 含空行不腰斩**·**跨界 comment 不留孤儿**·**未配对 `%%` 不吞 EOF**·F2 块末行尾删·多行 frontmatter 值 no-op·空隙 no-op·undoable）+ 既有 r52/r33/r192 不退。
+> - **v1 偏差（记录、非 corruption）**：① 列表 = 删**整个列表**（顶层块 List；Obsidian 可能只删当前项）；② frontmatter 内 no-op（清整块用 R194 clear-metadata-properties）；③ 消所有尾随 \n。**已知 wart（ROADMAP，非本轮）**：`frontmatterEnd` 三处副本（livePreview/folding/此）+ `FENCE_RE` 两处，参数型不一、跨文件、收敛须建共享 export。**v1 defer**：§3 光标处上下文菜单[需编辑器右键菜单]；§11 bookmark-search[需 query 提升 store]；`partial` theme:switch；`管理仓库` C1；§17 表格编辑器整片。
+
 ## Round 196 additions — G3 missing→done「添加别名 + 添加标签」（2 命令 editor:add-alias / editor:add-tag · 扩 R22 add-property 一次性 Store 带 key · 复用 submitAdd vetted 写路径 · data-safety 逻辑档 · 零新依赖）【As-built v0.192】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 `missing`「添加别名」「添加标签」（Obsidian `editor:add-alias` / `editor:add-tag`）。**契约（扩 R22 add-property 一次性 Store 带可选 key，无新写机制）**：
