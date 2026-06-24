@@ -6,7 +6,8 @@
  * Obsidian workspace.on('editor-menu', (menu, editor, info) => menu.addItem(...)) — plugins add items
  * to the editor right-click menu. Geode (no native editor menu) injects an always-on CM contextmenu
  * extension (via the R115 core registry) that fires 'editor-menu' + shows the REAL compat Menu when a
- * plugin contributed an item; otherwise the browser default menu shows. v1 = plugin items only.
+ * plugin contributed an item. R200 added native Cut/Copy/Paste + always-show, so the menu now ALSO
+ * carries the 3 native items and shows even with no plugin contribution (assertions updated below).
  */
 import { chromium } from "playwright";
 
@@ -61,22 +62,24 @@ ok("the handler received the active MarkdownView info (file = edm.md)", ctx.info
 ok("the handler received a usable Editor (getValue + getSelection)", ctx.editorOk === true);
 if (sawMenu) {
   const labels = await page.$$eval('[data-testid="compat-menu-item"]', (els) => els.map((e) => e.textContent.trim()));
-  ok("the menu shows the contributed item 'Editor Item'", labels.length === 1 && labels[0].includes("Editor Item"), JSON.stringify(labels));
-  await page.click('[data-testid="compat-menu-item"]');
+  ok("R200: menu = native Cut/Copy/Paste + the contributed 'Editor Item'", labels.length === 4 && labels.slice(0, 3).join(",") === "Cut,Copy,Paste" && labels[3].includes("Editor Item"), JSON.stringify(labels));
+  await page.$$eval('[data-testid="compat-menu-item"]', (els) => { const it = els.find((e) => e.textContent.trim().includes("Editor Item")); if (it) it.click(); });
   const fired = await app(() => window.__emFired);
-  ok("clicking the item runs its onClick", fired === "fired:edm.md", JSON.stringify(fired));
+  ok("clicking the contributed item runs its onClick", fired === "fired:edm.md", JSON.stringify(fired));
   const gone = await page.$('[data-testid="compat-menu"]').then((el) => el === null);
   ok("the menu closes after clicking the item", gone);
 }
 
-console.log("— when a plugin contributes NO item, the compat Menu is NOT shown (browser default) —");
+console.log("— R200: with NO plugin item the compat Menu STILL shows (native Cut/Copy/Paste) —");
 await app(() => { window.__addItems = false; });
 // dismiss any leftover menu, then right-click again
 await page.keyboard.press("Escape");
+await app(() => document.querySelector('[data-testid="compat-menu"]')?.remove());
 await page.click(".cm-content", { button: "right" });
-// brief settle, then assert no compat menu was created
-const noMenu = await app(() => new Promise((r) => setTimeout(() => r(document.querySelector('[data-testid="compat-menu"]') === null), 300)));
-ok("no compat Menu when the handler adds nothing (extension returns false → browser default)", noMenu === true);
+const stillShows = await page.waitForSelector('[data-testid="compat-menu"]', { timeout: 3000 }).then(() => true).catch(() => false);
+ok("R200: compat Menu shows native items even when no plugin contributes", stillShows === true);
+const natLabels = await page.$$eval('[data-testid="compat-menu-item"]', (els) => els.map((e) => e.textContent.trim()));
+ok("R200: the 3 native items are Cut/Copy/Paste", natLabels.join(",") === "Cut,Copy,Paste", JSON.stringify(natLabels));
 
 console.log(`\nR131 E2E: ${passed} passed, ${failed} failed`);
 if (failed) console.log("FAILED:", fails.join(", "));

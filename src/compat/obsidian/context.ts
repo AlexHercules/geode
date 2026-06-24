@@ -234,9 +234,9 @@ export function createCompatContext(
     }),
   );
 
-  /* ----- R131: editor-menu — an always-on CM contextmenu extension (via the R115 core registry)
-   * turns an editor right-click into the 'editor-menu' event + shows the plugin items. Compat-only:
-   * the editor feature applies it without importing compat. ----- */
+  /* ----- R131 + R200: editor-menu — an always-on CM contextmenu extension (via the R115 core registry)
+   * turns an editor right-click into a styled menu with native Cut/Copy/Paste + the 'editor-menu' event
+   * (plugin items). Compat-only: the editor feature applies it without importing compat. ----- */
   disposers.push(registerCoreEditorExtension(editorContextMenuExtension(workspace)));
 
   return {

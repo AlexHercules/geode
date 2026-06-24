@@ -158,6 +158,11 @@ export const en = {
   "cmd.insertFootnote": "Insert footnote",
   "cmd.clearFormatting": "Clear formatting",
 
+  // ---- editor right-click context menu (R200) ----
+  "editorMenu.cut": "Cut",
+  "editorMenu.copy": "Copy",
+  "editorMenu.paste": "Paste",
+
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "Search current file",
   "cmd.replaceFile": "Search & replace in current file",
@@ -366,6 +371,11 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.insertHorizontalRule": "插入分隔线",
   "cmd.insertFootnote": "插入脚注",
   "cmd.clearFormatting": "清除格式",
+
+  // ---- editor right-click context menu (R200) ----
+  "editorMenu.cut": "剪切",
+  "editorMenu.copy": "复制",
+  "editorMenu.paste": "粘贴",
 
   // ---- in-editor find/replace (R34) ----
   "cmd.searchFile": "在当前文件中查找",
