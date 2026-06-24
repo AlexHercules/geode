@@ -37,6 +37,7 @@ import { registerEditorMotionCommands } from "@features/editor/editorMotionComma
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri, basename } from "@core/vault";
+import { buildOpenUri } from "@core/obsidianUri";
 import { confirmDelete } from "@core/confirm";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
@@ -46,6 +47,21 @@ import { t, useI18n } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
+
+/** R183 (G3): brief bottom toast for app-level command feedback (e.g. "copied").
+ *  Mirrors the per-module local-notice convention (Explorer's showLinkUpdateNotice,
+ *  blockRef's showBlockNotice) and reuses the shared `.link-update-notice` styling. */
+function showCommandNotice(message: string): void {
+  document.querySelector("[data-testid='command-notice']")?.remove();
+  const el = document.createElement("div");
+  // distinct class from Explorer's `.link-update-notice` (which it removes by
+  // class) so the two toasts never clobber each other; shares styling via co-selector.
+  el.className = "command-notice";
+  el.textContent = message;
+  el.setAttribute("data-testid", "command-notice");
+  document.body.appendChild(el);
+  window.setTimeout(() => el.remove(), 3000);
+}
 
 /* ---------------- tab drag & drop plumbing ---------------- */
 
@@ -298,6 +314,31 @@ export function App() {
         id: "app:show-all-properties",
         name: () => t("cmd.showAllProperties"),
         callback: () => workspace.setRightPanel("allproperties"),
+      }),
+      // R183 (G3 ui-only→done): promote R179's right-click "copy path / copy
+      // Obsidian URL" to commands operating on the active file (reuse buildOpenUri;
+      // pure read + clipboard, no vault write). Obsidian command ids per the matrix.
+      commands.register({
+        id: "file-explorer:copy-path",
+        name: () => t("explorer.copyPath"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (!path) return;
+          void navigator.clipboard.writeText(path).catch(() => {});
+          showCommandNotice(t("explorer.copiedPath"));
+        },
+      }),
+      commands.register({
+        id: "workspace:copy-url",
+        name: () => t("explorer.copyObsidianUrl"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (!path) return;
+          void navigator.clipboard.writeText(buildOpenUri(vault.vaultName, path)).catch(() => {});
+          showCommandNotice(t("explorer.copiedUrl"));
+        },
       }),
       commands.register({
         id: "app:close-tab",

@@ -197,7 +197,10 @@
 
 /* ---- link update notice (R16, transient warning toast) ---- */
 
-.link-update-notice {
+/* `.command-notice` (R183, app-level command toast) shares this styling but a
+   distinct class so the two toasts' cleanups never clobber each other. */
+.link-update-notice,
+.command-notice {
   position: fixed;
   top: 44px;
   right: 16px;
