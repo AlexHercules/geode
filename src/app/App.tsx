@@ -1,4 +1,5 @@
 import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
 import {
@@ -45,6 +46,7 @@ import { registerEditorMotionCommands } from "@features/editor/editorMotionComma
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri, basename } from "@core/vault";
+import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
 import { buildClearProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
 import { confirmDelete } from "@core/confirm";
@@ -879,6 +881,14 @@ export function App() {
         available: () => workspace.getActiveFile() !== null,
         callback: () => workspace.openModal("recovery"),
       }),
+      // R203: vault switcher — NOT isTauri-gated (the recents list + modal are pure frontend;
+      // reopening a recent path needs no native dialog). "Open another vault" inside it still
+      // routes to openVaultFlow's native picker (desktop).
+      commands.register({
+        id: "app:switch-vault",
+        name: () => t("cmd.switchVault"),
+        callback: () => workspace.openModal("vaultswitcher"),
+      }),
     );
     if (isTauri()) {
       disposers.push(
@@ -1220,6 +1230,7 @@ export function App() {
       {ws.modal === "workspaces" && <WorkspacesModal />}
       {ws.modal === "recovery" && <RecoveryModal />}
       {ws.modal === "slides" && <SlidesOverlay />}
+      {ws.modal === "vaultswitcher" && <VaultSwitcherModal />}
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />
@@ -1862,9 +1873,79 @@ function VaultPicker() {
   );
 }
 
+/**
+ * R203 (G C1): the vault switcher modal — lists recently-opened vaults; click to reopen one,
+ * or open another folder. Local `useState` reflects the recents list (it has no reactive store);
+ * removing a row, or a failed switch (a recent path that no longer exists), prunes it from the list.
+ * Mirrors the shared modal shell (overlay-click close); Escape→closeModal is global.
+ */
+function VaultSwitcherModal() {
+  const app = useApp();
+  const t = useI18n();
+  const [vaults, setVaults] = useState<string[]>(() => loadRecentVaults());
+  const close = () => app.workspace.closeModal();
+  const onOverlayMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) close();
+  };
+  const open = (path: string) => {
+    close();
+    void switchToVault(app, path).catch((err) => {
+      console.error("[vault] switch failed; forgetting", path, err);
+      removeRecentVault(path);
+    });
+  };
+  const forget = (path: string) => {
+    removeRecentVault(path);
+    setVaults(loadRecentVaults());
+  };
+  return (
+    <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="vaultswitcher-modal-overlay">
+      <div className="modal-panel" role="dialog" aria-label={t("vaultSwitcher.title")} data-testid="vaultswitcher-modal">
+        <div className="vaultswitcher-header">{t("vaultSwitcher.title")}</div>
+        {vaults.length === 0 ? (
+          <p className="vaultswitcher-empty" data-testid="vaultswitcher-empty">
+            {t("vaultSwitcher.empty")}
+          </p>
+        ) : (
+          <ul className="vaultswitcher-list">
+            {vaults.map((path) => (
+              <li key={path} className="vaultswitcher-item" data-testid="vaultswitcher-item">
+                <button className="vaultswitcher-open" onClick={() => open(path)} title={path}>
+                  <span className="vaultswitcher-name">{basename(path)}</span>
+                  <span className="vaultswitcher-path">{path}</span>
+                </button>
+                <button
+                  className="vaultswitcher-remove"
+                  data-testid="vaultswitcher-remove"
+                  aria-label={t("vaultSwitcher.remove")}
+                  onClick={() => forget(path)}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button className="btn-accent vaultswitcher-open-other" data-testid="vaultswitcher-open-other" onClick={() => { close(); void openVaultFlow(app); }}>
+          {t("vaultSwitcher.openOther")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 async function openVaultFlow(app: ReturnType<typeof useApp>) {
   const picked = await app.vault.adapter.pickVaultFolder();
   if (!picked) return;
+  await switchToVault(app, picked);
+}
+
+/**
+ * R203: switch the active vault to an already-known absolute path (no folder dialog) — the body of
+ * openVaultFlow, reused by the vault switcher to reopen a recent vault. The exact sequence is
+ * load-bearing for data safety; do NOT reorder or drop a step.
+ */
+async function switchToVault(app: ReturnType<typeof useApp>, picked: string) {
   // Flush pending edits into the OLD vault BEFORE re-pointing the adapter:
   // afterwards relative paths resolve into the new root, and a late save
   // would silently overwrite the new vault's file with old-vault content.
@@ -1881,6 +1962,7 @@ async function openVaultFlow(app: ReturnType<typeof useApp>) {
     /* ignore */
   }
   await app.vault.load();
+  pushRecentVault(picked); // only after a successful load (a bad path throws above)
   // tabs persisted from the previous vault point at files the new vault does
   // not have — close them before plugins reload against the new vault
   app.workspace.closeMissingFileTabs((p) => app.vault.fileExists(p));

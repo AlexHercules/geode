@@ -183,7 +183,7 @@ export type RightPanelKind =
   | "tags"
   | "calendar"
   | (string & {});
-export type ModalKind = "palette" | "switcher" | "settings" | "templates" | "workspaces" | "recovery" | "slides" | null;
+export type ModalKind = "palette" | "switcher" | "settings" | "templates" | "workspaces" | "recovery" | "slides" | "vaultswitcher" | null;
 export type ThemeKind = "dark" | "light" | "system";
 
 /** Pane tree (split panes). "row" = children side by side, "column" = stacked. */

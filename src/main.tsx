@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
+import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
 import { AppContext, GeodeApp } from "@app/AppContext";
 import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
 import {
@@ -1046,6 +1047,13 @@ async function bootstrap() {
   };
   linkHost.__geodeLinkAtCursor = (line, lineStart, cursor) => linkAtCursor(line, lineStart, cursor);
 
+  // R203: recent-vaults store probe — lets E2E assert the localStorage CRUD (load/push/remove,
+  // dedupe, cap, defensive parse) deterministically.
+  const recentHost = globalThis as typeof globalThis & {
+    __geodeRecentVaults?: { load: () => string[]; push: (p: string) => void; remove: (p: string) => void };
+  };
+  recentHost.__geodeRecentVaults = { load: loadRecentVaults, push: pushRecentVault, remove: removeRecentVault };
+
   // always-on line-motion probe (R51): runs the CM move/copy-line StateCommands on
   // a throwaway EditorState so the transform is asserted deterministically (the live
   // command — editor:move-line-up on a real CM view — is exercised by the browser E2E).
@@ -1430,6 +1438,7 @@ async function bootstrap() {
       adapter.setVaultPath(last);
       try {
         await vault.load();
+        pushRecentVault(last); // R203: seed the recents list with the booted vault
       } catch (err) {
         console.warn("[boot] failed to reopen last vault", err);
         localStorage.removeItem(LAST_VAULT_KEY);
