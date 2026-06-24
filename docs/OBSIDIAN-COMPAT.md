@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R191 套件回归（2026-06-24，G3 missing→done「在上方/下方添加光标 多光标」· 表面复刻 G 系列 · 逻辑档[editor]·selection-only 无 .md 写、零 compat 调用面改动 · 桌面 probe N/A）
+
+R191 = 按 R182 矩阵收割 §3「在上方/下方添加光标」（Obsidian `editor:add-cursor-above`/`-below`）。Geode 编辑器早开 `allowMultipleSelections`，仅缺命令入口。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 191 additions」**：`editorMotionCommands.ts` 新增 `addCursorVertical`（view.moveVertically 加副光标·边界 no-op·去重·新光标设 main 级联）+ 2 spec（无默认键）经既有 registerEditorMotionCommands 自动注册；i18n +2 键 en+zh。**仅改 selection 无 doc 写**。
+
+新增套件：`r191-e2e.mjs` **15/15**（2 命令注册+名称解析非裸键+无默认键 + live CM view：cursor line2 col2→add-cursor-below 加 line3 同列[7,12]·连按级联 line4[7,12,17] + **doc 字节不变[selection-only 无 .md 写]** + add-cursor-above 级联上 + 顶行 no-op + 去重不重复加 + 无 page error）。**套件矩阵不回退**：**r51 10/10（motion 模块）**·r190 14/14·r33 37/37·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 CM selection 状态操作、零 fs/Rust/平台分支、data-safety skill 触发但实测无写路径，同 R188 fold）。**分档逻辑档（editor）→ data-safety skill 已跑**：reviewer 真驱动命令把副光标置 frontmatter 受保护 body-start（offset 17）+ 真键 Backspace 证闭合 fence 存活（R63 livePreview.ts:1400-1405 查每个 range）；add-cursor 无 `changes`/`docChanged=false`/零 autosave；多光标损坏面=R63 既有面未扩大。**对抗评审 6 维 → 0 confirmed defect**（data-safety 全证 / moveVertically goal-column·折行·Tab·CJK / 边界 no-op / create normalized 追踪 main / 命令+i18n / Obsidian 忠实）。简化门 **clean**（addCursorVertical 单算法、spec 箭头绑 forward 必需、纠正失效注释）。**既有口径**：CM defaultKeymap 早绑 `Mod-Alt-↑/↓`→addCursor（R63），R191 加的是命令面板可见+可重绑的具名 Obsidian-id 命令（无默认键=与 Obsidian 一致）、两入口无冲突。**v1 defer**：清除格式[字节风险高单独轮] / panel 新标签页变体 / theme:switch / 管理仓库 C1。
+
 ### R190 套件回归（2026-06-24，G3 ui-only→done「关闭其他标签页 / 关闭此标签页分组」· 表面复刻 G 系列 · 逻辑档[tab flush]·无新写路径、零 compat 调用面改动 · 桌面 probe N/A）
 
 R190 = 按 R182 矩阵收割 §4「关闭其他标签页」「关闭此标签页分组」（Obsidian `workspace:close-others`/`workspace:close-tab-group`）。矩阵原标 missing，实为 **ui-only**（closeOtherTabs/closeAllTabs 早是 vetted workspace 方法、由标签右键菜单调用）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 190 additions」**：`app/App.tsx` 紧邻 `app:close-tab` 注册 2 命令（镜像 getActiveTab 守卫、无默认键、复用 vetted closeOtherTabs/closeAllTabs，**零 workspace.ts 方法改动**）；i18n +2 键 en+zh。

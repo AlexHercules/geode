@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 191 additions — G3 missing→done「在上方/下方添加光标（多光标）」（2 命令 editor:add-cursor-above / -below · view.moveVertically 加副光标 · selection-only 无 .md 写 · 逻辑档[editor] · 零新依赖）【As-built v0.187】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 `missing`「在上方添加光标」「在下方添加光标」（Obsidian `editor:add-cursor-above` / `editor:add-cursor-below`）。Geode 编辑器**早已开 `EditorState.allowMultipleSelections`**（cmExtensions.ts:651 + drawSelection/rectangularSelection），仅缺「按命令加副光标」入口。**契约（扩展既有 R51 motion 命令模块，无跨模块签名破坏）**：
+> - **`features/editor/editorMotionCommands.ts`** 新增 `addCursorVertical(view, forward)`（CM `Command` 型）+ `addCursorAbove`/`addCursorBelow` 包装：用 **`view.moveVertically(cursor(main.head), forward)`** 求同 goal-column 的上下行位置（尊重折行/Tab 视觉列，非手算字符列）；**边界 no-op**（移动后行号 == 原行号 → 文档顶/底，返 false）；**去重**（该位已有空光标 → 不重复加）；`EditorSelection.create([...ranges, newCursor], ranges.length-1)`（新光标设为 main → 连按级联；create 内部 normalized 排序并正确追踪 main）。**纯改 selection、无 `changes` → 无 doc 变更/无 dirty/无 autosave**。+2 MOTION_COMMANDS spec（**无默认键**——Obsidian 未设置 + CM defaultKeymap 也未绑），经既有 `registerEditorMotionCommands`（App.tsx:684 已 wire）自动注册（available=active-file view）。模块头注释更新：line-motion 写 doc→autosave / add-cursor 仅 selection。
+> - i18n dict.app +2 `cmd.addCursorAbove`/`cmd.addCursorBelow` 键 en+zh。
+> - **分档：逻辑档（editor）**——碰 editor 管线，跑 data-safety skill。但 add-cursor **仅改 selection、零 .md 写**；且**多光标删除安全早由 R63 兜底**（livePreview.ts:1400-1405：deleteCharBackward 检查**每个** range、护 frontmatter 闭合 fence，本命令只「加光标」不改删除行为 → 无新损坏路径）。
+> - **既有口径（评审记录）**：CM defaultKeymap 早绑 `Mod-Alt-↑/↓`→addCursorAbove/Below（R63 注释 cmExtensions.ts:645），故 Geode 此前已有键盘多光标；R191 加的是**命令面板可见 + 可重绑**的具名 Obsidian-id 命令（无默认键=与 Obsidian 一致，沿用 R51「具名命令与 defaultKeymap 共键/或留空」哲学）。两入口无冲突（本命令无键）。
+> - **v1 defer**：matrix `missing` 纯编辑（清除格式[字节风险高单独轮]）；`partial` 余（panel「新标签页」变体[需主区视图]/theme:switch[语义待定]）；`管理仓库`/`切换仓库`（C1）。
+
 ## Round 190 additions — G3 ui-only→done「关闭其他标签页 / 关闭此标签页分组」（2 命令 app:close-others / app:close-tab-group · 复用 vetted closeOtherTabs/closeAllTabs · 逻辑档[tab 生命周期·flush]·无新写路径 · 零新依赖）【As-built v0.186】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §4「关闭其他标签页」「关闭此标签页分组」（Obsidian `workspace:close-others` / `workspace:close-tab-group`）。矩阵原标 missing，实为 **ui-only**：`closeOtherTabs`/`closeAllTabs` 已是 vetted workspace 方法、由标签右键菜单（`tabctx-close-others`/`tabctx-close-all`）调用，仅缺注册成命令。**契约（纯命令注册 + i18n，无跨模块签名变更、无新方法）**：
