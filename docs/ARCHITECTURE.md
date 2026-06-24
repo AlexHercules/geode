@@ -71,6 +71,14 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 194 additions — G3 missing→done「清除笔记属性」（1 命令 editor:clear-metadata-properties · 复用 vetted properties.ts findBlock 边界删整个 frontmatter 块 · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.190】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing`「清除笔记属性」（Obsidian `editor:clear-metadata-properties`）。**契约（扩 R22 properties 引擎，无跨模块签名破坏）**：
+> - **`core/properties.ts`** 新增纯 `buildClearProperties(content): PropertyEdit | null`——复用 vetted `parseInternal`（= `findBlock` R22 冻结 frontmatter 边界 + 解析），**镜像 buildRemoveProperty 的「末项→删整块」路径**：`parsed && entries.length>0` → `{from: parsed.from, to: parsed.to, insert: ""}`（删整个 `---…---\n` 块）；无块/空块/不可解析块 → null（no-op，**不碰无法解析的 frontmatter=安全方向**）。**字节安全**：边界由 R22-vetted findBlock 给（要求 `---` 在偏移 0、闭合 fence 在 20k 内），删 `[0, block.to)`、body 逐字保留。
+> - **`app/App.tsx`** 注册 `editor:clear-metadata-properties`（available=active-file editor view、callback 经 `getActiveFileEditorView(app).view` 读 doc → buildClearProperties → `view.dispatch({changes})`=既有 CM 事务→documents dirty→autosave，**无新写路径**、R23 只写 active-file、**undoable**[Ctrl-Z 恢复]）。无默认键（Obsidian 未设置）。import buildClearProperties。i18n dict.app +1 `cmd.clearProperties` 键 en+zh。
+> - **分档：逻辑档（data-safety）**——core/properties.ts=frontmatter 写引擎 + 命令删 frontmatter 块（编辑器写路径），跑 data-safety skill + byte 回归（frontmatter 删除/body 保留/无块·空块 no-op）+ 既有 properties 套件不退。
+> - **v1 defer**：其余 missing 纯编辑（删除段落[Lezer 不模 frontmatter→需 frontmatter 感知]/添加别名·标签[需 properties panel 预填 key]）；`partial` 余（panel「新标签页」变体/theme:switch）；§11 bookmark-search；`管理仓库` C1。
+
 ## Round 193 additions — G3 missing→done「书签命令组：移除当前文件书签 + 收藏所有标签页」（2 命令 bookmarks:unbookmark / bookmarks:bookmark-all-tabs · 复用 vetted 书签 store · 零新依赖）【As-built v0.189】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §11 `missing`「移除当前文件的书签」「收藏所有标签页」（Obsidian `bookmarks:unbookmark` / `bookmarks:bookmark-all-tabs`）。**契约（纯命令注册 + i18n，无跨模块签名变更、无新 store 方法）**：

@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R194 套件回归（2026-06-24，G3 missing→done「清除笔记属性」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归·复用 vetted properties 边界、零 compat 调用面改动 · 桌面 probe N/A）
+
+R194 = 按 R182 矩阵收割 §3「清除笔记属性」（Obsidian `editor:clear-metadata-properties`）。**非 compat-API 轮**（但 r30 properties 面板 + r126 frontmatter compat 复跑核验不退）。**详见 ARCHITECTURE「Round 194 additions」**：`core/properties.ts` 新增纯 `buildClearProperties`（复用 R22-vetted parseInternal/findBlock 边界删整 frontmatter 块、镜像 buildRemoveProperty 末项、`entries.length===0`→null）；`app/App.tsx` +1 命令（getActiveFileEditorView 读 doc→buildClearProperties→view.dispatch、active-file gated、undoable）；i18n +1 键 en+zh。
+
+新增套件：`r194-e2e.mjs` **12/12**（命令注册+名称解析非裸键+无默认键 + 单/多属性→body only + frontmatter-only→空 + **body `[[link]] **bold** $math$` 逐字保留** + 无 frontmatter/前置内容/纯文本 no-op + **undo Ctrl-Z 恢复整块** + 无 page error）。**套件矩阵不回退**：**r30 25/25（properties 面板）**·r126 11/11（frontmatter compat）·r193 17/17·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯字符串 buildClearProperties 字节验证 + view.dispatch 复用 R22/R23 frontmatter 写→autosave[已覆盖]、无新 fs 写路径，同 R192）。**分档逻辑档（data-safety）→ data-safety skill 已跑**：reviewer 12 例对抗字节驱动证只删 `[parsed.from,parsed.to)`、body 逐字保留（body 内第二 `---` 取首闭合不误删 / 闭合 fence 超 20k→no-op 不删半块 / frontmatter 不在偏移 0→no-op / 空块·opaque·CRLF·CJK·EOF 无尾换行 全安全 / undoable / 无 TOCTOU / 无新写路径）。**对抗评审 6 维 → 0 confirmed defect**（data-safety 全证 / 命令双门控 no-op / PropertiesPanel 反应式删块后行 2→0 无 stale / 命令+i18n / Obsidian 忠实 / 分层）。简化门 **clean**（单函数+单命令、buildClearProperties 与 buildRemoveProperty 末项相似非相同、合并须改 diff 外既有码驳回）。**关键决策**：删 frontmatter 用 vetted properties 边界**非 Lezer 树**（R192 教训：Lezer 不模 frontmatter）。**v1 nuance**：opaque-only frontmatter 也清除=clear-ALL 语义（body 始终保留、非数据安全）。
+
 ### R193 套件回归（2026-06-24，G3 missing→done「书签命令组：移除当前文件书签 + 收藏所有标签页」· 表面复刻 G 系列 · 逻辑档[书签 persist 非 .md]·复用 vetted store、零 compat 调用面改动 · 桌面 probe N/A）
 
 R193 = 按 R182 矩阵收割 §11「移除当前文件的书签」「收藏所有标签页」（Obsidian `bookmarks:unbookmark`/`bookmark-all-tabs`）。**非 compat-API 轮**（但 r158 书签 compat 套件复跑核验不退）。**详见 ARCHITECTURE「Round 193 additions」**：`app/App.tsx` 注册 2 命令复用 vetted 书签 store（unbookmark available=isFileBookmarked·复用 toggleFile；bookmark-all-tabs allTabs filePath 去重·复用 add 幂等，**零 core/bookmarks.ts 改动**）；i18n +1 键 en+zh。
