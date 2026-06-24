@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R185 套件回归（2026-06-24，G3 partial 校准「视图/外观切换命令 + 搜索默认键」· 表面复刻 G 系列 · 机械档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R185 = 按 R182 矩阵收割 `partial` 校准档纯前端子片。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 185 additions」**：`app/App.tsx` 注册 4 视图/外观切换命令（editor:toggle-line-numbers/readable-line-length/spellcheck + app:toggle-ribbon，回调 `setX(!X.get())` 翻转既有 appearance 设置）+ `app:show-search` 加默认键 Mod+Shift+F；i18n +4 键 en+zh。
+
+新增套件：`r185-e2e.mjs` **19/19**（4 命令注册+名称解析非裸键 + show-search 有效键=Mod+Shift+F + 各 toggle 翻转正确 localStorage 键[null≡default 布尔比较]+round-trip + toggle 无需 active file graph tab 可执行 + 无 page error）。**套件矩阵不回退**：r79 21/21·r181 26/26·r183 11/11·r32 24/24·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯前端外观切换=localStorage+反应式重配、零 fs/Rust/平台分支，同 R181/R183）。**分档机械档 → scoped 窄域 review 0 confirmed defect**（i18n en+zh 各 2·4 id 各唯一·hotkey 无冲突·store/setter 配对 e2e 验正确）。简化门机械档跳过。**v1 defer**：theme:switch（语义待定）、toggle-default-new-tab-view（三态非布尔）、panel 新标签页变体/方向性聚焦（新逻辑）、missing 纯编辑（编辑器写 data-safety）。
+
 ### R184 套件回归（2026-06-24，G3 ui-only→done「文件操作命令化 duplicate/rename/move/new-folder」· 表面复刻 G 系列 · data-safety 逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R184 = 按 R182 命令矩阵收割 `ui-only→done` **余四项文件操作**——至此矩阵 ui-only 6 项全清（R183 纯 2 + R184 余 4）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 184 additions」**：workspace +`explorerFileAction` 一次性 Store + 4 命令（矩阵指定 id）→ Explorer `findNode` + 消费 effect 路由到既有 vetted 处理器（makeCopy R42 / startRename→R16 / setMovePath→R28 / newFolder R17），**无新写路径**；命令名复用 R179 i18n（零新增）。

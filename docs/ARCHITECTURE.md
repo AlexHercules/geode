@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 185 additions — G3 partial 校准「视图/外观切换命令 + 搜索默认键」（4 toggle 命令 + show-search hotkey · 机械档 · 复用既有 appearance setters · 零新依赖）【As-built v0.181】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `partial` 校准档（命令在但缺默认键/变体）的**纯前端子片**。**契约（纯命令注册 + i18n，无跨模块签名变更）**：`app/App.tsx` 注册 4 个视图/外观切换命令（矩阵指定 id），回调 `setX(!X.get())` 翻转**既有 appearance 设置**（纯显示、无 vault/doc 写）：
+> - `editor:toggle-line-numbers`→showLineNumbers · `editor:toggle-readable-line-length`→readableLineLength · `editor:toggle-spellcheck`→spellcheckEnabled · `app:toggle-ribbon`→showRibbon（前二 matrix=partial[设置有开关无命令]、后二=missing）。
+> - **`app:show-search` 加默认键 `Mod+Shift+F`**（Obsidian global-search 默认键、校准缺口；验证 Mod+Shift+F 全仓未占用、editor:search=Mod+F 不冲突）。
+> - i18n dict.app +4 `cmd.toggle*` 键 en+zh（命名对齐 Obsidian「Toggle line numbers」等）。
+> - **分档：机械档**（diff 39 行/2 文件，4 toggle 命令回调=调既有 setter 翻转、无新控制流/store action/算法、纯显示非数据安全 + hotkey 常量 + i18n；零新依赖）→ 简化门跳过；**Step 4 scoped 窄域 review → 0 confirmed defect**（i18n en+zh 各 2 · 4 id 各唯一 · hotkey 无冲突 · **store/setter 配对正确**[e2e 验各命令翻转正确 localStorage 键]）。
+> - **r185-e2e 19/19**（4 命令注册+名称解析 + show-search 有效键=Mod+Shift+F + 各 toggle 翻转正确设置值[null≡default 布尔比较]+round-trip + toggle 无需 active file[graph tab 可执行] + 无 page error）+回归 r79 21/21·r181 26/26·r183 11/11·r32 24/24·typecheck 0/cargo/生产构建。**桌面 probe N/A**（纯前端外观切换=localStorage+反应式重配、零 fs/Rust/平台分支，同 R181/R183）。
+> - **v1 defer**：`theme:switch`（矩阵 partial，无独立切换器命令、语义待定）、`app:toggle-default-new-tab-view`（NewTabMode 三态非布尔、cycle 语义）；panel「新标签页」变体 + 方向性聚焦标签组（新逻辑、留后续 partial 子轮）；`missing` 纯编辑（设为小标题 1-6/清除格式 = 编辑器写 data-safety）。
+
 ## Round 184 additions — G3 ui-only→done「文件操作命令化」（duplicate/rename/move/new-folder · 一次性 Store bridge → 既有 vetted Explorer 处理器 · data-safety 逻辑档 · 零新依赖）【As-built v0.180】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 命令矩阵收割 `ui-only→done` 的**余四项文件操作**（duplicate/rename/move/new-folder，矩阵列右键/按钮已有、未注册成命令）。**契约（一处新 Store + 方法，无跨模块签名破坏）**：
