@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 198 additions — G3 missing→done「行内数学 + 插入数学块 + 插入分隔线」（3 命令 editor:insert-math / insert-math-block / insert-horizontal-rule · 扩 R33 format 引擎 3 纯插入 op · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.194】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing` insert 家族 3 项（Obsidian `editor:insert-math` 行内数学 / `editor:insert-math-block` 插入数学块 / `editor:insert-horizontal-rule` 插入分隔线）。与 R189 `insertWikilink`、R186 `setHeadingLevel` 同槽——**扩 R33 纯函数 format 引擎（`core/format.ts`），不读 Lezer 树、只替换 [from,to]，纯插入（非 toggle，不 unwrap）→ 天然回避 R192/R197 的「overlay 腰斩/保护翻转」损坏族**（那族源于删/改既有 overlay；本轮只新增分隔符）。**契约（扩 R33，无跨模块签名破坏）**：
+> - **`core/format.ts`** 新增 3 个 `FormatOp`：`"inline-math"` / `"math-block"` / `"horizontal-rule"`，3 个纯函数 helper + `applyFormatOp` 3 个 case：
+>   - **`insertInlineMath(text,from,to)`**（镜像 `insertWikilink`，单 `$` 包裹）：空选区→`$$` 光标居中（selFrom=selTo=from+1）；有选区→`$`+sel+`$`，光标在闭合 `$` 后。**已知固有歧义（记录、非 corruption）**：空选区落在**整空行**时 `$$` 会被 Geode block-math 扫描器（行首 `$$`）当块公式起始 → 渲染瞬时态待闭合；与 Obsidian 行内空插入字节一致（用户随即键入），accept。
+>   - **`insertMathBlock(text,from,to)`**（镜像 `toggleCodeBlock` 的 wrap 分支，但**纯插入不 toggle**——不检测既有 `$$…$$`，故不读 overlay）：`lineBounds` 取整行块 `block`；insert=`$$\n`+block+`\n$$`；空块→`$$\n\n$$` 光标在中间空行（selFrom=selTo=start+3）；有块→选中内层（selFrom=start+3, selTo=start+3+block.length）。
+>   - **`insertHorizontalRule(text,from,to)`**（**唯一不消选区** op，避免删用户文本=底线①）：pos=`to`（选区尾，from=to=pos 纯插入、保留选区文本）；lead=`(pos===0||text[pos-1]==="\n")?"":"\n"`；insert=lead+`***\n`；光标在规则后（selFrom=selTo=pos+insert.length）。**分隔符用 `***` 非 `---`**：`---` 直接跟在段落文本下会被 markdown-it 解析成 **setext H2 下划线**（语义损坏/底线①），`***`/`___` 永不是 setext；markdown-it `hr` 规则 `***`/`---`/`___` 渲染**完全等价**为 `<hr>`，故 `***` = 最忠实(Obsidian 三者同渲)且 setext-proof 的安全选择。
+> - **`features/editor/formatCommands.ts`**：FORMAT_COMMANDS +3 spec（`editor:insert-math`/`cmd.insertMath`/`inline-math`、`editor:insert-math-block`/`cmd.insertMathBlock`/`math-block`、`editor:insert-horizontal-rule`/`cmd.insertHorizontalRule`/`horizontal-rule`，均无默认键，对齐 Obsidian「未设置」）。
+> - **`core/i18n/dict.app.ts`** +3 键 en+zh（`cmd.insertMath`=Insert inline math/插入行内公式、`cmd.insertMathBlock`=Insert math block/插入数学块、`cmd.insertHorizontalRule`=Insert horizontal rule/插入分隔线）。
+> - **零接线成本**：`main.tsx` `__geodeFormat.apply(op,text,from,to)` 透传 `applyFormatOp` → 3 新 op 自动暴露给浏览器 E2E + 桌面 probe，无额外 wiring。
+> - **分档：逻辑档（data-safety）**——`core/format.ts`=编辑器 format 引擎产出 .md 字节，跑 data-safety skill + byte 回归 **r198-e2e 34/34** + 既有 r33 37/37·r189 17/17 不退。**字节安全论证**：3 op 全纯插入、只替换 [from,to]（math wrap 选区、HR 不消选区）、不 `syntaxTree`/不读 overlay → 无 R192/R197 损坏面；唯一新增风险=选区跨既有 overlay 边界时包裹产破损（用户驱动，与 Obsidian 同），区外字节不动。CRLF 经 `vault.ts:356 normalizeContent`（R16 choke point）已 CRLF→LF，HR 的 `text[to-1]==="\n"` 判定对每篇文档成立、无 `\r` 漏判。
+> - **⚠️ 对抗评审结论（Ultracode 4 lens + skeptic synthesis · verdict=deliverable · 0 critical/0 major）**：4 lens（byte-offset / data-safety-overlay / fidelity / wiring）逐项独立复核——offset 全对、R192/R197 损坏族**经证实不适用**（纯 slice 无树读）、wiring 干净（唯一 `switch(op)` 是 `default:never` 穷尽、3 键 en+zh 齐、id 无撞）。
+>   - **fidelity lens 洞见（强化 `***` 选择）**：`***` 不只**规避** setext 陷阱——它让 Geode **渲染输出对齐 Obsidian**（Obsidian 根本不支持 setext 标题，其 `text\n---` 渲成段落+`<hr>`；Geode 阅读视图[markdown-it]却把 `text\n---` 渲成 setext `<h2>`=**既有 Geode 阅读视图失真**，非 R198 范围）。插 `***` 使 Geode 渲染结果 = Obsidian。
+>   - **唯一 confirmed = nit（已修，非产品码）**：r198-e2e 两条 math-**渲染**断言原带 `|| includes("a^2")` 回退（且正则 `\$` 匹配未渲染的裸 `$`）→ 近乎恒真、math 渲染坏了也绿。已收紧为 `class="…geode-math-inline"` / `geode-math-block`（`markdown.ts:825` 实出标记），收紧后仍 34/34 → 渲染证明现为 load-bearing。byte 级 A/A2/A3 + setext render proof 本就精确、不受影响。
+>   - **refuted**：命令 id 非 Obsidian 逐字 core id（内部 id、用户不可见、Geode 自有注册表无 id 键迁移、零功能影响 + Obsidian 真 id 前提本身未证）。
+> - **桌面 probe N/A**：纯 `core/` format 引擎、无 fs/vault 路径，同一纯 TS 双端等价；`__geodeFormat.apply` 浏览器侧已直驱 `applyFormatOp`（同 R197/R189/R186 非 fs 命令轮）。
+> - **v1 偏差（记录、非 corruption）**：① inline-math 空选区插 `$$`（整空行上 = 瞬时 block-math 起始，用户随即键入，与 Obsidian 同）；② math-block 行级整行包裹（光标所在整行入 `$$…$$`，同 toggleCodeBlock）；③ HR 用 `***` 非 `---`（setext-proof + 渲染对齐 Obsidian）。**已知 wart（ROADMAP，非本轮）**：Geode 阅读视图 setext 标题失真（`text\n---`→h2，Obsidian 不支持 setext）= 独立缺口、R198 已绕开不需修。**v1 defer**：§2 重命名小标题/插入表格(§17)·附件·脚注·嵌入；§3 光标处上下文菜单；`管理仓库` C1。
+
 ## Round 197 additions — G3 missing→done「删除段落」（1 命令 editor:delete-paragraph · syntaxTree 顶层块边界 + frontmatter 守卫 · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.193】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §3 `missing`「删除段落」（Obsidian `editor:delete-paragraph`）。**字节安全核心：用 syntaxTree 顶层块边界，非行级**（行级「连续非空行」会把**多行 frontmatter 值 / 含空行的代码围栏**从中间切断 = 损坏；syntaxTree 把 FencedCode/List 当整块）。**契约（扩 R52 editorEditCommands，无跨模块签名破坏）**：
