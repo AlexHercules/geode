@@ -414,6 +414,25 @@ export function App() {
         },
       }),
       commands.register({
+        // R190: Obsidian workspace:close-others — close every other tab in the active
+        // group. Reuses the vetted closeTab path (flush + recently-closed + skip pinned).
+        id: "app:close-others",
+        name: () => t("cmd.closeOthers"),
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (tab) workspace.closeOtherTabs(tab.id);
+        },
+      }),
+      commands.register({
+        // R190: Obsidian workspace:close-tab-group — close all tabs in the active group.
+        id: "app:close-tab-group",
+        name: () => t("cmd.closeTabGroup"),
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (tab) workspace.closeAllTabs(tab.id);
+        },
+      }),
+      commands.register({
         // R161: Obsidian's real id is "app:delete-file"; no default hotkey
         // (matches Obsidian — users bind it in Hotkeys). Reuses the Explorer's
         // vetted flush-before-trash path → recoverable .trash, reactive cleanup.
