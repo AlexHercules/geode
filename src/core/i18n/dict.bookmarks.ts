@@ -21,6 +21,7 @@ export const en = {
   "cmd.unbookmarkFile": "Remove bookmark for the active note",
   "cmd.bookmarkHeading": "Bookmark heading under cursor",
   "cmd.bookmarkBlock": "Bookmark block under cursor",
+  "cmd.bookmarkAllTabs": "Bookmark all tabs",
   "cmd.showBookmarks": "Show bookmarks",
 } as const;
 
@@ -40,5 +41,6 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.unbookmarkFile": "取消收藏当前笔记",
   "cmd.bookmarkHeading": "收藏光标所在标题",
   "cmd.bookmarkBlock": "收藏光标所在块",
+  "cmd.bookmarkAllTabs": "收藏所有标签页",
   "cmd.showBookmarks": "显示书签",
 };

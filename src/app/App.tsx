@@ -7,7 +7,7 @@ import {
   readableLineLength, setReadableLineLength,
   spellcheckEnabled, setSpellcheckEnabled,
 } from "@core/appearance";
-import { MIN_PANE_FRACTION, findTabLeaf } from "@core/workspace";
+import { MIN_PANE_FRACTION, allTabs, findTabLeaf } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
 import { Icon } from "./icons";
@@ -655,6 +655,39 @@ export function App() {
         callback: () => {
           const b = blockUnderCursor(app);
           if (b) void bookmarks.add({ type: "block", path: b.path, subpath: b.subpath, ctime: Date.now() });
+        },
+      }),
+      commands.register({
+        // R193: Obsidian bookmarks:unbookmark — a dedicated REMOVE (≠ the toggle above),
+        // only available when the active file is bookmarked. Reuses toggleFile (which
+        // removes when present), so it never accidentally adds.
+        id: "bookmarks:unbookmark",
+        name: () => t("cmd.unbookmarkFile"),
+        available: () => {
+          const p = workspace.getActiveFile();
+          return p !== null && bookmarks.isFileBookmarked(p);
+        },
+        callback: () => {
+          const p = workspace.getActiveFile();
+          if (p && bookmarks.isFileBookmarked(p)) void bookmarks.toggleFile(p);
+        },
+      }),
+      commands.register({
+        // R193: Obsidian bookmarks:bookmark-all-tabs — bookmark every open file-backed tab.
+        // bookmarks.add is idempotent (already-present files no-op), so re-running is safe.
+        id: "bookmarks:bookmark-all-tabs",
+        name: () => t("cmd.bookmarkAllTabs"),
+        callback: () => {
+          const paths = [
+            ...new Set(
+              allTabs(workspace.state.get().root)
+                .map((tb) => tb.filePath)
+                .filter((p): p is string => p !== null),
+            ),
+          ];
+          void (async () => {
+            for (const p of paths) await bookmarks.add({ type: "file", path: p, ctime: Date.now() });
+          })();
         },
       }),
       commands.register({
