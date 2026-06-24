@@ -574,6 +574,31 @@ export function App() {
         },
       }),
       commands.register({
+        // R196: Obsidian editor:add-alias — add (or focus) an "aliases" property and focus
+        // its value. Mirrors add-property's flip-to-editable flow, passing the property key.
+        id: "editor:add-alias",
+        name: () => t("cmd.addAlias"),
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (!tab || !tab.filePath) return;
+          if (tab.mode === "source") workspace.setTabMode(tab.id, "live");
+          if (workspace.propertiesInDocument.get() !== "visible") workspace.setPropertiesInDocument("visible");
+          workspace.requestAddProperty(tab.id, tab.filePath, "aliases");
+        },
+      }),
+      commands.register({
+        // R196: Obsidian editor:add-tag — add (or focus) a "tags" property and focus its value.
+        id: "editor:add-tag",
+        name: () => t("cmd.addTag"),
+        callback: () => {
+          const tab = workspace.getActiveTab();
+          if (!tab || !tab.filePath) return;
+          if (tab.mode === "source") workspace.setTabMode(tab.id, "live");
+          if (workspace.propertiesInDocument.get() !== "visible") workspace.setPropertiesInDocument("visible");
+          workspace.requestAddProperty(tab.id, tab.filePath, "tags");
+        },
+      }),
+      commands.register({
         // R194: Obsidian editor:clear-metadata-properties — remove the whole frontmatter
         // block. Reuses the R22-vetted properties bounds; the change is a normal CM
         // transaction (undoable, dirty → autosave). No-op when there are no properties.

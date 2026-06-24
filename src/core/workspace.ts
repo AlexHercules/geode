@@ -1024,10 +1024,12 @@ export class Workspace {
    *  hanging while the tab navigates elsewhere is DISCARDED instead of
    *  writing an empty frontmatter block into a file the user never touched
    *  (R22 review fix INT-2/SEC-03). */
-  readonly addPropertyRequest = new Store<{ tabId: string; filePath: string } | null>(null);
+  readonly addPropertyRequest = new Store<{ tabId: string; filePath: string; key?: string } | null>(null);
 
-  requestAddProperty(tabId: string, filePath: string) {
-    this.addPropertyRequest.set({ tabId, filePath });
+  /** R196: `key` pre-fills the property name (editor:add-alias / add-tag); undefined keeps
+   *  the original add-property behaviour (empty add row, focus the name input). */
+  requestAddProperty(tabId: string, filePath: string, key?: string) {
+    this.addPropertyRequest.set({ tabId, filePath, key });
   }
 
   setTheme(theme: ThemeKind) {

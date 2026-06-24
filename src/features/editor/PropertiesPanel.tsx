@@ -659,6 +659,12 @@ export function PropertiesPanel(props: {
         }
         latest.current.applyEdit({ from: 0, to: 0, insert: "---\n---\n" });
       }
+      if (req.key) {
+        // R196 add-alias / add-tag: add the named property (or focus it if present) via
+        // the vetted submitAdd path, instead of opening an empty add row.
+        submitAdd(req.key);
+        return;
+      }
       pendingFocusRef.current = { kind: "add" };
       setAdding(true);
       rerender();
