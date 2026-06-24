@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R188 套件回归（2026-06-24，G3 partial→done「折叠 / 展开分拆」· 表面复刻 G 系列 · 逻辑档[editor]·无 .md 写、零 compat 调用面改动 · 桌面 probe N/A）
+
+R188 = 按 R182 矩阵收割 §15 `partial`「折叠」「展开」（Obsidian `editor:fold`/`editor:unfold`，此前均映射 Geode 单条 `editor:toggle-fold`）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 188 additions」**：`features/editor/folding.ts` +2 薄包装 `foldAtCursor`→CM `foldCode`、`unfoldAtCursor`→CM `unfoldCode`（层级决策：App 层保持 @codemirror-free）；App.tsx +2 命令（`if(active)` 守卫、无 `available` gate、无默认键）；i18n +2 键 en+zh。
+
+新增套件：`r188-e2e.mjs` **14/14**（2 命令注册+名称解析非裸键 + 无默认热键[Obsidian parity、CM keymap 拥有 Cmd-Alt-[/]] + 驱动 live CM view：光标置可折叠标题 → `editor:fold` 渲染 `.cm-foldPlaceholder` + **doc 字节不变[data-safety：view-only 无 .md 写]** + `editor:unfold` 移除占位 + 字节仍不变 + fold/unfold 与 toggle-fold 效果一致 + graph tab 无 active view → 守卫 no-op 不抛 + 无 page error）。**套件矩阵不回退**：r187 29/29·r186 27/27·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 CM view 状态操作、零 fs/Rust/平台分支、data-safety skill 触发但实测无写路径，同 R181/R183/R185）。**分档逻辑档（碰 editor → 底线①强制）→ data-safety skill 已跑**：reviewer 追到 gate `documents.ts:85-97`「`if(!update.docChanged) return`」证 fold 事务 `docChanged=false` 永不达 dirty/autosave/关窗 flush 分支；`foldEffect` 无 `changes` 不污染 undo；复用 vetted `editor:toggle-fold` 同款 CM 命令零新写机制。**对抗评审 7 维 → 0 confirmed defect**（无 .md 写[gate 追踪]/映射无张冠李戴/`if(active)` 守卫/折叠基建无回归/App CM-free 层级/命令+i18n 对齐/Obsidian 忠实）。简化门 **clean**（薄包装受 ARCHITECTURE 冻结层级豁免、内联会破 App CM-free 边界）。**v1 defer**：panel 新标签页变体 / theme:switch[语义待定] / insert-wikilink 分拆 / missing 纯编辑（清除格式·多光标）。
+
 ### R187 套件回归（2026-06-24，G3 partial→done「方向性聚焦标签页组」· 表面复刻 G 系列 · 非数据安全逻辑档、零 compat 调用面改动 · 桌面 probe N/A）
 
 R187 = 按 R182 矩阵收割 §4 `partial`「聚焦上方/下方/左侧/右侧标签页组」（Obsidian `workspace:focus-{top,bottom,left,right}-tab-group`）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 187 additions」**：`core/workspace.ts` 新增纯 `FocusDirection`/`LeafRect` + 纯 `leafRects`（split 树→归一化矩形）+ 纯 `directionalPaneTarget`（方向边界判据 + 跨轴重叠选最近邻 + (主距,跨距,布局序) 稳定排序）+ 方法 `focusDirectionalPane`（复用既有 setActivePane、无该向邻居 no-op）；App.tsx +4 命令（无默认键）；i18n +4 键 en+zh。

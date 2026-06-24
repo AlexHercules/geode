@@ -71,6 +71,14 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 188 additions — G3 partial→done「折叠 / 展开分拆」（2 命令 editor:fold / editor:unfold · 复用 CM foldCode/unfoldCode · 逻辑档[editor]·无 .md 写 · 零新依赖）【As-built v0.184】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §15 `partial`「折叠」「展开」（Obsidian `editor:fold` / `editor:unfold`，矩阵此前两条均映射到 Geode 单条 `editor:toggle-fold`、无独立 fold/unfold）。**契约（薄包装 + 命令注册 + i18n，无跨模块签名破坏）**：
+> - **`features/editor/folding.ts`** 新增 2 个导出薄包装 `foldAtCursor(view)`→`foldCode(view)`、`unfoldAtCursor(view)`→`unfoldCode(view)`（CM `Command` 返回 boolean → 适配为 `(view)=>void`，镜像既有 `toggleFoldAtCursor`/`foldAllInView`/`unfoldAllInView` 的 view-op 约定）。**层级决策（Step 1 契约）**：App.tsx 现 **0 个 `@codemirror` 导入**，所有编辑器 view-op 一律经 folding.ts 入口——这两个包装把 `@codemirror/language` 留在 editor feature 内、App 层保持 CM-free；**简化门不得内联**（内联 = 迫使 App→@codemirror 直接导入、破既有边界）。
+> - **`app/App.tsx`** 注册 2 命令 `editor:fold` / `editor:unfold`（矩阵 §15 id），callback 用 `if(active)` 守卫（镜像兄弟 `editor:toggle-fold`/`fold-all`/`unfold-all` 同款回调守卫，**无 `available` gate**）。**无默认键**（Obsidian editor:fold/unfold = 未设置；肌肉记忆 `Cmd-Alt-[`/`]` 早绑在 folding.ts 的 CM keymap 上、非这两命令）。i18n dict.app +2 `cmd.fold`/`cmd.unfold` 键 en+zh。
+> - **分档：逻辑档（碰 editor → 底线①强制逻辑档）**——data-safety skill 触发，但确认**无 .md 写路径**：`foldCode`/`unfoldCode` 仅 dispatch fold effects（`docChanged=false`）、不触 documents dirty/autosave；与既有 vetted `editor:toggle-fold` 同款 CM 命令、零新写机制。
+> - **v1 defer**：matrix `partial` 余（panel「新标签页」变体 / theme:switch[语义待定] / insert-wikilink 分拆）；`missing` 纯编辑（清除格式[字节风险高单独轮] / 多光标）。
+
 ## Round 187 additions — G3 partial→done「方向性聚焦标签页组」（4 命令 focus-left/right/top/bottom-pane · 纯 core 几何算法 · 非数据安全逻辑档 · 零新依赖）【As-built v0.183】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 `partial` 校准档：§4「聚焦上方/下方/左侧/右侧标签页组」（Obsidian `workspace:focus-{top,bottom,left,right}-tab-group`），矩阵此前标 partial（Geode 仅 `app:focus-next-pane`=布局序循环、无方向性）。**契约（纯 core 几何 + 命令注册 + i18n，无跨模块签名破坏）**：
