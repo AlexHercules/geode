@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 213 additions — G3 §8 收尾：FootnotesPanel + FilePropertiesPanel 跟随 lastActiveFile + 修 R211 BacklinksPanel unlinked 扫描卡死（消 R212 评审 deferred minor·5 个右侧栏 aux 面板行为对齐·data-safety 逻辑档[FilePropertiesPanel 是可写第二写者]+零新依赖）【As-built v0.209】
+
+> **状态：As-built（已交付）。** 收尾 R212 评审 deferred minor：R211/R212 给 backlinks/outgoing/outline 三个右侧栏 aux 面板加了 `lastActiveFile` 回退（非 markdown active tab 时跟随最后活动 markdown 文件），但 footnotes/properties 两个兄弟面板仍 `: null`（非 markdown active tab 时空白）→ 同一侧栏 5 面板行为不对称。本轮把两者对齐到同一回退·更忠实 Obsidian（Obsidian Properties view 跟随活动文件）。
+> **契约（无破坏性签名变更·纯 activePath 取值变更·镜像 R212 OutlinePanel）**：
+> - **`features/footnotes/FootnotesPanel.tsx`**：`activePath = activeTab?.viewType === "markdown" ? filePath : useStore(app.workspace.lastActiveFile)`（**纯读视图**·docstring「never writes」·与 OutlinePanel 逐字同型·低风险）。
+> - **`features/editor/FilePropertiesPanel.tsx`**：同上回退。**注意：本面板是可写第二写者**（acquire `DocumentHandle` → `applyExternalEdits`）→ 回退激活了「非 markdown active tab 时编辑 lastActiveFile 属性」的写路径。**机制安全**（DocumentHandle 本就为「独立第二写者」设计·path-keyed·与该文件是否 active tab 无关·已 vetted R86）；**激活条件变更**=新增「lastActiveFile 非空且 active tab 非 markdown」时面板可编辑。acquire 失败（文件已删）→ setHandle(null) → fp-empty（既有处理·无新崩溃面）。无自动写（仅用户主动编辑属性才 applyEdit）。
+> - **`features/backlinks/BacklinksPanel.tsx`（评审驱动·修 R211 遗留缺陷）**：unlinked-mentions 异步扫描的 stale-guard（~line 334）原 `livePath = markdown? filePath : null`，但 render 路径（line 193·R211）已是 `: lastActive` → 非 markdown active tab 跟随 lastActive 时 livePath(null)≠activePath(lastActive)→守卫在 `setScanning(false)` 前 return → **永久卡「Searching…」+ 丢未链接提及**。修=guard 镜像 render 回退（`: app.workspace.lastActiveFile.get()`）。**纯读扫描路径·无写**（linkedParas 用 activePath 直接 tag·不受影响）。
+> - **分档：逻辑档（features/editor·可写第二写者·DocumentHandle 写路径）**——data-safety skill 触发：验回退激活的写路径字节正确 + 删文件/外改 race。
+> - **对抗评审（Ultracode 2-lens[data-safety-write-path/correctness-fidelity]+skeptic → deliverable·0 crit/major·1 confirmed minor）**：data-safety lens 证 FilePropertiesPanel 写机制 = 既有 vetted R86 DocumentHandle（acquire/release·applyExternalEdits 路由 undo/dirty/save·acquire 拒→fp-empty）·仅「选哪个文件」变（lastActiveFile）·测 C 证写对文件且字节保真 → 非缺陷。唯一 confirmed = BacklinksPanel R211 遗留卡死（原判 out-of-scope defer）→ **本轮主动修**（R213 = §8 aux 面板 lastActiveFile 一致性收尾·同类缺陷不留尾巴）+ 补 r213-e2e E 锁定。
+> - **桌面 probe N/A 浏览器可验证**（写机制 = R86-vetted·不变·仅前端目标文件选择变·测 C data-safety 字节验证已在浏览器 MemoryVaultAdapter 跑）。**v1 偏差**：lastActiveFile 指已关 tab 的文件时面板仍显/可编辑其属性（同 R211 backlinks 先例·数据仍对·Obsidian 同）。
+
 ## Round 212 additions — G3 §8 主区视图 host 续片（2 命令 outgoing-links/outline 主区 tab · 扩 R211 host：viewType "outgoinglinks"/"outline" + openOutgoingLinks/openOutline · `isFilelessSingletonView` helper 统一序列化触点[消 R211 critical 漏判根因] · data-safety 逻辑档[workspace 序列化·无 .md 写] + 零新依赖）【As-built v0.208】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——续 R211 主区视图 host，把**出链 outgoing-links + 大纲 outline** 也做成主工作区 tab（§8 余 partial）。**完全照搬 R211 模式**（viewType singleton·镜像 openGraph/openBacklinks·跟随 lastActiveFile）。**关键改进（消 R211 critical 根因）**：引入 **`isFilelessSingletonView(vt): vt is "graph"|"backlinks"|"outgoinglinks"|"outline"` 类型守卫**（workspace.ts）统一所有「无文件 singleton 视图」布尔触点——**含 sanitizeTab 两处（拒收门 + viewType 重派生）**——使「加一个 singleton 视图 = 只更新 helper」·序列化两站点自动覆盖·根除 R211「只加拒收门漏重派生」的漏判类。**契约（扩 R211 host + helper 重构既有 graph/backlinks 触点[行为保持] + 2 命令，无破坏性签名变更）**：
