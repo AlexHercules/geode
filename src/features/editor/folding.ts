@@ -265,3 +265,13 @@ export function toggleFoldAtCursor(view: EditorView): void {
   if (folded) unfoldCode(view);
   else foldCode(view);
 }
+
+/** R188: "Fold" / "Unfold" the foldable region at the cursor (Obsidian editor:fold /
+ *  editor:unfold). Thin adapters over CM's foldCode/unfoldCode (Command → void) so the
+ *  App command layer stays @codemirror-free, mirroring toggleFoldAtCursor/foldAllInView. */
+export function foldAtCursor(view: EditorView): void {
+  foldCode(view);
+}
+export function unfoldAtCursor(view: EditorView): void {
+  unfoldCode(view);
+}

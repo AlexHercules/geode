@@ -34,7 +34,7 @@ import { RecoveryModal } from "@features/recovery";
 import { SlidesOverlay } from "@features/slides";
 import { HoverPreview } from "@features/hover/HoverPreview";
 import { exportActiveNoteHtml, printActiveNote } from "@features/export/export";
-import { foldAllInView, toggleFoldAtCursor, unfoldAllInView } from "@features/editor/folding";
+import { foldAllInView, foldAtCursor, toggleFoldAtCursor, unfoldAllInView, unfoldAtCursor } from "@features/editor/folding";
 import { registerFormatCommands } from "@features/editor/formatCommands";
 import { registerBlockRefCommands } from "@features/editor/blockRefCommands";
 import { registerComposerCommands } from "@features/editor/noteComposerCommands";
@@ -499,6 +499,22 @@ export function App() {
         callback: () => {
           const active = app.documents.getActiveView();
           if (active) unfoldAllInView(active.view);
+        },
+      }),
+      commands.register({
+        id: "editor:fold",
+        name: () => t("cmd.fold"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) foldAtCursor(active.view);
+        },
+      }),
+      commands.register({
+        id: "editor:unfold",
+        name: () => t("cmd.unfold"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) unfoldAtCursor(active.view);
         },
       }),
       commands.register({
