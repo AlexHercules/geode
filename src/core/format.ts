@@ -54,7 +54,13 @@ export type FormatOp =
   | "heading-4"
   | "heading-5"
   | "heading-6"
-  | "remove-heading";
+  | "remove-heading"
+  // R198: Obsidian "Insert inline math" / "Insert math block" / "Insert
+  // horizontal rule" — pure inserts (never toggle/unwrap), so they read no
+  // Lezer/overlay state and only touch the [from,to] range.
+  | "inline-math"
+  | "math-block"
+  | "horizontal-rule";
 
 /** Inline wrap markers (Obsidian-faithful: asterisks for emphasis, never `_`). */
 const WRAP_MARKERS: Record<string, string> = {
@@ -381,6 +387,53 @@ export function toggleCallout(text: string, from: number, to: number): FormatEdi
 }
 
 /**
+ * R198: insert inline math (Obsidian "Insert inline math"). Mirrors
+ * {@link insertWikilink} with single-`$` wrap markers: empty selection → `$$`
+ * with the cursor between (type the expression), otherwise `$selected$` with
+ * the cursor after the closing `$`. Pure insert (never unwraps); only the
+ * [from,to] range is replaced.
+ */
+export function insertInlineMath(text: string, from: number, to: number): FormatEdit {
+  const selected = text.slice(from, to);
+  if (selected.length === 0) {
+    return { from, to, insert: "$$", selFrom: from + 1, selTo: from + 1 };
+  }
+  const insert = `$${selected}$`;
+  const end = from + insert.length;
+  return { from, to, insert, selFrom: end, selTo: end };
+}
+
+/**
+ * R198: insert a `$$…$$` math block (Obsidian "Insert math block"). Mirrors
+ * {@link toggleCodeBlock}'s wrap branch but is INSERT-only (never detects/
+ * unwraps an existing block, so it reads no Lezer/overlay state). Wraps the
+ * cursor's whole line(s); an empty line → `$$\n\n$$` with the cursor on the
+ * middle line, otherwise the selected lines sit between the fences.
+ */
+export function insertMathBlock(text: string, from: number, to: number): FormatEdit {
+  const { start, end } = lineBounds(text, from, to);
+  const block = text.slice(start, end);
+  const insert = "$$\n" + block + "\n$$";
+  return { from: start, to: end, insert, selFrom: start + 3, selTo: start + 3 + block.length };
+}
+
+/**
+ * R198: insert a horizontal rule (Obsidian "Insert horizontal rule"). The ONLY
+ * insert op that does NOT consume the selection — it collapses to the selection
+ * end (`to`) and inserts there, because a rule replacing selected text would
+ * silently delete it (底线①). Uses `***`, not `---`: a `---` directly under
+ * paragraph text is a markdown-it setext-H2 underline (semantic corruption),
+ * while `***`/`___` are never setext; all three render identically as `<hr>`.
+ * A leading `\n` is added only when the rule would not already start its line.
+ */
+export function insertHorizontalRule(text: string, _from: number, to: number): FormatEdit {
+  const lead = to === 0 || text[to - 1] === "\n" ? "" : "\n";
+  const insert = lead + "***\n";
+  const end = to + insert.length;
+  return { from: to, to, insert, selFrom: end, selTo: end };
+}
+
+/**
  * Dispatch a {@link FormatOp} to its transform. The single entry point used by
  * both the editor command layer (features/editor/formatCommands.ts) and the
  * `__geodeFormat` probe (main.tsx), keeping behavior identical across them.
@@ -427,6 +480,12 @@ export function applyFormatOp(
       return setHeadingLevel(text, from, to, Number(op.slice(8)));
     case "remove-heading":
       return setHeadingLevel(text, from, to, 0);
+    case "inline-math":
+      return insertInlineMath(text, from, to);
+    case "math-block":
+      return insertMathBlock(text, from, to);
+    case "horizontal-rule":
+      return insertHorizontalRule(text, from, to);
     default: {
       // exhaustiveness: a new FormatOp without a case fails to compile here
       const _exhaustive: never = op;

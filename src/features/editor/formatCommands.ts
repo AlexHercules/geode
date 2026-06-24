@@ -240,6 +240,11 @@ const FORMAT_COMMANDS: ReadonlyArray<FormatCommandSpec> = [
   { id: "editor:toggle-checkbox", nameKey: "cmd.toggleCheckbox", op: "toggle-task", hotkey: "Mod+L" },
   { id: "editor:toggle-code-block", nameKey: "cmd.toggleCodeBlock", op: "code-block" },
   { id: "editor:insert-callout", nameKey: "cmd.insertCallout", op: "callout" },
+  // R198: Obsidian "Insert inline math" / "Insert math block" / "Insert
+  // horizontal rule" — pure inserts (no default key, Obsidian "未设置")
+  { id: "editor:insert-math", nameKey: "cmd.insertMath", op: "inline-math" },
+  { id: "editor:insert-math-block", nameKey: "cmd.insertMathBlock", op: "math-block" },
+  { id: "editor:insert-horizontal-rule", nameKey: "cmd.insertHorizontalRule", op: "horizontal-rule" },
 ];
 
 /**

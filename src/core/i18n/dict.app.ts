@@ -152,6 +152,9 @@ export const en = {
   "cmd.deleteParagraph": "Delete paragraph",
   "cmd.toggleCodeBlock": "Toggle code block",
   "cmd.insertCallout": "Insert callout",
+  "cmd.insertMath": "Insert inline math",
+  "cmd.insertMathBlock": "Insert math block",
+  "cmd.insertHorizontalRule": "Insert horizontal rule",
   "cmd.clearFormatting": "Clear formatting",
 
   // ---- in-editor find/replace (R34) ----
@@ -357,6 +360,9 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.deleteParagraph": "删除段落",
   "cmd.toggleCodeBlock": "切换代码块",
   "cmd.insertCallout": "插入标注",
+  "cmd.insertMath": "插入行内公式",
+  "cmd.insertMathBlock": "插入数学块",
+  "cmd.insertHorizontalRule": "插入分隔线",
   "cmd.clearFormatting": "清除格式",
 
   // ---- in-editor find/replace (R34) ----
