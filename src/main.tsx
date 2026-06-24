@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
 import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
+import { renameHeadingAt, type HeadingChange } from "@core/renameHeading";
 import { AppContext, GeodeApp } from "@app/AppContext";
 import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
 import {
@@ -1053,6 +1054,13 @@ async function bootstrap() {
     __geodeRecentVaults?: { load: () => string[]; push: (p: string) => void; remove: (p: string) => void };
   };
   recentHost.__geodeRecentVaults = { load: loadRecentVaults, push: pushRecentVault, remove: removeRecentVault };
+
+  // R204: rename-heading probe — exposes the pure edit computation so E2E can assert the heading +
+  // self-anchor byte changes deterministically (the live editor:rename-heading command is also E2E'd).
+  const renameHeadingHost = globalThis as typeof globalThis & {
+    __geodeRenameHeading?: (text: string, pos: number, newText: string) => HeadingChange[] | null;
+  };
+  renameHeadingHost.__geodeRenameHeading = renameHeadingAt;
 
   // always-on line-motion probe (R51): runs the CM move/copy-line StateCommands on
   // a throwaway EditorState so the transform is asserted deterministically (the live

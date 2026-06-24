@@ -20,6 +20,7 @@ import type { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { applyFormatOp, insertFootnote, type FormatOp } from "@core/format";
+import { currentHeadingText, renameHeadingAt } from "@core/renameHeading";
 import { t, type I18nKey } from "@core/i18n";
 import { findMathBlockRanges } from "./liveMath";
 
@@ -309,6 +310,29 @@ export function registerFormatCommands(
             userEvent: "input.insert.footnote",
           });
         }
+        view.focus();
+      },
+    }),
+  );
+  // R204: rename-heading prompts for new text then renames the heading + same-file self-anchor
+  // links in one transaction (not a FormatOp). No default key (Obsidian leaves it unset).
+  disposers.push(
+    app.commands.register({
+      id: "editor:rename-heading",
+      name: () => t("cmd.renameHeading"),
+      available: () => getView() !== null,
+      callback: () => {
+        const view = getView();
+        if (!view) return;
+        const pos = view.state.selection.main.head;
+        const doc = view.state.doc.toString();
+        const current = currentHeadingText(doc, pos);
+        if (current === null) return; // cursor not on a heading — no-op (don't prompt)
+        const next = window.prompt(t("editor.renameHeadingPrompt"), current);
+        if (next === null) return; // cancelled
+        const changes = renameHeadingAt(doc, pos, next);
+        if (!changes) return;
+        view.dispatch({ changes, scrollIntoView: true, userEvent: "input.rename-heading" });
         view.focus();
       },
     }),
