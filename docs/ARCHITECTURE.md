@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 181 additions — G3「侧栏面板 Show 命令组」（6 个 `app:show-*` 命令 · 复用既有 setLeft/RightPanel · 零新依赖）【As-built v0.178】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列（向 G3「热键 90→280」推进——补真 handler 命令、不做空行）。**Gate（R160）**：命令清单实查（grep 全 82 个 id）证 Geode 面板齐全（左 explorer/search/bookmarks；右 backlinks/outline/tags/allproperties/fileproperties/footnotes/outgoinglinks/calendar）但仅 `app:show-footnotes`/`app:show-outgoing-links` 两个有命令——Obsidian 每个视图都有「Show X」命令。**契约（无跨模块签名变更，纯命令注册）**：`app/App.tsx` 在 show-footnotes 块后注册 6 命令，回调皆单调用既有方法（`setLeftPanel`/`setRightPanel` 同时置 `*SidebarOpen:true`，故命令既切面板又开侧栏）：
+> - `app:show-file-explorer`→`setLeftPanel("explorer")` · `app:show-search`→`setLeftPanel("search")`
+> - `app:show-backlinks`/`app:show-outline`/`app:show-tags`/`app:show-all-properties`→`setRightPanel(<同名>)`
+> - i18n dict.app +6 `cmd.show*` 键 en+zh（命名对齐 Obsidian「Backlinks: Show backlinks」式）。
+> - **分档：机械档**（diff 45 行/2 源文件；6 命令注册=nav/IA + i18n 键，回调单调用既有 setLeft/RightPanel、无新承载逻辑控制流·无新 store action/导出签名·未碰数据安全面·零新依赖）→ 简化门跳过；**Step 4 scoped 窄域 review → 0 confirmed defect**（i18n 键 en+zh 各 2 全在 · 6 命令 id 各唯一无碰撞 · panel-id 字符串 typecheck 强校验[RightPanelKind/LeftPanelKind union] · r181 额外证注册+名称解析非裸键+面板切换+开侧栏）。
+> - **v1 defer**：fileproperties（Obsidian 属性内联编辑器、非独立 show 命令）、calendar（插件自带命令）；search 命令仅开面板未强制 focus 输入框（面板挂载多自聚焦）。**累积方向**：R179/R180/R181 三轮反复证命令面远比审计「90 vs 280」富 → G3「280 总表」仍待先建命令矩阵（权威源 reference/04 缺）。
+
 ## Round 180 additions — G4-b「Reveal active file in navigation 命令」（列表中显示当前文件 · 纯 UI · 复用 R14 一次性 Store 模式 + Explorer expandAncestors/selectOnly · 零新依赖）【As-built v0.177】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列（G4 续片 + 一条真 handler 命令，呼应 FUNCTIONAL「热键须真 handler 非空行」）。**Gate（R160）**：explorer 实查证 Explorer 仅**高亮**活动文件（`isActive` 行样式），但无「展开祖先+选中+滚动到活动文件」的命令——经 quick-switcher/链接打开折叠夹中的文件时不会自动展开露出（滚动 effect 由 `selected` 驱动、非 `activeFile`）。命令完全缺失（grep 零）。**契约（一处新 core Store + 方法，无跨模块签名破坏）**：

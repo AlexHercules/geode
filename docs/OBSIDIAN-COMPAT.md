@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R181 套件回归（2026-06-23，G3「侧栏面板 Show 命令组」· 表面复刻 G 系列 · 机械档、零 compat 调用面改动 · 桌面 probe N/A）
+
+R181 = 表面复刻 **G 系列**（向 G3「热键 90→280」推进——补真 handler 命令、不做空行）。**非 compat-API 轮**。**Gate（R160）**：命令清单实查（grep 全 82 id）证面板齐全但仅 footnotes/outgoing-links 有命令 → 补 6 个 `app:show-*`（file-explorer/search/backlinks/outline/tags/all-properties），回调单调用既有 setLeft/RightPanel（同开侧栏）。**详见 ARCHITECTURE「Round 181 additions」**。
+
+新增套件：`r181-e2e.mjs` **26/26**（6 命令全注册 + 名称解析非裸键[i18n en 存在] + 4 右面板命令切 rightPanel + 开右侧栏[先 toggle 关再验开] + 2 左面板命令切 leftPanel + 开左侧栏 + show-outline 无 available 门恒可执行 + 无 page error）。**套件矩阵不回退**：r32 24/24·r142 18/18·r161 15/15·r113 10/10（命令面板/命令注册）·r180 12/12（上轮 reveal 命令）· typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 UI 面板切换命令 = workspace state、零 fs/Rust/平台分支，同 R164/R179/R180）。**分档机械档 → scoped 窄域 review 0 confirmed defect**（i18n en+zh 各 2 全在 · 6 id 各唯一 · panel-id typecheck 强校验）。简化门 **机械档跳过**。**v1 defer**：fileproperties（属性内联编辑器）、calendar（插件自带）、search 命令不强制 focus 输入框。
+
 ### R180 套件回归（2026-06-23，G4-b「Reveal active file in navigation 命令」· 表面复刻 G 系列 · 纯 UI、零 compat 调用面改动 · 桌面 probe N/A）
 
 R180 = 表面复刻 **G 系列**（G4 续片 + 一条真 handler 命令）。**非 compat-API 轮**。**Gate（R160）**：explorer 实查证 Explorer 仅高亮活动文件、无「展开+选中+滚动到活动文件」命令（滚动 effect 由 selected 驱动非 activeFile）→ 命令完全缺失（grep 零）。**实现/根因详见 ARCHITECTURE「Round 180 additions」**：workspace 新增 `revealInExplorer` 一次性 Store（R14 同型）+ `requestRevealInExplorer`（setLeftPanel("explorer")+set）；命令 `file-explorer:reveal-active-file`（Obsidian 同 id、available=getActiveFile!==null）；Explorer 消费 effect expandAncestors+selectOnly+rAF 强制滚动；i18n en+zh +1 键。
