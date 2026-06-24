@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R195 套件回归（2026-06-24，G3 missing→done「切换新标签页的默认视图」· 表面复刻 G 系列 · 逻辑档[非数据安全 appearance]、零 compat 调用面改动 · 桌面 probe N/A）
+
+R195 = 按 R182 矩阵收割 §5「切换新标签页的默认视图」（Obsidian `app:toggle-default-new-tab-view`，R185 当时 defer 为「三态非布尔 cycle」）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 195 additions」**：`app/App.tsx` 紧邻 R185 既有 `app:toggle-ribbon` +1 命令，循环 `defaultNewTabMode` 三态 `["live","source","preview"]`（复用 vetted setDefaultNewTabMode、纯 appearance 设置无 vault/doc 写）；i18n +1 键 en+zh。**映射偏差**：Obsidian 拆 view+editing-mode 两设置、Geode 合并单一 NewTabMode 三态故循环全 3 态。
+
+新增套件：`r195-e2e.mjs` **11/11**（命令注册+名称解析非裸键+无默认键 + 循环 live→source→preview→live 全 3 态可达·wrap 正确 + 持久化 localStorage reload 后存活 + 无 active file graph tab 可执行 + 无 page error）。**套件矩阵不回退**：**r185 19/19（appearance toggle）**·r194 12/12·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯 appearance localStorage 设置、零 fs/Rust/平台分支，同 R185）。**分档逻辑档（非数据安全：纯 appearance localStorage、零 vault/.md 写、data-safety skill 不触发）**。**简化门 clean（skip：diff 16 行/2 文件单命令）**。**对抗评审 6 维 scoped → 0 confirmed defect**（cycle 全 3 态可达·wrap·indexOf -1 兜底回 live[类型约束实不可达] / 持久化 reload 后读回·非法值回退 live / 非数据安全零 vault 写·无 active file 可执行 / 命令+i18n / Obsidian 映射偏差已记录 / 分层·defaultNewTabMode 非死设置[workspace.openFile 消费+SettingsModal 反应式]）。**矩阵附带**：补录 R185 §5 功能区/行号/行宽/拼写检查 4 项 missing/partial→done（§5 done 9→13/partial 1/missing 0）。
+
 ### R194 套件回归（2026-06-24，G3 missing→done「清除笔记属性」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归·复用 vetted properties 边界、零 compat 调用面改动 · 桌面 probe N/A）
 
 R194 = 按 R182 矩阵收割 §3「清除笔记属性」（Obsidian `editor:clear-metadata-properties`）。**非 compat-API 轮**（但 r30 properties 面板 + r126 frontmatter compat 复跑核验不退）。**详见 ARCHITECTURE「Round 194 additions」**：`core/properties.ts` 新增纯 `buildClearProperties`（复用 R22-vetted parseInternal/findBlock 边界删整 frontmatter 块、镜像 buildRemoveProperty 末项、`entries.length===0`→null）；`app/App.tsx` +1 命令（getActiveFileEditorView 读 doc→buildClearProperties→view.dispatch、active-file gated、undoable）；i18n +1 键 en+zh。

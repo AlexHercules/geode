@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 195 additions — G3 missing→done「切换新标签页的默认视图」（1 命令 app:toggle-default-new-tab-view · 循环 defaultNewTabMode 三态 · 非数据安全 · 零新依赖）【As-built v0.191】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §5 `missing`「切换新标签页的默认视图」（Obsidian `app:toggle-default-new-tab-view`，R185 当时 defer 为「三态非布尔 cycle」）。**契约（纯命令注册 + i18n，无跨模块签名变更）**：
+> - **`app/App.tsx`** 紧邻 R185 既有 `app:toggle-ribbon` 注册 1 命令（复用 vetted `setDefaultNewTabMode`，**纯 appearance 设置、无 vault/doc 写**）：`app:toggle-default-new-tab-view` → 循环 `defaultNewTabMode` 三态 `["live","source","preview"]`（`ORDER[(indexOf(cur)+1)%3]`）。**无默认键**（Obsidian 未设置）。import `defaultNewTabMode`/`setDefaultNewTabMode`。
+> - **映射口径**：Obsidian 把「新标签默认视图」拆成两设置（阅读/编辑 view + 源码/实时编辑模式）；Geode 合并为单一 `NewTabMode` 三态，故单命令**循环全 3 态**（覆盖所有状态、可经命令到达任意模式），是 Geode 单设置模型的自然映射（非 Obsidian 二态 toggle 的逐字复刻——记录偏差）。
+> - i18n dict.app +1 `cmd.toggleDefaultNewTabView` 键 en+zh。
+> - **分档：逻辑档（非数据安全）**——新增 cycle 计算（array+modulo），但**纯 appearance 设置 localStorage 持久化、零 vault/doc 写**（data-safety skill 不触发）；scoped review = cycle 正确性 + 持久化 + i18n + 命令注册。
+> - **v1 defer**：其余 missing 纯编辑（删除段落/添加别名·标签）；§11 bookmark-search；`partial` theme:switch[语义待定]；`管理仓库` C1。
+
 ## Round 194 additions — G3 missing→done「清除笔记属性」（1 命令 editor:clear-metadata-properties · 复用 vetted properties.ts findBlock 边界删整个 frontmatter 块 · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.190】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `missing`「清除笔记属性」（Obsidian `editor:clear-metadata-properties`）。**契约（扩 R22 properties 引擎，无跨模块签名破坏）**：
