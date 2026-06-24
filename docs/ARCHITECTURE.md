@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 189 additions — G3 partial→done「插入内部链接（wikilink）」（1 命令 editor:insert-wikilink · 扩展 R33 format 引擎 insertWikilink · data-safety 逻辑档 + byte 回归 · 零新依赖）【As-built v0.185】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §2 `partial`「插入内部链接」（Obsidian `editor:insert-wikilink`，此前 Geode 仅 `editor:insert-link`=Markdown 链接 `[text](url)`、无 wikilink `[[]]` 变体）。沿用 R186 同款「扩展既有 R33 format 引擎」模式（无跨模块签名破坏）：
+> - **`core/format.ts`** 新增纯 `insertWikilink(text, from, to)`（镜像既有 `insertLink`）：空选区→`[[]]` 光标居中（`from+2`）；非空选区→`[[selected]]` 光标落 `]]` 之后；**始终返回 edit、绝不 no-op**；**绝不 unwrap 既有链接**（Obsidian「插入内部链接」非 toggle）；**只替换 `[from,to]` 字节、选区外内容逐字不动**（与 vetted `insertLink` 同字节安全属性）。FormatOp += `wikilink`；applyFormatOp 加 `case "wikilink"→insertWikilink`（`never` 穷尽门强制覆盖）。
+> - **`features/editor/formatCommands.ts`** +1 spec `{ id:"editor:insert-wikilink", op:"wikilink" }`（**无默认键**——Obsidian 未设置；`Mod+K` 仍归 insert-link）。经既有 `registerFormatCommands`→`applyFormat` 派发（available=active-file view、callback→既有 R33 派发路径=CM 事务→documents dirty→autosave，**无新写路径**、R23 只写 active-file）。
+> - i18n dict.app +1 `cmd.insertWikilink` 键 en+zh。
+> - **分档：逻辑档（data-safety）**——core/format.ts=编辑器写路径，跑 data-safety skill：选区外内容逐字保留（仅 `[[`/`]]` 包裹 [from,to]）/ 复用 applyFormat vetted 派发无新写路径 / R23 命令双门控只写 active-file view / 字节回归 r189-e2e（`__geodeFormat.apply` 纯探针）+ r33 37/37 不退。
+> - **v1 defer**：matrix `partial` 余（panel「新标签页」变体[需主区视图类型] / theme:switch[语义待定]）；`missing` 纯编辑（清除格式[字节风险高单独轮] / 多光标）。
+
 ## Round 188 additions — G3 partial→done「折叠 / 展开分拆」（2 命令 editor:fold / editor:unfold · 复用 CM foldCode/unfoldCode · 逻辑档[editor]·无 .md 写 · 零新依赖）【As-built v0.184】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——按 R182 矩阵收割 §15 `partial`「折叠」「展开」（Obsidian `editor:fold` / `editor:unfold`，矩阵此前两条均映射到 Geode 单条 `editor:toggle-fold`、无独立 fold/unfold）。**契约（薄包装 + 命令注册 + i18n，无跨模块签名破坏）**：

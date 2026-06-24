@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R189 套件回归（2026-06-24，G3 partial→done「插入内部链接 wikilink」· 表面复刻 G 系列 · data-safety 逻辑档 + byte 回归、零 compat 调用面改动 · 桌面 probe N/A）
+
+R189 = 按 R182 矩阵收割 §2 `partial`「插入内部链接」（Obsidian `editor:insert-wikilink`=`[[]]`，此前 Geode 仅 `editor:insert-link`=Markdown 链接）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 189 additions」**（R186 同款扩 R33 引擎）：`core/format.ts` 新增纯 `insertWikilink`（镜像 insertLink、只替换 [from,to]、绝不 unwrap）+ FormatOp `wikilink` + applyFormatOp case；`formatCommands.ts` +1 spec（无默认键、Mod+K 仍归 insert-link）经既有 applyFormat 派发；i18n +1 键 en+zh。
+
+新增套件：`r189-e2e.mjs` **17/17**（A 字节级纯 `__geodeFormat.apply` 探针：空选区→`[[]]` 光标居中 / 中位空选区插入 / `[[foo]]` 光标落 `]]` 后 / 中段包裹 span=[from,to] / **内容保留 `**bold**`→`[[**bold**]]`** / 非 toggle 机械嵌套 `[[[[foo]]]]` + B 命令注册+名称解析非裸键+**无默认键**+insert-link 仍 Mod+K 未被偷 + C live CM view 选区 `beta`→`[[beta]]` 余文逐字不变 + 无 page error）。**套件矩阵不回退**：**r33 37/37（format 引擎字节锁不退）**·r186 27/27·r188 14/14·typecheck 0/cargo check/生产构建。**桌面 probe N/A**（纯函数 transform 字节探针验证 + 派发复用 R33 applyFormat→CM→autosave[r33-probe 覆盖]、无新 fs/Rust/平台分支，同 R186）。**分档逻辑档（data-safety）→ data-safety skill 已跑**：reviewer 手算 9 对抗 case（空/CJK/emoji 代理对/多行/含 `]]`/嵌套）证选区外字节逐字不动 + 无新写路径 + R23 只写 active-file view。**对抗评审 6 维 → 0 confirmed defect**（data-safety 选区外字节不动/cursor math 无 off-by-one/非 toggle/id 唯一·无 hotkey 冲突·i18n en+zh/FormatOp 穷尽门/Obsidian 忠实）。简化门 **clean**（insertWikilink 与 insertLink 相似非相同、合并需发明 marker 参数=加间接层驳回）。**v1 defer**：panel 新标签页变体[需主区视图类型] / theme:switch[语义待定] / missing 纯编辑（清除格式·多光标）。
+
 ### R188 套件回归（2026-06-24，G3 partial→done「折叠 / 展开分拆」· 表面复刻 G 系列 · 逻辑档[editor]·无 .md 写、零 compat 调用面改动 · 桌面 probe N/A）
 
 R188 = 按 R182 矩阵收割 §15 `partial`「折叠」「展开」（Obsidian `editor:fold`/`editor:unfold`，此前均映射 Geode 单条 `editor:toggle-fold`）。**非 compat-API 轮**。**详见 ARCHITECTURE「Round 188 additions」**：`features/editor/folding.ts` +2 薄包装 `foldAtCursor`→CM `foldCode`、`unfoldAtCursor`→CM `unfoldCode`（层级决策：App 层保持 @codemirror-free）；App.tsx +2 命令（`if(active)` 守卫、无 `available` gate、无默认键）；i18n +2 键 en+zh。
