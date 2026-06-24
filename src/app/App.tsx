@@ -403,6 +403,13 @@ export function App() {
         name: () => t("cmd.showAllProperties"),
         callback: () => workspace.setRightPanel("allproperties"),
       }),
+      // R214 (G3 §10): reveal the R86 FilePropertiesPanel (current note's properties) —
+      // Obsidian's "Show file properties" core command, the twin of "Show all properties".
+      commands.register({
+        id: "app:show-file-properties",
+        name: () => t("cmd.showFileProperties"),
+        callback: () => workspace.setRightPanel("fileproperties"),
+      }),
       // R183 (G3 ui-only→done): promote R179's right-click "copy path / copy
       // Obsidian URL" to commands operating on the active file (reuse buildOpenUri;
       // pure read + clipboard, no vault write). Obsidian command ids per the matrix.
