@@ -27,6 +27,16 @@ const TABLE_COMMANDS: TableCommandSpec[] = [
   { id: "editor:table-insert-column-right", nameKey: "cmd.tableInsertColumnRight", op: "insert-column-right" },
   { id: "editor:table-delete-row", nameKey: "cmd.tableDeleteRow", op: "delete-row" },
   { id: "editor:table-delete-column", nameKey: "cmd.tableDeleteColumn", op: "delete-column" },
+  // R207 (片 B): duplicate / move / align
+  { id: "editor:table-copy-row", nameKey: "cmd.tableCopyRow", op: "copy-row" },
+  { id: "editor:table-copy-column", nameKey: "cmd.tableCopyColumn", op: "copy-column" },
+  { id: "editor:table-move-row-up", nameKey: "cmd.tableMoveRowUp", op: "move-row-up" },
+  { id: "editor:table-move-row-down", nameKey: "cmd.tableMoveRowDown", op: "move-row-down" },
+  { id: "editor:table-move-column-left", nameKey: "cmd.tableMoveColumnLeft", op: "move-column-left" },
+  { id: "editor:table-move-column-right", nameKey: "cmd.tableMoveColumnRight", op: "move-column-right" },
+  { id: "editor:table-align-left", nameKey: "cmd.tableAlignLeft", op: "align-left" },
+  { id: "editor:table-align-right", nameKey: "cmd.tableAlignRight", op: "align-right" },
+  { id: "editor:table-align-center", nameKey: "cmd.tableAlignCenter", op: "align-center" },
 ];
 
 /** Apply a table op at the cursor; no-op (returns false) if the cursor isn't in a table. */

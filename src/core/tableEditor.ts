@@ -20,7 +20,18 @@ export type TableOp =
   | "insert-column-left"
   | "insert-column-right"
   | "delete-row"
-  | "delete-column";
+  | "delete-column"
+  // R207 (片 B): duplicate / move / align — pure model rearrangements, no new
+  // parse/serialize/detect surface (R206's vetted layer is untouched).
+  | "copy-row"
+  | "copy-column"
+  | "move-row-up"
+  | "move-row-down"
+  | "move-column-left"
+  | "move-column-right"
+  | "align-left"
+  | "align-right"
+  | "align-center";
 
 export type ColumnAlign = "none" | "left" | "right" | "center";
 
@@ -251,6 +262,16 @@ function insertColAt(model: TableModel, at: number): TableModel {
   return { header, aligns, rows };
 }
 
+/** R207: swap columns `a` and `b` across the header, aligns, and every body row. */
+function swapCols(model: TableModel, a: number, b: number): TableModel {
+  const swap = <T>(arr: T[]): T[] => {
+    const c = arr.slice();
+    [c[a], c[b]] = [c[b], c[a]];
+    return c;
+  };
+  return { header: swap(model.header), aligns: swap(model.aligns), rows: model.rows.map(swap) };
+}
+
 interface OpResult {
   model: TableModel;
   focus: CellPos;
@@ -298,6 +319,53 @@ function applyOp(op: TableOp, model: TableModel, pos: CellPos): OpResult | null 
         return nr;
       });
       return { model: { header, aligns, rows }, focus: { col: Math.min(at, header.length - 1), bodyRow: pos.bodyRow } };
+    }
+    case "copy-row": {
+      if (pos.bodyRow < 0) return null; // header — nothing to duplicate
+      const rows = model.rows.slice();
+      rows.splice(pos.bodyRow + 1, 0, model.rows[pos.bodyRow].slice());
+      return { model: { ...model, rows }, focus: { col: pos.col, bodyRow: pos.bodyRow + 1 } };
+    }
+    case "copy-column": {
+      const c = pos.col;
+      const header = model.header.slice();
+      header.splice(c + 1, 0, header[c]);
+      const aligns = model.aligns.slice();
+      aligns.splice(c + 1, 0, aligns[c]);
+      const rows = model.rows.map((r) => {
+        const nr = r.slice();
+        nr.splice(c + 1, 0, r[c]);
+        return nr;
+      });
+      return { model: { header, aligns, rows }, focus: { col: c + 1, bodyRow: pos.bodyRow } };
+    }
+    case "move-row-up": {
+      if (pos.bodyRow <= 0) return null; // header / first body row — can't move up
+      const rows = model.rows.slice();
+      [rows[pos.bodyRow - 1], rows[pos.bodyRow]] = [rows[pos.bodyRow], rows[pos.bodyRow - 1]];
+      return { model: { ...model, rows }, focus: { col: pos.col, bodyRow: pos.bodyRow - 1 } };
+    }
+    case "move-row-down": {
+      if (pos.bodyRow < 0 || pos.bodyRow >= model.rows.length - 1) return null; // header / last body row
+      const rows = model.rows.slice();
+      [rows[pos.bodyRow], rows[pos.bodyRow + 1]] = [rows[pos.bodyRow + 1], rows[pos.bodyRow]];
+      return { model: { ...model, rows }, focus: { col: pos.col, bodyRow: pos.bodyRow + 1 } };
+    }
+    case "move-column-left": {
+      if (pos.col <= 0) return null;
+      return { model: swapCols(model, pos.col, pos.col - 1), focus: { col: pos.col - 1, bodyRow: pos.bodyRow } };
+    }
+    case "move-column-right": {
+      if (pos.col >= model.header.length - 1) return null;
+      return { model: swapCols(model, pos.col, pos.col + 1), focus: { col: pos.col + 1, bodyRow: pos.bodyRow } };
+    }
+    case "align-left":
+    case "align-right":
+    case "align-center": {
+      const align = op.slice("align-".length) as ColumnAlign;
+      const aligns = model.aligns.slice();
+      aligns[pos.col] = align;
+      return { model: { ...model, aligns }, focus: pos };
     }
     default: {
       const _exhaustive: never = op;
