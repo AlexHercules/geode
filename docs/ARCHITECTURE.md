@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 220 additions — F2 类型对齐：compat `Editor` 类型面字字对齐 obsidian.d.ts（纯类型面·无运行时/data-safety 风险·零新依赖）+ 5 个 metadata cache 接口补 barrel 再导出【As-built v0.216】
+
+> **状态：As-built（已交付）。** 商业主轴=插件迁移：让插件 `import type { X } from "obsidian"` 对 Geode compat shim 编译一致。F2 = **纯类型面**对齐（无运行时改动·不触 .md 写·data-safety byte 套件 N/A）。oracle = 仓库内 `.calibration/obsidian.d.ts`（≈v1.13）。
+> **契约（compat/obsidian/editor.ts 类型面 + index.ts barrel·零运行时逻辑改动）**：
+> - **`EditorRange.to` `?`→必填**（d.ts:2626 `to: EditorPosition` 必填）。唯一生产者 `wordAt` 返 `{from,to}` 两全·唯一消费者 `scrollIntoView` 带 `range.to?` 守卫（冗余化但不破）·全仓零「仅 from」构造点 → 运行时安全。
+> - **新增 `EditorRangeOrCaret { from; to? }`**（d.ts:2637）+ barrel 导出——此前缺失，插件 `import type { EditorRangeOrCaret }` 失败。
+> - **`EditorChange` 改 `extends EditorRangeOrCaret { text }`**（d.ts:2585·同形：from 必填/to 可选/text）。
+> - **`EditorTransaction`**：`selection?: EditorRange`→`EditorRangeOrCaret`（d.ts:2780·widen·运行时 `tx.selection.to?` 已守卫）+ 新增 `selections?: EditorRangeOrCaret[]`（d.ts:2778·**类型面声明·运行时暂不消费 selections·v1 defer**·同既有「co-supplied selection 被忽略」约定）。
+> - **`replaceSelection(replacement, _origin?: string)`**（d.ts:2465·`_origin` 忽略·镜像既有 `replaceRange` 的 `_origin`）。**`setSelections(ranges, _main?: number)`**（d.ts:2495·`_main` 忽略·honor main 属行为面·v1 defer）。
+> - **新增 `getDoc(): this { return this; }`**（d.ts:2409·CM5-legacy 插件用·return this·零写·零 data-safety）。
+> - **barrel index.ts**：补 5 个 metadata cache 接口再导出 `SectionCache`/`ListItemCache`/`FootnoteCache`/`FootnoteRefCache`/`FrontmatterLinkCache`（metadata.ts 已定义、d.ts 顶层导出、barrel 漏 re-export → 插件如 Dataview `import type { SectionCache }` 失败）。
+> - **v1 defer（非本轮·需写运行时=出 F2 纯类型范围）**：`Editor.processLines<T>`（d.ts:2577·读写回调·写 .md=data-safety 逻辑档·单独轮）。
+> - **R128 契约修订留痕**：`EditorRange`/`EditorChange`/`EditorTransaction`/`EditorPosition` 原冻结于「Round 128 additions」。本轮 `EditorRange.to`→必填、`EditorTransaction.selection`→EditorRangeOrCaret、`+selections?`、`EditorChange extends` 为**字字对齐 d.ts 的契约修订**（经全仓 grep 证零内部破坏 + typecheck 0）。
+> - **分档：逻辑档**（editor-adjacent 文件 + R128 冻结契约修订·虽纯类型面无运行时/写改动）→ 简化门 + 对抗评审（验：无内部构造点破坏·字字对齐 d.ts·零运行时行为变·frozen-contract 修订正当）；**data-safety byte 套件 N/A**（零 .md 写路径改动）。
+> - **验证**：r220-e2e（shim-compile 断言：新签名接受 d.ts 形状调用[EditorRange.to 必填·EditorRangeOrCaret·replaceSelection origin·setSelections main·getDoc·5 metadata 接口可 import]）+ typecheck 0 + 回归既有 compat 套件。**桌面 probe N/A（纯类型面·浏览器/typecheck 可验证）**。
+
 ## Round 219 additions — G3 §8：backlink:toggle-backlinks-in-document（Obsidian「Backlinks: Toggle backlinks in document」·注册命令翻 R154 既有 showBacklinksInDocument 外观设置·机械档[非数据安全·复用 vetted setter]·零新依赖）+ 矩阵据实纠误（ui-only 真·全清）【As-built v0.215】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §8 末项 `ui-only`「在文档中显示反链（开关）」补全为命令。**web 实证**：Obsidian 命令「Backlinks: Toggle backlinks in document」翻「Backlink in document」设置（笔记底部显示链接提及）。Geode R154 已有该功能 + `showBacklinksInDocument` 外观 Store + 设置开关，仅缺命令。
