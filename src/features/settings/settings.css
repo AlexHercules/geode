@@ -1022,3 +1022,18 @@
   background: var(--bg-hover);
   color: var(--text-normal);
 }
+
+/* R228: generic settings action button (e.g. Rebuild vault cache) */
+.settings-action-btn {
+  flex-shrink: 0;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-action-btn:hover {
+  background: var(--bg-hover);
+}

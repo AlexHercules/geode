@@ -353,6 +353,14 @@ export function App() {
         hotkey: "Mod+0",
         callback: () => workspace.setFontSize(16),
       }),
+      // R228: Obsidian "Rebuild vault cache" (Files & Links → Advanced). Re-walks the
+      // vault and rebuilds the in-memory metadata parse cache via the vetted rebuildAll
+      // (read-only — no .md writes; same engine the vault-load path runs).
+      commands.register({
+        id: "app:rebuild-cache",
+        name: () => t("cmd.rebuildCache"),
+        callback: () => void app.metadata.rebuildAll().then(() => showCommandNotice(t("cmd.rebuildCacheDone"))),
+      }),
       commands.register({
         id: "app:open-settings",
         name: () => t("cmd.openSettings"),

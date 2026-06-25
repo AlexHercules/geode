@@ -117,7 +117,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.223.0";
+export const APP_VERSION = "0.224.0";
 
 type SectionId =
   | "about"
@@ -951,6 +951,7 @@ function EditorSection() {
 /* ---------------- Files & links ---------------- */
 
 function FilesAndLinksSection() {
+  const app = useApp();
   const t = useI18n();
   const detectExt = useStore(detectAllExtensions);
   const autoUpdate = useStore(autoUpdateLinks);
@@ -1127,6 +1128,21 @@ function FilesAndLinksSection() {
           data-testid="settings-excluded-files"
           onChange={(e) => setExcludedFiles(e.target.value)}
         />
+      </div>
+
+      {/* R228: rebuild the in-memory metadata cache (Obsidian "Rebuild vault cache", Advanced) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.rebuildCache")}</div>
+          <div className="setting-desc">{t("settings.rebuildCacheDesc")}</div>
+        </div>
+        <button
+          className="settings-action-btn"
+          data-testid="settings-rebuild-cache"
+          onClick={() => void app.commands.execute("app:rebuild-cache")}
+        >
+          {t("settings.rebuildCacheButton")}
+        </button>
       </div>
     </section>
   );

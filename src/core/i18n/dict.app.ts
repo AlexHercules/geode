@@ -132,6 +132,8 @@ export const en = {
   "cmd.zoomIn": "Zoom in",
   "cmd.zoomOut": "Zoom out",
   "cmd.zoomReset": "Reset zoom",
+  "cmd.rebuildCache": "Rebuild vault cache",
+  "cmd.rebuildCacheDone": "Vault cache rebuilt",
 
   // ---- markdown formatting commands (R33) ----
   "cmd.toggleBold": "Toggle bold",
@@ -391,6 +393,8 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.zoomIn": "放大",
   "cmd.zoomOut": "缩小",
   "cmd.zoomReset": "重置缩放",
+  "cmd.rebuildCache": "重建仓库缓存",
+  "cmd.rebuildCacheDone": "仓库缓存已重建",
 
   // ---- markdown formatting commands (R33) ----
   "cmd.toggleBold": "切换粗体",

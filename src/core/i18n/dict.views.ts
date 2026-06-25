@@ -109,6 +109,9 @@ export const en = {
 
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "Files & links",
+  "settings.rebuildCache": "Rebuild vault cache",
+  "settings.rebuildCacheDesc": "Re-read every note and rebuild the metadata cache (tags, links, headings). Useful if search or links look out of date.",
+  "settings.rebuildCacheButton": "Rebuild",
   "settings.autoUpdateLinks": "Automatically update internal links",
   "settings.autoUpdateLinksDesc":
     "When a file is renamed or moved, automatically rewrite the links that point to it.",
@@ -447,6 +450,9 @@ export const zh: Record<keyof typeof en, string> = {
 
   // ---- settings: files & links (R16) ----
   "settings.filesAndLinks": "文件与链接",
+  "settings.rebuildCache": "重建仓库缓存",
+  "settings.rebuildCacheDesc": "重新读取所有笔记并重建元数据缓存（标签、链接、标题）。当搜索或链接看起来过期时有用。",
+  "settings.rebuildCacheButton": "重建",
   "settings.autoUpdateLinks": "自动更新内部链接",
   "settings.autoUpdateLinksDesc": "重命名或移动文件时，自动改写指向它的链接。",
   "settings.linkUseMarkdown": "使用 Markdown 链接",
