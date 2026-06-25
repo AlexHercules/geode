@@ -13,7 +13,7 @@ import type {
 } from "./types";
 import { EventBus } from "./events";
 import { Store } from "./store";
-import { defaultNewTabMode } from "./appearance";
+import { defaultNewTabMode, focusNewTab } from "./appearance";
 import { basename, stripExtension } from "./vault";
 import { isAttachmentPath } from "./attachments";
 
@@ -402,10 +402,14 @@ export class Workspace {
   /* ---------- tab management (active pane unless stated) ---------- */
 
   /** Open a file in a pane (default: active pane). Reuses that pane's tab for the same file unless newTab. */
-  openFile(path: string, opts: { newTab?: boolean; paneId?: string } = {}) {
+  openFile(path: string, opts: { newTab?: boolean; paneId?: string; focus?: boolean } = {}) {
     const s0 = this.state.get();
     const targetPaneId = opts.paneId ? paneId0(s0, opts.paneId) : s0.activePaneId;
     this.recordNavigation(s0, targetPaneId, path, opts.newTab ?? false);
+    // R233: "Always focus new tabs". A new tab steals focus unless the setting is OFF; explicit
+    // working-tab commands (Cmd+T, reopen-closed-tab) pass focus:true to bypass it. Default true =
+    // prior behaviour, so non-new-tab branches (reuse / replace-in-place) are untouched.
+    let openedInBackground = false;
     this.update((s) => {
       const paneId = opts.paneId ? paneId0(s, opts.paneId) : s.activePaneId;
       const target = findLeaf(s.root, paneId) ?? flattenLeaves(s.root)[0];
@@ -442,10 +446,18 @@ export class Workspace {
         mode: defaultNewTabMode.get(),
         title: stripExtension(basename(path)),
       };
-      root = mapLeaf(root, target.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));
-      return { ...s, root, activePaneId: target.id, modal: null };
+      if (opts.focus ?? focusNewTab.get()) {
+        root = mapLeaf(root, target.id, (l) => ({ ...l, tabs: [...l.tabs, tab], activeTabId: tab.id }));
+        return { ...s, root, activePaneId: target.id, modal: null };
+      }
+      // Background open: append the tab but keep the current active pane + tab focused.
+      openedInBackground = true;
+      root = mapLeaf(root, target.id, (l) => ({ ...l, tabs: [...l.tabs, tab] }));
+      return { ...s, root, modal: null };
     });
-    this.emitActiveFile();
+    // The active file is unchanged when opening in the background — skip the re-emit so panels
+    // (backlinks/outline) don't re-process the file still showing in the focused tab.
+    if (!openedInBackground) this.emitActiveFile();
   }
 
   /** Request a one-shot scroll-to-span reveal (R14). Pure store set — no side
@@ -861,7 +873,9 @@ export class Workspace {
       return true;
     }
     if (entry.filePath === null) return false;
-    this.openFile(entry.filePath, { newTab: true, paneId: entry.paneId });
+    // R233: reopening a closed tab is an explicit "bring it back" action that must focus —
+    // the mode/pin restoration below reads getActiveTab() and assumes the reopened tab is active.
+    this.openFile(entry.filePath, { newTab: true, paneId: entry.paneId, focus: true });
     const tab = this.getActiveTab();
     if (tab && tab.filePath === entry.filePath && tab.mode !== entry.mode) {
       this.setTabMode(tab.id, entry.mode);

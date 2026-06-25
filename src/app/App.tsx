@@ -959,7 +959,9 @@ export function App() {
           void (async () => {
             const path = vault.uniquePath("", "Untitled");
             await vault.create(path, "");
-            workspace.openFile(path, { newTab: true });
+            // R233: an explicit new working tab always focuses (Always focus new tabs setting
+            // governs file-opens from links/panels, not the Cmd+T new-tab command).
+            workspace.openFile(path, { newTab: true, focus: true });
           })();
         },
       }),

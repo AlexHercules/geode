@@ -560,7 +560,9 @@ async function bootstrap() {
   };
   newTabModeHost.__geodeNewTabMode = (mode, path) => {
     setDefaultNewTabMode(mode);
-    app.workspace.openFile(path, { newTab: true });
+    // R233: force focus so the probe reads the new tab's mode regardless of the
+    // (persisted) "Always focus new tabs" setting on the vault under test.
+    app.workspace.openFile(path, { newTab: true, focus: true });
     return app.workspace.getActiveTab()?.mode;
   };
 

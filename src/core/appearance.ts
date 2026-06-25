@@ -307,6 +307,20 @@ export function setShowViewModeToggle(on: boolean): void {
   persistBool(VIEW_MODE_TOGGLE_KEY, on);
 }
 
+/** R233: Obsidian native Editor "Always focus new tabs" (始终聚焦新标签页). Default ON =
+ *  Geode's prior "new tabs always grab focus" behaviour (zero regression). When OFF, opening a
+ *  file in a NEW tab keeps focus on the current tab (the new tab opens in the background) —
+ *  matching native semantics ("创建或打开文件时，立即切换至该标签页"). Consumed by
+ *  workspace.openFile's new-tab branch; explicit working-tab commands (Cmd+T / reopen-closed-tab)
+ *  pass focus:true to bypass it. */
+const FOCUS_NEW_TAB_KEY = "geode.focusNewTab";
+export const focusNewTab = new Store<boolean>(readBool(FOCUS_NEW_TAB_KEY, true));
+
+export function setFocusNewTab(on: boolean): void {
+  focusNewTab.set(on);
+  persistBool(FOCUS_NEW_TAB_KEY, on);
+}
+
 /** R231: Quick switcher settings (Obsidian core "Quick switcher"). All persisted, consumed by
  *  QuickSwitcher. existingOnly default OFF (create row shown = Geode prior); showAttachments
  *  default ON (Obsidian default — only adds rows when attachments exist, so zero-regression);
