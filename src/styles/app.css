@@ -665,6 +665,21 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* R237: the vault name is a button (opens the vault switcher) — strip the native
+   chrome so it reads like the other status items, with a hover affordance. */
+.status-vault {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.status-vault:hover {
+  color: var(--text-normal);
+}
+
 /* ============ empty / picker states ============ */
 
 .empty-state,

@@ -1359,7 +1359,16 @@ export function App() {
       {/* status bar (R100: hidden when showStatusBar is off) */}
       {statusBarVisible && (
       <footer className="status-bar" data-testid="status-bar">
-        <span className="status-item status-vault">{app.vault.vaultName}</span>
+        {/* R237: the vault name is a persistent entry to the vault switcher (app:switch-vault) */}
+        <button
+          type="button"
+          className="status-item status-vault"
+          data-testid="status-vault"
+          title={t("cmd.switchVault")}
+          onClick={() => app.commands.execute("app:switch-vault")}
+        >
+          {app.vault.vaultName}
+        </button>
         <span className="status-spacer" />
         {[...statusItems.entries()].map(([id, text]) => (
           <span key={id} className="status-item">
