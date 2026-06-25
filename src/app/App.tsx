@@ -9,6 +9,7 @@ import {
   spellcheckEnabled, setSpellcheckEnabled,
   defaultNewTabMode, setDefaultNewTabMode,
   showBacklinksInDocument, setShowBacklinksInDocument,
+  quickFontZoom,
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
@@ -1070,6 +1071,21 @@ export function App() {
     window.addEventListener("keydown", onKeydown);
     return () => window.removeEventListener("keydown", onKeydown);
   }, [app]);
+
+  /* ---- R227: Ctrl/Cmd + wheel adjusts the font size (Obsidian "Quick font size adjustment").
+     Gated on the toggle so the default (OFF) path keeps the browser's passive-scroll fast path —
+     the non-passive listener only exists while the feature is on. ---- */
+  const quickZoom = useStore(quickFontZoom);
+  useEffect(() => {
+    if (!quickZoom) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.deltaY === 0) return;
+      e.preventDefault(); // intercept the webview's pinch/page zoom and change the font size instead
+      app.workspace.setFontSize(app.workspace.state.get().fontSize + (e.deltaY < 0 ? 1 : -1));
+    };
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => window.removeEventListener("wheel", onWheel);
+  }, [app, quickZoom]);
 
   /* ---- no vault yet (desktop only) ---- */
   if (!tree) {

@@ -70,6 +70,17 @@ export function setRightToLeft(on: boolean): void {
   persistBool(RTL_KEY, on);
 }
 
+/** R227 (G8): Obsidian's "Quick font size adjustment" — hold Ctrl/Cmd and scroll to change the
+ *  font size. Default OFF (Obsidian default + zero-regression — Geode had no wheel zoom). App.tsx
+ *  installs a global wheel listener gated on this; the change reuses the vetted workspace.setFontSize. */
+const QUICK_FONT_ZOOM_KEY = "geode.quickFontZoom";
+export const quickFontZoom = new Store<boolean>(readBool(QUICK_FONT_ZOOM_KEY, false));
+
+export function setQuickFontZoom(on: boolean): void {
+  quickFontZoom.set(on);
+  persistBool(QUICK_FONT_ZOOM_KEY, on);
+}
+
 /** R91 (㊽): explorer file-tree sort order. Default "name-asc" = the canonical
  *  stored order (zero regression). Presentation-only (consumed at render time). */
 const EXPLORER_SORT_KEY = "geode.explorerSort";

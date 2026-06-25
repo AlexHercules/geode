@@ -15,6 +15,8 @@ import {
   setHideReferenceMarks,
   rightToLeft,
   setRightToLeft,
+  quickFontZoom,
+  setQuickFontZoom,
   autoPairBrackets,
   setAutoPairBrackets,
   autoPairMarkdown,
@@ -115,7 +117,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.222.0";
+export const APP_VERSION = "0.223.0";
 
 type SectionId =
   | "about"
@@ -315,6 +317,7 @@ function AppearanceSection() {
   const app = useApp();
   const t = useI18n();
   const ws = useStore(app.workspace.state);
+  const quickZoom = useStore(quickFontZoom);
   /* R94: interface — show inline title + show ribbon */
   const inlineTitle = useStore(showInlineTitle);
   const ribbon = useStore(showRibbon);
@@ -452,6 +455,24 @@ function AppearanceSection() {
             {ws.fontSize}px
           </span>
         </div>
+      </div>
+
+      {/* R227: quick font size adjustment — Ctrl/Cmd + scroll changes the font size (default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.quickFontZoom")}</div>
+          <div className="setting-desc">{t("settings.quickFontZoomDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${quickZoom ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={quickZoom}
+          aria-label={t("settings.quickFontZoom")}
+          data-testid="settings-quick-font-zoom-toggle"
+          onClick={() => setQuickFontZoom(!quickZoom)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
 
       {/* R94: show inline title (filename as H1 atop the note, default ON) */}
