@@ -5,6 +5,7 @@ import { EditorView, lineNumbers } from "@codemirror/view";
 import { foldEffect } from "@codemirror/language";
 import {
   spellcheckEnabled,
+  rightToLeft,
   strictLineBreaks,
   showLineNumbers,
   tabIndentSize,
@@ -302,6 +303,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const metaRevision = useStore(app.metadata.revision);
   /* R50: editor spellcheck preference — applied per-view reactively below */
   const spell = useStore(spellcheckEnabled);
+  /* R226: right-to-left text direction — applied to the CM contentDOM + the preview div */
+  const rtl = useStore(rightToLeft);
   /* R87: strict line breaks (reading view) — re-render preview reactively */
   const strict = useStore(strictLineBreaks);
   /* R88: line-number gutter preference — reconfigure CM compartment reactively */
@@ -534,6 +537,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     // R50: seed the new view with the current spellcheck preference (the effect
     // below keeps it in sync; this covers the initial build before that runs)
     view.contentDOM.setAttribute("spellcheck", String(spellcheckEnabled.get()));
+    // R226: seed text direction (LTR/RTL) — CM6's native bidi takes over from contentDOM.dir
+    view.contentDOM.setAttribute("dir", rightToLeft.get() ? "rtl" : "ltr");
     const detach = handle.attachView(view);
     // best-effort restore after a preview round-trip (clamped — the document
     // may have changed length while the editor view was gone)
@@ -623,6 +628,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
   useEffect(() => {
     viewRef.current?.contentDOM.setAttribute("spellcheck", String(spell));
   }, [spell]);
+
+  /* ---------- R226: right-to-left preference → live CM contentDOM ---------- */
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.contentDOM.setAttribute("dir", rtl ? "rtl" : "ltr");
+    view.requestMeasure(); // let CM re-read the text direction + re-render bidi
+  }, [rtl]);
 
   /* ---------- line-number gutter preference → CM compartment (R88) ---------- */
 
@@ -1142,6 +1155,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
         <div
           className={"preview-content markdown-preview-view markdown-rendered" + cssSuffix}
           data-testid="preview"
+          dir={rtl ? "rtl" : "ltr"} /* R226: RTL reading view (visual only — previewHtml bytes untouched) */
           ref={previewContentRef}
           dangerouslySetInnerHTML={{ __html: previewHtml }}
         />

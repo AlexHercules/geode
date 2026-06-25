@@ -13,6 +13,8 @@ import {
   setShowLineNumbers,
   hideReferenceMarks,
   setHideReferenceMarks,
+  rightToLeft,
+  setRightToLeft,
   autoPairBrackets,
   setAutoPairBrackets,
   autoPairMarkdown,
@@ -113,7 +115,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.221.0";
+export const APP_VERSION = "0.222.0";
 
 type SectionId =
   | "about"
@@ -632,6 +634,7 @@ function EditorSection() {
   const strict = useStore(strictLineBreaks);
   const lineNo = useStore(showLineNumbers);
   const hideRefMarks = useStore(hideReferenceMarks);
+  const rtl = useStore(rightToLeft);
   const autoPair = useStore(autoPairBrackets);
   const autoPairMd = useStore(autoPairMarkdown);
   const backlinksInDoc = useStore(showBacklinksInDocument);
@@ -729,6 +732,24 @@ function EditorSection() {
           aria-label={t("settings.hideReferenceMarks")}
           data-testid="settings-hide-reference-marks-toggle"
           onClick={() => setHideReferenceMarks(!hideRefMarks)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R226: right-to-left — default editor + reading view text direction (default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.rightToLeft")}</div>
+          <div className="setting-desc">{t("settings.rightToLeftDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${rtl ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={rtl}
+          aria-label={t("settings.rightToLeft")}
+          data-testid="settings-rtl-toggle"
+          onClick={() => setRightToLeft(!rtl)}
         >
           <span className="settings-toggle-thumb" />
         </button>

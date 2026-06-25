@@ -59,6 +59,17 @@ export function setSpellcheckEnabled(on: boolean): void {
   persistBool(SPELLCHECK_KEY, on);
 }
 
+/** R226 (G8): Obsidian's "Right-to-left" — set the editor + reading view default text
+ *  direction to RTL. Default OFF (LTR, prior behavior). Pure visual: EditorPane sets the CM
+ *  contentDOM `dir` (CM6's native bidi handles cursor/selection) + the preview div `dir`. */
+const RTL_KEY = "geode.rightToLeft";
+export const rightToLeft = new Store<boolean>(readBool(RTL_KEY, false));
+
+export function setRightToLeft(on: boolean): void {
+  rightToLeft.set(on);
+  persistBool(RTL_KEY, on);
+}
+
 /** R91 (㊽): explorer file-tree sort order. Default "name-asc" = the canonical
  *  stored order (zero regression). Presentation-only (consumed at render time). */
 const EXPLORER_SORT_KEY = "geode.explorerSort";
