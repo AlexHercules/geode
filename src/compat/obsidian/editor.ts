@@ -24,8 +24,16 @@ export interface EditorSelection {
   head: EditorPosition;
 }
 
-/** R128: a positional range ({from, to}); wordAt / scrollIntoView use these. */
+/** R128: a positional range ({from, to}); wordAt / scrollIntoView use these.
+ *  R220 (F2): `to` is REQUIRED to match d.ts `EditorRange` — distinct from the
+ *  optional-`to` EditorRangeOrCaret below. */
 export interface EditorRange {
+  from: EditorPosition;
+  to: EditorPosition;
+}
+
+/** R220 (F2): an {from, to?} where `to` defaults to a caret at `from` (d.ts EditorRangeOrCaret). */
+export interface EditorRangeOrCaret {
   from: EditorPosition;
   to?: EditorPosition;
 }
@@ -36,18 +44,23 @@ export interface EditorSelectionOrCaret {
   head?: EditorPosition;
 }
 
-/** R128: a single change in a transaction — {from, to?, text}. */
-export interface EditorChange {
-  from: EditorPosition;
-  to?: EditorPosition;
+/** R128: a single change in a transaction — {from, to?, text}.
+ *  R220 (F2): extends EditorRangeOrCaret (from required, to optional) per d.ts. */
+export interface EditorChange extends EditorRangeOrCaret {
   text: string;
 }
 
-/** R128: a batched edit — any of replaceSelection / changes / selection. */
+/** R128: a batched edit — any of replaceSelection / changes / selection(s).
+ *  R220 (F2): selection→EditorRangeOrCaret + selections? per d.ts. `selections` is
+ *  TYPE-ONLY in Geode v1 — the runtime honors changes/replaceSelection/selection;
+ *  multi-`selections` is not yet applied (same partial-honor stance as a co-supplied
+ *  selection beside replaceSelection). */
 export interface EditorTransaction {
   replaceSelection?: string;
   changes?: EditorChange[];
-  selection?: EditorRange;
+  /** Multiple selections, overrides `selection`. (type-only in Geode v1) */
+  selections?: EditorRangeOrCaret[];
+  selection?: EditorRangeOrCaret;
 }
 
 /** R128: Obsidian's exec() command names, mapped to CM6 commands in EXEC_COMMANDS. */
@@ -140,7 +153,8 @@ export class Editor {
     return this.cm.state.selection.ranges.some((r) => !r.empty);
   }
 
-  replaceSelection(replacement: string): void {
+  replaceSelection(replacement: string, _origin?: string): void {
+    // R220 (F2): `origin` (undo-grouping hint) accepted for d.ts parity; ignored like replaceRange's.
     this.cm.dispatch(this.cm.state.replaceSelection(replacement));
   }
 
@@ -192,7 +206,8 @@ export class Editor {
     }));
   }
 
-  setSelections(ranges: EditorSelectionOrCaret[]): void {
+  setSelections(ranges: EditorSelectionOrCaret[], _main?: number): void {
+    // R220 (F2): `main` (primary-range index) accepted for d.ts parity; honoring it is v1 defer.
     if (ranges.length === 0) return;
     const sel = CMSelection.create(
       ranges.map((r) => CMSelection.range(this.posToOffset(r.anchor), this.posToOffset(r.head ?? r.anchor))),
@@ -280,4 +295,9 @@ export class Editor {
 
   /** CM6 manages its own layout/measurement — nothing to refresh (CodeMirror 5 compat no-op). */
   refresh(): void {}
+
+  /** R220 (F2): CM5-legacy alias — the Editor IS its own document handle (d.ts `getDoc(): this`). */
+  getDoc(): this {
+    return this;
+  }
 }

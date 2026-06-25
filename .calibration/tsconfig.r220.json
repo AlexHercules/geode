@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "r220-types.ts",
+    "../src/compat/obsidian/global.d.ts",
+    "../src/core/katex-css.d.ts",
+    "../src/raw-import.d.ts"
+  ]
+}
