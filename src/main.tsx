@@ -81,6 +81,7 @@ import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTr
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
+import { headingSectionAt } from "@core/moveHeading";
 import { mergeNotes } from "@core/noteMerge";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
@@ -1341,12 +1342,14 @@ async function bootstrap() {
       derive: (selected: string) => string;
       content: (selected: string) => string;
       replacement: (name: string, mode: "link" | "embed") => string;
+      headingSection: (text: string, pos: number) => { from: number; to: number } | null;
     };
   };
   composerHost.__geodeComposer = {
     derive: (selected) => deriveNoteName(selected),
     content: (selected) => extractedContent(selected),
     replacement: (name, mode) => extractReplacement(name, mode),
+    headingSection: (text, pos) => headingSectionAt(text, pos),
   };
 
   // always-on obsidian:// URI probe (R46): `parse` is the PURE parser
