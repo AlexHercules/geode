@@ -61,6 +61,9 @@ import {
   setTextFont,
   monospaceFont,
   setMonospaceFont,
+  extractReplaceMode,
+  setExtractReplaceMode,
+  type ExtractReplaceMode,
 } from "@core/appearance";
 import { excludedRaw, setExcludedFiles } from "@core/excludedFiles";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
@@ -129,7 +132,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.229.0";
+export const APP_VERSION = "0.230.0";
 
 type SectionId =
   | "about"
@@ -141,6 +144,7 @@ type SectionId =
   | "plugins"
   | "command-palette"
   | "quick-switcher"
+  | "note-composer"
   | "templates"
   | "daily-notes"
   | "unique-notes"
@@ -184,6 +188,7 @@ const NAV_GROUPS: Array<{
     items: [
       { id: "command-palette", labelKey: "settings.section.commandPalette", icon: "pin" },
       { id: "quick-switcher", labelKey: "settings.section.quickSwitcher", icon: "search" },
+      { id: "note-composer", labelKey: "settings.section.noteComposer", icon: "files" },
       { id: "templates", labelKey: "settings.templates", icon: "file-text" },
       { id: "daily-notes", labelKey: "settings.dailyNotes", icon: "file-text" },
       { id: "unique-notes", labelKey: "settings.uniqueNotes", icon: "file-text" },
@@ -298,6 +303,7 @@ export function SettingsModal() {
           {section === "plugins" && <PluginsSection />}
           {section === "command-palette" && <CommandPaletteSection />}
           {section === "quick-switcher" && <QuickSwitcherSection />}
+          {section === "note-composer" && <NoteComposerSection />}
           {section === "templates" && <TemplatesSection />}
           {section === "daily-notes" && <DailyNotesSection />}
           {section === "unique-notes" && <UniqueNotesSection />}
@@ -1474,6 +1480,36 @@ function QuickSwitcherSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+    </section>
+  );
+}
+
+/* R234: Note composer core-plugin settings tab (Obsidian "Note composer"). Slice 1 = the
+ * "Replace selection with" dropdown; merge-confirmation + template location land in R235. */
+function NoteComposerSection() {
+  const t = useI18n();
+  const replaceMode = useStore(extractReplaceMode);
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.section.noteComposer")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.extractReplacement")}</div>
+          <div className="setting-desc">{t("settings.extractReplacementDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-extract-replacement"
+          value={replaceMode}
+          aria-label={t("settings.extractReplacement")}
+          onChange={(e) => setExtractReplaceMode(e.target.value as ExtractReplaceMode)}
+        >
+          <option value="link">{t("settings.extractReplaceLink")}</option>
+          <option value="embed">{t("settings.extractReplaceEmbed")}</option>
+          <option value="none">{t("settings.extractReplaceNone")}</option>
+        </select>
       </div>
     </section>
   );

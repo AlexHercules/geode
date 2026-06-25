@@ -17,6 +17,7 @@ import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { t } from "@core/i18n";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
+import { extractReplaceMode } from "@core/appearance";
 import { headingSectionAt } from "@core/moveHeading";
 import { basename, parentPath } from "@core/vault";
 
@@ -48,7 +49,8 @@ async function extractRange(app: GeodeApp, view: EditorView, from: number, to: n
     return;
   }
   const finalName = basename(notePath).replace(/\.md$/i, "");
-  const insert = extractReplacement(finalName, "link");
+  // R234: honor the "Replace selection with" setting (link / embed / none); default "link".
+  const insert = extractReplacement(finalName, extractReplaceMode.get());
   view.dispatch({
     changes: { from, to, insert },
     selection: { anchor: from + insert.length },

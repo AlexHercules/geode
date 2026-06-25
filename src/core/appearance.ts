@@ -223,6 +223,31 @@ export function setDefaultNewTabMode(mode: NewTabMode): void {
   persistString(DEFAULT_TAB_MODE_KEY, mode);
 }
 
+/** R234: Obsidian native Note composer "Replace selection with" (笔记重组「替代原文的方式」).
+ *  After extracting a selection/heading section to a new note, what to leave in the source:
+ *  a link `[[note]]` (default), an embed `![[note]]`, or nothing ("none"). Consumed by
+ *  noteComposerCommands.extractRange. Default "link" = the prior hardcoded behaviour
+ *  (zero regression). Named extractReplaceMode to avoid clashing with the pure helper
+ *  extractReplacement (core/noteComposer.ts). */
+export type ExtractReplaceMode = "link" | "embed" | "none";
+const EXTRACT_REPLACE_KEY = "geode.extractReplaceMode";
+
+function readExtractReplaceMode(): ExtractReplaceMode {
+  try {
+    const v = localStorage.getItem(EXTRACT_REPLACE_KEY);
+    return v === "embed" || v === "none" ? v : "link";
+  } catch {
+    return "link";
+  }
+}
+
+export const extractReplaceMode = new Store<ExtractReplaceMode>(readExtractReplaceMode());
+
+export function setExtractReplaceMode(mode: ExtractReplaceMode): void {
+  extractReplaceMode.set(mode);
+  persistString(EXTRACT_REPLACE_KEY, mode);
+}
+
 /** R92 (㊶ 续续): editor indentation. Mirrors Obsidian's "Indent using tabs"
  *  (default ON → insert a tab char; OFF → spaces) + "Tab indent size" (default 4 =
  *  one indent level's width). Both default to Obsidian's shipped values; this is a

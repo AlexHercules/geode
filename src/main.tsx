@@ -80,7 +80,7 @@ import { linkAtCursor, type LinkAtCursor } from "@core/linkAtCursor";
 import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
-import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
+import { deriveNoteName, extractedContent, extractReplacement, type ExtractMode } from "@core/noteComposer";
 import { headingSectionAt } from "@core/moveHeading";
 import { buildDebugInfo } from "@core/debugInfo";
 import { revealInSystem, openInDefaultApp } from "@core/reveal";
@@ -1345,7 +1345,7 @@ async function bootstrap() {
     __geodeComposer?: {
       derive: (selected: string) => string;
       content: (selected: string) => string;
-      replacement: (name: string, mode: "link" | "embed") => string;
+      replacement: (name: string, mode: ExtractMode) => string;
       headingSection: (text: string, pos: number) => { from: number; to: number } | null;
     };
   };

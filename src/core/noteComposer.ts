@@ -7,7 +7,7 @@
 
 import { encodeMdHref, linkUseMarkdown } from "./linkFormat";
 
-export type ExtractMode = "link" | "embed";
+export type ExtractMode = "link" | "embed" | "none";
 
 // strip the chars that break a filename (/ \ : * ? " < >) OR a wikilink
 // ([ ] # ^ |) — one class guards both.
@@ -74,6 +74,7 @@ export function extractedContent(selectedText: string): string {
  *  its bare basename always resolves back from the source (co-located) — the
  *  path-format is moot here. */
 export function extractReplacement(noteName: string, mode: ExtractMode): string {
+  if (mode === "none") return ""; // R234: leave nothing in the source (Obsidian "None")
   if (mode === "embed") return `![[${noteName}]]`;
   return linkUseMarkdown.get() ? `[${noteName}](${encodeMdHref(noteName + ".md")})` : `[[${noteName}]]`;
 }
