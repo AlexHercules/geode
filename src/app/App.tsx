@@ -200,6 +200,22 @@ export function App() {
           })();
         },
       }),
+      // R215 (G3 §4): Obsidian "Create new note in new pane" (⌘⇧N). Reuses app:new-note's
+      // create path + R202's split-right pattern; splitActivePane returns null for a
+      // fileless-singleton active tab (can't be split) → fall back to a new tab.
+      commands.register({
+        id: "file-explorer:new-file-in-new-pane",
+        name: () => t("cmd.newNoteInNewPane"),
+        hotkey: "Mod+Shift+N",
+        callback: () => {
+          void (async () => {
+            const path = vault.uniquePath("", "Untitled");
+            await vault.create(path, "");
+            const paneId = workspace.splitActivePane("row");
+            workspace.openFile(path, paneId ? { paneId } : { newTab: true });
+          })();
+        },
+      }),
       commands.register({
         id: "app:toggle-mode",
         name: () => t("cmd.toggleMode"),
