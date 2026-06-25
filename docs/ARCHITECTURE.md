@@ -71,6 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 242 additions — 表面复刻序 回收站组（slice 1）：「删除文件时确认」toggle（Obsidian native Files&Links·Confirm file deletion）·data-safety careful 轮·零新依赖【契约冻结 v0.238】
+
+> **状态：As-built（已交付·v0.238）。** **Step 0 全表面 scout 纠误（R228 纪律·近枯竭拐点）**：① 文件/文件夹右键菜单基本补齐（reference 08·剩 多窗口 oos / 打开历史 community）；② 热键页早有搜索+筛选(assignedOnly)+改键+**冲突检测 badge**（R145）——**WebSearch 纠误：Obsidian「冲突筛选」是 community feature-request 非 native**（reference 04「冲突」实指冲突 badge·非筛选）→ **不加冲突筛选**（防造非 native）；③ 命令 missing 多撞边界（release-notes 内容 / help open_url / trash·multi-window）。**剩唯一 native 功能缺口 = Files&Links 回收站组三设置**（reference 02:29-31：删除文件时确认[开关·默认关] / 删除附件处理[下拉] / 删除文件去向[下拉·系统回收站/.trash/永久]）= 用户预留 data-safety 重轮。**R242 取最安全 slice = 删除文件时确认 toggle**（仅 gate confirm UX·**不碰 vetted `.trash` 写路径**；附件处理 + 去向三档[含永久删除·系统回收站需 Rust]留后续 slice）。
+> **设计（1 bool Store + gate 3 confirm 点·data-safety careful·镜像 R235 merge-confirm）**：
+> - **`core/appearance.ts`**：`deleteConfirm` Store（默认 **true**·`geode.deleteConfirm`·镜像 mergeConfirm idiom）+ `setDeleteConfirm`。
+> - **🛑 default 决策（deviation·记一句）**：Obsidian native 默认 **关(OFF)**；Geode **默认 ON**（= 现状始终确认·**零回归** r140/r161·守意外删除防护）——**用户明确 flag「忠实默认 OFF 会放松防护」→ 按其顾虑取安全默认**，toggle 关闭即得 Obsidian 忠实无确认行为（删除仍走 recoverable `.trash`·关确认也安全可恢复）。
+> - **gate 3 个 confirm 点**（镜像 R235：`if (deleteConfirm.get() && !(await confirmAction(...))) return;`·仅设置 ON 才确认）：`features/explorer/Explorer.tsx` 单删(deleteNode)+批删(bulkDelete) + `app/App.tsx` `app:delete-file` 命令。**confirmAction + vault.trash 写路径逐字不变**（仅前置确认门控）。
+> - **`features/settings/SettingsModal.tsx`**：FilesAndLinksSection += toggle（回收站组·testid `settings-delete-confirm-toggle`·镜像 merge-confirm toggle）。
+> - **`core/i18n/dict.views.ts`**：`settings.deleteConfirm`/`Desc` × 中英。
+> **data-safety（逻辑档·gate 删除路径·但不改 delete 写）**：confirm gate 在 `vault.trash` **之前**（trash 写路径 R42 vetted 逐字不变·trash-after-flush lossless 不变）·默认 ON = 现状·OFF = 无确认但仍 recoverable `.trash`（关确认也安全·可从 .trash 恢复）·§A 竞态(autosave/flush/rename/delete watcher)不碰·§C 未碰 markdown.ts(r18-diff N/A)。**桌面 probe**：delete 写 = R42/R161 FS-vetted·confirmAction = R140 vetted·R242 纯 gate 接线·浏览器 e2e 全覆盖。**测试**：`.calibration/r242-e2e.mjs`（toggle 默认 ON·ON 时删除弹确认[dialog]·OFF 时删除无确认直接 trash·持久化）+ 回归 r140/r161 delete-confirm 套件不退（默认 ON confirm 仍弹）。
+
 ## Round 241 additions — 表面复刻序 文件操作命令：`file-explorer:copy-absolute-path`「复制当前文件绝对路径」（Obsidian native·Copy file path·桌面）·零新依赖【契约冻结 v0.237】
 
 > **状态：As-built（已交付·v0.237）。** **Step 0 verify-first**：grep 坐实文件/文件夹右键菜单基本补齐（reference 08 对照·剩 多窗口=oos / 打开历史=community 非 native）·热键页早有搜索+筛选+改键（R145）→ 取 G3 line 180 真 missing `file-explorer:copy-absolute-path`（命令面板·**非右键**·右键已有「复制库内路径」relative）。**桌面向**：绝对路径 = vault 根绝对路径 + 文件相对路径·浏览器 MemoryVault `getVaultPath()` 返 null → **桌面 gated（镜像 R218 reveal/open 桌面 gating）**。
