@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 241 additions — 表面复刻序 文件操作命令：`file-explorer:copy-absolute-path`「复制当前文件绝对路径」（Obsidian native·Copy file path·桌面）·零新依赖【契约冻结 v0.237】
+
+> **状态：As-built（已交付·v0.237）。** **Step 0 verify-first**：grep 坐实文件/文件夹右键菜单基本补齐（reference 08 对照·剩 多窗口=oos / 打开历史=community 非 native）·热键页早有搜索+筛选+改键（R145）→ 取 G3 line 180 真 missing `file-explorer:copy-absolute-path`（命令面板·**非右键**·右键已有「复制库内路径」relative）。**桌面向**：绝对路径 = vault 根绝对路径 + 文件相对路径·浏览器 MemoryVault `getVaultPath()` 返 null → **桌面 gated（镜像 R218 reveal/open 桌面 gating）**。
+> **设计（OS-aware 纯 join 助手 + 桌面 gated 命令·非数据安全[纯字符串 + clipboard·零 vault 写]）**：
+> - **`core/vault.ts`**：纯函数 `toAbsolutePath(vaultPath, relativePath)`——OS-aware：`sep = vaultPath.includes("\\") ? "\\" : "/"`·strip vaultPath 尾 sep·Windows 时 relativePath `/`→`\\`·`base + sep + rel`。无 IO（**纯字符串·vault.ts 红线触发逻辑档但 data-safety 维快速证伪**）。
+> - **`app/App.tsx`**（`file-explorer:copy-path` 之后）：命令 `file-explorer:copy-absolute-path`（name `explorer.copyAbsolutePath`·无默认键）·`available: () => workspace.getActiveFile() !== null && vault.getVaultPath() !== null`（**桌面 gated**·浏览器 vp=null → 不可用·= 无 vault 路径时无绝对路径·faithful）·callback `clipboard.writeText(toAbsolutePath(vp, path))` + `showCommandNotice`。
+> - **`main.tsx`**：probe `__geodeAbsolutePath(vp, rel)` = `toAbsolutePath`（浏览器测纯 join 逻辑[unix + windows sep]·命令本身桌面 gated 浏览器不可执行）。
+> - **`core/i18n/dict.panels.ts`**：`explorer.copyAbsolutePath`（EN「Copy absolute path」/ ZH「复制绝对路径」）+ `explorer.copiedAbsolutePath` × 中英（镜像 copyPath/copiedPath）。
+> **分档=逻辑档（碰 core/vault.ts 红线·但纯字符串助手 + clipboard·零 vault 写/IO·非真 data-safety 面）→ 简化门 → 多维对抗评审（重点：toAbsolutePath OS-aware 正确[unix/windows sep + 尾 sep strip]·桌面 gating·clipboard 复用 vetted copy-path 模式·非数据安全证伪）**。**桌面 probe**：clipboard.writeText = copy-path R183 vetted·`toAbsolutePath` 纯逻辑经 `__geodeAbsolutePath` 浏览器测·桌面真复制 = 同 vetted clipboard 路径·桌面 gating 浏览器 e2e 断 available false。**测试**：`.calibration/r241-e2e.mjs`（命令注册 + 名·**浏览器 available()=false[MemoryVault 无 vaultPath]**·**`__geodeAbsolutePath` 纯 join：unix `/Users/x/v`+`a/b.md`→`/Users/x/v/a/b.md`·windows `C:\x\v`+`a/b.md`→`C:\x\v\a\b.md`·尾 sep strip**）+ 回归 r179/r183 copy 命令不退。
+
 ## Round 240 additions — 表面复刻序 高频命令：`graph:open-local`「打开局部关系图」（Obsidian native Graph·Open local graph）·复用 R103/R110 局部图基建·零新依赖【契约冻结 v0.236】
 
 > **状态：As-built（已交付·v0.236）。** **Step 0 verify-first + 半成品发现**：grep 坐实 G3 line 238 `graph:open-local` = missing；但 **GraphView 早支持 local 模式**（`graphPrefs.ts:49` `mode:"global"|"local"` + R103 BFS depth/方向 follow + R110 邻居间连线·`GraphView.tsx:225` `anchor = mode==="local" ? lastActiveFile : null`）→ 缺的只是**直接以 local 模式打开图谱的命令**（现状须开全局图再 UI 切 local）。
