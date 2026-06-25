@@ -71,6 +71,14 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 237 additions — 二次拍板「表面复刻序」第 1 项：换库常驻入口（状态栏 vault 名可点 → app:switch-vault 切换器）·零新依赖【契约冻结 v0.233】
+
+> **状态：As-built（已交付·v0.233）。** 旧 bounded backlog 笔记重组 R234-236 收官后，正式转二次拍板「表面复刻序」。第 1 项 = **换库常驻入口**（Obsidian vault 名是常驻可点入口·打开换库切换器）。**Step 0**：explorer 坐实 `App.tsx:1362` 状态栏 vault 名是静态 `<span class="status-vault">`（**当前不可点**）；`app:switch-vault` 命令（callback `openModal("vaultswitcher")`）+ VaultSwitcherModal + 最近仓库 store **早 R203 已建**——本轮**只补 UI 入口**（不碰切库逻辑）。
+> **设计（机械档·纯入口 affordance·无数据安全面）**：
+> - **`App.tsx:1362`**：`<span class="status-item status-vault">` → `<button type="button" class="status-item status-vault" data-testid="status-vault" title={t("cmd.switchVault")} onClick={() => app.commands.execute("app:switch-vault")}>{app.vault.vaultName}</button>`。onClick = thunk 到既有 vetted `app:switch-vault` 命令（单一真源·R203 callback `openModal("vaultswitcher")`）·复用 `cmd.switchVault` i18n（无新键）。
+> - **`styles/app.css`**：`.status-vault` button reset（background/border/padding none·`font:inherit`·`color:inherit`·`cursor:pointer`）使其视觉同其它 status-item + `:hover` 提亮 `--text-normal` affordance。`.status-item` 的 `white-space:nowrap` 保留。
+> **分档=机械档**（diff ~26 行/2 文件·纯 nav/IA 入口 affordance + 样式·onClick thunk 到既有命令·无新承载逻辑控制流[无 if/for/while/switch/三元]·**未碰数据安全面**[click 路径仅 `execute→callback→openModal`·置 `workspace.state.modal`·不碰 vault 写/switchToVault/.md IO·真正切库是 R203 vetted 的 modal `open(path)`·本轮未触]·无新依赖·未动 Rust）→ **跳简化门** + **scoped review**（8 项全过：命令 id 逐字符一致 / testid 唯一 / i18n 双在 / t·app 作用域 / button reset 完整 / vault 名仍显 + R100 隐藏不退 / a11y `type=button`+可访问名+键盘 / 无数据安全面）·**0 缺陷**。**桌面 probe N/A**（纯 UI affordance·button click→openModal·跨端同码·切库逻辑 R203 已 FS-proven·浏览器全覆盖）。**测试**：`.calibration/r237-e2e.mjs` 9/9（status-vault 是 `<button>`·显 vault 名·title 提示·click→modal==="vaultswitcher" + DOM 现身·关闭后再点幂等再开）·回归 r203 21/21[换库切换器]·r100 15/15[状态栏 showStatusBar]。**后续**：完整「管理仓库」（新建库/列表/默认/启动选库）后续单独排。
+
 ## Round 236 additions — 笔记重组设置 Tab 补完（slice 3·收官 3/3）：「模板文件位置」（Obsidian native「Note composer」·Template file location·提取选区→新笔记时套模板）·零新依赖【契约冻结 v0.232】
 
 > **状态：As-built（已交付·v0.232）。** R234 下拉 + R235 合并提示后，本轮补最后一格「模板文件位置」→ Note composer Tab **3/3 收官**。**Step 0 scout**：WebFetch `obsidian.md/help/Plugins/Note+composer` 实证模板变量 `{{content}}`(提取的文本)`{{fromTitle}}`(源笔记名)`{{newTitle}}`(新笔记名)`{{date:FORMAT}}`·**{{content}} 缺省时内容追加到底部**·无模板=仅内容；explorer 坐实 Geode `extractedContent` 当前 verbatim 无模板·`expandTemplate`(core/templates.ts) 仅支持 `{{title}}/{{date}}/{{time}}`（**单趟 String.replace·替换值不重扫**=对抗输入安全·CLAUDE.md「单趟替换绝不重扫」）。
