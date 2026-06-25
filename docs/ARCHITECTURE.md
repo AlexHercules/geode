@@ -71,6 +71,18 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 217 additions — G3 §0：app:show-debug-info（Obsidian「Show debug info」·收集版本/平台/语言/插件→剪贴板+toast·新 core/debugInfo.ts 纯 builder·非数据安全·零新依赖）【As-built v0.213】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §0 missing「显示调试信息」(`app:show-debug-info`) 补全。**web 实证**：Obsidian「Show debug info」把 SYSTEM INFO（版本/OS/主题/插件数+列表）拷剪贴板供 bug 报告。Geode 取**忠实子集**（版本/平台/语言/插件 installed+enabled+列表）——base/community theme 在 compat 层（features 不可 import·且 Geode 无 light/dark base-theme 概念）故略。
+> **契约（新 pure core 1 文件 + 1 命令 + export 既有 APP_VERSION + 1 i18n + 1 probe·非数据安全·只读 + clipboard）**：
+> - **`core/debugInfo.ts`（新·纯）**：`buildDebugInfo({version,platform,locale,plugins:[{name,id,enabled}]}): string`——格式化文本块（Version/Platform/Locale/Plugins installed/enabled + enabled 编号列表）。纯函数·零 DOM/store 访问（命令层注入 live 值）·可 probe 测。
+> - **`app/App.tsx`**：`app:show-debug-info` 命令（无默认键）·收集 `APP_VERSION` + `navigator.platform||userAgent` + `locale.get()` + `plugins.list()`[name thunk 解析] → `buildDebugInfo` → `navigator.clipboard.writeText` → **复用 R183 `showCommandNotice`** toast。
+> - **`features/settings/SettingsModal.tsx`**：`APP_VERSION` 改 `export const`（App.tsx import·**不新增第 4 处硬编码**·版本三处流程不变）。
+> - **`core/i18n/dict.app.ts`**：`cmd.showDebugInfo` + `debugInfo.copied`（en/zh）。**`main.tsx`**：`__geodeDebugInfo = buildDebugInfo`（纯 probe）。
+> - **分档：逻辑档（新 core/debugInfo.ts builder 含 filter+map 控制流）·但非数据安全面**（只读 + clipboard·无 editor/vault/markdown 写）→ 聚焦 reviewer（非满跑 Workflow·风险面小）。
+> - **评审（聚焦 reviewer·7 维 确认/证伪 → 0 confirmed·deliverable）**：buildDebugInfo enabled-only 编号正确·命令 value-gathering 契约全匹配（name thunk 解析·plugins.list 形状·navigator 回退·locale 类型）·layering 合规·i18n en+zh 存在·命令 id 唯一·export APP_VERSION 不破既有用法。**1 nit 记不修**：clipboard `writeText(...).catch()` fire-and-forget 后无条件 toast「已复制」—失败时误导，但**字字沿用 R183 既有姊妹约定**（copy-path/copy-url）·Tauri/localhost 皆 secure context·无数据安全后果→不单独改避与姊妹不对称（要改应三命令统一）。
+> - **桌面 probe N/A·浏览器可验证 + pure-fn probe**。**v1 偏差**：略 theme（compat 层·Geode 无 light/dark base-theme）；插件无 version 字段（Geode 模型·列 id/name）。
+
 ## Round 216 additions — G3 §12：editor:move-heading（Obsidian「Move current heading to…」·移动光标处章节到新笔记·复用 R44 extract 写路径·新 core/moveHeading.ts 算 section 范围·data-safety 逻辑档[byte 写两侧]·零新依赖）【As-built v0.212】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §12 末项 missing「移动当前章节」(`note-composer:move-heading`) 补全·**note-composer 组整组补完**。Obsidian「Move current heading to…」移动光标处标题的整个章节（标题行 + 正文，含子标题）到另一笔记、原处留链接。Geode 既有 `editor:extract-selection`(R44) 已是「auto-create 新笔记 + 留链接」语义（无 picker），move-heading 复用同机制·**仅 range 不同**（章节范围 vs 选区）。

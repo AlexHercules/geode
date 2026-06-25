@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R217 套件回归（2026-06-25，G3 §0 · 表面复刻 G 系列 · app:show-debug-info[收集版本/平台/语言/插件→剪贴板+toast] · 新 core/debugInfo.ts 纯 builder · 逻辑档[非数据安全·只读+clipboard] · 聚焦 reviewer deliverable·0 confirmed · 桌面 probe N/A）
+
+R217 = G3 矩阵 §0 missing「显示调试信息」(`app:show-debug-info`) 补全。**web 实证**：Obsidian「Show debug info」把 SYSTEM INFO（版本/OS/主题/插件数+列表）拷剪贴板供 bug 报告。Geode 取忠实子集（版本/平台/语言/插件 installed+enabled+列表）·略 theme（compat 层·Geode 无 light/dark base-theme）。**详见 ARCHITECTURE「Round 217 additions」**：新 `core/debugInfo.ts` 纯 `buildDebugInfo`（命令注入 live 值·enabled-only 编号列表）+ 命令复用 R183 showCommandNotice toast + clipboard + **export 既有 APP_VERSION**（App.tsx 复用·避第 4 处版本硬编码·三处流程不变）+ __geodeDebugInfo probe。
+
+新增套件：`r217-e2e.mjs` **8/8**（A 纯 buildDebugInfo 精确格式 + **enabled-only 编号** · B 注册无键 · C 执行→剪贴板含调试块[版本/插件·含 r217 probe 插件] + command-notice toast）。**套件矩阵不回退**：**r183 11/11[toast/copy-path]·r214 10/10·r195 11/11·r81 14/14**·typecheck 0/cargo/生产构建。**桌面 probe N/A 浏览器可验证 + pure-fn probe**。**分档逻辑档（builder 含 filter+map）但非数据安全面（只读+clipboard）→ 聚焦 reviewer（非满跑 Workflow）**：7 维 确认/证伪 → **0 confirmed·deliverable**·1 nit 记（clipboard fire-and-forget 后无条件 toast「已复制」失败时误导·但字字沿用 R183 copy-path/copy-url 既有约定·secure context·无数据安全后果→不单独改）。
+
 ### R216 套件回归（2026-06-25，G3 §12 收尾 · 表面复刻 G 系列 · editor:move-heading[移动光标处章节到新笔记] · 新 core/moveHeading.ts headingSectionAt + 复用 R44 extract 写路径 · data-safety 逻辑档[byte 写两侧]·**Ultracode 3-lens+skeptic 对抗评审 初判 needs-fixes→修后 deliverable·1 major[frontmatter 掏空源·底线①]修**·桌面 probe N/A）
 
 R216 = G3 矩阵 §12 末项 missing「移动当前章节」(`note-composer:move-heading`) 补全·**note-composer 组整组补完**。Obsidian「Move current heading to…」移光标处章节到另一笔记、留链接。Geode 既有 `editor:extract-selection`(R44) 已是 auto-create 新笔记语义，move-heading 复用同机制·仅 range 不同。**详见 ARCHITECTURE「Round 216 additions」**：新 `core/moveHeading.ts` 纯 `headingSectionAt`（maskCodeRegions + **parseFrontmatter** blank·扫 ATX 标题·section end=下个 level≤本级·尾部 trim）+ 重构 R44 抽 `extractRange`（create-before-edit + stale-guard 复用·2 调用点）+ 注册 editor:move-heading。
