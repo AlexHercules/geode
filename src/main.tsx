@@ -82,6 +82,7 @@ import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteForm
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
 import { headingSectionAt } from "@core/moveHeading";
+import { buildDebugInfo } from "@core/debugInfo";
 import { mergeNotes } from "@core/noteMerge";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
@@ -1351,6 +1352,10 @@ async function bootstrap() {
     replacement: (name, mode) => extractReplacement(name, mode),
     headingSection: (text, pos) => headingSectionAt(text, pos),
   };
+
+  // R217: pure debug-info builder probe (the command in App.tsx injects live values).
+  (globalThis as typeof globalThis & { __geodeDebugInfo?: typeof buildDebugInfo }).__geodeDebugInfo =
+    buildDebugInfo;
 
   // always-on obsidian:// URI probe (R46): `parse` is the PURE parser
   // (core/obsidianUri) so browser/desktop E2E can assert the action mapping

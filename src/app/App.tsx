@@ -31,7 +31,8 @@ import { CalendarPanel } from "@features/calendar";
 import { CommandPalette } from "@features/palette/CommandPalette";
 import { QuickSwitcher } from "@features/palette/QuickSwitcher";
 import { TemplateSelector } from "@features/palette/TemplateSelector";
-import { SettingsModal, requestUpdateAutoCheck } from "@features/settings/SettingsModal";
+import { SettingsModal, requestUpdateAutoCheck, APP_VERSION } from "@features/settings/SettingsModal";
+import { buildDebugInfo } from "@core/debugInfo";
 import { WorkspacesModal } from "@features/workspaces";
 import { RecoveryModal } from "@features/recovery";
 import { SlidesOverlay } from "@features/slides";
@@ -57,7 +58,7 @@ import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { mergeTargetMode } from "@core/noteMerge";
 import { bookmarks } from "@core/bookmarks";
-import { t, useI18n } from "@core/i18n";
+import { t, useI18n, locale } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
@@ -425,6 +426,27 @@ export function App() {
         id: "app:show-file-properties",
         name: () => t("cmd.showFileProperties"),
         callback: () => workspace.setRightPanel("fileproperties"),
+      }),
+      // R217 (G3 §0): Obsidian "Show debug info" — copy version/platform/locale/plugins to
+      // the clipboard for bug reports. buildDebugInfo is pure; the gathered values are live.
+      commands.register({
+        id: "app:show-debug-info",
+        name: () => t("cmd.showDebugInfo"),
+        callback: () => {
+          const plugins = app.plugins.list().map((e) => ({
+            name: typeof e.plugin.name === "function" ? e.plugin.name() : e.plugin.name,
+            id: e.plugin.id,
+            enabled: e.enabled,
+          }));
+          const text = buildDebugInfo({
+            version: APP_VERSION,
+            platform: navigator.platform || navigator.userAgent || "unknown",
+            locale: locale.get(),
+            plugins,
+          });
+          void navigator.clipboard.writeText(text).catch(() => {});
+          showCommandNotice(t("debugInfo.copied"));
+        },
       }),
       // R183 (G3 ui-only→done): promote R179's right-click "copy path / copy
       // Obsidian URL" to commands operating on the active file (reuse buildOpenUri;
