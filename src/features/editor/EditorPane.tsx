@@ -6,6 +6,7 @@ import { foldEffect } from "@codemirror/language";
 import {
   spellcheckEnabled,
   rightToLeft,
+  showViewModeToggle,
   strictLineBreaks,
   showLineNumbers,
   tabIndentSize,
@@ -305,6 +306,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const spell = useStore(spellcheckEnabled);
   /* R226: right-to-left text direction — applied to the CM contentDOM + the preview div */
   const rtl = useStore(rightToLeft);
+  /* R229: show the edit/read view-mode toggle button group in the header (Obsidian default ON) */
+  const viewModeToggleVisible = useStore(showViewModeToggle);
   /* R87: strict line breaks (reading view) — re-render preview reactively */
   const strict = useStore(strictLineBreaks);
   /* R88: line-number gutter preference — reconfigure CM compartment reactively */
@@ -1197,12 +1200,13 @@ export function EditorPane({ tab }: { tab: TabState }) {
             <Icon name="bookmark" size={15} {...(bookmarked ? { fill: "currentColor" } : {})} />
           </button>
         )}
-        <div
-          className="editor-mode-group"
-          role="group"
-          aria-label={t("editor.viewModeAria")}
-          data-testid="mode-group"
-        >
+        {viewModeToggleVisible && (
+          <div
+            className="editor-mode-group"
+            role="group"
+            aria-label={t("editor.viewModeAria")}
+            data-testid="mode-group"
+          >
           <button
             className={"editor-mode-btn" + (tab.mode === "live" ? " is-active" : "")}
             data-testid="mode-live"
@@ -1246,7 +1250,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
           >
             <Icon name="book-open" size={15} />
           </button>
-        </div>
+          </div>
+        )}
       </div>
       {body}
     </div>

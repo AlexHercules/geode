@@ -9,6 +9,8 @@ import {
   setSpellcheckEnabled,
   strictLineBreaks,
   setStrictLineBreaks,
+  showViewModeToggle,
+  setShowViewModeToggle,
   showLineNumbers,
   setShowLineNumbers,
   hideReferenceMarks,
@@ -117,7 +119,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.224.0";
+export const APP_VERSION = "0.225.0";
 
 type SectionId =
   | "about"
@@ -653,6 +655,7 @@ function EditorSection() {
   const readable = useStore(readableLineLength);
   const spell = useStore(spellcheckEnabled);
   const strict = useStore(strictLineBreaks);
+  const viewModeToggle = useStore(showViewModeToggle);
   const lineNo = useStore(showLineNumbers);
   const hideRefMarks = useStore(hideReferenceMarks);
   const rtl = useStore(rightToLeft);
@@ -670,6 +673,24 @@ function EditorSection() {
   return (
     <section>
       <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
+
+      {/* R229: show the edit/read view-mode toggle button on each tab (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showViewModeToggle")}</div>
+          <div className="setting-desc">{t("settings.showViewModeToggleDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${viewModeToggle ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={viewModeToggle}
+          aria-label={t("settings.showViewModeToggle")}
+          data-testid="settings-view-mode-toggle"
+          onClick={() => setShowViewModeToggle(!viewModeToggle)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
 
       {/* R50: readable line length — caps the body column width (default ON) */}
       <div className="setting-item">

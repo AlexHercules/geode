@@ -281,6 +281,18 @@ export function setShowTabTitleBar(on: boolean): void {
   persistBool(TAB_TITLE_BAR_KEY, on);
 }
 
+/** R229 (G8): Obsidian "Show view mode toggle" — show the edit/read view-mode toggle button
+ *  group on each tab's header. Default ON = current behaviour + Obsidian default. OFF hides it
+ *  (the mode is still switchable via the Ctrl+E / Ctrl+Shift+E commands). Consumed reactively by
+ *  EditorPane (gates the .editor-mode-group render). */
+const VIEW_MODE_TOGGLE_KEY = "geode.showViewModeToggle";
+export const showViewModeToggle = new Store<boolean>(readBool(VIEW_MODE_TOGGLE_KEY, true));
+
+export function setShowViewModeToggle(on: boolean): void {
+  showViewModeToggle.set(on);
+  persistBool(VIEW_MODE_TOGGLE_KEY, on);
+}
+
 /** R100 (㊺ 续续续): show the bottom status bar. Default ON. OFF hides it (status-bar
  *  plugin items like word count keep working — only the display is hidden). */
 const STATUS_BAR_KEY = "geode.showStatusBar";
