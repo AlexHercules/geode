@@ -71,7 +71,17 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 238 additions — 表面复刻序 高频命令：`editor:focus`「将焦点切换至编辑区」（Obsidian native·Focus on the editor）·零新依赖【契约冻结 v0.234】
+## Round 239 additions — 表面复刻序：完成「搜索书签」= `bookmarks:bookmark-search`「收藏当前搜索」+ 点击恢复查询（Obsidian native Bookmarks·Bookmark current search）·零新依赖【契约冻结 v0.235】
+
+> **状态：As-built（已交付·v0.235）。** **Step 0 verify-first 纠误（R222/R238 纪律）**：grep 坐实候选「随机笔记」「复制路径」早 done；G3 矩阵 line 265 `bookmarks:bookmark-search` = missing → 取它。**关键发现（半成品补全）**：① bookmark store **早支持 `type:"search"`**（`core/bookmarks.ts:54` SearchBookmark·序列化/反序列化全在）② BookmarksPanel **早渲染** search 书签（title `bookmarks.untitledSearch`·icon "search"）③ **但两处缺口**：缺创建命令 + **点击恢复是 stale stub**（`BookmarksPanel.tsx:139`「no programmatic query injection available」——其实 `workspace.requestSearch(query)` R222 已建）。**故 R239 = 完成搜索书签（创建 + 恢复双补）**——否则创建的书签点击死掉 = 假完成（违 GAP_AUDIT 第十一节「真 handler」）。
+> **设计（reflection store + 1 命令[add+notice 在 App.tsx] + 点击修复）·非数据安全[bookmarks.json 非 .md]**：
+> - **`core/workspace.ts`**：`readonly currentSearchQuery = new Store<string>("")`（SearchPanel 把 live query 镜像于此·命令读它·session-only）。**reflection 而非 one-shot trigger**——因 add+notice 都在 App.tsx（`bookmarks` 模块单例 + `showCommandNotice` 模块函数都在此），命令直接读 query 做事、避免把 toast 接进 SearchPanel；且 add 在用户触发的命令 callback（非 effect）→ **无 StrictMode 写因双触发顾虑**。
+> - **`app/App.tsx`**：命令 `bookmarks:bookmark-search`（name `cmd.bookmarkSearch`）callback：`const q = workspace.currentSearchQuery.get().trim(); if (!q) { showCommandNotice(noSearch); return; } bookmarks.add({type:"search", query:q, ctime:Date.now()}); showCommandNotice(searchBookmarked)`（复用既有 `bookmarks` 单例 + `showCommandNotice`）。
+> - **`features/search/SearchPanel.tsx`**：sync effect `useEffect(() => { app.workspace.currentSearchQuery.set(query); }, [query, app.workspace])`（每次 query 变镜像到 store·StrictMode 双调幂等[set 同值]·无副作用）。
+> - **`features/bookmarks/BookmarksPanel.tsx`**（activate :138-140 search case）：`setLeftPanel("search")`（stale stub「no programmatic query injection」）→ `app.workspace.requestSearch(item.query)`（注入查询 + 开面板·复用 R222 vetted 方法·关闭 stale 缺口）。
+> - **`core/i18n/dict.bookmarks.ts`**：`cmd.bookmarkSearch`（EN「Bookmark current search」/ ZH「收藏当前搜索」）+ `bookmarks.searchBookmarked`/`bookmarks.noSearchToBookmark` × 中英。
+> **deviation（记一句）**：currentSearchQuery 不在 SearchPanel 卸载时清——故命令可收藏「上次搜索」即使搜索面板已关（比 Obsidian「须搜索视图聚焦」更宽松·更便利·重开搜索面板 query 重置 "" 会同步清空）。**评审驱动硬化**：`vault:changed("load")` 时 `currentSearchQuery.set("")`（与 recentlyClosed/tabHistory 同处清）·防切库把 A 的 last query 收进 B 的 bookmarks.json（残留纯字符串无害·但仍清干净）。
+> **分档=逻辑档（新 store + 新命令 + reflection sync effect + 点击逻辑改·但非数据安全[bookmarks.json 串行 RMW·非 .md 写·不碰 editor/vault 管线]）→ 简化门 → 多维对抗评审（重点：query 镜像正确·命令读 .get() 鲜值·空查询 no-op·点击 requestSearch 注入·StrictMode sync 幂等无重复书签）**。**桌面 probe N/A**（bookmarks.json 持久 = R158 vetted·跨端同码·浏览器全覆盖）。**测试**：`.calibration/r239-e2e.mjs`（命令注册 + 名·搜索面板键入 query → 执行命令 → 新 search 书签出现[title 含 query]·**StrictMode 不重复**·点击 search 书签 → 搜索面板开 + query 注入·空查询 no-op·持久化）+ 回归 r158/r193 书签 + r222 搜索不退。
 
 > **状态：As-built（已交付·v0.234）。** R238 续表面复刻序，取较轻**非删除**项（回收站+删除确认留 data-safety 专轮·避免连碰底线①）。**Step 0 verify-first（R222/R223 纪律）**：① grep 坐实候选「随机笔记」`random-note:open` 早已建（`src/plugins/random-note.ts`）、「复制路径」`file-explorer:copy-path` 早 R179/R183 建 → **两个 HANDOFF 命名候选都已 done**（即取序项常已 done 再验）；② 改取 **G3 矩阵 line 139 `editor:focus`「将焦点切换至编辑区」= missing**（高频键盘命令·搜索/侧栏后跳回编辑器·Obsidian 真命令·无默认键）。
 > **设计（1 命令·机械/轻逻辑·无数据安全面）**：
