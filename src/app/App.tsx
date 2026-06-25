@@ -685,6 +685,15 @@ export function App() {
           if (active) unfoldAtCursor(active.view);
         },
       }),
+      // R238: move keyboard focus to the active editor (Obsidian "Focus on the editor").
+      commands.register({
+        id: "editor:focus",
+        name: () => t("cmd.focusEditor"),
+        callback: () => {
+          const active = app.documents.getActiveView();
+          if (active) active.view.focus();
+        },
+      }),
       commands.register({
         id: "editor:add-property",
         name: () => t("cmd.addProperty"),
