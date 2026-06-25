@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R230 套件回归（2026-06-25，选项2 bounded backlog 续 · 文件夹右键「设为附件文件夹」[Obsidian native folder context「Set as attachment folder」] · 复用既有 setAttachmentFolder·零新依赖 · 机械档[context-menu IA·调既有 setter·非 vault IO] · 跳简化门 · scoped review deliverable·5 点全确认·0 缺陷 · 桌面 probe N/A）
+
+R230 = **选项2 bounded backlog 取最清爽单项**（scout 评「★最干净单项」）。**Step 0**：reference `08-右键菜单:30` 确认 native·后端 `core/attachments.ts:27 setAttachmentFolder()`（写 `geode.attachmentFolder` localStorage 设置·非 vault/file IO）早 vetted·设置输入框已用·仅文件夹右键缺此项。**详见 ARCHITECTURE「Round 230 additions」**：Explorer folder 分支 +1 按钮 `explorerctx-set-attachment-folder`·onClick `setMenu(null)+setAttachmentFolder(node.path)+showLinkUpdateNotice` toast·镜像 new-note-here；i18n +2 键×2 语言。
+
+新增套件：`r230-e2e.mjs` **8/8**（文件夹右键见「设为附件文件夹」·点击→`geode.attachmentFolder` localStorage = "myassets"·toast 确认·菜单关·**file 右键无此项[folder-only]**·持久化 reload）。**套件矩阵不回退**：**r130 12/12·r93 22/22[explorer 套件·context menu 不退]**·typecheck 0（全 src）·生产构建成功·cargo check 通过。**分档=机械档（context-menu IA +1 项 + i18n·调既有 vetted setter·非 vault/file IO/documents·无新控制流/store action·未碰数据安全面）→ 跳简化门 → scoped review deliverable·5 点全确认·0 缺陷**（testid 唯一·icon `folder` 已注册非 fallback·i18n 2 键中英真存在 + `{folder}` 占位对齐·`setAttachmentFolder(node.path)` 与设置输入框同源[存 RAW·消费 trim]·菜单项只在 folder 分支[file 零改]·showLinkUpdateNotice 复用既有 toast）。收尾 bump 版本三处 0.226。**桌面 probe N/A**（右键 + localStorage·浏览器全覆盖）·**r18-diff N/A**（不碰 markdown.ts·零 .md 写·仅 localStorage）。**backlog 余 9 项·R231 续取（快切 3 档 toggle 最清爽）。**
+
 ### R229 套件回归（2026-06-25，选项2 bounded backlog 取首项 · 编辑器设置「视图状态切换」toggle[Obsidian native Editor「Show view mode toggle」·默认开·每标签页显示编辑/阅读切换按钮] · 纯渲染门·零新依赖 · 逻辑档[碰 editor·纯 React 渲染门零 .md 写] · 简化门 clean · 多维对抗 deliverable·7 维全证伪·0 缺陷 · 桌面 probe N/A）
 
 R229 = **R228 拐点纠误后从 ROADMAP「选项2 bounded backlog」(scout 余 11 项) 取最清爽**（纯渲染门）。**Step 0**：reference `01-编辑器:15` 确认 native（Editor 顶部组·R226「Display 组全清」未覆盖此顶部组·scout 找出漏检）·`EditorPane:1200` 的 `.editor-mode-group`(live/source/preview 三按钮) 无条件渲染。**详见 ARCHITECTURE「Round 229 additions」**：逐点镜像 R94 showRibbon/R100 showTabTitleBar——`showViewModeToggle` Store(默认 true·零回归)；EditorPane `useStore` + 把 `.editor-mode-group` 包进 `{viewModeToggleVisible && (...)}`；SettingsModal EditorSection toggle。

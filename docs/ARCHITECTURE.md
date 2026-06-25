@@ -71,6 +71,14 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 230 additions — 选项2 bounded backlog 续：文件夹右键「设为附件文件夹」（Obsidian native folder context「Set as attachment folder」）·复用既有 setAttachmentFolder·零新依赖【契约冻结 v0.226】
+
+> **状态：As-built（已交付·v0.226）。** 从「选项2 bounded backlog」取最清爽单项（scout 评「★最干净单项」）。**Step 0**：reference `08-右键菜单.md:30`「文件夹对象菜单：新建笔记/新建文件夹/设为附件文件夹」= native。Geode 后端 `core/attachments.ts:27 setAttachmentFolder(value)`（写 localStorage 设置·attachment 导入消费）已 vetted·设置页输入框已用（SettingsModal:1099）·但**文件夹右键缺此项**（Explorer.tsx:1089-1113 folder 分支仅 new-note-here/new-folder-here·grep set-attachment 零命中）。
+> **契约（Explorer 文件夹右键 +1 菜单项·复用 vetted setter）**：
+> - **`Explorer.tsx`**：import `setAttachmentFolder` from `@core/attachments`；folder 分支（`node.kind === "folder"`·new-folder-here 后）+1 按钮 `data-testid="explorerctx-set-attachment-folder"`·`onClick = setMenu(null) + setAttachmentFolder(node.path) + showLinkUpdateNotice(t("explorer.setAttachmentFolderDone", { folder: node.path }))`（复用既有 explorer toast helper·镜像 new-note-here 按钮）。
+> - **i18n `dict.panels.ts` `explorer.*`**：+`setAttachmentFolder`（菜单标签）/`setAttachmentFolderDone`（toast·带 {folder}）·中英。
+> - **分档：机械档（context-menu IA +1 项 + i18n·调既有 vetted `setAttachmentFolder`[localStorage 设置·非 vault/file IO/documents]·无新控制流/store action/算法·无新依赖·未碰数据安全面·未动 Rust）** → 跳简化门（Step 3.4）·**scoped review deliverable·5 点全确认·0 缺陷**（testid `explorerctx-set-attachment-folder` 唯一·icon `folder` 已注册非 fallback·i18n 2 键中英真存在 + `{folder}` 占位与 onClick 传值对齐·`setAttachmentFolder(node.path)` 与设置输入框同源[存 RAW·消费 trim]·菜单项只在 folder 分支[file 分支零改]·showLinkUpdateNotice 复用既有 toast）。**As-built 验证**：typecheck 0（全 src）+ **r230-e2e 8/8**（文件夹右键见「设为附件文件夹」·点击→`geode.attachmentFolder` localStorage = "myassets"·toast·菜单关·**file 右键无此项[folder-only]**·持久化 reload）+ 回归 **r130 12/12·r93 22/22[explorer 套件不退]** + 生产构建成功 + cargo check 通过（零 Rust）。**桌面 probe N/A**（右键 + localStorage·浏览器全覆盖）·**r18-diff N/A**（不碰 markdown.ts·零 .md 写·setAttachmentFolder 仅 localStorage）。
+
 ## Round 229 additions — 选项2 bounded backlog 取首项：编辑器设置「视图状态切换」toggle（Obsidian native Editor 顶部组「Show view mode toggle」·默认开）·纯渲染门·零新依赖【契约冻结 v0.225】
 
 > **状态：As-built（已交付·v0.225）。** R228 拐点纠误后从 ROADMAP「选项2 bounded backlog」(scout 余 11 项) 取最清爽之一。**Step 0**：reference `01-编辑器.md:15`「视图状态切换 | 开关 | 开 | 在每个标签页显示『编辑/阅读视图』切换按钮」= native（Editor 顶部组·R226「Editor Display 组全清」未覆盖此顶部组·scout 找出漏检）。Geode `EditorPane.tsx:1200` 的 `.editor-mode-group`（live/source/preview 三按钮 + bookmark）**无条件渲染·无 setting 门控**（grep showViewModeToggle 零命中）。
