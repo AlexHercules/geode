@@ -1482,7 +1482,58 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 
 ---
 
-## 🆕 取用顺序总览（✅ 2026-06-25 用户对话拍板 · 优先级高于上方各梯队「F2 即取」基调）
+## 🆕🛑 取用顺序·二次拍板（2026-06-25 · 只做复刻 · 表面最后一公里 + 高频操作优先 · **优先级高于本文件一切旧基调**）
+
+**用户定调**：现在连 Obsidian 常用的**换库 / 管理仓库都做不到**，距 Obsidian 实操体验差距仍大。**当前阶段坚定且唯一的目标 = 完美复刻 Obsidian**；差异化 E 系列、`geode-设计讨论/` 全部待设计项、开源协议（E1）**一律搁置**，待复刻打磨完成后再议。
+
+**两条决策**：
+
+**(1) 复刻大件 → 登记「待讨论 · 不进 loop」**：以下大件**标注后续要做，但 loop 不自主取用**，须先讨论方向或拍板依赖才启动。
+
+| 大件 | 现状（code-verify · 2026-06-25） | 前置（须讨论 / 拍板）|
+|---|---|---|
+| Canvas 白板 `.canvas` | 缺（`features/` 无目录、无命令；canvas 命中全是图谱 `<canvas>`）| 立项 + 定方向：复用 Excalidraw vs 自建轻量画布 |
+| Bases 库内数据库 | 缺（0 命中、无命令）| 先建查询/过滤/排序引擎 + 数据模型 |
+| 导入器 / 格式转换器 | 缺（无命令）| HTML→md 转换依赖评估（疑似撞硬边界#5）|
+| 录音机 Audio recorder | 缺 | 麦克风新能力 |
+| Web viewer 网页查看器 | 缺（无命令）| 内嵌 webview / 新依赖 |
+| Pop-out 多窗口 | 显式不做（源码：single-window…do not exist）| 先评估宿主：多 WebView / 换宿主可行性 |
+| **Vim 模式** ⭐ | 缺（仅把 `.vim` 当文本扩展名）| **须拍板新依赖 `codemirror-vim`（硬边界#5）→ 批准即上** |
+| **Stacked tabs 标签堆叠** ⭐ | 部分（pinned 已 R39；堆叠 / linked view 缺）| data-safety 大轮（多 EditorPane 同挂）· 须谨慎设计 |
+
+> ⭐ = 用户已表态希望纳入优先，但卡前置（依赖拍板 / data-safety 设计）。**前置一解即从本表升入下方「最优先取用序」。**
+
+**(2) 最优先 = 表面复刻「最后一公里」+ 高频操作**（loop 即取、按下方序自主跑）。用户全选三类 + 编辑器/工作流核心；**换库 / 管理仓库为头号痛点，先做常驻入口（先入口、后完整）**。
+
+### 最优先取用序（loop 即取 · 自下一轮生效 · 当前 v0.230 一线）
+
+> **衔接（2026-06-25 用户拍板「先收尾再转」）**：下一轮 **R235 先收尾**上轮 R234 开头的「笔记重组」设置 Tab（合并提示 toggle + 模板文件位置 ＝ 旧 backlog 最后一次取用，避免半成品），**收尾后即从下方第 1 项「换库常驻入口」开始本序**。
+
+**第一批 · 文件操作体验（感知最强）**
+1. **换库常驻入口** ★头号痛点 — 状态栏 vault 名（`App.tsx:1362` 静态 `<span class="status-vault">`，**当前不可点**）改为可点击 → 触发 `app:switch-vault` 切换器模态；顺带补模态体验。**先入口**；完整「管理仓库」（新建库 / 库列表 / 设为默认 / 启动选库）= 紧接后续（见本节末「后续」）。
+2. **回收站 UI + 删除确认**（G7）— 触 vault 删除路径 = data-safety 重轮，单独谨慎排。
+3. **复制库内路径 / 绝对路径命令 + 打开历史入口**（G4-b；矩阵 missing `file-explorer:copy-absolute-path`）。
+4. **随机笔记 Random note** — 核心插件、零依赖一轮。
+
+**第二批 · 设置页「像不像」**
+5. **热键页结构**（G3-UI）— 按来源分组 + 右侧键位 chip + 加号 / 删除控件 + 默认键逐项校准。
+6. **设置页视觉像素级**（G2-b）— 字体「管理」弹窗 + 控件原生观感 + setting row 行高 / 分组，据 `reference/_截图/` 验收。
+7. **文件夹右键菜单补齐**（G4-b）。
+
+**第三批 · 零星高频命令**（矩阵 missing 中 bounded 项）
+8. 将焦点切换至编辑区 `editor:focus`
+9. 打开局部关系图 `graph:open-local`（需 local graph 内核 · 中等）
+10. 收藏当前搜索 `bookmarks:bookmark-search` / 显示版本日志 `app:show-release-notes` / 查看帮助 `help:open`
+
+**后续（用户已表态优先，须前置解锁）**：完整管理仓库界面 → Vim 模式（批依赖后）→ Stacked tabs（设计后）。
+
+> 🔒 验收仍走 `OBSIDIAN_REPLICA_GAP_AUDIT.md` 第十一节铁律：设置 tab 同名 + 命令进 280 清单 + 面板 / 右键入口 + 禁用插件后一致消失 + 值持久化·重启生效 + 对照 `reference/` 截图 + **真 handler 非空行**。
+>
+> ⚠️ **给 loop**：本节为 2026-06-25 **二次**拍板，**优先级高于下方一切旧节**（含「一次拍板·选项2 backlog」「表面复刻 G 系列即取」「F2 即取」）。每轮 Step 0 以本节顺序为准；**E 系列 / 设计讨论 / 开源协议本阶段一律不取**。选项2 backlog 余项（笔记重组等）降为本节清空后的续接燃料。
+
+---
+
+## 取用顺序总览（2026-06-25 一次拍板 · 选项2 backlog · ⚠️ 最优先级已被上方「二次拍板」覆盖，本节降为次优先续接燃料）
 
 **背景**：用户判断「不少功能做得不够好」。loop 自 R177 起长期刷广度（G3 命令矩阵 → 第八梯队 D-compat → F2 类型对齐），漂移成「磨 bounded 安全活」而非补深度。F2 纯类型对齐价值偏薄——真实 Obsidian 插件以**编译后 JS 分发、运行期不对 shim 做 typecheck**，故**运行期行为兼容 ≫ `.d.ts` 类型对齐**，F2 是无目标广度活，降级。
 
@@ -1493,7 +1544,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 3. **〔选项4·降为填充料〕F2 类型对齐** — 仅当选项2 即取项枯竭才取，不再当当前主线。
 4. **〔选项3·须立项〕Canvas / Bases 大件** — 单独拍板（含复用 Excalidraw vs 自建方向）。
 
-**选项2 即取序（autonomous-safe · 自 R222 起 · R221 F2 照跑不打断）**：~~独立 tag pane~~（**R222 done·对齐 native Tags view 三缺口**：树↔扁平切换/全展开折叠/Cmd-click 累积过滤·Step 0 实查纠误面板 R41 早建）→ ~~Footnotes view~~（**R223 done·内联编辑脚注文本**——Step 0 双纠误：面板 R65/R213 早建只读 + **WebSearch 纠误 Obsidian 1.9.0 新增 native Footnotes view[可 edit]**→补 native「click to edit」缺口·data-safety 第二写者写 def 行·byte 精确·r223-e2e 13/13）→ ~~G8 隐藏参考标记~~（**R224 done·Obsidian native Editor「Hide reference marks」**·显示组·默认 ON·单一门控 livePreview hide() helper·纯渲染零 .md 写·reference 截图 ground truth 确认 native·r224-e2e 11/11·回归 8 livePreview 套件零变）→ ~~G8「自动补全英文标点」~~（**R225 done + 据实纠误**：拆成两 native 设置——①「自动补全英文标点符号」= Auto pair brackets = **R153 早 done**[非 R63 community typography]；②「自动补全 Markdown 语法」= Auto pair Markdown syntax = R35 markdownWrapHandler 功能在但缺 toggle → **R225 补 toggle**[镜像 R153 compartment·markdownWrapCompartment+autoPairMarkdown Store·markdownWrapHandler 行为零改]·r225-e2e 10/10·回归 r35/r153/r24 不退）→ ~~G8 RTL 从右到左~~（**R226 done·Obsidian native Editor「Right-to-left」**·显示组·默认关·纯 DOM `dir` 属性[contentDOM + preview div]·CM6 原生 bidi 接管·零字节·镜像 R50 spellcheck·reference 截图 ground-truth 确认 native[per-note frontmatter 是 community 不做]·r226-e2e 9/9·回归 r33 字节锁 37/37 不退·**Editor Display 组全清**）→ ~~G8 快速调整字体大小~~（**R227 done·Obsidian native Appearance「Quick font size adjustment」**·字体组·默认关·Ctrl/Cmd+滚轮调字号·`quickFontZoom` Store + App 全局 wheel effect[gate on toggle·passive 默认快路径] + 复用 vetted setFontSize[clamp 11-28]·r227-e2e 11/11·回归 r50 不退·**外观字体组补完**）→ ~~重建仓库缓存~~（**R228 done·Obsidian native Files&Links 高级组「Rebuild vault cache」**·命令 `app:rebuild-cache` + 设置按钮·复用既有 vetted `metadata.rebuildAll()`[read-only 重 index·零 .md 写]·r228-e2e 9/9·回归 metadata 套件不退）→ ~~视图模式切换 toggle~~（**R229 done·Obsidian native Editor「Show view mode toggle」**·默认开·纯渲染门门控 `.editor-mode-group`[live/source/preview 按钮]·OFF 隐按钮但 Ctrl+E 命令仍切·镜像 showRibbon R94/R100·r229-e2e 9/9·回归 r106/r50/r131 不退）→ ~~设为附件文件夹~~（**R230 done·Obsidian native folder context「Set as attachment folder」**·机械档·Explorer folder 右键 +1 项调既有 vetted setAttachmentFolder[localStorage·非 vault IO]·r230-e2e 8/8·回归 r130/r93 不退）→ ~~快切 3 档 toggle~~（**R231 done·Obsidian native Quick switcher「仅显示已创建/显示附件/显示所有受类型」**·新设置 Tab·QuickSwitcher files 三路条件化[md→+attachment→all]+create 行门控·default attachments ON 零回归·评审修 exact .md 守卫·r231-e2e 13/13·回归 r38 19/19 不退）→ ~~智能列表 toggle~~（**R232 done·Obsidian native Editor「Smart lists / 智能列表」**·默认 ON·gate `@codemirror/lang-markdown` 的 `markdownKeymap`[Enter 续行/重编号/outdent + bundled 引用块续行·Backspace 退格降级]·`addKeymap:false` + `smartListExtension(on)=Prec.high(keymap.of(markdownKeymap))` 进新 compartment·镜像 R225·ON 逐字节同·OFF defaultKeymap 纯换行·r232-e2e 10/10·回归 r225/r153/r35 不退·deviation: OFF 时引用块续行+退格降级一并停[lang-markdown 单命令耦合]）→ ~~始终聚焦新标签页 toggle~~（**R233 done·Obsidian native Editor「Always focus new tabs / 始终聚焦新标签页」**·默认 ON·gate `workspace.openFile` 新 tab 抢焦：`focusNewTab` Store + openFile 加性 `focus?` opt[`shouldFocus = opts.focus ?? focusNewTab.get()`·后台分支 append tab 不改 active/activePaneId·`openedInBackground` 旗标仅后台跳 emitActiveFile]·两显式命令 focus:true 旁路[Cmd+T `app:new-tab` + reopenClosedTab 依赖 getActiveTab 还原 mode/pin]·link/explorer/URI 文件打开尊重设置·reference 01:12 ground truth 默认开·多维对抗 8 维 deliverable·评审揪 1 minor 已修[probe `__geodeNewTabMode` 加 focus:true 自卫]·default ON 逐状态零回归·r233-e2e 17/17·回归 r81 14/14·r39 17/17·r229/r232/r88 不退）→ ~~笔记重组「替代原文的方式」下拉~~（**R234 done·Obsidian native 核心插件「Note composer / 笔记重组」Replace selection with: Link[默认]/Embed/None**·新设置 Tab「Note composer」+ enum 下拉·`ExtractMode` 加 "none"[→ extractReplacement 返回 ""]·`extractReplaceMode` Store[默认 link·镜像 defaultNewTabMode]·`noteComposerCommands` 注入 `.get()` 替换硬编码 "link"[extract-selection + move-heading 共用 extractRange]·reference 05:41 + WebFetch 实证·**逻辑档 data-safety 坐实零丢失**[none 走 create-before-edit + stale-guard·= move 非 delete·新笔记仍建]·默认 link 逐字节零回归·简化门 clean·多维对抗 9 维 deliverable·0 缺陷·r234-e2e 14/14[真 extract 三模式]·回归 r44 25/25·r216 17/17·r47 11/11·r231 13/13·**合并提示+模板位置留 R235**）→ **【R235 下一项 = 笔记重组设置 Tab 补完（合并提示 toggle + 模板文件位置）· 余 bounded backlog 5 项·见下「选项2 bounded backlog」节】**。**🔑 R228 拐点纠误**：R227 收尾据 R226 explorer（仅扫 editor/appearance 两表面）误判「bounded 矿脉见底」——**Ultracode 6 表面并行穷举 scout 纠误：实剩 13 bounded-autonomous 项**（文件与链接/核心插件各设置 Tab/右键/Editor 顶部组等漏扫表面）→ **矿脉远未枯竭·loop 继续**。**纪律：宣布「bounded 枯竭/交回大方向」前必【全表面 Workflow 穷举】（所有 reference 01-08 + 核心插件每设置 Tab + 右键三类 + 候选池全节）·部分 scout 的「没找到」不算数。** 真·拐点（选项1 真插件迁移须批依赖 / Canvas·Bases·stacked-tabs 大件立项须拍板）= **backlog 全清后**。**⚠️ R222-R228 七轮教训：每项 Step 0 必 explorer 实查 + 读 reference 截图（PNG ground truth）+ WebSearch 辨「native 有 / community 加的 / Feature-archive 没做 / native 新版新增」——online 查不到 ≠ 非 native（R224/R226 截图证）、reference 截图滞后新版（R223 Footnotes 1.9.0）、相邻设置名易混（R225）；即取序项常已 done/需纠误·CM6 原生 bidi/补全优先复用（R226）·surface 既有 read-only 引擎=最低风险 bounded 轮（R228 rebuildAll）·只补 native 真缺口。**
+**选项2 即取序（autonomous-safe · 自 R222 起 · R221 F2 照跑不打断）**：~~独立 tag pane~~（**R222 done·对齐 native Tags view 三缺口**：树↔扁平切换/全展开折叠/Cmd-click 累积过滤·Step 0 实查纠误面板 R41 早建）→ ~~Footnotes view~~（**R223 done·内联编辑脚注文本**——Step 0 双纠误：面板 R65/R213 早建只读 + **WebSearch 纠误 Obsidian 1.9.0 新增 native Footnotes view[可 edit]**→补 native「click to edit」缺口·data-safety 第二写者写 def 行·byte 精确·r223-e2e 13/13）→ ~~G8 隐藏参考标记~~（**R224 done·Obsidian native Editor「Hide reference marks」**·显示组·默认 ON·单一门控 livePreview hide() helper·纯渲染零 .md 写·reference 截图 ground truth 确认 native·r224-e2e 11/11·回归 8 livePreview 套件零变）→ ~~G8「自动补全英文标点」~~（**R225 done + 据实纠误**：拆成两 native 设置——①「自动补全英文标点符号」= Auto pair brackets = **R153 早 done**[非 R63 community typography]；②「自动补全 Markdown 语法」= Auto pair Markdown syntax = R35 markdownWrapHandler 功能在但缺 toggle → **R225 补 toggle**[镜像 R153 compartment·markdownWrapCompartment+autoPairMarkdown Store·markdownWrapHandler 行为零改]·r225-e2e 10/10·回归 r35/r153/r24 不退）→ ~~G8 RTL 从右到左~~（**R226 done·Obsidian native Editor「Right-to-left」**·显示组·默认关·纯 DOM `dir` 属性[contentDOM + preview div]·CM6 原生 bidi 接管·零字节·镜像 R50 spellcheck·reference 截图 ground-truth 确认 native[per-note frontmatter 是 community 不做]·r226-e2e 9/9·回归 r33 字节锁 37/37 不退·**Editor Display 组全清**）→ ~~G8 快速调整字体大小~~（**R227 done·Obsidian native Appearance「Quick font size adjustment」**·字体组·默认关·Ctrl/Cmd+滚轮调字号·`quickFontZoom` Store + App 全局 wheel effect[gate on toggle·passive 默认快路径] + 复用 vetted setFontSize[clamp 11-28]·r227-e2e 11/11·回归 r50 不退·**外观字体组补完**）→ ~~重建仓库缓存~~（**R228 done·Obsidian native Files&Links 高级组「Rebuild vault cache」**·命令 `app:rebuild-cache` + 设置按钮·复用既有 vetted `metadata.rebuildAll()`[read-only 重 index·零 .md 写]·r228-e2e 9/9·回归 metadata 套件不退）→ ~~视图模式切换 toggle~~（**R229 done·Obsidian native Editor「Show view mode toggle」**·默认开·纯渲染门门控 `.editor-mode-group`[live/source/preview 按钮]·OFF 隐按钮但 Ctrl+E 命令仍切·镜像 showRibbon R94/R100·r229-e2e 9/9·回归 r106/r50/r131 不退）→ ~~设为附件文件夹~~（**R230 done·Obsidian native folder context「Set as attachment folder」**·机械档·Explorer folder 右键 +1 项调既有 vetted setAttachmentFolder[localStorage·非 vault IO]·r230-e2e 8/8·回归 r130/r93 不退）→ ~~快切 3 档 toggle~~（**R231 done·Obsidian native Quick switcher「仅显示已创建/显示附件/显示所有受类型」**·新设置 Tab·QuickSwitcher files 三路条件化[md→+attachment→all]+create 行门控·default attachments ON 零回归·评审修 exact .md 守卫·r231-e2e 13/13·回归 r38 19/19 不退）→ ~~智能列表 toggle~~（**R232 done·Obsidian native Editor「Smart lists / 智能列表」**·默认 ON·gate `@codemirror/lang-markdown` 的 `markdownKeymap`[Enter 续行/重编号/outdent + bundled 引用块续行·Backspace 退格降级]·`addKeymap:false` + `smartListExtension(on)=Prec.high(keymap.of(markdownKeymap))` 进新 compartment·镜像 R225·ON 逐字节同·OFF defaultKeymap 纯换行·r232-e2e 10/10·回归 r225/r153/r35 不退·deviation: OFF 时引用块续行+退格降级一并停[lang-markdown 单命令耦合]）→ ~~始终聚焦新标签页 toggle~~（**R233 done·Obsidian native Editor「Always focus new tabs / 始终聚焦新标签页」**·默认 ON·gate `workspace.openFile` 新 tab 抢焦：`focusNewTab` Store + openFile 加性 `focus?` opt[`shouldFocus = opts.focus ?? focusNewTab.get()`·后台分支 append tab 不改 active/activePaneId·`openedInBackground` 旗标仅后台跳 emitActiveFile]·两显式命令 focus:true 旁路[Cmd+T `app:new-tab` + reopenClosedTab 依赖 getActiveTab 还原 mode/pin]·link/explorer/URI 文件打开尊重设置·reference 01:12 ground truth 默认开·多维对抗 8 维 deliverable·评审揪 1 minor 已修[probe `__geodeNewTabMode` 加 focus:true 自卫]·default ON 逐状态零回归·r233-e2e 17/17·回归 r81 14/14·r39 17/17·r229/r232/r88 不退）→ ~~笔记重组「替代原文的方式」下拉~~（**R234 done·Obsidian native 核心插件「Note composer / 笔记重组」Replace selection with: Link[默认]/Embed/None**·新设置 Tab「Note composer」+ enum 下拉·`ExtractMode` 加 "none"[→ extractReplacement 返回 ""]·`extractReplaceMode` Store[默认 link·镜像 defaultNewTabMode]·`noteComposerCommands` 注入 `.get()` 替换硬编码 "link"[extract-selection + move-heading 共用 extractRange]·reference 05:41 + WebFetch 实证·**逻辑档 data-safety 坐实零丢失**[none 走 create-before-edit + stale-guard·= move 非 delete·新笔记仍建]·默认 link 逐字节零回归·简化门 clean·多维对抗 9 维 deliverable·0 缺陷·r234-e2e 14/14[真 extract 三模式]·回归 r44 25/25·r216 17/17·r47 11/11·r231 13/13·**合并提示+模板位置留 R235**）→ ~~笔记重组「合并提示」toggle~~（**R235 done·Obsidian native「Note composer」Ask to confirm before merging·默认 ON**·Tab 1/3→2/3·`confirmDelete`→`confirmAction` 泛化重命名[4 调用点·delete 套件全绿]·`mergeConfirm` Store·QuickSwitcher merge 包 async confirm gate[**不改 vetted mergeNotes 写**·cancel→源不动零丢失]·confirm 消息 stripExtension·probe 不 gate·r47 加 dialog accept·逻辑档 data-safety 坐实 cancel 不丢·简化门 clean·多维对抗 8 维 deliverable·1 minor 已修·r235-e2e 14/14[ON+accept→merge/ON+dismiss→源存活/OFF→无 dialog]·回归 r47/r140/r161/r38 不退）→ **【R236 下一项 = 笔记重组 Tab 补完最后一格「模板文件位置」(→3/3·改 extract 字节 data-safety 单独轮)·R236 后转二次拍板表面复刻序 R237「换库常驻入口」·见 HANDOFF START HERE 二次拍板节】**。**🔑 R228 拐点纠误**：R227 收尾据 R226 explorer（仅扫 editor/appearance 两表面）误判「bounded 矿脉见底」——**Ultracode 6 表面并行穷举 scout 纠误：实剩 13 bounded-autonomous 项**（文件与链接/核心插件各设置 Tab/右键/Editor 顶部组等漏扫表面）→ **矿脉远未枯竭·loop 继续**。**纪律：宣布「bounded 枯竭/交回大方向」前必【全表面 Workflow 穷举】（所有 reference 01-08 + 核心插件每设置 Tab + 右键三类 + 候选池全节）·部分 scout 的「没找到」不算数。** 真·拐点（选项1 真插件迁移须批依赖 / Canvas·Bases·stacked-tabs 大件立项须拍板）= **backlog 全清后**。**⚠️ R222-R228 七轮教训：每项 Step 0 必 explorer 实查 + 读 reference 截图（PNG ground truth）+ WebSearch 辨「native 有 / community 加的 / Feature-archive 没做 / native 新版新增」——online 查不到 ≠ 非 native（R224/R226 截图证）、reference 截图滞后新版（R223 Footnotes 1.9.0）、相邻设置名易混（R225）；即取序项常已 done/需纠误·CM6 原生 bidi/补全优先复用（R226）·surface 既有 read-only 引擎=最低风险 bounded 轮（R228 rebuildAll）·只补 native 真缺口。**
 
 ### 选项2 bounded backlog（R228 Ultracode 6 表面穷举 scout 产出·持久执行队列·后续轮免重 scout）
 
@@ -1506,14 +1557,14 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**快切 3 档 toggle**~~（**R231 done**）| 05:18 | ✅ done·新 Quick switcher 设置 Tab·QuickSwitcher files 三路条件化(md→+附件→全部)+create 行门控 | r231-e2e 13/13·default 附件 ON·评审修 exact .md 守卫 | 轻逻辑(纯只读导航) |
 | ~~**智能列表 toggle**~~（**R232 done**）| 01:38 | ✅ done·`smartLists` Store 门控 markdownKeymap·`addKeymap:false`+新 compartment·镜像 R225 | r232-e2e 10/10·ON 逐字节同·OFF 纯换行·deviation 引用块续行耦合一并停 | 逻辑(碰 editor·keymap gate) |
 | ~~**笔记重组 替代原文 link/embed 下拉**~~（**R234 done**）| 05:11 | ✅ done·新 Note composer 设置 Tab + `extractReplaceMode` 下拉(link/embed/none)·`ExtractMode` 加 none·注入替换硬编码 | r234-e2e 14/14·真 extract 三模式·data-safety 坐实 move 零丢失·默认 link 零回归 | 逻辑(editor 写) |
-| 笔记重组 合并提示+模板位置（**R235 下一项**）| 05:11 | partial·merge 无 confirm·提取无模板 | confirm modal gate(QuickSwitcher merge 前·不改 vetted mergeNotes 写) + expandTemplate 接进 extractedContent(默认空=verbatim 零回归) | 逻辑(merge data-safety 邻接·谨慎) |
+| ~~**笔记重组 合并提示**~~（**R235 done**）+ 模板位置（**R236 下一项**）| 05:11 | 合并提示 ✅ done（confirm gate·默认 ON）·模板位置 partial（提取无模板·R236 做） | ~~confirm gate~~ done·模板位置 = composer 变量展开接进 extractedContent(默认空 verbatim 零回归·改 extract 字节) | 逻辑(merge/extract data-safety) |
 | ~~**始终聚焦新标签页 toggle**~~（**R233 done**）| 01:12 | ✅ done·`focusNewTab` Store 门控 openFile 新 tab 抢焦·加性 `focus?` opt·Cmd+T/reopen 旁路 focus:true | r233-e2e 17/17·default ON 零回归·评审修 probe 自卫 | 逻辑(碰 core openFile) |
 | view-header 聚合「...」菜单 | 08:35 | missing·各子动作均有命令 | ~8 项聚合菜单·镜像 tab-context-menu(App.tsx:1954) | 逻辑(偏大·非首选) |
 | 默认打开文件 下拉 | 02:12 | missing | 启动行为下拉(上次/库首页/空)·碰 boot 序列 | 逻辑(中等·价值低) |
 | 删除文件时确认 toggle | 02:29 | missing·Geode 恒确认 | ⚠️ data-safety-邻接(gate 删除路径·忠实复刻默认 OFF 会放松防护)·**谨慎·非首选** | data-safety 邻接 |
 | F2 类型对齐残片(Vault/Workspace) | ROADMAP F2 | partial | 纯类型面·零依赖·oracle 仓库内·**用户降为填充料** | 类型面 |
 
-> **取序建议**：~~R229 视图模式切换~~ done · ~~R230 设为附件文件夹~~ done · ~~R231 快切 3 档~~ done · ~~R232 智能列表~~ done · ~~R233 始终聚焦新标签页~~ done（`focusNewTab` Store gate openFile + focus opt·default ON 零回归）；~~R234 笔记重组 link/embed 下拉~~ done（新 Note composer 设置 Tab + extractReplaceMode·real-extract 三模式·data-safety move 零丢失）；**R235 取 笔记重组设置 Tab 补完 = 合并提示 toggle（默认 ON·QuickSwitcher merge 前加 confirm modal gate·不改 vetted mergeNotes 写）+ 模板文件位置 输入（expandTemplate 接进 extractedContent·默认空 verbatim 零回归·改 extract 字节=data-safety）**→ 把 Tab 从 1/3 补到 3/3·对照 reference 截图；view-header 聚合菜单[~8 项偏大]/默认打开文件下拉/删除确认价值低靠后；F2 残片仅其它枯竭才取。**E1-E11 差异化系列仍卡设计空白（须先消解 `geode-设计讨论/99-待设计清单` 或拍板）·不在此 backlog。**
+> **取序建议**：~~R229 视图模式切换~~ done · ~~R230 设为附件文件夹~~ done · ~~R231 快切 3 档~~ done · ~~R232 智能列表~~ done · ~~R233 始终聚焦新标签页~~ done（`focusNewTab` Store gate openFile + focus opt·default ON 零回归）；~~R234 笔记重组 link/embed 下拉~~ done（新 Note composer 设置 Tab + extractReplaceMode·real-extract 三模式·data-safety move 零丢失）；**R235 取 笔记重组设置 Tab 补完 = 合并提示 toggle（默认 ON·QuickSwitcher merge 前加 confirm modal gate·不改 vetted mergeNotes 写）+ 模板文件位置 输入（expandTemplate 接进 extractedContent·默认空 verbatim 零回归·改 extract 字节=data-safety）**→ 把 Tab 从 1/3 补到 3/3·对照 reference 截图（**⚠️ 此为旧 backlog 最后一次取用 · 收尾后转上方「二次拍板」表面复刻序、不再续本 backlog**）；view-header 聚合菜单[~8 项偏大]/默认打开文件下拉/删除确认价值低靠后；F2 残片仅其它枯竭才取。**E1-E11 差异化系列仍卡设计空白（须先消解 `geode-设计讨论/99-待设计清单` 或拍板）·不在此 backlog。**
 
 **🔒 验收口径（强制 · 防 R177 以来「假完成」重演 ＝ 本顺序存在的根本理由）**：每项须过下方①「最低验收线」+ `OBSIDIAN_REPLICA_GAP_AUDIT.md` 第十一节防误判 ＝ **设置 tab 同名 + 命令进 280 清单 + 面板/右键入口 + 禁用插件后一致消失 + 值持久化·重启生效 + 对照 `reference/` 截图**。**无真 handler 的命令 ＝ 假完成，严禁热键页伪装可用；核心插件「已有」≠ Obsidian 等价（查 tab/命令/面板/禁用态/持久化）。不做空 UI 行。**
 

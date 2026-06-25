@@ -71,6 +71,19 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 235 additions — 笔记重组设置 Tab 补完（slice 2）：「合并提示」toggle（Obsidian native 核心插件「Note composer」·Ask to confirm before merging·默认 ON）·零新依赖【契约冻结 v0.231】
+
+> **状态：As-built（已交付·v0.231）。** R234 建了 Note composer 设置 Tab（1/3 设置）；R235 补「合并提示」（→ 2/3·模板文件位置留 R236）。**Step 0 scout**：WebFetch `obsidian.md/help/Plugins/Note+composer` 实证「By default, Note composer asks you to confirm when merging notes」·默认 **ON**；explorer 坐实 ① Geode 合并**无 confirm**（`QuickSwitcher.tsx:200` 选目标后直接 `void mergeNotes(...)`）② **已有可复用 confirm**：`core/confirm.ts` `confirmDelete(message,title)`（Tauri `ask` / browser `window.confirm`·泛型但命名 delete-specific·4 调用点）。
+> **设计（generalize confirm + 1 bool Store + gate merge + 设置 toggle）**：
+> - **`core/confirm.ts`**：`confirmDelete` → **`confirmAction`**（泛型重命名·body 逐字节不变·JSDoc 改为通用「确认对话框 idiom·delete + merge 共用」）。纯重命名·typecheck 校全 4 调用点（App.tsx delete-file / SettingsModal / Explorer×2）→ 零行为变。
+> - **`core/appearance.ts`**：`mergeConfirm` Store（默认 **true**·`geode.mergeConfirm`·镜像 readBool idiom）+ `setMergeConfirm`。默认 ON = Obsidian 默认（**注意：这改变 Geode 现状**——此前无 confirm 直接合并·现默认询问·= 更忠实）。
+> - **`features/palette/QuickSwitcher.tsx`**（merge activate :197-218）：选目标后 `app.workspace.closeModal()`（同步·先关 switcher）→ `void (async () => { if (mergeConfirm.get() && !(await confirmAction(t("switcher.mergeConfirm",{source,target}), t("switcher.mergeConfirmTitle")))) return; mergeNotes(...).then(...).catch(...) })()`。**confirm 是 vetted `mergeNotes` 前的 gate·不改 mergeNotes 写路径**（append-before-trash + live-buffer 读 + R16 link rewrite 全不动）。OFF → 直接 merge（= R235 前行为·零回归）。cancel → return·source 不动（零丢失）。confirm 消息用 `stripExtension(basename(...))` from `@core/vault` 取 source/target 名（去 `.md`·与 switcher 列表 FileNode.basename 及 Obsidian 一致·评审 minor 驱动）。
+> - **`features/settings/SettingsModal.tsx`**：NoteComposerSection += toggle 行（testid `settings-merge-confirm-toggle`·镜像 R233 focusNewTab toggle）。
+> - **`core/i18n/dict.views.ts`**：`settings.mergeConfirm`/`Desc` × 中英（设置标签）。**`core/i18n/dict.panels.ts`**：`switcher.mergeConfirm`（对话框消息·`{source}`→`{target}`）/`switcher.mergeConfirmTitle` × 中英（与既有 switcher.merge* 同处）。
+> **probe 不 gate**：`main.tsx:1397` `__geodeMerge.merge` 直调 `mergeNotes`（绕 QuickSwitcher）·不受 confirm 影响（测试基建·r47 core merge 走它）。
+> **回归适配**：`r47-e2e.mjs` part B（UI flow·驱动 switcher merge Enter）默认 ON 会撞 `window.confirm`（Playwright 默认 dismiss→merge 取消）→ **r47 顶加 `page.on("dialog", d => d.accept())`**（真实「用户确认」路径·part B 仍绿·= 测了 confirm-accept→merge）。
+> **data-safety（逻辑档·碰 merge 路径·但 confirm 是 gate 不改 merge 写）**：§A 竞态不碰·mergeNotes 写路径逐字节不变·confirm 仅前置门控（ON 询问·OFF/cancel 不动 source）·§C 未碰 markdown.ts（r18-diff N/A）·**桌面 probe**：merge 写 = R47 vetted（已 FS-probe）·confirm 是 R140 vetted `confirmAction`（Tauri `ask`·已用于 delete·跨端同机制）·R235 纯 gate 接线·浏览器 dialog accept/dismiss 等价桌面 ask。**测试**：`.calibration/r235-e2e.mjs`（toggle 默认 ON + 设置 UI·ON+accept→merge·ON+dismiss→source 存活无 merge·OFF→直接 merge 无 dialog·持久化 reload）。
+
 ## Round 234 additions — 选项2 bounded backlog 续：笔记重组设置 Tab + 「替代原文的方式」下拉（Obsidian native 核心插件「Note composer / 笔记重组」·Replace selection with: Link/Embed/None）·零新依赖【契约冻结 v0.230】
 
 > **状态：As-built（已交付·v0.230）。** 从「选项2 bounded backlog」取（ROADMAP 把笔记重组拆两项：本轮 = **link/embed/none 下拉**[清爽]；**合并提示+模板位置**[data-safety 邻接·谨慎]留 R235）。**Step 0 三 scout**：① reference `05-核心插件.md:41` ground truth = 笔记重组三设置「替代原文的方式(下拉) · 模板文件位置(输入) · 合并提示(开)」；② WebFetch `obsidian.md/help/Plugins/Note+composer` 实证「Replace selection with」下拉 = **Link(默认)/Embed/None**·合并提示默认 ON；③ explorer 坐实 Geode `core/noteComposer.ts:76` `extractReplacement(name, mode)` **embed 路径已建**但 `noteComposerCommands.ts:51` 调用方**写死 `"link"`**·`ExtractMode` 缺 `"none"`。
