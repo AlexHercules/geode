@@ -8,6 +8,7 @@ import {
   readableLineLength, setReadableLineLength,
   spellcheckEnabled, setSpellcheckEnabled,
   defaultNewTabMode, setDefaultNewTabMode,
+  showBacklinksInDocument, setShowBacklinksInDocument,
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
@@ -310,6 +311,14 @@ export function App() {
         id: "app:toggle-ribbon",
         name: () => t("cmd.toggleRibbon"),
         callback: () => setShowRibbon(!showRibbon.get()),
+      }),
+      commands.register({
+        // R219: Obsidian backlink:toggle-backlinks-in-document — flips R154's
+        // "Backlink in document" appearance setting (linked mentions at the note
+        // bottom). Reuses the vetted store+setter; pure appearance toggle.
+        id: "backlink:toggle-backlinks-in-document",
+        name: () => t("cmd.toggleBacklinksInDocument"),
+        callback: () => setShowBacklinksInDocument(!showBacklinksInDocument.get()),
       }),
       commands.register({
         // R195: Obsidian app:toggle-default-new-tab-view. Geode merges Obsidian's
