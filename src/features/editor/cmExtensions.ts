@@ -48,7 +48,7 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { autoPairBrackets, foldHeading, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
@@ -526,8 +526,9 @@ export function editorModeExtensions(
   app: GeodeApp,
   getPath: () => string,
   mode: "live" | "source",
+  hideMarks = true,
 ): Extension {
-  return mode === "live" ? livePreview(app, getPath) : [];
+  return mode === "live" ? livePreview(app, getPath, hideMarks) : [];
 }
 
 /**
@@ -616,7 +617,7 @@ export function buildEditorExtensions(opts: {
       }),
     ),
     propertiesHostFacet.of(opts.propertiesHost ?? null),
-    modeCompartment.of(editorModeExtensions(app, getPath, mode)),
+    modeCompartment.of(editorModeExtensions(app, getPath, mode, hideReferenceMarks.get())),
     // R88: line-number gutter — empty when off; EditorPane reconfigures on toggle
     lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : []),
     // R92: indentation (tab width + indent unit) — EditorPane reconfigures on setting change

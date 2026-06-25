@@ -11,6 +11,8 @@ import {
   setStrictLineBreaks,
   showLineNumbers,
   setShowLineNumbers,
+  hideReferenceMarks,
+  setHideReferenceMarks,
   autoPairBrackets,
   setAutoPairBrackets,
   showBacklinksInDocument,
@@ -109,7 +111,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.219.0";
+export const APP_VERSION = "0.220.0";
 
 type SectionId =
   | "about"
@@ -627,6 +629,7 @@ function EditorSection() {
   const spell = useStore(spellcheckEnabled);
   const strict = useStore(strictLineBreaks);
   const lineNo = useStore(showLineNumbers);
+  const hideRefMarks = useStore(hideReferenceMarks);
   const autoPair = useStore(autoPairBrackets);
   const backlinksInDoc = useStore(showBacklinksInDocument);
   const foldH = useStore(foldHeading);
@@ -705,6 +708,24 @@ function EditorSection() {
           aria-label={t("settings.showLineNumbers")}
           data-testid="settings-line-numbers-toggle"
           onClick={() => setShowLineNumbers(!lineNo)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R224: hide reference marks — live preview reveals syntax only at cursor (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.hideReferenceMarks")}</div>
+          <div className="setting-desc">{t("settings.hideReferenceMarksDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${hideRefMarks ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={hideRefMarks}
+          aria-label={t("settings.hideReferenceMarks")}
+          data-testid="settings-hide-reference-marks-toggle"
+          onClick={() => setHideReferenceMarks(!hideRefMarks)}
         >
           <span className="settings-toggle-thumb" />
         </button>

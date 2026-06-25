@@ -13,6 +13,7 @@ import {
   showInlineTitle,
   showBacklinksInDocument,
   foldHeading,
+  hideReferenceMarks,
 } from "@core/appearance";
 import type { DocumentHandle } from "@core/documents";
 import { editorExtensionsRevision, getEditorExtensions } from "@core/editorExtensions";
@@ -305,6 +306,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const showLineNo = useStore(showLineNumbers);
   /* R153: auto-pair-brackets preference — reconfigure CM compartment reactively */
   const autoPair = useStore(autoPairBrackets);
+  /* R224: hide-reference-marks preference — reconfigures the mode compartment (live preview) */
+  const hideRefMarks = useStore(hideReferenceMarks);
   // R156: Fold heading — reconfigure the fold-service compartment on change
   const foldHeadingOn = useStore(foldHeading);
   /* R92: indentation preferences — reconfigure CM compartment reactively */
@@ -601,7 +604,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
     // swaps ONLY the mode slice — selection, scroll and the handle-owned
     // history compartment (promoteHistoryHost) are untouched by design
     view.dispatch({
-      effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode)),
+      effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode, hideReferenceMarks.get())),
     });
   }, [app, handle, tab.mode]);
 
@@ -667,8 +670,20 @@ export function EditorPane({ tab }: { tab: TabState }) {
     const modeCompartment = modeCompartmentRef.current;
     if (!view || !modeCompartment) return;
     const mode = tab.mode === "source" ? "source" : "live";
-    view.dispatch({ effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode)) });
+    view.dispatch({ effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode, hideReferenceMarks.get())) });
   }, [cbProcRev]);
+
+  /* ---------- R224: hide-reference-marks preference → mode compartment (live preview) ---------- */
+  // livePreview's ViewPlugin only rebuilds on doc/selection/viewport change, so a setting flip
+  // needs an explicit mode-compartment reconfigure (mirrors the cbProcRev effect above).
+  useEffect(() => {
+    if (tab.mode === "preview" || !handle) return;
+    const view = viewRef.current;
+    const modeCompartment = modeCompartmentRef.current;
+    if (!view || !modeCompartment) return;
+    const mode = tab.mode === "source" ? "source" : "live";
+    view.dispatch({ effects: modeCompartment.reconfigure(editorModeExtensions(app, () => handle.path, mode, hideRefMarks)) });
+  }, [hideRefMarks]);
 
   /* ---------- one-shot reveal consumption (R14: scroll + flash) ---------- */
 

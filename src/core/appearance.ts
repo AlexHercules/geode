@@ -89,6 +89,18 @@ export function setShowLineNumbers(on: boolean): void {
   persistBool(LINE_NUMBERS_KEY, on);
 }
 
+/** R224 (G8): Obsidian's "Hide reference marks" — in Live Preview, hide Markdown syntax
+ *  delimiters except at the cursor. Default ON (Obsidian default + zero-regression — Geode's
+ *  live preview always hid them). OFF shows all marks while keeping widgets/styles rendered
+ *  (not source mode). Applied per CM view via the mode Compartment, reconfigured in EditorPane. */
+const HIDE_REF_MARKS_KEY = "geode.hideReferenceMarks";
+export const hideReferenceMarks = new Store<boolean>(readBool(HIDE_REF_MARKS_KEY, true));
+
+export function setHideReferenceMarks(on: boolean): void {
+  hideReferenceMarks.set(on);
+  persistBool(HIDE_REF_MARKS_KEY, on);
+}
+
 /** R153 (㊶): Obsidian's "Auto pair brackets" — auto-close `( [ { " '` while typing.
  *  Default ON (Obsidian default + zero-regression — Geode had closeBrackets() always on).
  *  Applied per CM view via a Compartment reconfigured reactively in EditorPane. */

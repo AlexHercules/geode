@@ -686,6 +686,7 @@ function computeDecorations(
   view: EditorView,
   app: GeodeApp,
   getPath: () => string,
+  hideMarks: boolean,
 ): DecorationSet {
   const { state } = view;
   const doc = state.doc;
@@ -696,6 +697,10 @@ function computeDecorations(
   const others: Spec[] = [];
 
   const hide = (from: number, to: number) => {
+    // R224: "Hide reference marks" OFF → keep every Markdown syntax delimiter visible
+    // (widgets + .cm-live-* styles still apply, so it's not source mode). This is the
+    // single gate for all 13 delimiter-hiding sites — they all route through hide().
+    if (!hideMarks) return;
     if (from >= to) return;
     replaces.push({ from, to, deco: Decoration.replace({}) });
   };
@@ -1292,16 +1297,16 @@ function computeDecorations(
 
 /* ================= plugin + click navigation ================= */
 
-function livePreviewPlugin(app: GeodeApp, getPath: () => string): Extension {
+function livePreviewPlugin(app: GeodeApp, getPath: () => string, hideMarks: boolean): Extension {
   return ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
       constructor(view: EditorView) {
-        this.decorations = computeDecorations(view, app, getPath);
+        this.decorations = computeDecorations(view, app, getPath, hideMarks);
       }
       update(update: ViewUpdate) {
         if (update.docChanged || update.selectionSet || update.viewportChanged) {
-          this.decorations = computeDecorations(update.view, app, getPath);
+          this.decorations = computeDecorations(update.view, app, getPath, hideMarks);
         }
       }
     },
@@ -1370,7 +1375,7 @@ const liveTheme = EditorView.theme({
 
 /** The full live-preview extension set (only included when mode === "live").
  *  `getPath` is a live accessor — file:renamed retargets without a rebuild. */
-export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
+export function livePreview(app: GeodeApp, getPath: () => string, hideMarks = true): Extension[] {
   const fmField = buildFrontmatterField(app);
   return [
     fmField,
@@ -1407,7 +1412,7 @@ export function livePreview(app: GeodeApp, getPath: () => string): Extension[] {
         },
       ]),
     ),
-    livePreviewPlugin(app, getPath),
+    livePreviewPlugin(app, getPath, hideMarks),
     liveClickHandler(app, getPath),
     // R55 — render GFM pipe tables as <table>s in live preview (reveal source on
     // cursor/click). Block-replace widget + atomicRanges, like the frontmatter field.
