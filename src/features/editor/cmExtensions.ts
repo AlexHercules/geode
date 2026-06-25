@@ -16,7 +16,7 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
 import { HighlightStyle, LanguageSupport, foldService, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
 import { search, searchKeymap } from "@codemirror/search";
@@ -48,7 +48,7 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { autoPairBrackets, autoPairMarkdown, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, autoPairMarkdown, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, smartLists, tabIndentSize } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
@@ -570,15 +570,30 @@ export function markdownWrapExtension(on: boolean): Extension {
 }
 
 /**
+ * R232: Obsidian's "Smart lists" toggle. `on` → lang-markdown's markdownKeymap
+ * (Enter = insertNewlineContinueMarkup: continue/renumber/outdent list markup +
+ * the bundled blockquote continuation; Backspace = deleteMarkupBackward: dedent);
+ * `off` → nothing (Enter/Backspace fall through to defaultKeymap). Prec.high preserves
+ * the precedence the keymap had inside markdown()'s support (wins over closeBrackets +
+ * defaultKeymap). Owned by a Compartment so EditorPane can flip it without rebuilding
+ * the view (mirrors markdownWrapExtension / closeBracketsExtension).
+ */
+export function smartListExtension(on: boolean): Extension {
+  return on ? Prec.high(keymap.of(markdownKeymap)) : [];
+}
+
+/**
  * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
  * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
  * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
  * produces would fold the whole body. Strip exactly that entry (the only
- * support member providing the foldService facet); the markdown keymap,
- * paste-URL-as-link and HTML completion support all stay.
+ * support member providing the foldService facet); paste-URL-as-link and HTML
+ * completion support stay. R232: addKeymap:false drops the bundled markdownKeymap
+ * here — it now lives in smartListCompartment (Smart lists toggle), re-added at the
+ * same Prec.high so precedence vs closeBrackets/defaultKeymap is unchanged.
  */
 function markdownSansHeaderFold(): Extension {
-  const md = markdown({ base: markdownLanguage, codeLanguages: languages });
+  const md = markdown({ base: markdownLanguage, codeLanguages: languages, addKeymap: false });
   const support = Array.isArray(md.support)
     ? (md.support as Extension[]).filter(
         (ext) => (ext as { facet?: unknown }).facet !== foldService,
@@ -603,6 +618,8 @@ export function buildEditorExtensions(opts: {
   closeBracketsCompartment: Compartment;
   /** R225: owned by EditorPane — autoPairMarkdown toggle reconfigures it in place */
   markdownWrapCompartment: Compartment;
+  /** R232: owned by EditorPane — smartLists toggle reconfigures it in place */
+  smartListCompartment: Compartment;
   /** R156: owned by EditorPane — the foldHeading toggle reconfigures it in place */
   foldServiceCompartment: Compartment;
   /** R115: owned by EditorPane — plugin-contributed CM6 extensions
@@ -611,7 +628,7 @@ export function buildEditorExtensions(opts: {
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, markdownWrapCompartment, foldServiceCompartment, compatExtensionCompartment } =
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, markdownWrapCompartment, smartListCompartment, foldServiceCompartment, compatExtensionCompartment } =
     opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
@@ -640,6 +657,10 @@ export function buildEditorExtensions(opts: {
     compatExtensionCompartment.of(getEditorExtensions()),
     revealFlashField,
     markdownSansHeaderFold(),
+    // R232: the markdownKeymap (list/quote continuation + dedent), gated by Obsidian's
+    // "Smart lists" toggle. Re-added here at the position+Prec.high it had inside markdown()'s
+    // support (addKeymap:false above), so OFF→plain Enter/Backspace, ON→byte-identical to pre-R232.
+    smartListCompartment.of(smartListExtension(smartLists.get())),
     syntaxHighlighting(mdHighlight),
     // R52 — markdown defines no comment tokens, so give the `editor:toggle-comment`
     // command (and CM's comment commands) Obsidian's `%%…%%` block comment. With no

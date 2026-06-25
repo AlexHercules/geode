@@ -13,6 +13,7 @@ import {
   indentUsingTabs,
   autoPairBrackets,
   autoPairMarkdown,
+  smartLists,
   showInlineTitle,
   showBacklinksInDocument,
   foldHeading,
@@ -38,6 +39,7 @@ import {
   clearRevealFlash,
   closeBracketsExtension,
   markdownWrapExtension,
+  smartListExtension,
   editorModeExtensions,
   indentExtensions,
   refreshProperties,
@@ -316,6 +318,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const autoPair = useStore(autoPairBrackets);
   /* R225: auto-pair-Markdown-syntax preference — reconfigure CM compartment reactively */
   const autoPairMd = useStore(autoPairMarkdown);
+  /* R232: smart-lists preference — reconfigure the markdownKeymap compartment reactively */
+  const smartList = useStore(smartLists);
   /* R224: hide-reference-marks preference — reconfigures the mode compartment (live preview) */
   const hideRefMarks = useStore(hideReferenceMarks);
   // R156: Fold heading — reconfigure the fold-service compartment on change
@@ -357,6 +361,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const closeBracketsCompartmentRef = useRef<Compartment | null>(null);
   /** R225: compartment for auto-pair Markdown syntax — autoPairMarkdown reconfigures it */
   const markdownWrapCompartmentRef = useRef<Compartment | null>(null);
+  /** R232: compartment for the markdownKeymap (list continuation) — smartLists reconfigures it */
+  const smartListCompartmentRef = useRef<Compartment | null>(null);
   /** R156: compartment for the fold service — the foldHeading toggle reconfigures it */
   const foldServiceCompartmentRef = useRef<Compartment | null>(null);
   /** R115: compartment for plugin-contributed CM6 extensions (registerEditorExtension) */
@@ -509,6 +515,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     closeBracketsCompartmentRef.current = closeBracketsCompartment;
     const markdownWrapCompartment = new Compartment();
     markdownWrapCompartmentRef.current = markdownWrapCompartment;
+    const smartListCompartment = new Compartment();
+    smartListCompartmentRef.current = smartListCompartment;
     const foldServiceCompartment = new Compartment();
     foldServiceCompartmentRef.current = foldServiceCompartment;
     const compatExtensionCompartment = new Compartment();
@@ -528,6 +536,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           indentCompartment,
           closeBracketsCompartment,
           markdownWrapCompartment,
+          smartListCompartment,
           foldServiceCompartment,
           compatExtensionCompartment,
           // R22: portal target for the live-mode PropertiesPanel
@@ -601,6 +610,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       indentCompartmentRef.current = null;
       closeBracketsCompartmentRef.current = null;
       markdownWrapCompartmentRef.current = null;
+      smartListCompartmentRef.current = null;
       foldServiceCompartmentRef.current = null;
       compatExtensionCompartmentRef.current = null;
       view.destroy();
@@ -664,6 +674,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(markdownWrapExtension(autoPairMd)) });
   }, [autoPairMd]);
+
+  /* ---------- R232: smart-lists preference → CM compartment (markdownKeymap) ---------- */
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = smartListCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(smartListExtension(smartList)) });
+  }, [smartList]);
 
   /* ---------- R156: fold heading preference → CM compartment ---------- */
   useEffect(() => {

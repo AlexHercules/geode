@@ -146,6 +146,20 @@ export function setAutoPairMarkdown(on: boolean): void {
   persistBool(AUTO_PAIR_MD_KEY, on);
 }
 
+/** R232: Obsidian's "Smart lists" (智能列表) — auto-continue/renumber/outdent list markup
+ *  (and the bundled blockquote-continuation + backspace-dedent) as you type. Default ON
+ *  (Obsidian default + zero-regression — Geode's markdownKeymap was always on, bundled inside
+ *  markdown()). Applied per CM view via a Compartment reconfigured reactively in EditorPane
+ *  (mirrors autoPairMarkdown). NB: @codemirror/lang-markdown couples list + blockquote
+ *  continuation in one Enter command, so OFF disables both; faithful enough — toggle is opt-out. */
+const SMART_LISTS_KEY = "geode.smartLists";
+export const smartLists = new Store<boolean>(readBool(SMART_LISTS_KEY, true));
+
+export function setSmartLists(on: boolean): void {
+  smartLists.set(on);
+  persistBool(SMART_LISTS_KEY, on);
+}
+
 /** R154 (㊷): Obsidian's "Backlink in document" — show the note's linked mentions at
  *  the bottom of the reading view. Default OFF (Obsidian opt-in). Read-only: the section
  *  is appended below the rendered content in EditorPane, so it never touches the markdown
