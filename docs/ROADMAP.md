@@ -1404,7 +1404,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | **白板 Canvas（`.canvas`）** ★用户点名 | 缺（#⑰ 仅一行登记）| 独立编辑器级大工程，子项展开见下 |
 | Bases（库内数据库视图，Obsidian 2025 新核心）| 缺（T3）| 需先建数据库/查询引擎；与 R22 Properties 体系衔接 |
 | Stacked tabs 标签堆叠 + linked view | 部分（#⑧ pinned 已 R39）| 内容级横向 cascade，需多 EditorPane 同挂＝data-safety 大轮 |
-| 独立标签面板（tag pane）| 部分（搜索面板已有标签浏览模式）| 独立侧栏面板未做，中等 |
+| ~~独立标签面板（tag pane）~~ **done（据实纠误）** | **done**：独立 `TagsPanel` 早 R41 建（右侧栏·树形·改名·命令 `app:show-tags`=`tag-pane:open`）+ R150 嵌套树 + R151 排序 + **R222 对齐 native Tags view 三缺口**（树↔扁平切换/全展开折叠/Cmd-click 累积过滤） | ✅ 完成；表「部分/未做」系据实纠误对象（R222 Step 0 实查发现早全功能） |
 | Vim mode / Audio recorder / Web viewer / Format converter / Footnotes view | 缺（#㉑ 小众核心插件）| Footnotes / Format converter 零依赖较清爽可先；Vim / 录音 / Web viewer 需新能力或撞硬边界#5 |
 | `parseYaml` / `stringifyYaml` | 缺（T3，高价值）| 需 YAML 运行时依赖＝硬边界#5；或自研最小子集（无新依赖）|
 | Pop-out 多窗口（#⑯）| 显式不做 | 单窗口宿主天然不做（已决策，列此备查）|
@@ -1493,7 +1493,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 3. **〔选项4·降为填充料〕F2 类型对齐** — 仅当选项2 即取项枯竭才取，不再当当前主线。
 4. **〔选项3·须立项〕Canvas / Bases 大件** — 单独拍板（含复用 Excalidraw vs 自建方向）。
 
-**选项2 即取序（autonomous-safe · 自 R222 起 · R221 F2 照跑不打断）**：独立 tag pane（搜索面板已有标签浏览 → 抽独立侧栏面板，中等）→ Footnotes view（零依赖清爽）→ Stacked tabs / linked view（**多 EditorPane 同挂 ＝ data-safety 大轮，谨慎**）→ G8 编辑器页纯前端设置（隐藏参考标记 / 自动转 HTML / 自动英文标点）。G7 文件与链接页（删除确认 / 三档回收站 / 默认打开文件）触 vault 删除路径 ＝ 底线① 重轮，单独排、勿顺手做。
+**选项2 即取序（autonomous-safe · 自 R222 起 · R221 F2 照跑不打断）**：~~独立 tag pane~~（**R222 done·实为对齐 native Tags view 三缺口**——Step 0 实查纠误：独立面板 R41 早建全功能，「抽面板」早做完；改补树↔扁平切换/全展开折叠/Cmd-click 累积过滤）→ **【下一项 R223】Footnotes view（零依赖清爽·先 explorer 核 R213 既有 FootnotesPanel 现状 + Obsidian native 脚注呈现对照·防重蹈 R222「标『未做』实已做」）** → Stacked tabs / linked view（**多 EditorPane 同挂 ＝ data-safety 大轮，谨慎**）→ G8 编辑器页纯前端设置（隐藏参考标记 / 自动转 HTML / 自动英文标点）。G7 文件与链接页（删除确认 / 三档回收站 / 默认打开文件）触 vault 删除路径 ＝ 底线① 重轮，单独排、勿顺手做。**⚠️ R222 教训：每项 Step 0 必 explorer 实查现状 + WebFetch native 权威辨「native 有 / community 插件加的 / Feature-archive 没做的」三类，只补 native 真缺口、不造非 native 功能。**
 
 **🔒 验收口径（强制 · 防 R177 以来「假完成」重演 ＝ 本顺序存在的根本理由）**：每项须过下方①「最低验收线」+ `OBSIDIAN_REPLICA_GAP_AUDIT.md` 第十一节防误判 ＝ **设置 tab 同名 + 命令进 280 清单 + 面板/右键入口 + 禁用插件后一致消失 + 值持久化·重启生效 + 对照 `reference/` 截图**。**无真 handler 的命令 ＝ 假完成，严禁热键页伪装可用；核心插件「已有」≠ Obsidian 等价（查 tab/命令/面板/禁用态/持久化）。不做空 UI 行。**
 
