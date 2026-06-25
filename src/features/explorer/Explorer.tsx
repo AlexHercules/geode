@@ -3,7 +3,7 @@ import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
 import { parentPath, basename, sortTreeNodes, isTauri, type ExplorerSortKey } from "@core/vault";
 import { revealInSystem, openInDefaultApp } from "@core/reveal";
-import { confirmDelete } from "@core/confirm";
+import { confirmAction } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
 import { explorerSort, setExplorerSort, detectAllExtensions } from "@core/appearance";
@@ -444,7 +444,7 @@ export function Explorer() {
       node.kind === "folder"
         ? t("explorer.deleteConfirmFolder", { name: node.name })
         : t("explorer.deleteConfirmFile", { name: node.name });
-    if (!(await confirmDelete(message, t("explorer.delete")))) return;
+    if (!(await confirmAction(message, t("explorer.delete")))) return;
     try {
       // R42: flush pending editor saves BEFORE trashing so the recoverable copy
       // in .trash holds the user's latest edits (review: trash-before-flush =
@@ -638,7 +638,7 @@ export function Explorer() {
   const bulkDelete = async (paths: string[]) => {
     const roots = toRoots(paths);
     if (roots.length === 0) return;
-    if (!(await confirmDelete(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
+    if (!(await confirmAction(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
     await app.workspace.flushAll(); // R42: once before the loop (flushAll is vault-global)
     for (const path of roots) {
       try {

@@ -248,6 +248,18 @@ export function setExtractReplaceMode(mode: ExtractReplaceMode): void {
   persistString(EXTRACT_REPLACE_KEY, mode);
 }
 
+/** R235: Obsidian native Note composer "Ask to confirm before merging" (合并提示). Default ON =
+ *  Obsidian's behaviour ("Note composer asks you to confirm when merging notes"). Consumed by
+ *  QuickSwitcher's merge path: when ON, a confirm dialog gates the (vetted) mergeNotes call.
+ *  NB: default ON CHANGES Geode's prior behaviour (it merged immediately) — matching native. */
+const MERGE_CONFIRM_KEY = "geode.mergeConfirm";
+export const mergeConfirm = new Store<boolean>(readBool(MERGE_CONFIRM_KEY, true));
+
+export function setMergeConfirm(on: boolean): void {
+  mergeConfirm.set(on);
+  persistBool(MERGE_CONFIRM_KEY, on);
+}
+
 /** R92 (㊶ 续续): editor indentation. Mirrors Obsidian's "Indent using tabs"
  *  (default ON → insert a tab char; OFF → spaces) + "Tab indent size" (default 4 =
  *  one indent level's width). Both default to Obsidian's shipped values; this is a

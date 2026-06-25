@@ -3,7 +3,9 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
-import { switcherShowExistingOnly, switcherShowAttachments, switcherShowAllTypes } from "@core/appearance";
+import { switcherShowExistingOnly, switcherShowAttachments, switcherShowAllTypes, mergeConfirm } from "@core/appearance";
+import { confirmAction } from "@core/confirm";
+import { basename, stripExtension } from "@core/vault";
 import { isAttachmentPath } from "@core/attachments";
 import { useI18n } from "@core/i18n";
 import type { FileNode, HeadingRef, BlockRef } from "@core/types";
@@ -197,24 +199,39 @@ export function QuickSwitcher() {
     if (mergeSource !== null && row.kind === "file" && row.file.path !== mergeSource) {
       const target = row.file.path;
       app.workspace.closeModal();
-      void mergeNotes(
-        { vault: app.vault, metadata: app.metadata, documents: app.documents },
-        mergeSource,
-        target,
-      )
-        .then((result) => {
-          app.workspace.openFile(target);
-          // a skipped referrer keeps its [[source]] link, now dangling (source
-          // trashed) — surface it like Explorer's rename path does (R47 review).
-          if (result && result.skipped.length > 0) {
-            showMergeNotice(t("switcher.mergeLinksSkipped", { count: result.skipped.length }));
-          }
-        })
-        .catch((err) => {
-          // modify/read/trash failed — never silently swallow on a merge (R47 review).
-          console.error("[merge] failed", err);
-          showMergeNotice(t("switcher.mergeFailed"));
-        });
+      void (async () => {
+        // R235: "Ask to confirm before merging" (default ON). Cancel → source untouched.
+        if (
+          mergeConfirm.get() &&
+          !(await confirmAction(
+            t("switcher.mergeConfirm", {
+              source: stripExtension(basename(mergeSource)),
+              target: stripExtension(basename(target)),
+            }),
+            t("switcher.mergeConfirmTitle"),
+          ))
+        ) {
+          return;
+        }
+        mergeNotes(
+          { vault: app.vault, metadata: app.metadata, documents: app.documents },
+          mergeSource,
+          target,
+        )
+          .then((result) => {
+            app.workspace.openFile(target);
+            // a skipped referrer keeps its [[source]] link, now dangling (source
+            // trashed) — surface it like Explorer's rename path does (R47 review).
+            if (result && result.skipped.length > 0) {
+              showMergeNotice(t("switcher.mergeLinksSkipped", { count: result.skipped.length }));
+            }
+          })
+          .catch((err) => {
+            // modify/read/trash failed — never silently swallow on a merge (R47 review).
+            console.error("[merge] failed", err);
+            showMergeNotice(t("switcher.mergeFailed"));
+          });
+      })();
       return;
     }
     if (row.kind === "file") {

@@ -56,7 +56,7 @@ import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
 import { buildClearProperties, parseProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
-import { confirmDelete } from "@core/confirm";
+import { confirmAction } from "@core/confirm";
 import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { mergeTargetMode } from "@core/noteMerge";
@@ -592,7 +592,7 @@ export function App() {
           void (async () => {
             const path = workspace.getActiveFile();
             if (!path) return;
-            if (!(await confirmDelete(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
+            if (!(await confirmAction(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
               return;
             try {
               await workspace.flushAll();

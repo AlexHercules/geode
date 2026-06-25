@@ -20,6 +20,10 @@ function ok(name, cond, extra = "") {
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
+// R235: the UI merge (part B) now shows a confirm dialog (default ON) — accept it
+// so the realistic "user confirms the merge" path proceeds (Playwright would otherwise
+// auto-dismiss it → cancel). The core probe (part A) bypasses the dialog entirely.
+page.on("dialog", (d) => d.accept());
 await page.goto(BASE_URL);
 await page.waitForFunction(() => !!window.geode, null, { timeout: 15000 });
 await page.evaluate(() => window.geode.registerPlugin({ id: "r47", name: "r47", onload(app) { window.__app = app; } }));
