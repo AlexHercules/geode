@@ -27,8 +27,20 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
 - `npm run typecheck`（0 错误）→ 浏览器 dev server（:1420，后台）+ `node .calibration/rXX-e2e.mjs` 套件 → `PATH="$HOME/.cargo/bin:$PATH" cargo check` / build。
 - 浏览器实测 + 截图留证。
 
+## Step 3.4 · 分档（diff 实测自动判 · 决定 3.5/4 力度 · 默认逻辑档、举证责任在机械档）
+> 目的：让闸门力度匹配本轮**实际改动**而非一律满跑。判定在此（diff 已成形、简化门之前），**只影响 Step 3.5 与 Step 4**；Step 0–3、Step 5 双端实测、Step 6 收尾**两档完全一致**。
+- 取本轮未提交 diff：`git diff --stat` + `git diff --name-only`（工作树 `M`+`??`，**非** `master...HEAD`）。
+- **数据安全红线（一票否决 → 强制逻辑档）**：`git diff --name-only` 命中 `core/markdown.ts` / `core/vault*` / `core/documents*` / editor 管线 / 任何 vault·文件 IO → **逻辑档**，不再往下判（对应 CLAUDE.md 底线①）。
+- **机械档 ⟺ 同时满足以下全部**（任一不满足即逻辑档——**默认逻辑档**）：
+  1. 未碰数据安全面（上一条已过）；
+  2. **无新逻辑**：未新增/改 `ARCHITECTURE.md` 冻结契约（导出 types/events/adapter 签名）、未新增承载逻辑的控制流（新 `if/for/while/switch` 或三元分支）、未新增/改 store action·reducer·算法；
+  3. 纯属：JSX 块搬迁 / 样式 / 文案·i18n 键 / nav·IA 结构 / 图标注册 / 常量重排；
+  4. 未新增 runtime 依赖、未动 Rust 壳逻辑。
+- 写一行判定留痕：`分档：机械档（diff N 行/M 文件，纯 IA 搬迁，无新逻辑·未碰数据安全面）` 或 `分档：逻辑档（命中：新增 store action / 碰 markdown 管线 …）`。**判定可审计 → 防机械档被滥用成偷工。**
+
 ## Step 3.5 · 简化门（gate · 评审前 · 只减不增 · clean 即通过）
 > 位置铁律：**简化必须在 Step 4 对抗评审之前落地**，让 reviewer 把简化后的形态当本轮终态来审——简化被免费复审、不新增评审面、杜绝未评审上线。评审后再简化 = 逻辑关缺席，禁。
+> **分档（Step 3.4）**：**机械档跳过本步**——纯 IA 搬迁本就 0 可简化面，写一行「简化门：机械档跳过（Step 3.4）」即进 Step 4；**逻辑档照常**跑下文全部。
 - 派 **fresh `code-simplifier` subagent**（非 implementer：实现者锚定在自己刚写的抽象上看不见自己的间接层；非只读 reviewer：其合约禁改码）；范围 = **本轮 diff ∩ Step 1 所有权表独占文件**（Step 3.5 在 Step 6 提交**前**跑，本轮改动尚未提交 → 用 `git status --short` 看工作树未提交的修改 `M` + 新增 `??` 文件，**不是** `master...HEAD`），**就地改写**。
 - **唯一不变量**：一次简化合法 ⟺ 在本轮 diff 已触碰的行上产生**净负复杂度**（更少行/分支/名字/间接层）且**行为与公共契约逐字节不变**。只删/内联/合并，**绝不新增**——新抽象是 Step 1 契约决策，不在此。
 - **SIMPLIFY-YES（grep/tsc 可判）**：① 死代码（本轮新增、全仓零引用 / `return`/`throw` 后不可达分支）；② 残留脚手架（`console.log` / 注释码 / `TODO(temp)` / 无断言引用的 debug `data-testid` / 一次性 probe stub）；③ 未用 param/export/import（`noUnusedLocals` + grep 确认）；④ 本轮内两处 token 级相同（modulo 重命名）、≥~8 行复制，且收敛**不需发明新公共类型**；⑤ 多余间接（纯转发参数的包装函数 / 即取即返的单次局部 / 可直接当表达式的单分支 `if` / Promise 套 Promise）；⑥ 冗余或失效注释（逐字复述代码 / 与代码矛盾的过期注释）；⑦ **类型可证**的不可能态防御（类型已证非空的 null 检查 / 穷尽 union 的 `default:` / 不会抛的 try/catch——仅类型可证才删，非凭「我觉得不会发生」）。
@@ -39,9 +51,10 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
 - **找不到 = 常态、非失败**：写一行「简化门：clean，无 ≥8 行重复 / 无死代码 / 无脚手架」即进 Step 4。**禁**「顺手」重构 / 口味重命名 / 无重复支撑的重组。若几乎每轮都「找到东西」，是本门阈值太松、本门自己即膨胀。
 - 幸存（简化后）形态**原样流入 Step 4 对抗评审**。
 
-## Step 4 · 对抗评审（替代人审 = 自主模式质量关）
-- 派 `reviewer` subagent 做**多维对抗性**评审；逐条 finding 标 确认/证伪，**只修确认缺陷**，去重到根因。审的是 Step 3.5 简化后的终态形。
-- 本轮改了 editor/vault/markdown → **data-safety skill** 自动触发，跑数据安全竞态清单 + 历轮根因 checklist。
+## Step 4 · 评审（替代人审 = 自主模式质量关 · 力度随 Step 3.4 分档）
+- **逻辑档 → 多维对抗评审（满跑）**：派 `reviewer` subagent 做**多维对抗性**评审；逐条 finding 标 确认/证伪，**只修确认缺陷**，去重到根因。审的是 Step 3.5 简化后的终态形。
+- **机械档 → scoped review（窄域）**：派 `reviewer` 只审本轮 diff 的**残留风险面** = automated 套件覆盖不到、却正是搬迁高发的盲区：① 迁移控件的 `data-testid`/绑定/默认值逐一保留（对照 Step 1 控件清单）；② 新增 nav·控件的图标**已注册**（非 fallback 到 `file-text`）；③ 新引用的 i18n 键在 `dict.*` **真实存在**（非键名直显）；④ 搬迁后无重复/遗漏 `testid`。**不做全维对抗扫描**（纯 IA 重排无新逻辑面值得对抗）；逐条确认/证伪，只修确认缺陷。
+- 本轮改了 editor/vault/markdown → 已被 Step 3.4 强制为逻辑档 → **data-safety skill** 自动触发，跑数据安全竞态清单 + 历轮根因 checklist。
 
 ## Step 5 · 双端实测
 - 浏览器 E2E 全绿；桌面裸二进制 `./src-tauri/target/release/geode <vault>` + probe 插件自检（遵守 App Nap 时序纪律，见 data-safety skill §D）。
@@ -56,7 +69,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
   - `docs/OBSIDIAN-COMPAT.md`：套件矩阵不回退。
 - 版本号**三处对齐**（package.json / tauri.conf.json / SettingsModal `APP_VERSION`）。
 - 提交：`feat(rXX):` 代码 + `docs(rXX):` 文档（具体文件，不用 `git add .`）→ `git push`。
-- 报告用户：本轮做了什么、修了几个根因、套件状态、**简化门结果（clean / 删了 N 处死代码+冗余——「不简化」也留痕、可审计是否被滥用成 churn）**、**下一项是什么**。
+- 报告用户：本轮做了什么、**本轮分档（机械/逻辑 + 一句判定依据）**、修了几个根因、套件状态、**简化门结果（clean / 删了 N 处死代码+冗余 / 机械档跳过——「不简化」也留痕、可审计是否被滥用成 churn）**、**下一项是什么**。
 - `$ARGUMENTS` 要求连做 → 回 Step 0；否则停下等用户下次「阅读 handoff，继续开发」。
 
 ## 🛑 何时必须停下问用户

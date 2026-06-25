@@ -96,7 +96,9 @@ typecheck → 浏览器 E2E → 桌面 probe → cargo check / build
 **Workflow 并行 agent（独占文件所有权），非 ralph-loop。** 一整轮的编排见 **`/continue` 命令**；分工用 **`.claude/agents/`**：
 - `explorer` — 只读探索、定位代码、压缩成结论回报（保持主上下文干净）
 - `implementer` — 在**独占文件/目录**内实现，冻结跨区签名
-- `reviewer` — 多维**对抗性**评审（自主模式的质量守门人，替代人审）
+- `reviewer` — 评审守门人（替代人审）：逻辑档**多维对抗**，机械档 **scoped 窄域**（testid/绑定/图标/i18n 键），力度随 `/continue` Step 3.4 分档
+
+> **分档（`/continue` Step 3.4）**：按本轮**实测 diff** 自动判机械/逻辑档，只调 Step 3.5 简化门 + Step 4 评审力度（Step 0–3、双端实测、收尾两档一致）。碰 editor/vault/markdown **强制逻辑档**（底线①）；机械档 = 跳简化门 + scoped review。
 
 agent 行内注释**不能修订契约**——契约冲突上报 chief（= 主对话 / 用户）裁决。
 

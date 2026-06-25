@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 218 additions — G3 §6：file-explorer:reveal-in-system + open-in-default-app（Obsidian「Show in system explorer」/「Open in default app」·命令面板＋文件右键两入口·薄 Rust 命令复用 safe_join·新依赖 tauri-plugin-opener[硬边界#5 用户授权解锁·仅此插件]·逻辑档[非数据安全·只读 OS 动作]）【As-built v0.214】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §6 两项 missing 补全。**硬边界#5（新运行时依赖）经用户 2026-06-25 显式授权解锁，仅对 Tauri 官方 `tauri-plugin-opener`**；用途上限＝**库内文件** reveal/open（**不含 `open_url`/任意 URL**）；其余四条硬边界不动。**web 实证**：Obsidian 命令面板名「Files: Show in system explorer」「Files: Open in default app」（macOS 右键菜单显「Reveal in Finder」·命令身份同名）。Geode 取跨平台中性命令名（不硬编码 Finder·免平台分支）。
+> **设计取向（前端不碰绝对路径·安全边界在 Rust）**：前端只传**库内相对路径**；Rust 命令 `safe_join(vault, rel)` 把它合到 vault 根（堵 `..` 逃逸·与既有 15+ vault_* 命令同一 vetted confinement），再调 opener 的 Rust API。绝对路径永不出壳。
+> **契约（1 Cargo dep + 2 Rust 命令 + 1 新 core IPC 模块 + 2 命令 + 2 右键菜单项 + 2×2 i18n）**：
+> - **`src-tauri/Cargo.toml`**：+`tauri-plugin-opener = "2"`（唯一新依赖）。**`src-tauri/src/main.rs`**：`.plugin(tauri_plugin_opener::init())` + `use tauri_plugin_opener::OpenerExt` + 2 命令 `reveal_in_system(app, vault, path)` / `open_in_default_app(app, vault, path)`——皆 `safe_join` 后调 `app.opener().reveal_item_in_dir(&abs)` / `.open_path(abs, None::<&str>)`·注册进 generate_handler!。**capabilities/default.json 不改**（app 自有命令不受权限系统约束·且前端不调 opener 的 JS 命令→无需 `opener:default`）。
+> - **`core/reveal.ts`（新·纯 IPC owner·layering：core 可 import @tauri-apps/api·见 net.ts/export.ts 先例）**：`revealInSystem(vaultRoot, relPath): Promise<void>` / `openInDefaultApp(vaultRoot, relPath): Promise<void>`——各 `if(!isTauri()) return;` 浏览器 no-op·否则 `await import("@tauri-apps/api/core").invoke("reveal_in_system"|"open_in_default_app", { vault: vaultRoot, path: relPath })`。**IPC arg 形 = 主流 vault_* 约定（vault/path）**。
+> - **`app/App.tsx`**：2 命令 `file-explorer:reveal-in-system` / `file-explorer:open-in-default-app`（无默认键）·`available: () => isTauri() && workspace.getActiveFile() !== null`（桌面专属·浏览器隐藏=忠实 Obsidian mobile 隐藏 host 命令）·callback 取 `workspace.getActiveFile()` + `vault.adapter.getVaultPath()` 双非空再调 core/reveal·**fire-and-forget catch-swallow·无 toast**（reveal/open 有可见效果·Obsidian 亦不 toast）。
+> - **`features/explorer/Explorer.tsx`**：file 节点右键菜单加 2 项（copy-obsidian-url 之后·`{isTauri() && (...)}` 浏览器隐藏）·handler `revealInSystem(app.vault.adapter.getVaultPath(), node.path)` catch-swallow·图标 `folder`/`external-link`（registry 已有·无需改 icons.tsx）。
+> - **`core/i18n/dict.app.ts`**：`cmd.revealInSystem`「Files: Show in system explorer / 文件：在系统资源管理器中显示」+ `cmd.openInDefaultApp`「Files: Open in default app / 文件：用默认应用打开」。**`core/i18n/dict.panels.ts`**：`explorer.revealInSystem`「Show in system explorer / 在系统资源管理器中显示」+ `explorer.openInDefaultApp`「Open in default app / 用默认应用打开」（en/zh 各加）。
+> - **分档：逻辑档**（新运行时依赖 + 新 Rust 命令 + 新 core 模块控制流·虽只读 OS 动作非 .md 写）→ 简化门 + 聚焦对抗评审（安全 confinement / 浏览器 null-root 防护 / 依赖权限面 / 正确性）。
+> **冻结接口（不破）**：IPC arg 形 `{ vault, path }`·`core/reveal.ts` 两签名·VaultAdapter 接口·isTauri 语义·Command 注册形·getActiveFile 返库内相对路径。
+> **验证（As-built）**：r218-e2e（命令注册 + available 浏览器 gating false + 菜单项浏览器隐藏 + core/reveal no-op）+ cargo build release（证 dep+opener API+handler 编译）+ 桌面 probe（invoke 传 `../` traversal → 断言 Err 确认 safe_join confinement·不开 Finder）。
+
 ## Round 217 additions — G3 §0：app:show-debug-info（Obsidian「Show debug info」·收集版本/平台/语言/插件→剪贴板+toast·新 core/debugInfo.ts 纯 builder·非数据安全·零新依赖）【As-built v0.213】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §0 missing「显示调试信息」(`app:show-debug-info`) 补全。**web 实证**：Obsidian「Show debug info」把 SYSTEM INFO（版本/OS/主题/插件数+列表）拷剪贴板供 bug 报告。Geode 取**忠实子集**（版本/平台/语言/插件 installed+enabled+列表）——base/community theme 在 compat 层（features 不可 import·且 Geode 无 light/dark base-theme 概念）故略。
