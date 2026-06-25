@@ -71,6 +71,18 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 216 additions — G3 §12：editor:move-heading（Obsidian「Move current heading to…」·移动光标处章节到新笔记·复用 R44 extract 写路径·新 core/moveHeading.ts 算 section 范围·data-safety 逻辑档[byte 写两侧]·零新依赖）【As-built v0.212】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §12 末项 missing「移动当前章节」(`note-composer:move-heading`) 补全·**note-composer 组整组补完**。Obsidian「Move current heading to…」移动光标处标题的整个章节（标题行 + 正文，含子标题）到另一笔记、原处留链接。Geode 既有 `editor:extract-selection`(R44) 已是「auto-create 新笔记 + 留链接」语义（无 picker），move-heading 复用同机制·**仅 range 不同**（章节范围 vs 选区）。
+> **契约（新 pure core 1 文件 + 重构 R44 命令复用 extractRange + 1 命令 + 1 i18n 键 + 1 probe 钩）**：
+> - **`core/moveHeading.ts`（新·纯）**：`headingSectionAt(text, pos): {from,to} | null`——`maskCodeRegions`（同长 blank·offset 字节对齐）扫 ATX 标题行 → 找 pos 所在章节（start ≤ pos 的最后一个标题）→ section end = 下一个 level ≤ 本级的标题 start，否则 EOF → **尾部 trim 空白**（`to = from + slice.replace(/\s+$/,"").length`·让原文保留章节后空行间距·避链接与下个标题贴死）。pos 在首标题前 → null。光标在深层子标题 → 移子章节（最内层·同 Obsidian）。
+> - **`features/editor/noteComposerCommands.ts`（重构）**：抽 `extractRange(app, view, from, to)`（R44 extractSelection 的 create-before-edit + stale-guard[`doc.sliceString(from,to)!==content` 跳过] + 链接 splice 全复用·零新写路径）；`extractSelection` 改为算选区 range 后委托；新 `moveHeading(app, view)` = headingSectionAt(doc, cursor) → extractRange。注册 `editor:move-heading`（available=getView!=null·callback no-op 当无章节·无默认键）。
+> - **`core/i18n/dict.app.ts`**：`cmd.moveHeading`（en "Move current heading to a new note…" / zh "移动当前章节到新笔记…"）。
+> - **`main.tsx`**：`__geodeComposer.headingSection = headingSectionAt`（纯函数 probe·同 derive/content/replacement）。
+> - **分档：逻辑档（byte 写源 splice + 新笔记 create·markdown 章节边界）**——data-safety：复用 R44 vetted create-before-edit（新笔记先落盘·失败源不动）+ stale-guard（异步 create 后重验范围内容未变·变则跳过保新笔记）；新增 = headingSectionAt 纯算 range（code-fence + **frontmatter** 感知·offset 字节对齐）。
+> - **对抗评审（Ultracode 3-lens[data-safety-bytes/adversarial-markdown/correctness-fidelity]+skeptic → 初判 needs-fixes → 修后 deliverable·1 major 修·4 minor/nit[1 修 3 记]·1 refuted）**：**1 major 修（底线①·正是 lens 意义）**＝headingSectionAt 原只 `maskCodeRegions(text)`（blank fence/inline-code）**漏 frontmatter** → frontmatter 内 column-0 `# comment`（YAML 注释）被当标题 → move 把链接 splice 跨过闭合 `---`→**掏空源笔记**（复现：`---\n# c\ntitle: x\n---\nbody` 光标在 body → source 变 `---\n[[LINK]]\n`）。**根因＝heading 扫描没对齐阅读视图管线**（parseNote/resolveSubpath 都先 blank frontmatter·我漏了）→ 修＝扫描前 `parseFrontmatter` offset-preserving blank frontmatter（非换行→空格·保字节对齐）+ 补 r216-e2e 三 frontmatter 断言锁定。**1 minor 修**＝cmd.moveHeading 去尾「…」（Geode auto-create 无 picker·对齐 sibling extractSelection）。**3 记不修**：auto-create 无目标 picker（fidelity gap·同 R44·矩阵注明）/ setext 不识别（同 R204·失败=错 range 非 corruption·可撤销）/ 无章节时静默 no-op（nit·available 改 O(n) 不值·可后补 Notice）。**1 refuted**：空标题 `## ` 当 body（非缺陷·HEADING_RE 要 `\S`·安全）。
+> - **桌面 probe N/A·浏览器可验证 + pure-fn probe（__geodeComposer.headingSection）**。**v1 偏差/记**：ATX 标题（非 setext·同 R204）；auto-create 新笔记无目标 picker（同 R44 extract-selection 既有语义·矩阵标 gap）；无章节时静默 no-op。**frontmatter 已 blank**（评审 major 根因·已修）。
+
 ## Round 215 additions — G3 §7：file-explorer:new-file-in-new-pane（⌘⇧N 在右侧新建笔记·复用 vetted splitActivePane + R17 create·data-safety 逻辑档[vault create]·零新依赖）【As-built v0.211】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §7 missing「在右侧新建笔记」(`file-explorer:new-file-in-new-pane`·默认键 ⌘⇧N) 补全 + 当前标签页变体据实纠误（app:new-note 覆盖）·**§7 整组补完**。**web 实证**：⌘⇧N 是 Obsidian「create a note in a new pane」真默认键（非 phantom）。复用既有 `app:new-note`（R17 vault.uniquePath+create）+ `splitActivePane("row")`（R202/split-right 先例）。
