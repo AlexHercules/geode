@@ -22,7 +22,10 @@ export const en = {
   "cmd.bookmarkHeading": "Bookmark heading under cursor",
   "cmd.bookmarkBlock": "Bookmark block under cursor",
   "cmd.bookmarkAllTabs": "Bookmark all tabs",
+  "cmd.bookmarkSearch": "Bookmark current search",
   "cmd.showBookmarks": "Show bookmarks",
+  "bookmarks.searchBookmarked": "Search bookmarked",
+  "bookmarks.noSearchToBookmark": "No active search to bookmark",
 } as const;
 
 export const zh: Record<keyof typeof en, string> = {
@@ -42,5 +45,8 @@ export const zh: Record<keyof typeof en, string> = {
   "cmd.bookmarkHeading": "收藏光标所在标题",
   "cmd.bookmarkBlock": "收藏光标所在块",
   "cmd.bookmarkAllTabs": "收藏所有标签页",
+  "cmd.bookmarkSearch": "收藏当前搜索",
   "cmd.showBookmarks": "显示书签",
+  "bookmarks.searchBookmarked": "已收藏搜索",
+  "bookmarks.noSearchToBookmark": "没有可收藏的搜索",
 };

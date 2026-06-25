@@ -349,6 +349,10 @@ export class Workspace {
    *  token against its live query then clears. Mirrors Obsidian's modifier-click
    *  (accumulate filters) vs plain click (replace). Session-only. */
   readonly searchTagToggle = new Store<string | null>(null);
+  /** R239: SearchPanel mirrors its live query here so the bookmarks:bookmark-search command
+   *  (which lives in App.tsx with the bookmarks API + notice) can read it. Session-only;
+   *  empty when no search has been typed. */
+  readonly currentSearchQuery = new Store<string>("");
   private flushers = new Set<() => void | Promise<void>>();
   /** Most-recent-LAST stack of user-closed tabs for Mod+Shift+T. Session-only —
    *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds
@@ -375,6 +379,7 @@ export class Workspace {
       if (reason === "load") {
         this.recentlyClosed = [];
         this.tabHistory.clear();
+        this.currentSearchQuery.set(""); // R239: don't carry a query across a vault switch
       }
     });
   }

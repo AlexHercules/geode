@@ -239,6 +239,11 @@ export function SearchPanel() {
     setQuery((q) => toggleTagInQuery(q, tag));
   }, [tagToggle, app.workspace]);
 
+  // R239: mirror the live query so the bookmarks:bookmark-search command can read it.
+  useEffect(() => {
+    app.workspace.currentSearchQuery.set(query);
+  }, [query, app.workspace]);
+
   const trimmed = debounced.trim();
   // tag BROWSER only for a whole-query bare `#…` token; anything else (spaces,
   // operators) goes through the query parser, where `#tag` means tag:tag.

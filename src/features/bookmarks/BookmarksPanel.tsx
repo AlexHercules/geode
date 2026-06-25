@@ -136,8 +136,9 @@ export function BookmarksPanel() {
         app.workspace.openGraph();
         break;
       case "search":
-        // no programmatic query injection available — just switch panel (known gap)
-        app.workspace.setLeftPanel("search");
+        // R239: open the search panel seeded with the bookmarked query (requestSearch
+        // injects via the searchRequest one-shot that SearchPanel consumes).
+        app.workspace.requestSearch(item.query);
         break;
     }
   };

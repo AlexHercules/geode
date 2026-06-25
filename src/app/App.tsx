@@ -890,6 +890,21 @@ export function App() {
         },
       }),
       commands.register({
+        // R239: Obsidian bookmarks:bookmark-search — bookmark the current search query.
+        // SearchPanel mirrors its live query into workspace.currentSearchQuery.
+        id: "bookmarks:bookmark-search",
+        name: () => t("cmd.bookmarkSearch"),
+        callback: () => {
+          const query = workspace.currentSearchQuery.get().trim();
+          if (!query) {
+            showCommandNotice(t("bookmarks.noSearchToBookmark"));
+            return;
+          }
+          void bookmarks.add({ type: "search", query, ctime: Date.now() });
+          showCommandNotice(t("bookmarks.searchBookmarked"));
+        },
+      }),
+      commands.register({
         id: "bookmarks:show",
         name: () => t("cmd.showBookmarks"),
         callback: () => workspace.setLeftPanel("bookmarks"),
