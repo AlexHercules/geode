@@ -51,7 +51,7 @@ import { registerComposerCommands } from "@features/editor/noteComposerCommands"
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
-import { isTauri, basename } from "@core/vault";
+import { isTauri, basename, toAbsolutePath } from "@core/vault";
 import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
 import { buildClearProperties, parseProperties } from "@core/properties";
@@ -489,6 +489,20 @@ export function App() {
           if (!path) return;
           void navigator.clipboard.writeText(path).catch(() => {});
           showCommandNotice(t("explorer.copiedPath"));
+        },
+      }),
+      commands.register({
+        // R241: Obsidian "Copy file path" — the file's absolute OS path. Desktop-only
+        // (the Memory adapter has no vault path), gated like reveal-in-system (R218).
+        id: "file-explorer:copy-absolute-path",
+        name: () => t("explorer.copyAbsolutePath"),
+        available: () => workspace.getActiveFile() !== null && vault.getVaultPath() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          const vp = vault.getVaultPath();
+          if (!path || vp === null) return;
+          void navigator.clipboard.writeText(toAbsolutePath(vp, path)).catch(() => {});
+          showCommandNotice(t("explorer.copiedAbsolutePath"));
         },
       }),
       commands.register({

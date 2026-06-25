@@ -77,7 +77,7 @@ import { searchHeadings, searchBlocks, switcherMode, stripSigil } from "@core/sw
 import { applyFormatOp, insertFootnote, type FootnoteAction, type FormatEdit, type FormatOp } from "@core/format";
 import { applyTableOp, type TableOp } from "@core/tableEditor";
 import { linkAtCursor, type LinkAtCursor } from "@core/linkAtCursor";
-import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes } from "@core/vault";
+import { basename, isTauri, MemoryVaultAdapter, TauriVaultAdapter, Vault, sortTreeNodes, toAbsolutePath } from "@core/vault";
 import { dailyStamp, dailyNotePath, parseDailyStamp, monthGrid, setDailyNoteFormat, setDailyNoteFolder } from "@core/dailyNote";
 import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNoteFolder } from "@core/uniqueNote";
 import { deriveNoteName, extractedContent, extractReplacement, type ExtractMode } from "@core/noteComposer";
@@ -552,6 +552,12 @@ async function bootstrap() {
   };
   createNoteHost.__geodeCreateNewNote = (name) =>
     createNewNote(app.vault, name, app.workspace.getActiveFile());
+
+  // R241: pure probe for the absolute-path join (the copy-absolute-path command is
+  // desktop-gated, so the join logic is exercised here on both unix + windows inputs).
+  (globalThis as typeof globalThis & {
+    __geodeAbsolutePath?: (vaultPath: string, relativePath: string) => string;
+  }).__geodeAbsolutePath = toAbsolutePath;
 
   // always-on new-tab-mode probe (R88, ㊶ 续): proves workspace.openFile honours
   // the defaultNewTabMode setting on the real build (a new tab opens in that mode).

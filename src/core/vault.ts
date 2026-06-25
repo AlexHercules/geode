@@ -96,6 +96,17 @@ export function parentPath(path: string): string {
   return i >= 0 ? path.slice(0, i) : "";
 }
 
+/** R241: join a vault root absolute path (OS-native, from the Tauri adapter) with a
+ *  vault-relative "/"-separated path into the file's absolute OS path. OS-aware: a
+ *  backslash anywhere in `vaultPath` marks Windows, so the separator + relative path
+ *  switch to "\\". Pure string transform — no filesystem access. */
+export function toAbsolutePath(vaultPath: string, relativePath: string): string {
+  const sep = vaultPath.includes("\\") ? "\\" : "/";
+  const base = vaultPath.replace(/[/\\]+$/, "");
+  const rel = sep === "\\" ? relativePath.replace(/\//g, "\\") : relativePath;
+  return `${base}${sep}${rel}`;
+}
+
 /** Reject a vault-relative path that escapes the vault or carries control chars.
  *  The Tauri side's safe_join enforces this, but the Memory adapter does not — so
  *  a hostile path (e.g. an obsidian://new URI with `..`/NUL) could otherwise write
@@ -224,6 +235,12 @@ export class Vault {
     const p = this.adapter.getVaultPath();
     if (!p) return this.adapter.kind === "memory" ? "Demo Vault" : "Vault";
     return p.replace(/[\\/]+$/, "").split(/[\\/]/).pop() ?? "Vault";
+  }
+
+  /** R241: the vault root's absolute OS path, or null (e.g. the Memory adapter / no
+   *  vault). Exposed so features get it via the Vault class, not the adapter. */
+  getVaultPath(): string | null {
+    return this.adapter.getVaultPath();
   }
 
   /** All markdown + other files, flat. Empty array if no vault open. */
