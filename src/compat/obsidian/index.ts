@@ -38,9 +38,11 @@ export {
   MarkdownView,
   Workspace,
   WorkspaceLeaf,
+  type MarkdownFileInfo,
   type PaneType,
   type SplitDirection,
 } from "./workspace";
+export { HoverPopover, PopoverState, type HoverParent, type Point } from "./hover";
 export { FileView, ItemView, View, type ViewStateResult } from "./view";
 export {
   AbstractInputSuggest,

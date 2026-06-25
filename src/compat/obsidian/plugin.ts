@@ -40,6 +40,7 @@ import { normalizePath } from "./util";
 import type { Vault } from "./vault";
 import {
   makeActiveMarkdownView,
+  type MarkdownFileInfo,
   type MarkdownView,
   type ViewCreator,
   type Workspace,
@@ -60,8 +61,12 @@ export interface Command {
   repeatable?: boolean;
   callback?: () => unknown;
   checkCallback?: (checking: boolean) => boolean | void;
-  editorCallback?: (editor: Editor, ctx: MarkdownView) => unknown;
-  editorCheckCallback?: (checking: boolean, editor: Editor, ctx: MarkdownView) => boolean | void;
+  editorCallback?: (editor: Editor, ctx: MarkdownView | MarkdownFileInfo) => unknown;
+  editorCheckCallback?: (
+    checking: boolean,
+    editor: Editor,
+    ctx: MarkdownView | MarkdownFileInfo,
+  ) => boolean | void;
   hotkeys?: Hotkey[];
 }
 

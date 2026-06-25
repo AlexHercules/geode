@@ -11,6 +11,7 @@ import { Editor } from "./editor";
 import { Events, type EventRef } from "./events";
 import type { FileRegistry, TAbstractFile, TFile } from "./files";
 import { reportGap } from "./gaps";
+import type { HoverParent, HoverPopover } from "./hover";
 import { getIconSvg } from "./icons";
 import type { App } from "./plugin";
 import type { Menu } from "./ui";
@@ -55,12 +56,32 @@ function applyViewStateMode(handle: Handle, mode: string | undefined, source: bo
 export type ViewCreator = (leaf: WorkspaceLeaf) => View;
 
 /**
+ * d.ts:3954 — `interface MarkdownFileInfo extends HoverParent`. The active markdown
+ * editor's file context: the modern `editorCallback` ctx / `Workspace.activeEditor`
+ * shape. A compat MarkdownView IS structurally a MarkdownFileInfo (it carries
+ * `editor` + `file` + `app`); R221 declares the type so plugins can `import type`
+ * it and annotate `editorCallback (editor, ctx: MarkdownFileInfo)`.
+ */
+export interface MarkdownFileInfo extends HoverParent {
+  app: App;
+  get file(): TFile | null;
+  editor?: Editor;
+}
+
+/**
  * Markdown view facade for editorCallback ctx / getActiveViewOfType. A real
  * FileView (F8) so plugin checks like `view instanceof FileView/ItemView/View`
  * hold; getDisplayText comes from FileView (file?.basename ?? "").
  */
-export class MarkdownView extends FileView {
+export class MarkdownView extends FileView implements MarkdownFileInfo {
   editor: Editor;
+  /**
+   * R221: HoverParent.hoverPopover (via MarkdownFileInfo). Geode has no plugin
+   * self-rendered hover preview (gap recorded in plugin.ts:registerHoverLinkSource)
+   * → stays null; declared so a compat MarkdownView formally satisfies
+   * MarkdownFileInfo (the union `editorCallback` ctx accepts).
+   */
+  hoverPopover: HoverPopover | null = null;
 
   constructor(leaf: WorkspaceLeaf, editor: Editor, file: TFile | null) {
     super(leaf);
