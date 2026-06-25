@@ -71,7 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 239 additions — 表面复刻序：完成「搜索书签」= `bookmarks:bookmark-search`「收藏当前搜索」+ 点击恢复查询（Obsidian native Bookmarks·Bookmark current search）·零新依赖【契约冻结 v0.235】
+## Round 240 additions — 表面复刻序 高频命令：`graph:open-local`「打开局部关系图」（Obsidian native Graph·Open local graph）·复用 R103/R110 局部图基建·零新依赖【契约冻结 v0.236】
+
+> **状态：As-built（已交付·v0.236）。** **Step 0 verify-first + 半成品发现**：grep 坐实 G3 line 238 `graph:open-local` = missing；但 **GraphView 早支持 local 模式**（`graphPrefs.ts:49` `mode:"global"|"local"` + R103 BFS depth/方向 follow + R110 邻居间连线·`GraphView.tsx:225` `anchor = mode==="local" ? lastActiveFile : null`）→ 缺的只是**直接以 local 模式打开图谱的命令**（现状须开全局图再 UI 切 local）。
+> **设计（1 one-shot store + 1 命令 + GraphView 消费·非数据安全[图谱只读 viz·prefs 在 localStorage]）**：
+> - **`core/workspace.ts`**：`readonly openLocalGraphRequest = new Store<boolean>(false)`（one-shot·镜像 searchRequest idiom）。
+> - **`app/App.tsx`**（`app:open-graph` 之后）：命令 `graph:open-local`（name `cmd.openLocalGraph`·无默认键·G3「未设置」）callback `workspace.openLocalGraphRequest.set(true); workspace.openGraph()`（先置请求再开图·图未开→mount 即消费·已开→请求变触发消费）。
+> - **`features/graph/GraphView.tsx`**：消费 effect（deps `[openLocalReq, app.workspace]`·**clear FIRST 守卫**）：请求起 → `setPrefs((p) => p.mode==="local" ? p : {...p, mode:"local"})`（已 local 返同 `p` 免无谓 rebuild·StrictMode 双调幂等）。anchor 自动 = `lastActiveFile`（R103 既有·= 当前笔记）·`savePrefs` effect(:227) 持久化 mode。
+> - **`core/i18n/dict.app.ts`**：`cmd.openLocalGraph`（EN「Open local graph」/ ZH「打开局部关系图」）。
+> **分档=逻辑档（新 store + 命令 + 消费 effect + setPrefs·但非数据安全[图谱只读·prefs localStorage·零 .md 写·不碰 editor/vault]）→ 简化门 → 多维对抗评审（重点：消费 clear-first 不重复·setPrefs 已-local 免 rebuild·图未开/已开两路径·anchor=lastActiveFile 正确）**。**桌面 probe N/A**（图谱 + localStorage prefs·跨端同码·浏览器全覆盖）。**测试**：`.calibration/r240-e2e.mjs`（命令注册 + 名 + 无默认键·开笔记 → 执行命令 → 图谱开 + `graphPrefs` mode==="local" + anchor 为该笔记·全局图已开时执行→切 local·持久化）+ 回归 r78/r103/r110 图谱套件不退。
 
 > **状态：As-built（已交付·v0.235）。** **Step 0 verify-first 纠误（R222/R238 纪律）**：grep 坐实候选「随机笔记」「复制路径」早 done；G3 矩阵 line 265 `bookmarks:bookmark-search` = missing → 取它。**关键发现（半成品补全）**：① bookmark store **早支持 `type:"search"`**（`core/bookmarks.ts:54` SearchBookmark·序列化/反序列化全在）② BookmarksPanel **早渲染** search 书签（title `bookmarks.untitledSearch`·icon "search"）③ **但两处缺口**：缺创建命令 + **点击恢复是 stale stub**（`BookmarksPanel.tsx:139`「no programmatic query injection available」——其实 `workspace.requestSearch(query)` R222 已建）。**故 R239 = 完成搜索书签（创建 + 恢复双补）**——否则创建的书签点击死掉 = 假完成（违 GAP_AUDIT 第十一节「真 handler」）。
 > **设计（reflection store + 1 命令[add+notice 在 App.tsx] + 点击修复）·非数据安全[bookmarks.json 非 .md]**：
