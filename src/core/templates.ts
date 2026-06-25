@@ -134,3 +134,31 @@ export function expandTemplate(content: string, ctx: { title: string; now: Date 
     return moment(ctx.now).format(format);
   });
 }
+
+/** R236: Note composer "extract to new note" template variables. Distinct from {{title}}/
+ *  {{date}}/{{time}} above — {{content}}=extracted text, {{fromTitle}}=source note name,
+ *  {{newTitle}}=new note name, {{date}}/{{date:FMT}}=moment(now) (bare → templateDateFormat /
+ *  YYYY-MM-DD). Same single-pass String.replace as expandTemplate, so a replacement value (e.g.
+ *  extracted content containing a literal "{{newTitle}}") is NEVER re-scanned/re-expanded. */
+const EXTRACT_VAR = /\{\{(content|fromTitle|newTitle|date)(?::([^}]*))?\}\}/gi;
+
+export function expandExtractTemplate(
+  template: string,
+  ctx: { content: string; fromTitle: string; newTitle: string; now: Date },
+): string {
+  return template.replace(EXTRACT_VAR, (match, name: string, fmt: string | undefined) => {
+    switch (name.toLowerCase()) {
+      // {{content:...}} etc. are not variables — keep the source text (mirrors {{title:x}}).
+      case "content":
+        return fmt === undefined ? ctx.content : match;
+      case "fromtitle":
+        return fmt === undefined ? ctx.fromTitle : match;
+      case "newtitle":
+        return fmt === undefined ? ctx.newTitle : match;
+      default: {
+        const setting = templateDateFormat.get().trim() || DEFAULT_DATE_FORMAT;
+        return moment(ctx.now).format(fmt !== undefined && fmt !== "" ? fmt : setting);
+      }
+    }
+  });
+}

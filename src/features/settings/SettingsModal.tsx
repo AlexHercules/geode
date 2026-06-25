@@ -66,6 +66,8 @@ import {
   type ExtractReplaceMode,
   mergeConfirm,
   setMergeConfirm,
+  extractTemplatePath,
+  setExtractTemplatePath,
 } from "@core/appearance";
 import { excludedRaw, setExcludedFiles } from "@core/excludedFiles";
 import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
@@ -134,7 +136,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.231.0";
+export const APP_VERSION = "0.232.0";
 
 type SectionId =
   | "about"
@@ -1493,6 +1495,7 @@ function NoteComposerSection() {
   const t = useI18n();
   const replaceMode = useStore(extractReplaceMode);
   const askMerge = useStore(mergeConfirm);
+  const templatePath = useStore(extractTemplatePath);
   return (
     <section>
       <h2 className="settings-heading">{t("settings.section.noteComposer")}</h2>
@@ -1531,6 +1534,24 @@ function NoteComposerSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+
+      {/* R236: template file location — structures notes created by "extract selection" */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.extractTemplate")}</div>
+          <div className="setting-desc">{t("settings.extractTemplateDesc")}</div>
+        </div>
+        <input
+          className="settings-text-input"
+          type="text"
+          value={templatePath}
+          placeholder="templates/extract.md"
+          spellCheck={false}
+          aria-label={t("settings.extractTemplate")}
+          data-testid="settings-extract-template"
+          onChange={(e) => setExtractTemplatePath(e.target.value)}
+        />
       </div>
     </section>
   );

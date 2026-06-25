@@ -260,6 +260,18 @@ export function setMergeConfirm(on: boolean): void {
   persistBool(MERGE_CONFIRM_KEY, on);
 }
 
+/** R236: Obsidian native Note composer "Template file location" (模板文件位置). A vault-relative
+ *  path to a template applied when extracting a selection into a new note ({{content}}/{{fromTitle}}/
+ *  {{newTitle}}/{{date}} vars). Default "" = no template = verbatim content (zero regression).
+ *  Stored RAW (trimmed at consumption — same controlled-input idiom as templateFolder). */
+const EXTRACT_TEMPLATE_KEY = "geode.extractTemplatePath";
+export const extractTemplatePath = new Store<string>(readString(EXTRACT_TEMPLATE_KEY, ""));
+
+export function setExtractTemplatePath(v: string): void {
+  extractTemplatePath.set(v);
+  persistString(EXTRACT_TEMPLATE_KEY, v);
+}
+
 /** R92 (㊶ 续续): editor indentation. Mirrors Obsidian's "Indent using tabs"
  *  (default ON → insert a tab char; OFF → spaces) + "Tab indent size" (default 4 =
  *  one indent level's width). Both default to Obsidian's shipped values; this is a

@@ -17,9 +17,10 @@ import { EditorView } from "@codemirror/view";
 import type { GeodeApp } from "@app/AppContext";
 import { t } from "@core/i18n";
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
-import { extractReplaceMode } from "@core/appearance";
+import { extractReplaceMode, extractTemplatePath } from "@core/appearance";
+import { expandExtractTemplate } from "@core/templates";
 import { headingSectionAt } from "@core/moveHeading";
-import { basename, parentPath } from "@core/vault";
+import { basename, parentPath, stripExtension } from "@core/vault";
 
 /**
  * Move the doc range [from, to) into a new note (named from its first line) and splice a
@@ -37,8 +38,29 @@ async function extractRange(app: GeodeApp, view: EditorView, from: number, to: n
   if (content.trim().length === 0) return; // whitespace-only → don't make an empty note
   const folder = parentPath(activePath);
   const notePath = app.vault.uniquePath(folder, deriveNoteName(content));
+  // R236: structure the new note with the configured template (Note composer "Template file
+  // location"); default empty / unreadable → verbatim content (prior behaviour, no data loss).
+  let noteBody = extractedContent(content);
+  const tmplPath = extractTemplatePath.get().trim();
+  if (tmplPath) {
+    const tmpl = await app.vault.read(tmplPath).catch(() => null);
+    if (tmpl !== null) {
+      const expanded = expandExtractTemplate(tmpl, {
+        content: content.replace(/\s+$/, ""),
+        fromTitle: stripExtension(basename(activePath)),
+        newTitle: stripExtension(basename(notePath)),
+        now: new Date(),
+      });
+      // {{content}} omitted → append the extracted content at the bottom (Obsidian behaviour).
+      // Case-insensitive to match the expansion regex ({{CONTENT}} is also a content var).
+      const body = tmpl.toLowerCase().includes("{{content}}")
+        ? expanded
+        : `${expanded.replace(/\s+$/, "")}\n\n${content.replace(/\s+$/, "")}`;
+      noteBody = body.replace(/\s+$/, "") + "\n";
+    }
+  }
   try {
-    await app.vault.create(notePath, extractedContent(content));
+    await app.vault.create(notePath, noteBody);
   } catch (err) {
     console.error("[note-composer] extract failed to create note", err);
     return; // source untouched — no data loss

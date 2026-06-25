@@ -119,6 +119,8 @@ res = await app(async () => {
   const setVal = (el, v) => { const s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set; s.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); };
   a.commands.execute("app:open-settings");
   await new Promise(r => setTimeout(r, 300));
+  document.querySelector('[data-testid="settings-nav-templates"]')?.click();
+  await new Promise(r => setTimeout(r, 120));
   const folder = document.querySelector('[data-testid="settings-template-folder"]');
   const out = { phFolder: folder.placeholder, phDate: document.querySelector('[data-testid="settings-template-date-format"]').placeholder, phTime: document.querySelector('[data-testid="settings-template-time-format"]').placeholder };
   setVal(folder, "  no-such-folder  ");
@@ -131,6 +133,8 @@ res = await app(async () => {
   // invalid folder -> notConfigured
   a.commands.execute("app:open-settings");
   await new Promise(r => setTimeout(r, 300));
+  document.querySelector('[data-testid="settings-nav-templates"]')?.click();
+  await new Promise(r => setTimeout(r, 120));
   setVal(document.querySelector('[data-testid="settings-template-folder"]'), "../evil");
   a.workspace.closeModal();
   a.commands.execute("editor:insert-template");
@@ -141,6 +145,8 @@ res = await app(async () => {
   // restore + custom date format consumed by insert-date
   a.commands.execute("app:open-settings");
   await new Promise(r => setTimeout(r, 300));
+  document.querySelector('[data-testid="settings-nav-templates"]')?.click();
+  await new Promise(r => setTimeout(r, 120));
   setVal(document.querySelector('[data-testid="settings-template-folder"]'), "templates");
   setVal(document.querySelector('[data-testid="settings-template-date-format"]'), "[D:]YYYY/MM/DD");
   a.workspace.closeModal();
