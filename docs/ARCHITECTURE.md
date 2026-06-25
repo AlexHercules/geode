@@ -71,7 +71,13 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 237 additions — 二次拍板「表面复刻序」第 1 项：换库常驻入口（状态栏 vault 名可点 → app:switch-vault 切换器）·零新依赖【契约冻结 v0.233】
+## Round 238 additions — 表面复刻序 高频命令：`editor:focus`「将焦点切换至编辑区」（Obsidian native·Focus on the editor）·零新依赖【契约冻结 v0.234】
+
+> **状态：As-built（已交付·v0.234）。** R238 续表面复刻序，取较轻**非删除**项（回收站+删除确认留 data-safety 专轮·避免连碰底线①）。**Step 0 verify-first（R222/R223 纪律）**：① grep 坐实候选「随机笔记」`random-note:open` 早已建（`src/plugins/random-note.ts`）、「复制路径」`file-explorer:copy-path` 早 R179/R183 建 → **两个 HANDOFF 命名候选都已 done**（即取序项常已 done 再验）；② 改取 **G3 矩阵 line 139 `editor:focus`「将焦点切换至编辑区」= missing**（高频键盘命令·搜索/侧栏后跳回编辑器·Obsidian 真命令·无默认键）。
+> **设计（1 命令·机械/轻逻辑·无数据安全面）**：
+> - **`App.tsx`**（editor 命令组·镜像 `editor:fold` 等 5 个 getActiveView 命令）：`commands.register({ id: "editor:focus", name: () => t("cmd.focusEditor"), callback: () => { const active = app.documents.getActiveView(); if (active) active.view.focus(); } })`。`EditorView.focus()` = CM6 把键盘焦点移到 active 编辑器 contentDOM；无 active 编辑器 view（非 markdown tab）→ null-guard no-op。**纯 DOM 焦点·零 .md 写·零 vault IO·不碰 editor 编辑/decoration/save 管线**。
+> - **`core/i18n/dict.app.ts`**：`cmd.focusEditor` × 中英（EN「Focus on the editor」/ ZH「将焦点切换至编辑区」）。
+> **分档=逻辑档（新命令注册 + callback null-guard `if`·虽 thin·但默认逻辑档·非数据安全[view.focus 是 DOM 焦点·非 editor 管线/vault IO]）→ 简化门（单薄包装·跳过条件命中：单命令镜像既有 5 个 fold 命令·无 ≥8 行重复）→ 多维评审（thin·聚焦命令注册正确性）**。**桌面 probe N/A**（纯 DOM 焦点·跨端同码·浏览器全覆盖）。**测试**：`.calibration/r238-e2e.mjs`（命令注册 + 名「Focus on the editor」+ 无默认键·执行 → active 编辑器 contentDOM 获焦点[`document.activeElement` 在 `.cm-content` 内]·无 active 编辑器时不抛）+ 回归命令注册套件不退。
 
 > **状态：As-built（已交付·v0.233）。** 旧 bounded backlog 笔记重组 R234-236 收官后，正式转二次拍板「表面复刻序」。第 1 项 = **换库常驻入口**（Obsidian vault 名是常驻可点入口·打开换库切换器）。**Step 0**：explorer 坐实 `App.tsx:1362` 状态栏 vault 名是静态 `<span class="status-vault">`（**当前不可点**）；`app:switch-vault` 命令（callback `openModal("vaultswitcher")`）+ VaultSwitcherModal + 最近仓库 store **早 R203 已建**——本轮**只补 UI 入口**（不碰切库逻辑）。
 > **设计（机械档·纯入口 affordance·无数据安全面）**：
