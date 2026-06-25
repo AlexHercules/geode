@@ -7,6 +7,7 @@ import { confirmDelete } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
 import { explorerSort, setExplorerSort, detectAllExtensions } from "@core/appearance";
+import { setAttachmentFolder } from "@core/attachments";
 import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
 import { useI18n } from "@core/i18n";
@@ -1107,6 +1108,17 @@ export function Explorer() {
                     >
                       <Icon name="folder-plus" size={14} />
                       {t("explorer.newFolderHere")}
+                    </button>
+                    <button
+                      data-testid="explorerctx-set-attachment-folder"
+                      onClick={() => {
+                        setMenu(null);
+                        setAttachmentFolder(node.path);
+                        showLinkUpdateNotice(t("explorer.setAttachmentFolderDone", { folder: node.path }));
+                      }}
+                    >
+                      <Icon name="folder" size={14} />
+                      {t("explorer.setAttachmentFolder")}
                     </button>
                     <div className="explorer-menu-sep" />
                   </>
