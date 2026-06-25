@@ -66,6 +66,8 @@ import {
   type ExtractReplaceMode,
   mergeConfirm,
   setMergeConfirm,
+  deleteConfirm,
+  setDeleteConfirm,
   extractTemplatePath,
   setExtractTemplatePath,
 } from "@core/appearance";
@@ -136,7 +138,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.237.0";
+export const APP_VERSION = "0.238.0";
 
 type SectionId =
   | "about"
@@ -1037,6 +1039,7 @@ function FilesAndLinksSection() {
   const t = useI18n();
   const detectExt = useStore(detectAllExtensions);
   const autoUpdate = useStore(autoUpdateLinks);
+  const askDelete = useStore(deleteConfirm);
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
   /* R89: default location for new notes */
@@ -1210,6 +1213,25 @@ function FilesAndLinksSection() {
           data-testid="settings-excluded-files"
           onChange={(e) => setExcludedFiles(e.target.value)}
         />
+      </div>
+
+      {/* R242: confirm before deleting a file (Obsidian "Confirm file deletion", Trash group).
+          Default ON for safety; OFF = Obsidian-faithful no-confirm (delete still → recoverable .trash). */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.deleteConfirm")}</div>
+          <div className="setting-desc">{t("settings.deleteConfirmDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${askDelete ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={askDelete}
+          aria-label={t("settings.deleteConfirm")}
+          data-testid="settings-delete-confirm-toggle"
+          onClick={() => setDeleteConfirm(!askDelete)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
 
       {/* R228: rebuild the in-memory metadata cache (Obsidian "Rebuild vault cache", Advanced) */}

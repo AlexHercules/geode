@@ -260,6 +260,19 @@ export function setMergeConfirm(on: boolean): void {
   persistBool(MERGE_CONFIRM_KEY, on);
 }
 
+/** R242: Obsidian native Files&Links "Confirm file deletion" (删除文件时确认). Gates the delete
+ *  confirmation dialog at every delete site. Default ON = Geode's prior always-confirm behaviour
+ *  (zero regression + accidental-delete protection). NB: this DEVIATES from Obsidian's default OFF
+ *  — chosen for safety per an explicit user concern; deletes still go to the recoverable .trash, so
+ *  turning it OFF (Obsidian-faithful) is safe (recoverable). */
+const DELETE_CONFIRM_KEY = "geode.deleteConfirm";
+export const deleteConfirm = new Store<boolean>(readBool(DELETE_CONFIRM_KEY, true));
+
+export function setDeleteConfirm(on: boolean): void {
+  deleteConfirm.set(on);
+  persistBool(DELETE_CONFIRM_KEY, on);
+}
+
 /** R236: Obsidian native Note composer "Template file location" (模板文件位置). A vault-relative
  *  path to a template applied when extracting a selection into a new note ({{content}}/{{fromTitle}}/
  *  {{newTitle}}/{{date}} vars). Default "" = no template = verbatim content (zero regression).

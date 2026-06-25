@@ -10,6 +10,7 @@ import {
   defaultNewTabMode, setDefaultNewTabMode,
   showBacklinksInDocument, setShowBacklinksInDocument,
   quickFontZoom,
+  deleteConfirm,
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
@@ -616,7 +617,8 @@ export function App() {
           void (async () => {
             const path = workspace.getActiveFile();
             if (!path) return;
-            if (!(await confirmAction(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
+            // R242: confirm only when "Confirm file deletion" is on (delete still → recoverable .trash).
+            if (deleteConfirm.get() && !(await confirmAction(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
               return;
             try {
               await workspace.flushAll();

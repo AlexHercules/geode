@@ -6,7 +6,7 @@ import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { confirmAction } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
-import { explorerSort, setExplorerSort, detectAllExtensions } from "@core/appearance";
+import { explorerSort, setExplorerSort, detectAllExtensions, deleteConfirm } from "@core/appearance";
 import { setAttachmentFolder } from "@core/attachments";
 import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
@@ -444,7 +444,8 @@ export function Explorer() {
       node.kind === "folder"
         ? t("explorer.deleteConfirmFolder", { name: node.name })
         : t("explorer.deleteConfirmFile", { name: node.name });
-    if (!(await confirmAction(message, t("explorer.delete")))) return;
+    // R242: confirm only when "Confirm file deletion" is on (delete still → recoverable .trash).
+    if (deleteConfirm.get() && !(await confirmAction(message, t("explorer.delete")))) return;
     try {
       // R42: flush pending editor saves BEFORE trashing so the recoverable copy
       // in .trash holds the user's latest edits (review: trash-before-flush =
@@ -638,7 +639,8 @@ export function Explorer() {
   const bulkDelete = async (paths: string[]) => {
     const roots = toRoots(paths);
     if (roots.length === 0) return;
-    if (!(await confirmAction(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
+    // R242: confirm only when "Confirm file deletion" is on (delete still → recoverable .trash).
+    if (deleteConfirm.get() && !(await confirmAction(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
     await app.workspace.flushAll(); // R42: once before the loop (flushAll is vault-global)
     for (const path of roots) {
       try {
