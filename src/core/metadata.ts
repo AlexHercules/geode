@@ -180,6 +180,44 @@ export function getCssClasses(content: string): string[] {
   return out;
 }
 
+/**
+ * R65/R223: extract `[^id]: content` footnote definitions from already-`masked` text.
+ * Matched on `masked` (so defs inside fenced/inline code are excluded and offsets line up
+ * with `content`), but the content text is sliced from the ORIGINAL `content` so inline code
+ * in the body survives un-masked. The content offset is taken from the `]:` boundary (the id
+ * charset excludes `]`, so the FIRST `]:` is the definition's) — NOT from a masked content-
+ * group length, which would drop a leading inline-code span (masking blanks it; a greedy
+ * `[ \t]*` would then eat the blanks). Duplicate ids keep BOTH (document order). Multi-line
+ * continuation lines are not merged (single-line preview); col-0 anchored (see RE). Pure.
+ */
+export function extractFootnoteDefs(content: string, masked: string): FootnoteRef[] {
+  const footnotes: FootnoteRef[] = [];
+  for (const m of masked.matchAll(FOOTNOTE_DEF_RE)) {
+    const afterColon = m.index! + m[0].indexOf("]:") + 2;
+    footnotes.push({
+      id: m[1],
+      content: content.slice(afterColon, m.index! + m[0].length).trim(),
+      from: m.index!,
+      to: m.index! + m[0].length,
+    });
+  }
+  return footnotes;
+}
+
+/**
+ * R223: parse footnote definitions straight from raw note text (frontmatter blanked +
+ * code masked first, exactly as parseNote does). Lets the Footnotes pane parse LIVE
+ * document text (so edit positions never go stale vs the lagging metadata index) while
+ * sharing one parser with the indexer — no drift. Pure.
+ */
+export function parseFootnoteDefinitions(content: string): FootnoteRef[] {
+  const frontmatter = parseFrontmatter(content) ?? undefined;
+  const withoutFm = frontmatter
+    ? " ".repeat(frontmatter.to) + content.slice(frontmatter.to)
+    : content;
+  return extractFootnoteDefs(content, maskCodeRegions(withoutFm));
+}
+
 /** Parse one markdown document into metadata. Exported for tests/reuse. */
 export function parseNote(path: string, content: string): NoteMetadata {
   const frontmatter = parseFrontmatter(content) ?? undefined;
@@ -232,25 +270,10 @@ export function parseNote(path: string, content: string): NoteMetadata {
     headings.push({ level: m[1].length, text: m[2].trim(), from: m.index! });
   }
 
-  // R65: footnote definitions `[^id]: content`. Matched on `masked` (so defs
-  // inside fenced/inline code are excluded and offsets line up with `content`),
-  // but the content text is sliced from the ORIGINAL `content` so inline code in
-  // the body survives un-masked. The content offset is taken from the `]:`
-  // boundary (the id charset excludes `]`, so the FIRST `]:` is the definition's)
-  // — NOT from a masked content-group length, which would drop a leading inline-
-  // code span (masking blanks it; a greedy `[ \t]*` would then eat the blanks).
-  // Duplicate ids keep BOTH (document order). Multi-line continuation lines are
-  // not merged (panel shows a single-line preview); col-0 anchored (see RE).
-  const footnotes: FootnoteRef[] = [];
-  for (const m of masked.matchAll(FOOTNOTE_DEF_RE)) {
-    const afterColon = m.index! + m[0].indexOf("]:") + 2;
-    footnotes.push({
-      id: m[1],
-      content: content.slice(afterColon, m.index! + m[0].length).trim(),
-      from: m.index!,
-      to: m.index! + m[0].length,
-    });
-  }
+  // R65: footnote definitions `[^id]: content` (R223: extracted to extractFootnoteDefs,
+  // reusing this already-computed `masked` so the indexer and the Footnotes pane share
+  // exactly one parser — no double-mask, no drift).
+  const footnotes = extractFootnoteDefs(content, masked);
   // R127: inline `[^id]` references in the body (footnoteRefs). Scanned on `masked` (so refs
   // inside fenced/inline code + frontmatter are excluded, like the definitions above). A
   // definition's own marker is a col-0 `[^id]:` (FOOTNOTE_DEF_RE's anchor) — skip exactly those,

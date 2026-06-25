@@ -39,11 +39,20 @@
 .fn-item:hover {
   background: var(--bg-hover);
 }
+/* R223: marker is now a jump button; content is a click-to-edit button or an input */
 .fn-marker {
   flex-shrink: 0;
   color: var(--accent);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+}
+.fn-marker:hover {
+  text-decoration: underline;
 }
 .fn-content {
   flex: 1;
@@ -52,4 +61,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  cursor: text;
+  font: inherit;
+}
+.fn-edit {
+  overflow: visible;
+  white-space: normal;
+  color: var(--text-normal);
+  background: var(--bg-input);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  cursor: text;
+  outline: none;
 }

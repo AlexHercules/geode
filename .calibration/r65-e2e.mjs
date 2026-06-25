@@ -64,6 +64,8 @@ await openFile("Notes.md");
 await page.click('[data-testid="right-tab-footnotes"]');
 await page.waitForSelector('[data-testid="footnotes-panel"]', { timeout: 4000 }).catch(() => {});
 ok("footnotes tab opens the panel", (await page.$('[data-testid="footnotes-panel"]')) !== null);
+// R223: the panel now acquires a DocumentHandle async before parsing — wait for rows
+await page.waitForSelector('[data-testid="fn-item"]', { timeout: 4000 }).catch(() => {});
 const rows = await fnItems();
 ok("exactly 3 footnotes indexed (fenced def excluded)", rows.length === 3, JSON.stringify(rows));
 ok("footnote ^1 with its content", rows.some((r) => r.id === "^1" && r.content === "First footnote body."), JSON.stringify(rows));
@@ -75,13 +77,14 @@ ok("fenced `[^fenced]` is NOT listed", !rows.some((r) => r.id.includes("fenced")
 const count = await page.$eval('[data-testid="fn-count"]', (e) => e.textContent).catch(() => "?");
 ok("count badge = 3", count === "3", count);
 
-console.log("— clicking a footnote jumps (keeps the file active) —");
+console.log("— clicking a footnote's ^marker jumps (keeps the file active) —");
+// R223: jump moved from the row to the `^id` marker button (the row's content is now click-to-edit)
 await page.evaluate(() => {
-  const it = document.querySelector('[data-testid="fn-item"]');
-  it?.click();
+  const m = document.querySelector('[data-testid="fn-marker"]');
+  m?.click();
 });
 await page.waitForTimeout(180);
-ok("clicking a footnote keeps Notes.md active (jump dispatched)", (await page.evaluate(() => window.__app.workspace.getActiveFile())) === "Notes.md");
+ok("clicking a footnote marker keeps Notes.md active (jump dispatched)", (await page.evaluate(() => window.__app.workspace.getActiveFile())) === "Notes.md");
 
 console.log("— command opens the pane; switch away then command back —");
 await page.evaluate(() => window.__app.workspace.setRightPanel("backlinks"));

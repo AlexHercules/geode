@@ -135,6 +135,10 @@ export const en = {
   "footnotes.title": "Footnotes",
   "footnotes.empty": "Open a note to see its footnotes",
   "footnotes.noFootnotes": "No footnotes in this note",
+  "footnotes.loading": "Loading…",
+  "footnotes.jumpAria": "Go to footnote [^{id}] in the note",
+  "footnotes.editAria": "Edit footnote [^{id}] text",
+  "footnotes.editPlaceholder": "(empty)",
 
   // ---- outline ----
   "outline.title": "Outline",
@@ -321,6 +325,10 @@ export const zh: Record<keyof typeof en, string> = {
   "footnotes.title": "脚注",
   "footnotes.empty": "打开笔记以查看其脚注。",
   "footnotes.noFootnotes": "此笔记中没有脚注。",
+  "footnotes.loading": "加载中…",
+  "footnotes.jumpAria": "跳转到笔记中的脚注 [^{id}]",
+  "footnotes.editAria": "编辑脚注 [^{id}] 文本",
+  "footnotes.editPlaceholder": "（空）",
 
   // ---- outline ----
   "outline.title": "大纲",
