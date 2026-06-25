@@ -164,6 +164,10 @@ export const en = {
   "tags.sortFreqAsc": "Frequency (low to high)",
   "tags.sortNameAsc": "Tag name (A to Z)",
   "tags.sortNameDesc": "Tag name (Z to A)",
+  "tags.displayTree": "Show nested tags as a tree",
+  "tags.displayFlat": "Show nested tags as a flat list",
+  "tags.expandAll": "Expand all",
+  "tags.collapseAll": "Collapse all",
 
   // ---- calendar ----
   "calendar.today": "Today",
@@ -346,6 +350,10 @@ export const zh: Record<keyof typeof en, string> = {
   "tags.sortFreqAsc": "频率（低到高）",
   "tags.sortNameAsc": "标签名 (A→Z)",
   "tags.sortNameDesc": "标签名 (Z→A)",
+  "tags.displayTree": "嵌套标签显示为树",
+  "tags.displayFlat": "嵌套标签显示为列表",
+  "tags.expandAll": "全部展开",
+  "tags.collapseAll": "全部折叠",
 
   // ---- calendar ----
   "calendar.today": "今天",

@@ -24,6 +24,18 @@ interface LineHit {
  *  → name), preserved for zero regression. */
 type SortKey = "relevance" | "name-asc" | "name-desc" | "count-desc" | "count-asc";
 
+/** R222: toggle a tag within a freeform search query (Obsidian's Cmd/Ctrl-click on a
+ *  tag-pane row — accumulate `tag:` filters instead of replacing). Splits on whitespace
+ *  and removes the tag if already present as `tag:TAG` or `#TAG`, else appends `tag:TAG`
+ *  (the operator form ANDs multiple tags). Pure — exported for the e2e/probe. */
+export function toggleTagInQuery(query: string, tag: string): string {
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const idx = tokens.findIndex((tk) => tk === `tag:${tag}` || tk === `#${tag}`);
+  if (idx >= 0) tokens.splice(idx, 1);
+  else tokens.push(`tag:${tag}`);
+  return tokens.join(" ");
+}
+
 /** Sort matched files by the chosen order. Pure — exported for the probe. */
 export function sortResults<T extends { basename: string; nameMatch: boolean; total: number }>(
   results: readonly T[],
@@ -214,6 +226,18 @@ export function SearchPanel() {
       app.workspace.searchRequest.set(null);
     }
   }, [searchReq, app.workspace]);
+
+  // R222: Cmd/Ctrl-click on a tag-pane row toggles the tag within the live query.
+  // Toggle is self-inverse, so a StrictMode double-fire would on→off-cancel — read
+  // the value fresh via .get() and clear it FIRST so the second invoke early-returns
+  // (memory: geode-oneshot-store-strictmode). setQuery's functional form reads live query.
+  const tagToggle = useStore(app.workspace.searchTagToggle);
+  useEffect(() => {
+    const tag = app.workspace.searchTagToggle.get();
+    if (tag === null) return;
+    app.workspace.searchTagToggle.set(null);
+    setQuery((q) => toggleTagInQuery(q, tag));
+  }, [tagToggle, app.workspace]);
 
   const trimmed = debounced.trim();
   // tag BROWSER only for a whole-query bare `#…` token; anything else (spaces,

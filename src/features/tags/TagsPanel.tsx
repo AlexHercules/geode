@@ -4,6 +4,7 @@
 // Contract: docs/ARCHITECTURE.md "Round 41/69/150 additions".
 // Layering: features/ may import only @core/*, @app/AppContext, @app/icons.
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useI18n } from "@core/i18n";
@@ -84,6 +85,32 @@ export function buildTagTree(
   return [...roots.values()].map(finalize).sort(cmp);
 }
 
+/** R222: one row per REAL tag, shown by full path (Obsidian's "flat list" display).
+ *  No phantom parents. The Map dedupes normalized paths so a malformed key never emits
+ *  a duplicate React key / testid (mirrors buildTagTree's `split("/").filter` guard). Pure. */
+export interface FlatTag {
+  fullPath: string;
+  count: number;
+}
+export function buildFlatTags(
+  map: Map<string, ReadonlySet<string>>,
+  sortKey: TagSortKey = "freq-desc",
+): FlatTag[] {
+  const seen = new Map<string, number>();
+  for (const [tag, notes] of map) {
+    const norm = tag.split("/").filter((s) => s !== "").join("/");
+    if (norm === "") continue;
+    seen.set(norm, Math.max(seen.get(norm) ?? 0, notes.size));
+  }
+  const cmp: Record<TagSortKey, (a: FlatTag, b: FlatTag) => number> = {
+    "freq-desc": (a, b) => b.count - a.count || a.fullPath.localeCompare(b.fullPath),
+    "freq-asc": (a, b) => a.count - b.count || a.fullPath.localeCompare(b.fullPath),
+    "name-asc": (a, b) => a.fullPath.localeCompare(b.fullPath),
+    "name-desc": (a, b) => b.fullPath.localeCompare(a.fullPath),
+  };
+  return [...seen].map(([fullPath, count]) => ({ fullPath, count })).sort(cmp[sortKey]);
+}
+
 const SORT_KEY_PREF = "geode.tagsSort";
 const isTagSortKey = (v: string): v is TagSortKey =>
   v === "freq-desc" || v === "freq-asc" || v === "name-asc" || v === "name-desc";
@@ -98,16 +125,47 @@ function readTagSort(): TagSortKey {
   }
 }
 
+/** R222: nested-tag display mode (Obsidian: "as a tree or as a flat list"), persisted. */
+export type TagDisplayMode = "tree" | "flat";
+const DISPLAY_PREF = "geode.tagsDisplay";
+const isDisplayMode = (v: string): v is TagDisplayMode => v === "tree" || v === "flat";
+function readDisplayMode(): TagDisplayMode {
+  try {
+    const v = localStorage.getItem(DISPLAY_PREF);
+    return v !== null && isDisplayMode(v) ? v : "tree";
+  } catch {
+    return "tree";
+  }
+}
+
 export function TagsPanel() {
   const app = useApp();
   const t = useI18n();
   const rev = useStore(app.metadata.revision); // re-render on index change
   const [sortKey, setSortKey] = useState<TagSortKey>(readTagSort);
+  const [displayMode, setDisplayMode] = useState<TagDisplayMode>(readDisplayMode);
   const tree = useMemo(
     () => buildTagTree(app.metadata.getTagMap(), sortKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [app.metadata, rev, sortKey],
   );
+  const flat = useMemo(
+    () => buildFlatTags(app.metadata.getTagMap(), sortKey),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [app.metadata, rev, sortKey],
+  );
+  // R222: fullPaths of nodes with children — the set to collapse for "Collapse all".
+  const collapsiblePaths = useMemo(() => {
+    const acc: string[] = [];
+    const walk = (n: TagTreeNode): void => {
+      if (n.children.length > 0) {
+        acc.push(n.fullPath);
+        n.children.forEach(walk);
+      }
+    };
+    tree.forEach(walk);
+    return acc;
+  }, [tree]);
 
   const changeSort = (key: TagSortKey): void => {
     setSortKey(key);
@@ -116,6 +174,20 @@ export function TagsPanel() {
     } catch {
       /* storage unavailable — session-only */
     }
+  };
+  const changeDisplay = (mode: TagDisplayMode): void => {
+    setDisplayMode(mode);
+    try {
+      localStorage.setItem(DISPLAY_PREF, mode);
+    } catch {
+      /* storage unavailable — session-only */
+    }
+  };
+  // R222: plain click runs a tag search (replace); Cmd/Ctrl-click toggles the tag
+  // within the current search term (accumulate filters) — Obsidian's modifier behavior.
+  const openTag = (fullPath: string, e: ReactMouseEvent): void => {
+    if (e.metaKey || e.ctrlKey) app.workspace.toggleSearchTag(fullPath);
+    else app.workspace.requestSearch(`#${fullPath}`);
   };
 
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -181,6 +253,25 @@ export function TagsPanel() {
     });
   };
 
+  /* the clickable tag row — shared by tree nodes (segment name) and flat rows (full path).
+   * click = search/toggle (openTag); right-click = rename menu. R222 factor. */
+  const renderTagButton = (fullPath: string, displayName: string, count: number) => (
+    <button
+      className="tag-row"
+      data-testid={`tag-row-${fullPath}`}
+      title={t("tags.count", { count })}
+      onClick={(e) => openTag(fullPath, e)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        setMenu({ x: e.clientX, y: e.clientY, tag: fullPath });
+      }}
+    >
+      <span className="tag-row-icon"><Icon name="hash" size={13} /></span>
+      <span className="tag-row-name">{displayName}</span>
+      <span className="tag-row-count">{count}</span>
+    </button>
+  );
+
   /* depth-first render of one node + (if expanded) its children */
   const renderNode = (node: TagTreeNode, depth: number) => {
     const hasChildren = node.children.length > 0;
@@ -206,20 +297,7 @@ export function TagsPanel() {
           ) : (
             <span className="tag-chevron-spacer" />
           )}
-          <button
-            className="tag-row"
-            data-testid={`tag-row-${node.fullPath}`}
-            title={t("tags.count", { count: node.count })}
-            onClick={() => app.workspace.requestSearch(`#${node.fullPath}`)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenu({ x: e.clientX, y: e.clientY, tag: node.fullPath });
-            }}
-          >
-            <span className="tag-row-icon"><Icon name="hash" size={13} /></span>
-            <span className="tag-row-name">{node.segment}</span>
-            <span className="tag-row-count">{node.count}</span>
-          </button>
+          {renderTagButton(node.fullPath, node.segment, node.count)}
         </div>
         {hasChildren && !isCollapsed && (
           <div role="group">{node.children.map((c) => renderNode(c, depth + 1))}</div>
@@ -232,18 +310,51 @@ export function TagsPanel() {
     <div className="tags-panel" data-testid="tags-panel">
       <div className="tags-panel-header">
         <span className="tags-panel-title">{t("tags.title")}</span>
-        <select
-          className="tags-sort"
-          data-testid="tags-sort"
-          value={sortKey}
-          aria-label={t("tags.sortBy")}
-          onChange={(e) => changeSort(e.target.value as TagSortKey)}
-        >
-          <option value="freq-desc">{t("tags.sortFreqDesc")}</option>
-          <option value="freq-asc">{t("tags.sortFreqAsc")}</option>
-          <option value="name-asc">{t("tags.sortNameAsc")}</option>
-          <option value="name-desc">{t("tags.sortNameDesc")}</option>
-        </select>
+        <div className="tags-tools">
+          {displayMode === "tree" && (
+            <>
+              <button
+                className="tags-tool"
+                data-testid="tags-expand-all"
+                aria-label={t("tags.expandAll")}
+                title={t("tags.expandAll")}
+                onClick={() => setCollapsed(new Set())}
+              >
+                <Icon name="chevrons-up-down" size={14} />
+              </button>
+              <button
+                className="tags-tool"
+                data-testid="tags-collapse-all"
+                aria-label={t("tags.collapseAll")}
+                title={t("tags.collapseAll")}
+                onClick={() => setCollapsed(new Set(collapsiblePaths))}
+              >
+                <Icon name="chevrons-down-up" size={14} />
+              </button>
+            </>
+          )}
+          <button
+            className="tags-tool"
+            data-testid="tags-display-toggle"
+            aria-label={t(displayMode === "tree" ? "tags.displayFlat" : "tags.displayTree")}
+            title={t(displayMode === "tree" ? "tags.displayFlat" : "tags.displayTree")}
+            onClick={() => changeDisplay(displayMode === "tree" ? "flat" : "tree")}
+          >
+            <Icon name={displayMode === "tree" ? "list" : "list-tree"} size={14} />
+          </button>
+          <select
+            className="tags-sort"
+            data-testid="tags-sort"
+            value={sortKey}
+            aria-label={t("tags.sortBy")}
+            onChange={(e) => changeSort(e.target.value as TagSortKey)}
+          >
+            <option value="freq-desc">{t("tags.sortFreqDesc")}</option>
+            <option value="freq-asc">{t("tags.sortFreqAsc")}</option>
+            <option value="name-asc">{t("tags.sortNameAsc")}</option>
+            <option value="name-desc">{t("tags.sortNameDesc")}</option>
+          </select>
+        </div>
       </div>
       {result !== null && (
         <div className="tags-result" data-testid="tags-result" role="status">
@@ -252,6 +363,15 @@ export function TagsPanel() {
       )}
       {tree.length === 0 ? (
         <div className="tags-empty">{t("tags.empty")}</div>
+      ) : displayMode === "flat" ? (
+        <div className="tags-list" data-testid="tags-list-flat" role="list">
+          {flat.map((f) => (
+            <div key={f.fullPath} className="tag-row-wrap" role="listitem">
+              <span className="tag-chevron-spacer" />
+              {renderTagButton(f.fullPath, f.fullPath, f.count)}
+            </div>
+          ))}
+        </div>
       ) : (
         <div className="tags-list" role="tree">
           {tree.map((node) => renderNode(node, 0))}

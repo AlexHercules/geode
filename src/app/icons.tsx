@@ -111,6 +111,10 @@ const PATHS: Record<string, string[]> = {
     "M15 3v18",
   ],
   list: ["M8 6h13", "M8 12h13", "M8 18h13", "M3 6h.01", "M3 12h.01", "M3 18h.01"],
+  // R222: tags-pane controls — tree display, expand-all, collapse-all (lucide)
+  "list-tree": ["M21 12h-8", "M21 6H8", "M21 18h-8", "M3 6v4c0 1.1.9 2 2 2h3", "M3 10v6c0 1.1.9 2 2 2h3"],
+  "chevrons-up-down": ["m7 15 5 5 5-5", "m7 9 5-5 5 5"],
+  "chevrons-down-up": ["m7 20 5-5 5 5", "m7 4 5 5 5-5"],
   filter: ["M22 3H2l8 9.46V19l4 2v-8.54L22 3z"],
   copy: ["M9 9h10v10H9z", "M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"],
   check: ["M20 6L9 17l-5-5"],

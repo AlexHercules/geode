@@ -344,6 +344,11 @@ export class Workspace {
   /** R41: one-shot search request — the Tags pane (or any caller) seeds a query
    *  and opens the search panel; SearchPanel consumes it then clears. Session-only. */
   readonly searchRequest = new Store<string | null>(null);
+  /** R222: one-shot "toggle this tag within the current search term" request —
+   *  the Tags pane sets it on a Cmd/Ctrl-click; SearchPanel toggles the `tag:…`
+   *  token against its live query then clears. Mirrors Obsidian's modifier-click
+   *  (accumulate filters) vs plain click (replace). Session-only. */
+  readonly searchTagToggle = new Store<string | null>(null);
   private flushers = new Set<() => void | Promise<void>>();
   /** Most-recent-LAST stack of user-closed tabs for Mod+Shift+T. Session-only —
    *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds
@@ -471,6 +476,14 @@ export class Workspace {
   /** Open the left search panel seeded with `query` (e.g. `#tag` from the Tags pane). */
   requestSearch(query: string) {
     this.searchRequest.set(query);
+    this.setLeftPanel("search");
+  }
+
+  /** R222: open the search panel and toggle `tag` within its current query (Obsidian's
+   *  Cmd/Ctrl-click on a tag-pane row). SearchPanel owns the query and resolves the
+   *  toggle against its live value (one-shot store, consumed then cleared). */
+  toggleSearchTag(tag: string) {
+    this.searchTagToggle.set(tag);
     this.setLeftPanel("search");
   }
 
