@@ -15,6 +15,8 @@ import {
   setHideReferenceMarks,
   autoPairBrackets,
   setAutoPairBrackets,
+  autoPairMarkdown,
+  setAutoPairMarkdown,
   showBacklinksInDocument,
   setShowBacklinksInDocument,
   detectAllExtensions,
@@ -111,7 +113,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.220.0";
+export const APP_VERSION = "0.221.0";
 
 type SectionId =
   | "about"
@@ -631,6 +633,7 @@ function EditorSection() {
   const lineNo = useStore(showLineNumbers);
   const hideRefMarks = useStore(hideReferenceMarks);
   const autoPair = useStore(autoPairBrackets);
+  const autoPairMd = useStore(autoPairMarkdown);
   const backlinksInDoc = useStore(showBacklinksInDocument);
   const foldH = useStore(foldHeading);
   const newTabMode = useStore(defaultNewTabMode);
@@ -744,6 +747,24 @@ function EditorSection() {
           aria-label={t("settings.autoPairBrackets")}
           data-testid="settings-autopair-toggle"
           onClick={() => setAutoPairBrackets(!autoPair)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R225: auto-pair Markdown syntax while typing (Obsidian "Auto pair Markdown syntax", default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.autoPairMarkdown")}</div>
+          <div className="setting-desc">{t("settings.autoPairMarkdownDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${autoPairMd ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={autoPairMd}
+          aria-label={t("settings.autoPairMarkdown")}
+          data-testid="settings-autopair-markdown-toggle"
+          onClick={() => setAutoPairMarkdown(!autoPairMd)}
         >
           <span className="settings-toggle-thumb" />
         </button>

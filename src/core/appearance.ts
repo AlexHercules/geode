@@ -112,6 +112,18 @@ export function setAutoPairBrackets(on: boolean): void {
   persistBool(AUTO_PAIR_KEY, on);
 }
 
+/** R225 (G8): Obsidian's "Auto pair Markdown syntax" — auto-wrap a selection with emphasis
+ *  marks (`* _ ~ = $ \``) on a single keypress. Default ON (Obsidian default + zero-regression —
+ *  Geode's markdownWrapHandler was always on since R35). Applied per CM view via a Compartment
+ *  reconfigured reactively in EditorPane (mirrors autoPairBrackets). */
+const AUTO_PAIR_MD_KEY = "geode.autoPairMarkdown";
+export const autoPairMarkdown = new Store<boolean>(readBool(AUTO_PAIR_MD_KEY, true));
+
+export function setAutoPairMarkdown(on: boolean): void {
+  autoPairMarkdown.set(on);
+  persistBool(AUTO_PAIR_MD_KEY, on);
+}
+
 /** R154 (㊷): Obsidian's "Backlink in document" — show the note's linked mentions at
  *  the bottom of the reading view. Default OFF (Obsidian opt-in). Read-only: the section
  *  is appended below the rendered content in EditorPane, so it never touches the markdown

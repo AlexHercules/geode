@@ -48,7 +48,7 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { autoPairBrackets, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, autoPairMarkdown, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, tabIndentSize } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
@@ -561,6 +561,15 @@ export function closeBracketsExtension(on: boolean): Extension {
 }
 
 /**
+ * R225: Obsidian's "Auto pair Markdown syntax" toggle. `on` → the R35 markdownWrapHandler
+ * (selection-wrap with `* _ ~ = $ \``); `off` → nothing. Owned by a Compartment so EditorPane
+ * can flip it without rebuilding the view (mirrors closeBracketsExtension / autoPairBrackets).
+ */
+export function markdownWrapExtension(on: boolean): Extension {
+  return on ? markdownWrapHandler : [];
+}
+
+/**
  * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
  * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
  * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
@@ -592,6 +601,8 @@ export function buildEditorExtensions(opts: {
   indentCompartment: Compartment;
   /** R153: owned by EditorPane — autoPairBrackets toggle reconfigures it in place */
   closeBracketsCompartment: Compartment;
+  /** R225: owned by EditorPane — autoPairMarkdown toggle reconfigures it in place */
+  markdownWrapCompartment: Compartment;
   /** R156: owned by EditorPane — the foldHeading toggle reconfigures it in place */
   foldServiceCompartment: Compartment;
   /** R115: owned by EditorPane — plugin-contributed CM6 extensions
@@ -600,7 +611,7 @@ export function buildEditorExtensions(opts: {
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, foldServiceCompartment, compatExtensionCompartment } =
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, markdownWrapCompartment, foldServiceCompartment, compatExtensionCompartment } =
     opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
@@ -669,12 +680,12 @@ export function buildEditorExtensions(opts: {
     keymap.of(searchKeymap),
     EditorState.phrases.of(editorSearchPhrases()),
     // R35 — auto-pair brackets/quotes (`( [ { " '`): auto-close, selection-wrap, type-over.
-    // R153: closeBrackets() itself moved UP into closeBracketsCompartment (autoPairBrackets toggle);
-    // markdownWrapHandler (Prec.high) still covers the disjoint markdown emphasis chars
-    // `* _ ` ~ = $` for selection-wrap only (NOT gated by the toggle — Obsidian's "Auto pair
-    // Markdown syntax" is a separate setting, deferred). `[` pairing coordinates with the wikilink
-    // `]]` completion via that source's `sliceDoc(to,to+2)==="]]"` guard (no double `]]`).
-    markdownWrapHandler,
+    // R153: closeBrackets() itself moved UP into closeBracketsCompartment (autoPairBrackets toggle).
+    // R225: markdownWrapHandler (Prec.high, disjoint emphasis chars `* _ ` ~ = $` for selection-wrap)
+    // now lives in markdownWrapCompartment, gated by Obsidian's "Auto pair Markdown syntax" toggle.
+    // `[` pairing coordinates with the wikilink `]]` completion via that source's
+    // `sliceDoc(to,to+2)==="]]"` guard (no double `]]`).
+    markdownWrapCompartment.of(markdownWrapExtension(autoPairMarkdown.get())),
     autocompletion({
       override: [wikilinkCompletionSource(app, getPath), slashCommandSource(app), tagCompletionSource(app)],
       icons: false,
