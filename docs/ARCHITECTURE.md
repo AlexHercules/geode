@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 219 additions — G3 §8：backlink:toggle-backlinks-in-document（Obsidian「Backlinks: Toggle backlinks in document」·注册命令翻 R154 既有 showBacklinksInDocument 外观设置·机械档[非数据安全·复用 vetted setter]·零新依赖）+ 矩阵据实纠误（ui-only 真·全清）【As-built v0.215】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §8 末项 `ui-only`「在文档中显示反链（开关）」补全为命令。**web 实证**：Obsidian 命令「Backlinks: Toggle backlinks in document」翻「Backlink in document」设置（笔记底部显示链接提及）。Geode R154 已有该功能 + `showBacklinksInDocument` 外观 Store + 设置开关，仅缺命令。
+> **契约（1 命令 + 1 i18n·零新逻辑·复用 R154 vetted setter）**：
+> - **`app/App.tsx`**：注册 `backlink:toggle-backlinks-in-document`（无默认键）·callback `setShowBacklinksInDocument(!showBacklinksInDocument.get())`——镜像 R185/R195 toggle 兄弟（toggle-ribbon/toggle-spellcheck）·复用 `@core/appearance` 既有 Store+setter（R154）。
+> - **`core/i18n/dict.app.ts`**：`cmd.toggleBacklinksInDocument`（en「Backlinks: Toggle backlinks in document」/ zh「反向链接：在文档中显示反链（开关）」）。
+> - **分档：机械档**（无数据安全面·无新控制流·复用既有 store setter·无新依赖·非 Rust）→ 跳简化门 + scoped review（命令 id 唯一 / i18n 键真实存在 / setter·Store 引用正确 / 无默认键冲突）。
+> **矩阵据实纠误（命令已注册但矩阵 status 列未翻新·非本轮代码引入·借本轮一并修正）**：§8 line 225 backlinks-in-document `ui-only→done`；§8 line 212 `backlink:open-in-new-tab` 经 web 实证非真 Obsidian 命令（Obsidian 仅 backlink:open[Show] + backlink:open-backlinks[R211] + toggle-in-document[本轮]）→ phantom·标 oos/据实纠误；§1 line 34 copy-url、§6 lines 178/179/181/182 edit-file-title/copy-path/duplicate/move、§7 line 197 new-folder 经 grep 实证命令早在 R183/R184 注册 → `ui-only→done`（R184「ui-only 6 项全清」当时漏翻矩阵 status 列）。**结论：G3 矩阵 ui-only 真·全清（0 ui-only）。**
+> **验证**：r219-e2e（命令注册 + i18n 名 + 执行翻转 showBacklinksInDocument Store 双向）+ 回归既有套件。**桌面 probe N/A 浏览器可验证**（纯 appearance Store toggle·无 fs/host 面）。
+
 ## Round 218 additions — G3 §6：file-explorer:reveal-in-system + open-in-default-app（Obsidian「Show in system explorer」/「Open in default app」·命令面板＋文件右键两入口·薄 Rust 命令复用 safe_join·新依赖 tauri-plugin-opener[硬边界#5 用户授权解锁·仅此插件]·逻辑档[非数据安全·只读 OS 动作]）【As-built v0.214】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §6 两项 missing 补全。**硬边界#5（新运行时依赖）经用户 2026-06-25 显式授权解锁，仅对 Tauri 官方 `tauri-plugin-opener`**；用途上限＝**库内文件** reveal/open（**不含 `open_url`/任意 URL**）；其余四条硬边界不动。**web 实证**：Obsidian 命令面板名「Files: Show in system explorer」「Files: Open in default app」（macOS 右键菜单显「Reveal in Finder」·命令身份同名）。Geode 取跨平台中性命令名（不硬编码 Finder·免平台分支）。
