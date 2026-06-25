@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 229 additions — 选项2 bounded backlog 取首项：编辑器设置「视图状态切换」toggle（Obsidian native Editor 顶部组「Show view mode toggle」·默认开）·纯渲染门·零新依赖【契约冻结 v0.225】
+
+> **状态：As-built（已交付·v0.225）。** R228 拐点纠误后从 ROADMAP「选项2 bounded backlog」(scout 余 11 项) 取最清爽之一。**Step 0**：reference `01-编辑器.md:15`「视图状态切换 | 开关 | 开 | 在每个标签页显示『编辑/阅读视图』切换按钮」= native（Editor 顶部组·R226「Editor Display 组全清」未覆盖此顶部组·scout 找出漏检）。Geode `EditorPane.tsx:1200` 的 `.editor-mode-group`（live/source/preview 三按钮 + bookmark）**无条件渲染·无 setting 门控**（grep showViewModeToggle 零命中）。
+> **契约（纯渲染门·逐点镜像 R94 showRibbon / R100 showTabTitleBar）**：
+> - **`core/appearance.ts`**：`showViewModeToggle = new Store<boolean>(readBool("geode.showViewModeToggle", true))` + `setShowViewModeToggle`（镜像 showRibbon·**默认 true = 当前行为·零回归**）。
+> - **`EditorPane.tsx`**：`useStore(showViewModeToggle)` → 条件渲染 `.editor-mode-group`（`{viewModeToggleVisible && (<div className="editor-mode-group">…)}`·OFF 时隐切换按钮·模式仍可经命令 Ctrl+E/Ctrl+Shift+E 切换·与 Obsidian 一致）。
+> - **`SettingsModal.tsx` EditorSection（顶部/视图行为位）**：toggle row 镜像既有 editor toggle（如 strictLineBreaks）。**i18n `dict.views.ts`**：+`settings.showViewModeToggle`/`...Desc`（en+zh）。
+> - **分档：逻辑档（碰 editor 管线·底线①——但纯 React 渲染门·零 .md 写·零 CM 改动·非数据安全）** → 简化门 **clean**（纯镜像 R94/R100 + 1 Store + 1 条件渲染门·无 intra-round 重复） → 多维对抗 **deliverable·7 维全证伪·0 缺陷**（JSX wrap 闭合平衡[`</div>)}` 配对未误吞 header 闭合]·OFF 仅隐按钮组·模式切换两路径[按钮 setMode + 全局命令 `app:toggle-mode` Ctrl+E·App 层注册解耦]均不依赖 mode-group render·默认 true 恒渲染=prior·header 布局 bookmark/body 未卷入·持久化·分层/i18n/testid·faithfulness[同 showRibbon OFF 保命令先例]）。**As-built 验证**：typecheck 0（全 src）+ **r229-e2e 9/9**（默认 ON mode-group 显·真 Settings UI toggle OFF→隐 + OFF 下 setTabMode→source 仍切[逻辑未门控]·持久化 reload·反向 ON）+ 回归 **r106 12/12·r50 15/15·r131 8/8[editor 套件·mode-live/source/preview testid·默认 true 零变]** + 生产构建成功 + cargo check 通过（零 Rust）。**桌面 probe N/A**（纯渲染门·浏览器全覆盖·R94/R100 先例）·**r18-diff N/A**（不碰 markdown.ts·零 .md 写）。**minor（评审记·非缺陷）**：wrap 内 3 按钮少缩进 2 空格（纯排版·Prettier 可自动归位·保最小 diff 未手动重缩）。
+
 ## Round 228 additions — 选项2 补深七轮：文件与链接设置「重建仓库缓存」（Obsidian native Files&Links 高级组「Rebuild vault cache」）·复用既有 rebuildAll·零新依赖【契约冻结 v0.224】
 
 > **状态：As-built（已交付·v0.224）。** **🔑 拐点纠误**：R227 收尾据 R226 explorer（仅扫 editor/appearance）误判「bounded 矿脉见底·交回大方向」——**Ultracode 6 表面并行穷举 scout（workflow `geode-bounded-work-scout`）纠误：实剩 13 个 bounded-autonomous 项**（跨 文件与链接/核心插件设置 Tab/右键菜单/Editor 顶部组等 R226 未扫表面）→ **矿脉远未枯竭·loop 继续**。R228 = scout 综合者首推（实现风险最低）。**Step 0**：reference `02-文件与链接.md:40` 高级组「重建仓库缓存 | 重建 | 重建元数据缓存」= native。Geode 重走引擎 `core/metadata.ts:410 rebuildAll()`（清 byPath/nameToPaths + 重 indexFiles(getMarkdownFiles) + bump）**已存在且经 vault-load 路径实测**·仅缺用户可达面（grep 无命令/设置）。
