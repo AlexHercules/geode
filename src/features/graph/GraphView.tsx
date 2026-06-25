@@ -226,6 +226,15 @@ export function GraphView() {
 
   useEffect(() => savePrefs(prefs), [prefs]);
 
+  // R240: graph:open-local one-shot — flip to local mode (anchor follows lastActiveFile).
+  // Clear FIRST so a StrictMode double-fire can't re-trigger; idempotent if already local.
+  const openLocalReq = useStore(app.workspace.openLocalGraphRequest);
+  useEffect(() => {
+    if (!app.workspace.openLocalGraphRequest.get()) return;
+    app.workspace.openLocalGraphRequest.set(false);
+    setPrefs((p) => (p.mode === "local" ? p : { ...p, mode: "local" }));
+  }, [openLocalReq, app.workspace]);
+
   const stateRef = useRef<GraphState>({
     nodes: [],
     links: [],

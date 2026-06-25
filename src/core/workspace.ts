@@ -353,6 +353,10 @@ export class Workspace {
    *  (which lives in App.tsx with the bookmarks API + notice) can read it. Session-only;
    *  empty when no search has been typed. */
   readonly currentSearchQuery = new Store<string>("");
+  /** R240: one-shot "switch the graph to local mode" request — the graph:open-local command
+   *  sets it (after openGraph); GraphView flips its prefs.mode to "local" then clears.
+   *  Session-only. */
+  readonly openLocalGraphRequest = new Store<boolean>(false);
   private flushers = new Set<() => void | Promise<void>>();
   /** Most-recent-LAST stack of user-closed tabs for Mod+Shift+T. Session-only —
    *  NOT persisted (avoids stale-path risk across restart). Only closeTab feeds

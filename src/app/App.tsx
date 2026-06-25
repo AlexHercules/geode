@@ -265,6 +265,16 @@ export function App() {
         callback: () => workspace.openGraph(),
       }),
       commands.register({
+        // R240: open the graph anchored to the active note (Obsidian "Open local graph").
+        // GraphView already supports local mode (R103/R110); this opens it + flips to local.
+        id: "graph:open-local",
+        name: () => t("cmd.openLocalGraph"),
+        callback: () => {
+          workspace.openLocalGraphRequest.set(true);
+          workspace.openGraph();
+        },
+      }),
+      commands.register({
         id: "app:toggle-theme",
         name: () => t("cmd.toggleTheme"),
         callback: () => workspace.toggleTheme(),
