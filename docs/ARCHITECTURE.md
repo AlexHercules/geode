@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 215 additions — G3 §7：file-explorer:new-file-in-new-pane（⌘⇧N 在右侧新建笔记·复用 vetted splitActivePane + R17 create·data-safety 逻辑档[vault create]·零新依赖）【As-built v0.211】
+
+> **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §7 missing「在右侧新建笔记」(`file-explorer:new-file-in-new-pane`·默认键 ⌘⇧N) 补全 + 当前标签页变体据实纠误（app:new-note 覆盖）·**§7 整组补完**。**web 实证**：⌘⇧N 是 Obsidian「create a note in a new pane」真默认键（非 phantom）。复用既有 `app:new-note`（R17 vault.uniquePath+create）+ `splitActivePane("row")`（R202/split-right 先例）。
+> **契约（纯加 1 命令 + 1 i18n 键·复用 vetted create/split·新逻辑＝split→open 目标定向 + null 回退）**：
+> - **`app/App.tsx`**：`commands.register({ id: "file-explorer:new-file-in-new-pane", name: () => t("cmd.newNoteInNewPane"), hotkey: "Mod+Shift+N", callback: 创建 uniquePath 空文件 → splitActivePane("row") → openFile(path, paneId ? {paneId} : {newTab:true}) })`。**split 返 null**（活动 tab 是 graph/backlinks 等 fileless singleton·或无源 pane）→ 回退 `{newTab:true}`（新标签页·不丢命令）。**split 非 null**：新 pane 含活动 markdown tab 的复制·openFile(path,{paneId}) 就地替换为新空笔记（openFile markdown→markdown in-place replace 语义）。
+> - **`core/i18n/dict.app.ts`**：`cmd.newNoteInNewPane`（en "Create new note in new pane" / zh "在右侧新建笔记"）。
+> - **分档：逻辑档（vault create·文件 IO）**——data-safety：create 走 vetted vault.create（uniquePath 防覆盖·同 app:new-note）·新空文件不碰既有文件字节·split→open 目标定向是新控制流。
+> - **对抗评审（Ultracode 2-lens[data-safety/correctness-fidelity]+skeptic → deliverable·0 crit/major·3 nit 全 accept-as-is）**：data-safety lens 证 split 复制源 tab→openFile 就地替换 dup 为新空笔记·源文件零变·仅创建新空文件（复用 vetted splitActivePane/openFile/uniquePath）。3 nit：① 快速双击 ⌘⇧N 第二次 create 抛未捕获（**严格 no-op**·throw 在 split/open 前·无数据丢失·与 vetted app:new-note 同模式→**不单独加 .catch 避免与 app:new-note 不对称**）；② attachment 活动 tab 时 split 复制 attachment·新笔记开成新 tab→新 pane 留 [dup attachment, 新笔记]（cosmetic·罕见·非破坏）；③ singleton 活动回退新标签页非新 pane（intentional·无 split-singleton 原语）。**均 accept**（无 confirmed crit/major）。
+> - **桌面 probe N/A 浏览器可验证**。**v1 偏差**：singleton 视图活动时回退新标签页（不可 split singleton·同 splitActivePane 既有约束）；attachment 活动时新 pane 留 dup tab（cosmetic）。
+
 ## Round 214 additions — G3 §10：app:show-file-properties 命令（揭示 R86 FilePropertiesPanel·补 Obsidian「Show file properties」核心命令·机械档·零新依赖）【As-built v0.210】
 
 > **状态：As-built（已交付）。** 表面复刻 G 系列——G3 矩阵 §10 唯一 partial「显示当前笔记的属性列表」(`file-properties:open`) 收尾。**web 实证**：Obsidian Properties 核心插件有 **两个** 命令——「Show file properties」(当前笔记) + 「Show all properties」(全库)。Geode 有 `app:show-all-properties`（揭示 AllProperties 面板）但**缺**「Show file properties」——尽管 R86 早已建 FilePropertiesPanel（右侧栏 `fileproperties` tab，仅 right-tab 可达、无命令）。矩阵旧注「无当前笔记属性面板」**stale**（R86 已有面板）→ 真实 gap = 缺命令。

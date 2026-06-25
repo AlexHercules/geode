@@ -251,6 +251,12 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R215 套件回归（2026-06-25，G3 §7 收尾 · 表面复刻 G 系列 · file-explorer:new-file-in-new-pane[⌘⇧N 在右侧新建笔记] · 复用 vetted splitActivePane + app:new-note create · data-safety 逻辑档[vault create]·**Ultracode 2-lens+skeptic 对抗评审 deliverable·0 crit/major·3 nit accept-as-is**·桌面 probe N/A）
+
+R215 = G3 矩阵 §7 missing「在右侧新建笔记」(`file-explorer:new-file-in-new-pane`·默认键 ⌘⇧N) 补全。**web 实证**：⌘⇧N 是 Obsidian「create a note in a new pane」真默认键（非 phantom）。**详见 ARCHITECTURE「Round 215 additions」**：复用 app:new-note 的 vault.uniquePath+create + splitActivePane("row")（R202 split-right 先例）·`openFile(path, paneId?{paneId}:{newTab:true})`·split 返 null（singleton 活动）→ 回退新标签页。当前标签页变体据实纠误（app:new-note 即此语义）·**§7 整组补完**。
+
+新增套件：`r215-e2e.mjs` **10/10**（A 注册 + ⌘⇧N · B markdown tab → 新 split pane[新空 Untitled 笔记 active·Base.md 另 pane 保留] · **C 边界：graph singleton 活动 → split null → 回退新标签页·命令不丢·不崩**）。**套件矩阵不回退**：**r81 14/14[tabs/split]·r202 12/12·r207 32/32[split]·r36 47/47·r212 17/17**·typecheck 0/cargo/生产构建。**桌面 probe N/A 浏览器可验证**（复用 vetted vault.create + splitActivePane·新空文件不碰既有字节）。**⭐ Ultracode 2-lens 对抗评审（data-safety/correctness-fidelity + skeptic）→ deliverable·0 crit/major·3 nit accept**：① 快速双击 ⌘⇧N 第二次 create 抛未捕获（严格 no-op·throw 在 split/open 前·无数据丢失·与 vetted app:new-note 同模式→不单独加 .catch 避免不对称）；② attachment 活动时新 pane 留 dup tab（cosmetic·罕见）；③ singleton 回退新标签页非新 pane（intentional·无 split-singleton 原语）。data-safety lens 证仅创建新空文件·源文件零变。
+
 ### R214 套件回归（2026-06-25，G3 §10 收尾 · 表面复刻 G 系列 · app:show-file-properties 命令揭示 R86 FilePropertiesPanel · 机械档[命令注册镜像 5 兄弟·复用 vetted setRightPanel·无写] · scoped review · 桌面 probe N/A）
 
 R214 = G3 矩阵 §10 唯一 partial「显示当前笔记的属性列表」(`file-properties:open`) 收尾。**web 实证**：Obsidian Properties 核心插件有两命令——「Show file properties」(当前笔记) + 「Show all properties」(全库)。Geode 有 `app:show-all-properties` 但缺前者，尽管 R86 早已建 FilePropertiesPanel（右侧栏 fileproperties tab·仅 right-tab 可达·无命令）。**详见 ARCHITECTURE「Round 214 additions」**：加 `app:show-file-properties`（name "Show file properties"·callback setRightPanel("fileproperties")·逐字镜像 app:show-all-properties·无默认键）+ i18n 键 cmd.showFileProperties（en/zh）。矩阵旧注「无当前笔记属性面板」stale（R86 已有）→ 真实 gap = 缺命令。
