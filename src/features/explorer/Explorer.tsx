@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
-import { parentPath, basename, sortTreeNodes, type ExplorerSortKey } from "@core/vault";
+import { parentPath, basename, sortTreeNodes, isTauri, type ExplorerSortKey } from "@core/vault";
+import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { confirmDelete } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
@@ -518,6 +519,29 @@ export function Explorer() {
       /* clipboard unavailable (headless / denied) */
     }
     showLinkUpdateNotice(t("explorer.copiedUrl"));
+  };
+
+  /** R218 (G3 §6): reveal the file in the OS file manager / open it with the OS
+   *  default app. Desktop-only (menu items are isTauri-gated). The Rust command
+   *  safe_join's the vault-relative path; the OS window IS the feedback, so these
+   *  swallow host errors silently (matching Obsidian — no toast). */
+  const revealNodeInSystem = async (node: VaultNode) => {
+    const root = app.vault.adapter.getVaultPath();
+    if (!root) return;
+    try {
+      await revealInSystem(root, node.path);
+    } catch {
+      /* host error (file removed / permission) — best-effort */
+    }
+  };
+  const openNodeInDefaultApp = async (node: VaultNode) => {
+    const root = app.vault.adapter.getVaultPath();
+    if (!root) return;
+    try {
+      await openInDefaultApp(root, node.path);
+    } catch {
+      /* host error — best-effort */
+    }
   };
 
   const validateName = (node: VaultNode, value: string): boolean => {
@@ -1139,6 +1163,31 @@ export function Explorer() {
                       <Icon name="link" size={14} />
                       {t("explorer.copyObsidianUrl")}
                     </button>
+                    {/* R218 (G3 §6): desktop-only OS-shell actions (hidden in browser). */}
+                    {isTauri() && (
+                      <>
+                        <button
+                          data-testid="explorerctx-reveal-in-system"
+                          onClick={() => {
+                            setMenu(null);
+                            void revealNodeInSystem(node);
+                          }}
+                        >
+                          <Icon name="folder" size={14} />
+                          {t("explorer.revealInSystem")}
+                        </button>
+                        <button
+                          data-testid="explorerctx-open-in-default-app"
+                          onClick={() => {
+                            setMenu(null);
+                            void openNodeInDefaultApp(node);
+                          }}
+                        >
+                          <Icon name="external-link" size={14} />
+                          {t("explorer.openInDefaultApp")}
+                        </button>
+                      </>
+                    )}
                     <div className="explorer-menu-sep" />
                   </>
                 )}

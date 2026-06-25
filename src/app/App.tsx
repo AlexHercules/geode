@@ -50,6 +50,7 @@ import { registerEditorMotionCommands } from "@features/editor/editorMotionComma
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
 import { isTauri, basename } from "@core/vault";
+import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
 import { buildClearProperties, parseProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
@@ -471,6 +472,33 @@ export function App() {
           if (!path) return;
           void navigator.clipboard.writeText(buildOpenUri(vault.vaultName, path)).catch(() => {});
           showCommandNotice(t("explorer.copiedUrl"));
+        },
+      }),
+      // R218 (G3 §6): reveal / open the active file via the OS shell. Desktop-only
+      // (isTauri gate hides them in browser mode — host capability, like Obsidian
+      // mobile hiding desktop commands). The webview passes the vault-relative path;
+      // the Rust command safe_join's it (no absolute paths in the frontend). The OS
+      // window IS the feedback, so no toast — fire-and-forget, swallow host errors.
+      commands.register({
+        id: "file-explorer:reveal-in-system",
+        name: () => t("cmd.revealInSystem"),
+        available: () => isTauri() && workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          const root = vault.adapter.getVaultPath();
+          if (!path || !root) return;
+          void revealInSystem(root, path).catch(() => {});
+        },
+      }),
+      commands.register({
+        id: "file-explorer:open-in-default-app",
+        name: () => t("cmd.openInDefaultApp"),
+        available: () => isTauri() && workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          const root = vault.adapter.getVaultPath();
+          if (!path || !root) return;
+          void openInDefaultApp(root, path).catch(() => {});
         },
       }),
       // R184 (G3 ui-only→done): file-op commands route the active file to the

@@ -726,11 +726,40 @@ fn vault_write_config(vault: String, path: String, content: String) -> CmdResult
     fs::write(&abs, content).map_err(|e| format!("write config {path}: {e}"))
 }
 
+/// R218: reveal a vault file in the OS file manager (Finder/Explorer). The
+/// webview passes a vault-RELATIVE path; `safe_join` confines it to the vault
+/// root (rejects `..` traversal — the same vetted gate as every vault_* IO
+/// command), so absolute paths never leave the shell. Read-only OS action: no
+/// vault write, no data-safety surface. `tauri-plugin-opener` Rust API only —
+/// the frontend never invokes the opener's JS commands (no capability needed).
+#[tauri::command]
+fn reveal_in_system(app: tauri::AppHandle, vault: String, path: String) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let abs = safe_join(&vault, &path)?;
+    app.opener()
+        .reveal_item_in_dir(&abs)
+        .map_err(|e| format!("reveal {path}: {e}"))
+}
+
+/// R218: open a vault file with the OS default application. Same vault
+/// confinement as `reveal_in_system`; the opener is handed the `safe_join`'d
+/// absolute path, NEVER an arbitrary URL (R218 scope = vault files only).
+/// Read-only OS action.
+#[tauri::command]
+fn open_in_default_app(app: tauri::AppHandle, vault: String, path: String) -> CmdResult<()> {
+    use tauri_plugin_opener::OpenerExt;
+    let abs = safe_join(&vault, &path)?;
+    app.opener()
+        .open_path(abs.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| format!("open {path}: {e}"))
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(WatcherState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             initial_vault,
@@ -752,6 +781,8 @@ fn main() {
             vault_read_config,
             vault_write_config,
             vault_list_config_dir,
+            reveal_in_system,
+            open_in_default_app,
             http_request,
             export_write
         ])

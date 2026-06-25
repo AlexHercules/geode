@@ -83,6 +83,7 @@ import { uniqueNoteName, uniqueNotePathPreview, setUniqueNoteFormat, setUniqueNo
 import { deriveNoteName, extractedContent, extractReplacement } from "@core/noteComposer";
 import { headingSectionAt } from "@core/moveHeading";
 import { buildDebugInfo } from "@core/debugInfo";
+import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { mergeNotes } from "@core/noteMerge";
 import { resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { loadFoldInfo, saveFoldInfo, type FoldInfo } from "@core/foldStore";
@@ -1356,6 +1357,14 @@ async function bootstrap() {
   // R217: pure debug-info builder probe (the command in App.tsx injects live values).
   (globalThis as typeof globalThis & { __geodeDebugInfo?: typeof buildDebugInfo }).__geodeDebugInfo =
     buildDebugInfo;
+
+  // R218: reveal/open host-shell probe. Browser E2E asserts the isTauri gate makes
+  // these a no-op (resolve, no throw); the desktop probe drives the real
+  // core→invoke→Rust path to assert safe_join confinement (a `..` traversal rejects
+  // BEFORE the opener is called — proves the security boundary without opening Finder).
+  (globalThis as typeof globalThis & {
+    __geodeReveal?: { revealInSystem: typeof revealInSystem; openInDefaultApp: typeof openInDefaultApp };
+  }).__geodeReveal = { revealInSystem, openInDefaultApp };
 
   // always-on obsidian:// URI probe (R46): `parse` is the PURE parser
   // (core/obsidianUri) so browser/desktop E2E can assert the action mapping
