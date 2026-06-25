@@ -3,6 +3,8 @@ import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent
 import { useApp } from "@app/AppContext";
 import { Icon } from "@app/icons";
 import { useStore } from "@core/store";
+import { switcherShowExistingOnly, switcherShowAttachments, switcherShowAllTypes } from "@core/appearance";
+import { isAttachmentPath } from "@core/attachments";
 import { useI18n } from "@core/i18n";
 import type { FileNode, HeadingRef, BlockRef } from "@core/types";
 import { allTabs } from "@core/workspace";
@@ -71,12 +73,23 @@ export function QuickSwitcher() {
     mergeTargetMode.set(null);
   }, []);
 
+  // R231: Quick switcher file-type settings (Obsidian core "Quick switcher")
+  const showExistingOnly = useStore(switcherShowExistingOnly);
+  const showAttachments = useStore(switcherShowAttachments);
+  const showAllTypes = useStore(switcherShowAllTypes);
+
   // flattening the vault tree is O(files) — do it once per tree change,
-  // not on every keystroke
+  // not on every keystroke. R231: the file-type settings widen the base list
+  // (markdown only → +attachments → all supported types).
   const files = useMemo(
-    () => app.vault.getMarkdownFiles(),
+    () =>
+      showAllTypes
+        ? app.vault.getFiles()
+        : showAttachments
+          ? app.vault.getFiles().filter((f) => f.extension === "md" || isAttachmentPath(f.path))
+          : app.vault.getMarkdownFiles(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [app.vault, tree],
+    [app.vault, tree, showAllTypes, showAttachments],
   );
 
   const rows = useMemo<Row[]>(() => {
@@ -135,7 +148,9 @@ export function QuickSwitcher() {
         if (m && (!aliasHit || m.score > aliasHit.score)) aliasHit = { alias: a, indices: m.indices, score: m.score };
         if (m && a.toLowerCase() === qLower) exact = true;
       }
-      if (byName && file.basename.toLowerCase() === qLower) exact = true;
+      // R231: the create row makes a .md NOTE, so only a NOTE match suppresses it —
+      // an attachment (now in `files` when showAttachments is on) with the same name must not.
+      if (byName && file.extension === "md" && file.basename.toLowerCase() === qLower) exact = true;
       if (!byName && !byPath && !aliasHit) continue;
       // basename + alias matches outrank path-only matches
       const nameScore = byName ? byName.score + 200 : -Infinity;
@@ -156,11 +171,12 @@ export function QuickSwitcher() {
     if (matched.length > MAX_RESULTS) matched.length = MAX_RESULTS;
 
     const out: Row[] = matched.map(({ file, indices, alias, aliasIndices }) => ({ kind: "file", file, indices, alias, aliasIndices }));
-    if (!exact) out.unshift({ kind: "create", name: q });
+    // R231: "Show existing only" suppresses the create-new row
+    if (!exact && !showExistingOnly) out.unshift({ kind: "create", name: q });
     return out;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [files, query, ws.root]);
+  }, [files, query, ws.root, showExistingOnly]);
 
   const sel = rows.length === 0 ? -1 : Math.min(selected, rows.length - 1);
 

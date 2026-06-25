@@ -11,6 +11,12 @@ import {
   setStrictLineBreaks,
   showViewModeToggle,
   setShowViewModeToggle,
+  switcherShowExistingOnly,
+  setSwitcherShowExistingOnly,
+  switcherShowAttachments,
+  setSwitcherShowAttachments,
+  switcherShowAllTypes,
+  setSwitcherShowAllTypes,
   showLineNumbers,
   setShowLineNumbers,
   hideReferenceMarks,
@@ -119,7 +125,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.226.0";
+export const APP_VERSION = "0.227.0";
 
 type SectionId =
   | "about"
@@ -130,6 +136,7 @@ type SectionId =
   | "keychain"
   | "plugins"
   | "command-palette"
+  | "quick-switcher"
   | "templates"
   | "daily-notes"
   | "unique-notes"
@@ -172,6 +179,7 @@ const NAV_GROUPS: Array<{
     testid: "settings-navgroup-core-plugins",
     items: [
       { id: "command-palette", labelKey: "settings.section.commandPalette", icon: "pin" },
+      { id: "quick-switcher", labelKey: "settings.section.quickSwitcher", icon: "search" },
       { id: "templates", labelKey: "settings.templates", icon: "file-text" },
       { id: "daily-notes", labelKey: "settings.dailyNotes", icon: "file-text" },
       { id: "unique-notes", labelKey: "settings.uniqueNotes", icon: "file-text" },
@@ -285,6 +293,7 @@ export function SettingsModal() {
           {section === "keychain" && <KeychainSection />}
           {section === "plugins" && <PluginsSection />}
           {section === "command-palette" && <CommandPaletteSection />}
+          {section === "quick-switcher" && <QuickSwitcherSection />}
           {section === "templates" && <TemplatesSection />}
           {section === "daily-notes" && <DailyNotesSection />}
           {section === "unique-notes" && <UniqueNotesSection />}
@@ -1362,6 +1371,71 @@ function UniqueNotesSection() {
 }
 
 /* ---------------- Page preview ---------------- */
+
+/* ---------------- Quick switcher (R231) ---------------- */
+
+function QuickSwitcherSection() {
+  const t = useI18n();
+  const existingOnly = useStore(switcherShowExistingOnly);
+  const showAttachments = useStore(switcherShowAttachments);
+  const showAllTypes = useStore(switcherShowAllTypes);
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.section.quickSwitcher")}</h2>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.switcherExistingOnly")}</div>
+          <div className="setting-desc">{t("settings.switcherExistingOnlyDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${existingOnly ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={existingOnly}
+          aria-label={t("settings.switcherExistingOnly")}
+          data-testid="settings-switcher-existing-only"
+          onClick={() => setSwitcherShowExistingOnly(!existingOnly)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.switcherShowAttachments")}</div>
+          <div className="setting-desc">{t("settings.switcherShowAttachmentsDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${showAttachments ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={showAttachments}
+          aria-label={t("settings.switcherShowAttachments")}
+          data-testid="settings-switcher-attachments"
+          onClick={() => setSwitcherShowAttachments(!showAttachments)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.switcherShowAllTypes")}</div>
+          <div className="setting-desc">{t("settings.switcherShowAllTypesDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${showAllTypes ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={showAllTypes}
+          aria-label={t("settings.switcherShowAllTypes")}
+          data-testid="settings-switcher-all-types"
+          onClick={() => setSwitcherShowAllTypes(!showAllTypes)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function PagePreviewSection() {
   const t = useI18n();

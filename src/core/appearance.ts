@@ -293,6 +293,31 @@ export function setShowViewModeToggle(on: boolean): void {
   persistBool(VIEW_MODE_TOGGLE_KEY, on);
 }
 
+/** R231: Quick switcher settings (Obsidian core "Quick switcher"). All persisted, consumed by
+ *  QuickSwitcher. existingOnly default OFF (create row shown = Geode prior); showAttachments
+ *  default ON (Obsidian default — only adds rows when attachments exist, so zero-regression);
+ *  showAllTypes default OFF. */
+const SWITCHER_EXISTING_KEY = "geode.switcherShowExistingOnly";
+export const switcherShowExistingOnly = new Store<boolean>(readBool(SWITCHER_EXISTING_KEY, false));
+export function setSwitcherShowExistingOnly(on: boolean): void {
+  switcherShowExistingOnly.set(on);
+  persistBool(SWITCHER_EXISTING_KEY, on);
+}
+
+const SWITCHER_ATTACHMENTS_KEY = "geode.switcherShowAttachments";
+export const switcherShowAttachments = new Store<boolean>(readBool(SWITCHER_ATTACHMENTS_KEY, true));
+export function setSwitcherShowAttachments(on: boolean): void {
+  switcherShowAttachments.set(on);
+  persistBool(SWITCHER_ATTACHMENTS_KEY, on);
+}
+
+const SWITCHER_ALL_TYPES_KEY = "geode.switcherShowAllTypes";
+export const switcherShowAllTypes = new Store<boolean>(readBool(SWITCHER_ALL_TYPES_KEY, false));
+export function setSwitcherShowAllTypes(on: boolean): void {
+  switcherShowAllTypes.set(on);
+  persistBool(SWITCHER_ALL_TYPES_KEY, on);
+}
+
 /** R100 (㊺ 续续续): show the bottom status bar. Default ON. OFF hides it (status-bar
  *  plugin items like word count keep working — only the display is hidden). */
 const STATUS_BAR_KEY = "geode.showStatusBar";
