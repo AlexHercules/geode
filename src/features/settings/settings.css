@@ -108,6 +108,16 @@
   color: var(--text-normal);
 }
 
+/* R246 (G2-b): in-page section subheader grouping setting rows (界面/字体 …) —
+   Obsidian groups each settings page's items under gray subheadings (reference 03 §三/§五).
+   Larger/bolder than a row name, normal color, clear gap above, NO underline. */
+.settings-subheader {
+  margin: 22px 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
 .settings-note {
   margin: 0 0 16px;
   font-size: 13px;

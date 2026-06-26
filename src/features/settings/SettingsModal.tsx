@@ -141,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.241.0";
+export const APP_VERSION = "0.242.0";
 
 type SectionId =
   | "about"
@@ -417,166 +417,6 @@ function AppearanceSection() {
         </div>
       </div>
 
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.interfaceFont")}</div>
-          <div className="setting-desc">{t("settings.interfaceFontDesc")}</div>
-        </div>
-        <input
-          type="text"
-          className="settings-text-input"
-          value={iFont}
-          placeholder={t("settings.fontDefault")}
-          aria-label={t("settings.interfaceFont")}
-          data-testid="settings-font-interface"
-          onChange={(e) => setInterfaceFont(e.target.value)}
-        />
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.textFont")}</div>
-          <div className="setting-desc">{t("settings.textFontDesc")}</div>
-        </div>
-        <input
-          type="text"
-          className="settings-text-input"
-          value={tFont}
-          placeholder={t("settings.fontDefault")}
-          aria-label={t("settings.textFont")}
-          data-testid="settings-font-text"
-          onChange={(e) => setTextFont(e.target.value)}
-        />
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.monospaceFont")}</div>
-          <div className="setting-desc">{t("settings.monospaceFontDesc")}</div>
-        </div>
-        <input
-          type="text"
-          className="settings-text-input"
-          value={mFont}
-          placeholder={t("settings.fontDefault")}
-          aria-label={t("settings.monospaceFont")}
-          data-testid="settings-font-monospace"
-          onChange={(e) => setMonospaceFont(e.target.value)}
-        />
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.fontSize")}</div>
-          <div className="setting-desc">{t("settings.fontSizeDesc")}</div>
-        </div>
-        <div className="settings-slider">
-          <input
-            type="range"
-            min={11}
-            max={28}
-            step={1}
-            value={ws.fontSize}
-            aria-label={t("settings.fontSize")}
-            data-testid="settings-font-size"
-            onChange={(e) => app.workspace.setFontSize(Number(e.target.value))}
-          />
-          <span className="settings-slider-value" data-testid="settings-font-size-value">
-            {ws.fontSize}px
-          </span>
-        </div>
-      </div>
-
-      {/* R227: quick font size adjustment — Ctrl/Cmd + scroll changes the font size (default OFF) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.quickFontZoom")}</div>
-          <div className="setting-desc">{t("settings.quickFontZoomDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${quickZoom ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={quickZoom}
-          aria-label={t("settings.quickFontZoom")}
-          data-testid="settings-quick-font-zoom-toggle"
-          onClick={() => setQuickFontZoom(!quickZoom)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R94: show inline title (filename as H1 atop the note, default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.showInlineTitle")}</div>
-          <div className="setting-desc">{t("settings.showInlineTitleDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${inlineTitle ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={inlineTitle}
-          aria-label={t("settings.showInlineTitle")}
-          data-testid="settings-inline-title-toggle"
-          onClick={() => setShowInlineTitle(!inlineTitle)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R94: show the left ribbon (default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.showRibbon")}</div>
-          <div className="setting-desc">{t("settings.showRibbonDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${ribbon ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={ribbon}
-          aria-label={t("settings.showRibbon")}
-          data-testid="settings-ribbon-toggle"
-          onClick={() => setShowRibbon(!ribbon)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R100: show tab title bar (default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.showTabTitleBar")}</div>
-          <div className="setting-desc">{t("settings.showTabTitleBarDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${tabTitleBar ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={tabTitleBar}
-          aria-label={t("settings.showTabTitleBar")}
-          data-testid="settings-tab-title-bar-toggle"
-          onClick={() => setShowTabTitleBar(!tabTitleBar)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R100: show the bottom status bar (default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.showStatusBar")}</div>
-          <div className="setting-desc">{t("settings.showStatusBarDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${statusBar ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={statusBar}
-          aria-label={t("settings.showStatusBar")}
-          data-testid="settings-status-bar-toggle"
-          onClick={() => setShowStatusBar(!statusBar)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
       {/* ---- Obsidian CSS compat (R20) ---- */}
 
       <div className="setting-item">
@@ -669,6 +509,170 @@ function AppearanceSection() {
           </div>
         ))
       )}
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-interface">{t("settings.subheaderInterface")}</h3>
+
+      {/* R94: show inline title (filename as H1 atop the note, default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showInlineTitle")}</div>
+          <div className="setting-desc">{t("settings.showInlineTitleDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${inlineTitle ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={inlineTitle}
+          aria-label={t("settings.showInlineTitle")}
+          data-testid="settings-inline-title-toggle"
+          onClick={() => setShowInlineTitle(!inlineTitle)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R100: show tab title bar (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showTabTitleBar")}</div>
+          <div className="setting-desc">{t("settings.showTabTitleBarDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${tabTitleBar ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={tabTitleBar}
+          aria-label={t("settings.showTabTitleBar")}
+          data-testid="settings-tab-title-bar-toggle"
+          onClick={() => setShowTabTitleBar(!tabTitleBar)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R94: show the left ribbon (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showRibbon")}</div>
+          <div className="setting-desc">{t("settings.showRibbonDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${ribbon ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={ribbon}
+          aria-label={t("settings.showRibbon")}
+          data-testid="settings-ribbon-toggle"
+          onClick={() => setShowRibbon(!ribbon)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R100: show the bottom status bar (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showStatusBar")}</div>
+          <div className="setting-desc">{t("settings.showStatusBarDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${statusBar ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={statusBar}
+          aria-label={t("settings.showStatusBar")}
+          data-testid="settings-status-bar-toggle"
+          onClick={() => setShowStatusBar(!statusBar)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-fonts">{t("settings.subheaderFonts")}</h3>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.interfaceFont")}</div>
+          <div className="setting-desc">{t("settings.interfaceFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={iFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.interfaceFont")}
+          data-testid="settings-font-interface"
+          onChange={(e) => setInterfaceFont(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.textFont")}</div>
+          <div className="setting-desc">{t("settings.textFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={tFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.textFont")}
+          data-testid="settings-font-text"
+          onChange={(e) => setTextFont(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.monospaceFont")}</div>
+          <div className="setting-desc">{t("settings.monospaceFontDesc")}</div>
+        </div>
+        <input
+          type="text"
+          className="settings-text-input"
+          value={mFont}
+          placeholder={t("settings.fontDefault")}
+          aria-label={t("settings.monospaceFont")}
+          data-testid="settings-font-monospace"
+          onChange={(e) => setMonospaceFont(e.target.value)}
+        />
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.fontSize")}</div>
+          <div className="setting-desc">{t("settings.fontSizeDesc")}</div>
+        </div>
+        <div className="settings-slider">
+          <input
+            type="range"
+            min={11}
+            max={28}
+            step={1}
+            value={ws.fontSize}
+            aria-label={t("settings.fontSize")}
+            data-testid="settings-font-size"
+            onChange={(e) => app.workspace.setFontSize(Number(e.target.value))}
+          />
+          <span className="settings-slider-value" data-testid="settings-font-size-value">
+            {ws.fontSize}px
+          </span>
+        </div>
+      </div>
+
+      {/* R227: quick font size adjustment — Ctrl/Cmd + scroll changes the font size (default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.quickFontZoom")}</div>
+          <div className="setting-desc">{t("settings.quickFontZoomDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${quickZoom ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={quickZoom}
+          aria-label={t("settings.quickFontZoom")}
+          data-testid="settings-quick-font-zoom-toggle"
+          onClick={() => setQuickFontZoom(!quickZoom)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
 
     </section>
   );
