@@ -42,6 +42,9 @@ export const en = {
   "explorer.deleteConfirmFile": 'Move "{name}" to trash?',
   "explorer.deleteConfirmFolder": 'Move folder "{name}" and all its contents to trash?',
   "explorer.deleteConfirmBulk": "Move {count} items to trash?",
+  "explorer.attachmentDeleteTitle": "Delete attachments?",
+  "explorer.attachmentDeletePrompt":
+    "Also delete {count} attachment(s) used only by this note?\n{list}",
   "explorer.bulkMovePartial": "Moved {moved}, skipped {skipped}",
   "explorer.linkUpdateSkipped": "{count} file(s) skipped during link update — see console",
   "explorer.moveCollision": 'A file or folder named "{name}" already exists here',
@@ -241,6 +244,9 @@ export const zh: Record<keyof typeof en, string> = {
   "explorer.deleteConfirmFile": "将“{name}”移到回收站？",
   "explorer.deleteConfirmFolder": "将文件夹“{name}”及其全部内容移到回收站？",
   "explorer.deleteConfirmBulk": "将 {count} 个项目移到回收站？",
+  "explorer.attachmentDeleteTitle": "删除附件？",
+  "explorer.attachmentDeletePrompt":
+    "一并删除仅被此笔记引用的 {count} 个附件？\n{list}",
   "explorer.bulkMovePartial": "已移动 {moved}，跳过 {skipped}",
   "explorer.linkUpdateSkipped": "链接更新跳过 {count} 个文件——详见控制台",
   "explorer.moveCollision": "此处已存在名为“{name}”的文件或文件夹",

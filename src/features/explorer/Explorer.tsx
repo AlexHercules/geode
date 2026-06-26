@@ -6,7 +6,8 @@ import { revealInSystem, openInDefaultApp } from "@core/reveal";
 import { confirmAction } from "@core/confirm";
 import { EXPLORER_MIME, findFolder, moveTargets, resolveDropTarget, wouldCollide } from "@core/explorerMove";
 import { MoveToModal } from "./MoveToModal";
-import { explorerSort, setExplorerSort, detectAllExtensions, deleteConfirm } from "@core/appearance";
+import { explorerSort, setExplorerSort, detectAllExtensions, deleteConfirm, attachmentDeleteMode } from "@core/appearance";
+import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
 import { setAttachmentFolder } from "@core/attachments";
 import { excludedRaw, isExcluded } from "@core/excludedFiles";
 import { useStore } from "@core/store";
@@ -439,6 +440,19 @@ export function Explorer() {
     setRenaming(node.path);
   };
 
+  // R244: expand the paths being deleted to the .md notes they contain — a note path is itself;
+  // a folder yields its .md descendants; a non-md file yields nothing (deleting an attachment
+  // directly does not cascade). Drives orphan-attachment detection for the delete.
+  const notesUnderDeletion = (rootPaths: string[]): Set<string> => {
+    const notes = new Set<string>();
+    const mdFiles = app.vault.getMarkdownFiles();
+    for (const p of rootPaths) {
+      if (p.endsWith(".md")) notes.add(p);
+      else for (const f of mdFiles) if (f.path.startsWith(`${p}/`)) notes.add(f.path);
+    }
+    return notes;
+  };
+
   const deleteNode = async (node: VaultNode) => {
     const message =
       node.kind === "folder"
@@ -446,12 +460,29 @@ export function Explorer() {
         : t("explorer.deleteConfirmFile", { name: node.name });
     // R242: confirm only when "Confirm file deletion" is on (delete still → recoverable .trash).
     if (deleteConfirm.get() && !(await confirmAction(message, t("explorer.delete")))) return;
+    // R244: resolve orphaned attachments (body + frontmatter refs) BEFORE flush/trash — the live
+    // index still holds the note's references; the "ask" prompt runs before flush.
+    const orphans = await resolveAttachmentDeletion(
+      app.metadata,
+      notesUnderDeletion([node.path]),
+      [node.path],
+      attachmentDeleteMode.get(),
+    );
     try {
       // R42: flush pending editor saves BEFORE trashing so the recoverable copy
       // in .trash holds the user's latest edits (review: trash-before-flush =
       // truly lossless), then route deletion through the local `.trash/`.
       await app.workspace.flushAll();
       await app.vault.trash(node.path);
+      // R244: trash orphans AFTER the node, via the same vetted recoverable .trash path.
+      // Per-attachment try/catch (mirrors bulkDelete) — one failing orphan must not abort the rest.
+      for (const att of orphans) {
+        try {
+          await app.vault.trash(att);
+        } catch (e) {
+          console.error("[explorer] delete: orphan attachment trash failed", att, e);
+        }
+      }
     } catch (err) {
       console.error("[explorer] delete failed", err);
       return;
@@ -641,12 +672,28 @@ export function Explorer() {
     if (roots.length === 0) return;
     // R242: confirm only when "Confirm file deletion" is on (delete still → recoverable .trash).
     if (deleteConfirm.get() && !(await confirmAction(t("explorer.deleteConfirmBulk", { count: roots.length }), t("explorer.delete")))) return;
+    // R244: resolve orphaned attachments across ALL deleted notes before flush/trash; deletedRoots
+    // = the trashed roots so an orphan inside a deleted folder isn't double-trashed.
+    const orphans = await resolveAttachmentDeletion(
+      app.metadata,
+      notesUnderDeletion(roots),
+      roots,
+      attachmentDeleteMode.get(),
+    );
     await app.workspace.flushAll(); // R42: once before the loop (flushAll is vault-global)
     for (const path of roots) {
       try {
         await app.vault.trash(path); // emits file:deleted → open tabs close reactively
       } catch (err) {
         console.error("[explorer] bulk delete failed", path, err);
+      }
+    }
+    // R244: trash orphaned attachments after the roots, via the same recoverable .trash path.
+    for (const att of orphans) {
+      try {
+        await app.vault.trash(att);
+      } catch (err) {
+        console.error("[explorer] bulk delete attachment failed", att, err);
       }
     }
     clearSelection();

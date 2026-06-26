@@ -141,6 +141,12 @@ export const en = {
   "settings.deleteConfirm": "Confirm file deletion",
   "settings.deleteConfirmDesc":
     "Show a confirmation dialog before deleting a file. Deleted files always move to the recoverable .trash folder.",
+  "settings.attachmentDelete": "Deleted attachments",
+  "settings.attachmentDeleteDesc":
+    "When deleting a note, what to do with attachments used only by it",
+  "settings.attachmentDeleteAsk": "Ask every time",
+  "settings.attachmentDeleteDelete": "Delete attachments",
+  "settings.attachmentDeleteKeep": "Keep attachments",
   "settings.linkUseMarkdown": "Use Markdown links",
   "settings.linkUseMarkdownDesc":
     "On: new links use Markdown [text](path). Off: new links use wikilinks [[text]]. (Embeds always use ![[ ]].)",
@@ -506,6 +512,11 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.autoUpdateLinksDesc": "重命名或移动文件时，自动改写指向它的链接。",
   "settings.deleteConfirm": "删除文件时确认",
   "settings.deleteConfirmDesc": "删除文件前弹确认对话框。删除的文件始终移入可恢复的 .trash 文件夹。",
+  "settings.attachmentDelete": "删除文件时删除附件",
+  "settings.attachmentDeleteDesc": "删除笔记时，如何处理仅被它引用的附件",
+  "settings.attachmentDeleteAsk": "每次都询问",
+  "settings.attachmentDeleteDelete": "一并删除附件",
+  "settings.attachmentDeleteKeep": "保留附件",
   "settings.linkUseMarkdown": "使用 Markdown 链接",
   "settings.linkUseMarkdownDesc":
     "开：新链接用 Markdown [文本](路径)。关：新链接用 wikilink [[文本]]。（嵌入始终用 ![[ ]]。）",

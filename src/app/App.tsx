@@ -11,8 +11,10 @@ import {
   showBacklinksInDocument, setShowBacklinksInDocument,
   quickFontZoom,
   deleteConfirm,
+  attachmentDeleteMode,
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
+import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
 import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
@@ -621,8 +623,26 @@ export function App() {
             if (deleteConfirm.get() && !(await confirmAction(t("explorer.deleteConfirmFile", { name: basename(path) }), t("explorer.delete"))))
               return;
             try {
+              // R244: resolve orphaned attachments (body + frontmatter refs) BEFORE flush/trash —
+              // the live index still holds this note's references; the "ask" prompt runs pre-flush.
+              const orphans = await resolveAttachmentDeletion(
+                app.metadata,
+                path.endsWith(".md") ? new Set([path]) : new Set(),
+                [path],
+                attachmentDeleteMode.get(),
+              );
               await workspace.flushAll();
               await vault.trash(path);
+              // R244: trash orphans AFTER the note, via the same vetted recoverable .trash path.
+              // Per-attachment try/catch (mirrors bulkDelete) — one failing orphan must not abort
+              // the rest, and the note is already safely trashed.
+              for (const att of orphans) {
+                try {
+                  await vault.trash(att);
+                } catch (e) {
+                  console.error("[app] delete-file: orphan attachment trash failed", att, e);
+                }
+              }
             } catch (err) {
               console.error("[app] delete-file failed", err);
             }

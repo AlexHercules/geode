@@ -68,6 +68,9 @@ import {
   setMergeConfirm,
   deleteConfirm,
   setDeleteConfirm,
+  attachmentDeleteMode,
+  setAttachmentDeleteMode,
+  type AttachmentDeleteMode,
   extractTemplatePath,
   setExtractTemplatePath,
 } from "@core/appearance";
@@ -138,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.239.0";
+export const APP_VERSION = "0.240.0";
 
 type SectionId =
   | "about"
@@ -1040,6 +1043,7 @@ function FilesAndLinksSection() {
   const detectExt = useStore(detectAllExtensions);
   const autoUpdate = useStore(autoUpdateLinks);
   const askDelete = useStore(deleteConfirm);
+  const attachMode = useStore(attachmentDeleteMode);
   const useMdLinks = useStore(linkUseMarkdown);
   const linkPath = useStore(linkPathFormat);
   /* R89: default location for new notes */
@@ -1232,6 +1236,26 @@ function FilesAndLinksSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+
+      {/* R244: how to handle attachments used only by a note being deleted
+          (Obsidian "Deleted attachments", Files & links). Default "ask" = faithful. */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.attachmentDelete")}</div>
+          <div className="setting-desc">{t("settings.attachmentDeleteDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-attachment-delete-mode"
+          value={attachMode}
+          aria-label={t("settings.attachmentDelete")}
+          onChange={(e) => setAttachmentDeleteMode(e.target.value as AttachmentDeleteMode)}
+        >
+          <option value="ask">{t("settings.attachmentDeleteAsk")}</option>
+          <option value="delete">{t("settings.attachmentDeleteDelete")}</option>
+          <option value="keep">{t("settings.attachmentDeleteKeep")}</option>
+        </select>
       </div>
 
       {/* R228: rebuild the in-memory metadata cache (Obsidian "Rebuild vault cache", Advanced) */}

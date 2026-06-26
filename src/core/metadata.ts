@@ -848,6 +848,60 @@ export class MetadataIndex {
   }
 
   /**
+   * R244: given a set of note paths about to be deleted, return the attachment paths that
+   * would become orphans — whose COMPLETE referrer set is non-empty and lies entirely
+   * within `deletedNotePaths`. "Complete" = body links (getAttachmentMap) UNION frontmatter
+   * `[[att]]` references. The frontmatter half is the R243 blind spot: parseNote blanks the
+   * whole frontmatter before scanning, so meta.links omits `cover: "[[pic.png]]"`; trusting
+   * getAttachmentMap alone would mis-flag an attachment still referenced by ANOTHER note's
+   * frontmatter as an orphan and delete it = data loss (breaks底线①). Bare strings
+   * (`image: pic.png`) are NOT references (faithful to Obsidian: property links need `[[]]`).
+   * Drives delete-attachment handling (core/attachmentDeletion.ts). Not cached — delete is
+   * infrequent and this layers a full frontmatter pass over the (cached) body map.
+   */
+  getOrphanedAttachments(deletedNotePaths: Set<string>): string[] {
+    // Start from the cached body-reference map, then layer frontmatter `[[att]]` refs on top
+    // so each attachment's referrer set is complete BEFORE judging orphanhood.
+    const referrers = new Map<string, Set<string>>();
+    for (const [att, set] of this.getAttachmentMap()) referrers.set(att, new Set(set));
+    for (const meta of this.byPath.values()) {
+      const fields = meta.frontmatter?.fields;
+      if (!fields) continue;
+      for (const value of Object.values(fields)) {
+        const texts = typeof value === "string" ? [value] : value;
+        for (const text of texts) {
+          for (const m of text.matchAll(WIKILINK_RE)) {
+            const target = m[1].trim();
+            if (target === "") continue;
+            const att = this.resolveAttachment(target, meta.path);
+            // only count attachments — a frontmatter `[[SomeNote]]` resolves to a note (or
+            // null) and must never be treated as a deletable attachment.
+            if (att === null || this.byPath.has(att)) continue;
+            let set = referrers.get(att);
+            if (!set) referrers.set(att, (set = new Set()));
+            set.add(meta.path);
+          }
+        }
+      }
+    }
+    const orphans: string[] = [];
+    for (const [att, set] of referrers) {
+      // referenced by ≥1 deleted note AND by no surviving note → orphaned by the delete.
+      let referencedByDeleted = false;
+      let allDeleted = true;
+      for (const r of set) {
+        if (deletedNotePaths.has(r)) referencedByDeleted = true;
+        else {
+          allDeleted = false;
+          break;
+        }
+      }
+      if (referencedByDeleted && allDeleted) orphans.push(att);
+    }
+    return orphans;
+  }
+
+  /**
    * R22: every frontmatter key used anywhere in the vault — authored casing,
    * case-insensitively deduplicated (first occurrence wins), sorted
    * lexicographically. Lazily computed and cached per index revision.

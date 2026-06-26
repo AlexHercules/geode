@@ -273,6 +273,31 @@ export function setDeleteConfirm(on: boolean): void {
   persistBool(DELETE_CONFIRM_KEY, on);
 }
 
+/** R244: Obsidian native Files&Links "删除文件时删除附件" (reference 02:30, default 「每次都询问」).
+ *  When deleting a note, how to handle the attachments referenced ONLY by it (orphaned by the
+ *  delete): "ask" prompts with the orphan list (default = Obsidian's 「每次都询问」), "delete" trashes
+ *  them outright, "keep" leaves them (Geode's prior behaviour). Consumed by resolveAttachmentDeletion
+ *  (core/attachmentDeletion.ts) at every delete site. Orphan detection covers body + frontmatter refs
+ *  (the R243 blind spot); deletions go to the recoverable .trash, never a permanent delete. */
+export type AttachmentDeleteMode = "ask" | "delete" | "keep";
+const ATTACHMENT_DELETE_KEY = "geode.attachmentDeleteMode";
+
+function readAttachmentDeleteMode(): AttachmentDeleteMode {
+  try {
+    const v = localStorage.getItem(ATTACHMENT_DELETE_KEY);
+    return v === "delete" || v === "keep" ? v : "ask";
+  } catch {
+    return "ask";
+  }
+}
+
+export const attachmentDeleteMode = new Store<AttachmentDeleteMode>(readAttachmentDeleteMode());
+
+export function setAttachmentDeleteMode(mode: AttachmentDeleteMode): void {
+  attachmentDeleteMode.set(mode);
+  persistString(ATTACHMENT_DELETE_KEY, mode);
+}
+
 /** R236: Obsidian native Note composer "Template file location" (模板文件位置). A vault-relative
  *  path to a template applied when extracting a selection into a new note ({{content}}/{{fromTitle}}/
  *  {{newTitle}}/{{date}} vars). Default "" = no template = verbatim content (zero regression).

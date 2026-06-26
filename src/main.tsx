@@ -25,6 +25,8 @@ import { t } from "@core/i18n";
 import { DocumentManager } from "@core/documents";
 import { EventBus } from "@core/events";
 import { renameWithLinkUpdate, type LinkRewriteResult } from "@core/linkRewrite";
+import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
+import type { AttachmentDeleteMode } from "@core/appearance";
 import { renameTagAcrossVault, type TagRewriteResult } from "@core/tagRewrite";
 import {
   formatLink,
@@ -238,6 +240,20 @@ async function bootstrap() {
   };
   probeHost.__geodeRename = (oldPath, newPath) =>
     renameWithLinkUpdate({ vault, metadata, documents }, oldPath, newPath);
+
+  // always-on attachment-deletion probe (R244): drive the orphan-resolution orchestration
+  // (getOrphanedAttachments incl. frontmatter refs + the deletedRoots double-trash filter +
+  // keep/delete/ask mode) deterministically, so E2E can assert which attachments would be
+  // trashed without driving the Explorer UI. (ask mode triggers a confirm dialog.)
+  const attDelHost = globalThis as unknown as {
+    __geodeResolveAttachmentDeletion?: (
+      deletedNotePaths: string[],
+      deletedRoots: string[],
+      mode: AttachmentDeleteMode,
+    ) => Promise<string[]>;
+  };
+  attDelHost.__geodeResolveAttachmentDeletion = (deletedNotePaths, deletedRoots, mode) =>
+    resolveAttachmentDeletion(metadata, new Set(deletedNotePaths), deletedRoots, mode);
 
   // always-on link-format probe (R72, ㉞-c): set the link-format settings then
   // build a link, so browser/desktop E2E can assert every wiki/markdown ×
