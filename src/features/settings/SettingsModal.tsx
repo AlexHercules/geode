@@ -141,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.240.0";
+export const APP_VERSION = "0.241.0";
 
 type SectionId =
   | "about"

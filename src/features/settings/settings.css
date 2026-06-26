@@ -81,8 +81,11 @@
 }
 
 .settings-nav-item.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
+  /* R245 (G2-b): Obsidian's settings nav selects with a NEUTRAL highlight
+     (--background-modifier-active-hover), not the accent — accent is reserved for
+     toggles/primary-buttons/links (reference 03 §三「灰底高亮」/§四). */
+  background: var(--bg-active);
+  color: var(--text-normal);
 }
 
 /* ---------- right content ---------- */
