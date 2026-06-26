@@ -248,6 +248,17 @@ export const en = {
   "settings.customize": "Customize",
   "settings.cancel": "Cancel",
 
+  // ---- R251: hotkeys page command-source prefixes (plugin commands show "Source: name") ----
+  "cmdSource.bookmarks": "Bookmarks",
+  "cmdSource.dailyNotes": "Daily notes",
+  "cmdSource.backlinks": "Backlinks",
+  "cmdSource.uniqueNotes": "Unique note creator",
+  "cmdSource.slides": "Slides",
+  "cmdSource.randomNote": "Random note",
+  "cmdSource.outline": "Outline",
+  "cmdSource.outgoingLinks": "Outgoing links",
+  "cmdSource.graph": "Graph view",
+
   // ---- settings: command palette (R142) ----
   "settings.cmdPalette.note": "Pinned commands appear at the top of the command palette.",
   "settings.cmdPalette.newPinned": "New pinned command",
@@ -615,6 +626,17 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.hotkeyResetAria": "恢复 {name} 的默认快捷键",
   "settings.customize": "自定义",
   "settings.cancel": "取消",
+
+  // ---- R251: 热键页命令来源前缀（插件命令显示「源: 命令名」） ----
+  "cmdSource.bookmarks": "书签",
+  "cmdSource.dailyNotes": "日记",
+  "cmdSource.backlinks": "反向链接",
+  "cmdSource.uniqueNotes": "唯一笔记创建器",
+  "cmdSource.slides": "幻灯片",
+  "cmdSource.randomNote": "随机笔记",
+  "cmdSource.outline": "大纲",
+  "cmdSource.outgoingLinks": "出链",
+  "cmdSource.graph": "关系图谱",
 
   // ---- settings: command palette (R142) ----
   "settings.cmdPalette.note": "固定的命令会显示在命令面板顶部。",

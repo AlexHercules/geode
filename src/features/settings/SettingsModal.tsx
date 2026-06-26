@@ -107,7 +107,7 @@ import {
   setPagePreviewRequireModifier,
 } from "@core/hover";
 import { locale, setLocale, useI18n, type I18nKey } from "@core/i18n";
-import type { ThemeKind } from "@core/types";
+import type { ThemeKind, Command } from "@core/types";
 import { autoUpdateLinks, setAutoUpdateLinks } from "@core/linkRewrite";
 import {
   linkPathFormat,
@@ -141,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.245.0";
+export const APP_VERSION = "0.246.0";
 
 type SectionId =
   | "about"
@@ -1946,6 +1946,24 @@ function PluginList({
 
 /* ---------------- Hotkeys ---------------- */
 
+/* R251: Obsidian's hotkeys page prefixes each plugin command's name with its SOURCE
+   ("书签: 收藏当前搜索"); core app/editor/workspace/file-explorer commands have no prefix.
+   Geode has no Command.source, so derive it from the id prefix. The list stays FLAT — this is a
+   name prefix, NOT a collapsible group section (verify-first: Obsidian's hotkeys page is flat).
+   Note: a few core-plugin commands Geode registers under editor:/app: (e.g. note composer) stay
+   unprefixed — prefixing only the cleanly-sourced ids avoids mislabelling. */
+const CMD_SOURCE_KEYS: Record<string, I18nKey> = {
+  bookmarks: "cmdSource.bookmarks",
+  "daily-note": "cmdSource.dailyNotes",
+  backlink: "cmdSource.backlinks",
+  "unique-note": "cmdSource.uniqueNotes",
+  slides: "cmdSource.slides",
+  "random-note": "cmdSource.randomNote",
+  outline: "cmdSource.outline",
+  "outgoing-links": "cmdSource.outgoingLinks",
+  graph: "cmdSource.graph",
+};
+
 function HotkeysSection() {
   const app = useApp();
   const t = useI18n();
@@ -1956,13 +1974,28 @@ function HotkeysSection() {
   const [assignedOnly, setAssignedOnly] = useState(false);
   const [capturingId, setCapturingId] = useState<string | null>(null);
 
+  // R251: source-prefixed display name ("书签: 收藏当前搜索"), also used for the filter so a user
+  // can search by source label, and for the conflict list / reset aria-label. Core app/editor/
+  // workspace/file-explorer commands (not in CMD_SOURCE_KEYS) get no prefix.
+  const cmdLabel = (cmd: Command) => {
+    const name = getCommandName(cmd);
+    const colon = cmd.id.indexOf(":");
+    const key = colon > 0 ? CMD_SOURCE_KEYS[cmd.id.slice(0, colon)] : undefined;
+    if (!key) return name;
+    const label = t(key);
+    // Idempotent: a few commands already bake the source into their own registered name (e.g.
+    // "Backlinks: …", ZH "反向链接：…" with a fullwidth colon, from R211/R212/R219 for the command
+    // palette) — don't prepend a second copy (the e2e covers backlink:/outline:/outgoing-links:).
+    return name.startsWith(`${label}:`) || name.startsWith(`${label}：`) ? name : `${label}: ${name}`;
+  };
+
   const q = filter.trim().toLowerCase();
   const rows = app.commands
     .list()
     .filter(
       (cmd) =>
         (!q ||
-          getCommandName(cmd).toLowerCase().includes(q) ||
+          cmdLabel(cmd).toLowerCase().includes(q) ||
           cmd.id.toLowerCase().includes(q)) &&
         (!assignedOnly || app.commands.getEffectiveHotkey(cmd.id) !== null),
     );
@@ -2055,11 +2088,11 @@ function HotkeysSection() {
             return (
               <div className="hotkey-row" key={cmd.id} data-testid={`hotkey-row-${cmd.id}`}>
                 <div className="hotkey-info">
-                  <div className="hotkey-name">{getCommandName(cmd)}</div>
+                  <div className="hotkey-name">{cmdLabel(cmd)}</div>
                   {conflicts.length > 0 && (
                     <div className="hotkey-conflict" data-testid={`hotkey-conflict-${cmd.id}`}>
                       {t("settings.hotkeyConflict", {
-                        names: conflicts.map((c) => `"${getCommandName(c)}"`).join(", "),
+                        names: conflicts.map((c) => `"${cmdLabel(c)}"`).join(", "),
                       })}
                     </div>
                   )}
@@ -2078,7 +2111,7 @@ function HotkeysSection() {
                     <button
                       className="hotkey-reset"
                       title={t("settings.hotkeyResetTitle")}
-                      aria-label={t("settings.hotkeyResetAria", { name: getCommandName(cmd) })}
+                      aria-label={t("settings.hotkeyResetAria", { name: cmdLabel(cmd) })}
                       data-testid={`hotkey-reset-${cmd.id}`}
                       onClick={() => app.commands.clearHotkeyOverride(cmd.id)}
                     >
