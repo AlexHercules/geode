@@ -141,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.242.0";
+export const APP_VERSION = "0.243.0";
 
 type SectionId =
   | "about"
@@ -708,24 +708,6 @@ function EditorSection() {
     <section>
       <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
 
-      {/* R229: show the edit/read view-mode toggle button on each tab (default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.showViewModeToggle")}</div>
-          <div className="setting-desc">{t("settings.showViewModeToggleDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${viewModeToggle ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={viewModeToggle}
-          aria-label={t("settings.showViewModeToggle")}
-          data-testid="settings-view-mode-toggle"
-          onClick={() => setShowViewModeToggle(!viewModeToggle)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
       {/* R233: always focus new tabs — switch to a file opened in a new tab (Obsidian "Always focus new tabs", default ON) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -744,6 +726,60 @@ function EditorSection() {
         </button>
       </div>
 
+      {/* R88: default mode a new markdown tab opens in (reading / live / source) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.defaultNewTabMode")}</div>
+          <div className="setting-desc">{t("settings.defaultNewTabModeDesc")}</div>
+        </div>
+        <div className="settings-segmented" role="group" aria-label={t("settings.defaultNewTabMode")}>
+          <button
+            className={newTabMode === "preview" ? "is-active" : ""}
+            aria-pressed={newTabMode === "preview"}
+            data-testid="settings-newtab-reading"
+            onClick={() => setDefaultNewTabMode("preview")}
+          >
+            {t("settings.modeReading")}
+          </button>
+          <button
+            className={newTabMode === "live" ? "is-active" : ""}
+            aria-pressed={newTabMode === "live"}
+            data-testid="settings-newtab-live"
+            onClick={() => setDefaultNewTabMode("live")}
+          >
+            {t("settings.modeLive")}
+          </button>
+          <button
+            className={newTabMode === "source" ? "is-active" : ""}
+            aria-pressed={newTabMode === "source"}
+            data-testid="settings-newtab-source"
+            onClick={() => setDefaultNewTabMode("source")}
+          >
+            {t("settings.modeSource")}
+          </button>
+        </div>
+      </div>
+
+      {/* R229: show the edit/read view-mode toggle button on each tab (default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.showViewModeToggle")}</div>
+          <div className="setting-desc">{t("settings.showViewModeToggleDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${viewModeToggle ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={viewModeToggle}
+          aria-label={t("settings.showViewModeToggle")}
+          data-testid="settings-view-mode-toggle"
+          onClick={() => setShowViewModeToggle(!viewModeToggle)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-display">{t("settings.subheaderDisplay")}</h3>
+
       {/* R50: readable line length — caps the body column width (default ON) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -756,23 +792,6 @@ function EditorSection() {
           aria-label={t("settings.readableLineLength")}
           data-testid="settings-readable-toggle"
           onClick={() => setReadableLineLength(!readable)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default OFF) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.spellcheck")}</div>
-        </div>
-        <button
-          className={`settings-toggle${spell ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={spell}
-          aria-label={t("settings.spellcheck")}
-          data-testid="settings-spellcheck-toggle"
-          onClick={() => setSpellcheckEnabled(!spell)}
         >
           <span className="settings-toggle-thumb" />
         </button>
@@ -791,6 +810,47 @@ function EditorSection() {
           aria-label={t("settings.strictLineBreaks")}
           data-testid="settings-strict-linebreaks-toggle"
           onClick={() => setStrictLineBreaks(!strict)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* ---- R22: in-document properties display ---- */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.propertiesDisplay")}</div>
+          <div className="setting-desc">{t("settings.propertiesDisplayDesc")}</div>
+        </div>
+        <select
+          className="settings-select"
+          data-testid="settings-properties-display"
+          value={propsDisplay}
+          aria-label={t("settings.propertiesDisplay")}
+          onChange={(e) =>
+            app.workspace.setPropertiesInDocument(
+              e.target.value === "hidden" ? "hidden" : e.target.value === "source" ? "source" : "visible",
+            )
+          }
+        >
+          <option value="visible">{t("settings.propertiesVisible")}</option>
+          <option value="hidden">{t("settings.propertiesHidden")}</option>
+          <option value="source">{t("settings.propertiesSource")}</option>
+        </select>
+      </div>
+
+      {/* R156: allow folding heading sections (Obsidian "Fold heading", default ON) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.foldHeading")}</div>
+          <div className="setting-desc">{t("settings.foldHeadingDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${foldH ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={foldH}
+          aria-label={t("settings.foldHeading")}
+          data-testid="settings-fold-heading-toggle"
+          onClick={() => setFoldHeading(!foldH)}
         >
           <span className="settings-toggle-thumb" />
         </button>
@@ -844,6 +904,44 @@ function EditorSection() {
           aria-label={t("settings.rightToLeft")}
           data-testid="settings-rtl-toggle"
           onClick={() => setRightToLeft(!rtl)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R154: show linked mentions at the bottom of the note (Obsidian "Backlink in
+          document", default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.backlinksInDocument")}</div>
+          <div className="setting-desc">{t("settings.backlinksInDocumentDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${backlinksInDoc ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={backlinksInDoc}
+          aria-label={t("settings.backlinksInDocument")}
+          data-testid="settings-backlinks-indoc-toggle"
+          onClick={() => setShowBacklinksInDocument(!backlinksInDoc)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-behavior">{t("settings.subheaderBehavior")}</h3>
+
+      {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.spellcheck")}</div>
+        </div>
+        <button
+          className={`settings-toggle${spell ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={spell}
+          aria-label={t("settings.spellcheck")}
+          data-testid="settings-spellcheck-toggle"
+          onClick={() => setSpellcheckEnabled(!spell)}
         >
           <span className="settings-toggle-thumb" />
         </button>
@@ -903,77 +1001,6 @@ function EditorSection() {
         </button>
       </div>
 
-      {/* R154: show linked mentions at the bottom of the note (Obsidian "Backlink in
-          document", default OFF) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.backlinksInDocument")}</div>
-          <div className="setting-desc">{t("settings.backlinksInDocumentDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${backlinksInDoc ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={backlinksInDoc}
-          aria-label={t("settings.backlinksInDocument")}
-          data-testid="settings-backlinks-indoc-toggle"
-          onClick={() => setShowBacklinksInDocument(!backlinksInDoc)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R156: allow folding heading sections (Obsidian "Fold heading", default ON) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.foldHeading")}</div>
-          <div className="setting-desc">{t("settings.foldHeadingDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${foldH ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={foldH}
-          aria-label={t("settings.foldHeading")}
-          data-testid="settings-fold-heading-toggle"
-          onClick={() => setFoldHeading(!foldH)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* R88: default mode a new markdown tab opens in (reading / live / source) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.defaultNewTabMode")}</div>
-          <div className="setting-desc">{t("settings.defaultNewTabModeDesc")}</div>
-        </div>
-        <div className="settings-segmented" role="group" aria-label={t("settings.defaultNewTabMode")}>
-          <button
-            className={newTabMode === "preview" ? "is-active" : ""}
-            aria-pressed={newTabMode === "preview"}
-            data-testid="settings-newtab-reading"
-            onClick={() => setDefaultNewTabMode("preview")}
-          >
-            {t("settings.modeReading")}
-          </button>
-          <button
-            className={newTabMode === "live" ? "is-active" : ""}
-            aria-pressed={newTabMode === "live"}
-            data-testid="settings-newtab-live"
-            onClick={() => setDefaultNewTabMode("live")}
-          >
-            {t("settings.modeLive")}
-          </button>
-          <button
-            className={newTabMode === "source" ? "is-active" : ""}
-            aria-pressed={newTabMode === "source"}
-            data-testid="settings-newtab-source"
-            onClick={() => setDefaultNewTabMode("source")}
-          >
-            {t("settings.modeSource")}
-          </button>
-        </div>
-      </div>
-
       {/* R92: indent using tabs (default ON = Obsidian) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -1011,29 +1038,6 @@ function EditorSection() {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* ---- R22: in-document properties display ---- */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.propertiesDisplay")}</div>
-          <div className="setting-desc">{t("settings.propertiesDisplayDesc")}</div>
-        </div>
-        <select
-          className="settings-select"
-          data-testid="settings-properties-display"
-          value={propsDisplay}
-          aria-label={t("settings.propertiesDisplay")}
-          onChange={(e) =>
-            app.workspace.setPropertiesInDocument(
-              e.target.value === "hidden" ? "hidden" : e.target.value === "source" ? "source" : "visible",
-            )
-          }
-        >
-          <option value="visible">{t("settings.propertiesVisible")}</option>
-          <option value="hidden">{t("settings.propertiesHidden")}</option>
-          <option value="source">{t("settings.propertiesSource")}</option>
-        </select>
       </div>
     </section>
   );
