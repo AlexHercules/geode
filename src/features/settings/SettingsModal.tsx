@@ -141,7 +141,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.243.0";
+export const APP_VERSION = "0.244.0";
 
 type SectionId =
   | "about"
@@ -1065,82 +1065,6 @@ function FilesAndLinksSection() {
     <section>
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
 
-      {/* R155: show every file's extension in the explorer, incl .md (Obsidian "Detect all
-          file extensions", default OFF) */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.detectAllExtensions")}</div>
-          <div className="setting-desc">{t("settings.detectAllExtensionsDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${detectExt ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={detectExt}
-          aria-label={t("settings.detectAllExtensions")}
-          data-testid="settings-detect-extensions-toggle"
-          onClick={() => setDetectAllExtensions(!detectExt)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.autoUpdateLinks")}</div>
-          <div className="setting-desc">{t("settings.autoUpdateLinksDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${autoUpdate ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={autoUpdate}
-          aria-label={t("settings.autoUpdateLinks")}
-          data-testid="settings-auto-update-links"
-          onClick={() => setAutoUpdateLinks(!autoUpdate)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      {/* ---- R72 (㉞-c): new-link format ---- */}
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.linkUseMarkdown")}</div>
-          <div className="setting-desc">{t("settings.linkUseMarkdownDesc")}</div>
-        </div>
-        <button
-          className={`settings-toggle${useMdLinks ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={useMdLinks}
-          aria-label={t("settings.linkUseMarkdown")}
-          data-testid="settings-link-use-markdown"
-          onClick={() => setLinkUseMarkdown(!useMdLinks)}
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.linkPathFormat")}</div>
-          <div className="setting-desc">{t("settings.linkPathFormatDesc")}</div>
-        </div>
-        <select
-          className="settings-select"
-          data-testid="settings-link-path-format"
-          value={linkPath}
-          aria-label={t("settings.linkPathFormat")}
-          onChange={(e) =>
-            setLinkPathFormat(
-              e.target.value === "relative" ? "relative" : e.target.value === "absolute" ? "absolute" : "shortest",
-            )
-          }
-        >
-          <option value="shortest">{t("settings.linkPathShortest")}</option>
-          <option value="relative">{t("settings.linkPathRelative")}</option>
-          <option value="absolute">{t("settings.linkPathAbsolute")}</option>
-        </select>
-      </div>
-
       {/* R89: default location for new notes (root / current folder / specified) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -1209,23 +1133,85 @@ function FilesAndLinksSection() {
         />
       </div>
 
-      {/* R96: excluded files — patterns hidden from search/graph + dimmed in the tree */}
-      <div className="setting-item setting-item-stacked">
+      <h3 className="settings-subheader" data-testid="settings-subheader-links">{t("settings.subheaderLinks")}</h3>
+
+      <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">{t("settings.excludedFiles")}</div>
-          <div className="setting-desc">{t("settings.excludedFilesDesc")}</div>
+          <div className="setting-name">{t("settings.linkPathFormat")}</div>
+          <div className="setting-desc">{t("settings.linkPathFormatDesc")}</div>
         </div>
-        <textarea
-          className="settings-textarea"
-          value={excluded}
-          rows={3}
-          placeholder={"Archive/\n*.png\n{regex}^drafts/"}
-          spellCheck={false}
-          aria-label={t("settings.excludedFiles")}
-          data-testid="settings-excluded-files"
-          onChange={(e) => setExcludedFiles(e.target.value)}
-        />
+        <select
+          className="settings-select"
+          data-testid="settings-link-path-format"
+          value={linkPath}
+          aria-label={t("settings.linkPathFormat")}
+          onChange={(e) =>
+            setLinkPathFormat(
+              e.target.value === "relative" ? "relative" : e.target.value === "absolute" ? "absolute" : "shortest",
+            )
+          }
+        >
+          <option value="shortest">{t("settings.linkPathShortest")}</option>
+          <option value="relative">{t("settings.linkPathRelative")}</option>
+          <option value="absolute">{t("settings.linkPathAbsolute")}</option>
+        </select>
       </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.autoUpdateLinks")}</div>
+          <div className="setting-desc">{t("settings.autoUpdateLinksDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${autoUpdate ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={autoUpdate}
+          aria-label={t("settings.autoUpdateLinks")}
+          data-testid="settings-auto-update-links"
+          onClick={() => setAutoUpdateLinks(!autoUpdate)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* ---- R72 (㉞-c): new-link format ---- */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.linkUseMarkdown")}</div>
+          <div className="setting-desc">{t("settings.linkUseMarkdownDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${useMdLinks ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={useMdLinks}
+          aria-label={t("settings.linkUseMarkdown")}
+          data-testid="settings-link-use-markdown"
+          onClick={() => setLinkUseMarkdown(!useMdLinks)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      {/* R155: show every file's extension in the explorer, incl .md (Obsidian "Detect all
+          file extensions", default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.detectAllExtensions")}</div>
+          <div className="setting-desc">{t("settings.detectAllExtensionsDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${detectExt ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={detectExt}
+          aria-label={t("settings.detectAllExtensions")}
+          data-testid="settings-detect-extensions-toggle"
+          onClick={() => setDetectAllExtensions(!detectExt)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-trash">{t("settings.subheaderTrash")}</h3>
 
       {/* R242: confirm before deleting a file (Obsidian "Confirm file deletion", Trash group).
           Default ON for safety; OFF = Obsidian-faithful no-confirm (delete still → recoverable .trash). */}
@@ -1264,6 +1250,26 @@ function FilesAndLinksSection() {
           <option value="delete">{t("settings.attachmentDeleteDelete")}</option>
           <option value="keep">{t("settings.attachmentDeleteKeep")}</option>
         </select>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-advanced">{t("settings.subheaderAdvanced")}</h3>
+
+      {/* R96: excluded files — patterns hidden from search/graph + dimmed in the tree */}
+      <div className="setting-item setting-item-stacked">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.excludedFiles")}</div>
+          <div className="setting-desc">{t("settings.excludedFilesDesc")}</div>
+        </div>
+        <textarea
+          className="settings-textarea"
+          value={excluded}
+          rows={3}
+          placeholder={"Archive/\n*.png\n{regex}^drafts/"}
+          spellCheck={false}
+          aria-label={t("settings.excludedFiles")}
+          data-testid="settings-excluded-files"
+          onChange={(e) => setExcludedFiles(e.target.value)}
+        />
       </div>
 
       {/* R228: rebuild the in-memory metadata cache (Obsidian "Rebuild vault cache", Advanced) */}
