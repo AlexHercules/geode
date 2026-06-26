@@ -71,6 +71,12 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 249 additions — G2-b 续 slice：设置下拉框原生观感（`appearance:none` + 主题化 CSS chevron 替原生 OS 箭头·对齐 Obsidian reference 00 §四「下拉：圆角框 + 右侧 ⌄」）+ section-子标题 sub-slice 收官·纯 CSS·零新依赖【契约冻结 v0.245·机械档】
+
+> **状态：As-built（已交付·v0.245）。** **背景**：① **section-子标题 sub-slice 收官**——Step 0 核实剩余设置页（核心插件 模板/日记/唯一笔记/笔记重组/快切=各 3 项·页面预览=2·钥匙串=1·关于/命令面板/快捷键/第三方插件=列表/非分组设置页）**全为单组·Obsidian 本就无页内子标题** → 三个多组页（外观 R246/编辑器 R247/文件与链接 R248）已覆盖全部需分组页·分组工作完成。② **本片转下一视觉 slice = 下拉框原生观感**：`.settings-select`（settings.css:208）**无 `appearance:none`** → 显示原生 OS 下拉箭头（macOS 蓝色双箭头⇅）·与 Obsidian 自定义下拉的中性 `⌄` chevron 不符。
+> **设计（1 CSS 规则改·纯视觉·非数据安全[不碰 .md/vault/editor]·颜色走变量）**：`features/settings/settings.css` `.settings-select`：加 `-webkit-appearance:none`+`appearance:none`（去原生箭头）·`background` 拆成 `background-color: var(--bg-input)` + **双 linear-gradient 画 `v` chevron**（`linear-gradient(45deg,transparent 50%,var(--text-muted) 50%)` + `linear-gradient(135deg,var(--text-muted) 50%,transparent 50%)`·position `calc(100%-15px)`/`calc(100%-10px)` center·size 5px·**chevron 颜色走 `--text-muted` 变量·双主题自适**[纯 CSS 渐变无 SVG·规避 SVG 不继承 currentColor 的主题化难题]）·`padding` 右侧加宽给 chevron 留位（`4px 28px 4px 10px`）。**所有 settings-select 实例**（theme/link-path/attachment-delete/properties/obsidian-theme/语言 等）一并受益（共用类）。
+> **分档=机械档（diff = settings.css `.settings-select` 1 规则·纯样式·无新逻辑/无新契约/未碰数据安全面）→ 简化门机械档跳过 → scoped review（窄域：① `appearance:none` 不破坏 select 功能[options 仍可选·套件 selectOption 不受影响]·② chevron 用 `--text-muted` 变量双主题·③ padding 不挤压文字·④ 未误伤其它 select 用途）**。**测试**：`.calibration/r249-e2e.mjs`（computed-style：`.settings-select` `appearance==="none"`·`background-image` 含 2 个 linear-gradient·功能不破[selectOption 改值仍生效]）+ 截图实证（原生箭头→中性 `⌄`）+ 回归 r23/r231[快切 select]/r234[note composer select] 不退。**桌面 probe N/A**（纯 CSS·跨端同样式）。**下一片 G2-b backlog**：控件原生观感其余（按钮态一致性 / 字体管理弹窗）/ typography 微调·或按 reference 找下一处像素偏差·逐项收敛。
+
 ## Round 248 additions — G2-b 续 slice：文件与链接页分组 section 子标题（默认位置/链接/回收站/高级 四组·对齐 Obsidian reference 02）·复用 R246 `.settings-subheader`·JSX 块搬迁 + 子标题 + i18n·零新依赖【契约冻结 v0.244·机械档】
 
 > **状态：As-built（已交付·v0.244）。** **背景**：续 R246/R247 分组模式·推广到文件与链接页。reference 02 分组 = **顶部(默认位置) → 链接(Links) → 回收站(Trash) → 高级(Advanced)**（四组·比外观/编辑器多一组）。Geode 文件与链接页当前 11 项扁平且组间交错（链接项在顶部项之前·回收站/高级交错）→ 重排进 四组 + 加 链接/回收站/高级 子标题（**顶部=首组 headerless**；Geode 无 Obsidian 的「默认打开文件/切换设置文件夹/启用 URI」项→各组只放 Geode 已有项·不造空项）。
