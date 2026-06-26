@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 246 additions — G2-b 续 slice：设置内容区分组 section 子标题（外观页·主题/界面/字体 三组·对齐 Obsidian 页内分组 reference 03 §三/§五）·JSX 块搬迁 + 子标题 + CSS·零新依赖【契约冻结 v0.242·机械档】
+
+> **状态：As-built（已交付·v0.242）。** **背景**：R245 起 G2-b 设置页视觉打磨。reference 03 外观页分组 = **主题 → 界面 → 字体 →（高级）**，每组前有灰色 section 子标题（外观-02 截图实证「高级」子标题：较大较粗·正常色·上方留白·无下划线）。Geode 外观页当前**扁平无分组**且顺序非忠实（theme→字体→界面→obsidian-css）。本片把外观页重排进 主题/界面/字体 三组 + 加 界面/字体 子标题（**主题=首组 headerless·对齐 Obsidian 首组隐式**；Geode 无 Obsidian 的「高级」桌面设置[缩放/原生菜单/窗口边框/半透明/硬件加速]→不造空高级组）。
+> **设计（纯 IA 重排 + 样式 + i18n·无新逻辑/无 store/无数据安全面）**：
+> - **`features/settings/settings.css`**：新 `.settings-subheader`（页内组子标题·`font-size:16px`[< 页标题 17px]·`font-weight:600`·`color:var(--text-normal)`·`margin:22px 0 2px` 上方留白分隔上一组·**无下划线**[页标题 `.settings-heading` 才有]）。
+> - **`features/settings/SettingsModal.tsx` `AppearanceSection`**：**仅重排既有 setting-item 块 + 插 2 个 `<h3 className="settings-subheader">`**（每个 setting-item 块**逐字保留** testid/绑定/默认值·只移动位置）。新顺序：**主题组**(theme-select·accent-color·obsidian-css·obsidian-theme·snippets) → `界面` 子标题 → **界面组**(inline-title·tab-title-bar·ribbon·status-bar·对齐 reference 界面序 inline→tabbar→ribbon) → `字体` 子标题 → **字体组**(font-interface·font-text·font-monospace·font-size·quick-font-zoom)。
+> - **`core/i18n/dict.views.ts`**：`settings.subheaderInterface`（EN「Interface」/ZH「界面」）+ `settings.subheaderFonts`（EN「Fonts」/ZH「字体」）×中英。
+> **分档=机械档（diff = SettingsModal AppearanceSection 块搬迁 + 2 子标题 + settings.css 1 类 + i18n 2 键·纯 IA 重排/样式/文案·无新逻辑/无新契约/未碰数据安全面）→ 简化门机械档跳过 → scoped review（窄域：① 14 个 setting-item testid/绑定/默认值搬迁后逐一保留[对照清单]·② 子标题 i18n 键真实存在·③ 无重复/遗漏 setting-item·④ 顺序符合 reference）**。**测试**：`.calibration/r246-e2e.mjs`（外观页 14 个原 testid 全在·界面/字体 子标题存在·DOM 顺序：主题组 → 界面子标题 → 界面组 → 字体子标题 → 字体组·子标题文案正确）+ 回归 r23 设置模态不退。**桌面 probe N/A**（纯前端 IA/CSS·跨端同）。**下一片 G2-b backlog**：其它设置页（编辑器/文件与链接等）的页内分组子标题·按 reference 各页结构逐页推进。
+
 ## Round 245 additions — G2-b 设置页视觉打磨 slice：设置左导航选中项忠实度（accent 紫 → 中性灰·对齐 Obsidian `--background-modifier-active-hover`）·纯 CSS·零新依赖【契约冻结 v0.241·机械档】
 
 > **状态：As-built（已交付·v0.241）。** **背景（用户 R244 拍板转设置页视觉打磨·R245 删除去向 parked）**：G2-b = 对照 reference 截图逐像素校准设置模态视觉。Step 0 实测纠误：`settings.css` **零硬编码颜色**（全走 CSS 变量·R178/G2-a 已立好）→「硬编码→变量」无活；真·偏差 = **左导航选中项用了 accent 紫高亮**（`rgba(139,124,246,.18)` bg + accent 紫文字/图标），而 **Obsidian 设置左导航选中项是【中性灰】高亮**（reference 03/§三「选中项有灰底高亮」·§四 accent 仅用于 开关 ON / 主按钮 / 链接·**不含 nav 选中**·截图实证 nav 内无紫）。
