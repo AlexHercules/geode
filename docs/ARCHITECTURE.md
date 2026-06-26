@@ -71,6 +71,14 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 248 additions — G2-b 续 slice：文件与链接页分组 section 子标题（默认位置/链接/回收站/高级 四组·对齐 Obsidian reference 02）·复用 R246 `.settings-subheader`·JSX 块搬迁 + 子标题 + i18n·零新依赖【契约冻结 v0.244·机械档】
+
+> **状态：As-built（已交付·v0.244）。** **背景**：续 R246/R247 分组模式·推广到文件与链接页。reference 02 分组 = **顶部(默认位置) → 链接(Links) → 回收站(Trash) → 高级(Advanced)**（四组·比外观/编辑器多一组）。Geode 文件与链接页当前 11 项扁平且组间交错（链接项在顶部项之前·回收站/高级交错）→ 重排进 四组 + 加 链接/回收站/高级 子标题（**顶部=首组 headerless**；Geode 无 Obsidian 的「默认打开文件/切换设置文件夹/启用 URI」项→各组只放 Geode 已有项·不造空项）。
+> **设计（纯 IA 重排 + i18n·复用 R246 `.settings-subheader` CSS·无新逻辑/无 store/无数据安全面）**：
+> - **`features/settings/SettingsModal.tsx` `FilesAndLinksSection`**：**仅重排既有 11 个 setting-item 块 + 插 3 个 `<h3 className="settings-subheader">`**（每块逐字保留 testid/绑定/默认值·只移位置；**newnote segmented 块 + 其后的 `{newNoteLoc==="folder" && (...)}` 条件 path 块必须一起搬·保持相邻**）。新顺序：**顶部组**(newnote segmented[root/current/folder] + 条件 newnote-folder-path · attachment-folder) → `链接` 子标题 → **链接组**(link-path-format · auto-update-links · link-use-markdown · detect-extensions) → `回收站` 子标题 → **回收站组**(delete-confirm-toggle · attachment-delete-mode) → `高级` 子标题 → **高级组**(excluded-files · rebuild-cache)。
+> - **`core/i18n/dict.views.ts`**：`settings.subheaderLinks`（EN「Links」/ZH「链接」）+ `settings.subheaderTrash`（EN「Trash」/ZH「回收站」）+ `settings.subheaderAdvanced`（EN「Advanced」/ZH「高级」）×中英。
+> **分档=机械档（diff = SettingsModal FilesAndLinksSection 块搬迁 + 3 子标题 + i18n 3 键·纯 IA 重排/文案·复用既有 CSS·无新逻辑/无新契约/未碰数据安全面）→ 简化门机械档跳过 → scoped review（窄域：① 11 个 setting-item testid/绑定搬迁后逐一保留[byte 级 set-diff]·② 子标题 i18n 键真实·③ 无重复/遗漏·④ newnote 条件 path 块仍紧随 segmented·⑤ 顺序符 reference 02）**。**测试**：`.calibration/r248-e2e.mjs`（文件与链接页 11 原 testid 全在·链接/回收站/高级 子标题存在·DOM 顺序 顶部组 → 链接 → 回收站 → 高级·newnote=folder 时条件 path 仍在顶部组）+ 回归 r23/r242/r244 设置相关不退。**桌面 probe N/A**（纯前端 IA·跨端同）。**下一片 G2-b backlog**：核心插件各页（模板/日记/唯一笔记/笔记重组/快切/页面预览）+ 关于/钥匙串 等剩余页分组（多数页设置少·可能本就无需分组·逐页核 reference）。
+
 ## Round 247 additions — G2-b 续 slice：编辑器页分组 section 子标题（顶部/显示/行为·对齐 Obsidian reference 01）·复用 R246 `.settings-subheader`·JSX 块搬迁 + 子标题 + i18n·零新依赖【契约冻结 v0.243·机械档】
 
 > **状态：As-built（已交付·v0.243）。** **背景**：R246 给外观页建了 `.settings-subheader` 分组模式·R247 推广到编辑器页。reference 01 编辑器页分组 = **顶部(无分组) → 显示(Display) → 行为(Behavior) → 高级(Advanced)**。Geode 编辑器页当前 17 项扁平且顺序非忠实（显示/行为项交错）→ 重排进 顶部/显示/行为 三组 + 加 显示/行为 子标题（**顶部=首组 headerless**；Geode 无 Obsidian 高级项[自动转换 HTML / Vim 模式·Vim 待批依赖]→不造空高级组）。
