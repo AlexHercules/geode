@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 254 additions — Stacked tabs（堆叠标签页·一个 tab 组内同时渲染全部 tab 为横向 cascade·Obsidian native「Stack tabs / Unstack tabs」·原 Andy Matuschak Mode 内化为核心）·逻辑档·data-safety【🔒 立项·契约冻结 v0.249·实现待下一迭代】
+
+> **状态：立项（contract frozen·实现未落地）。** 用户 R253 收尾拐点拍板「Stacked tabs 立项(推荐)」（R250 已表态想优先·零新依赖·boundary-gated 集里最适合自主推进者）。**Obsidian 行为（WebSearch 实证）**：Stacked tabs 是 tab 组（=Geode `PaneLeaf`）内的替代视图——组内**全部 tab 同时渲染**为横向并排的列（像桌上扇开的纸张），active tab 展开、其余折叠成窄竖标题条；点条或横向滚动切焦点。每组独立 toggle（tab 组「⌄」菜单「Stack tabs/Unstack tabs」+ 命令 `workspace:toggle-stacked-tabs`）。
+>
+> **关键判断（Step 0 explorer 实查·决定难度）**：**Geode 已支持 split**（`PaneSplitView` 递归渲染 pane 树·每 leaf 各挂一个 EditorPane·**多 EditorPane 同屏共存早是既成事实**）→ **多挂载的 data-safety 早被 split 解决**：autosave/dirty/flush 全 **per-DocumentHandle（per-file）非 per-EditorPane**（`documents.ts:54`「one dirty flag + one debounced save per FILE, regardless of pane count」）·`flushAll()` 遍历所有 handle·同文档跨 view 编辑 sync 转发（`documents.ts:85`）·refcount acquire/release（`EditorPane.tsx:460`）。**故 Stacked tabs 本质 = 把 `PaneLeafView` 的「只渲 activeTab」改成「stacked 时渲全部 tab」·复用同一套已验证机制·非新建数据安全面**。R23 active-view 闩锁陈旧教训此处不复发（focusin 驱动·unmount 仅当闩锁==自己才清·split 多 view 已验证）。
+>
+> **冻结契约（加性·不动现有字段）**：
+> - **`core/types.ts`**：`PaneLeaf` 加 `stacked?: boolean`（缺省=false=今日单挂载行为·**加性可选字段·不破坏既有持久化 JSON**）。`PaneSplit`/`PaneNode`/`WorkspaceState` 不动。
+> - **`core/workspace.ts`**：① `toggleStacked(paneId)` mutation（翻转该 leaf 的 `stacked`·emit + persist）；② **`sanitizeNode` 的 leaf 分支显式读取 `stacked`（默认 false）** —— 该分支返回新对象字面量·**漏写=重启丢失**（命中 memory [[geode-serialized-enum-multiple-sites]]：序列化字段必在每个 dispatch/round-trip 站点 parity）·必测 persist→reload→restore。
+> - **`app/App.tsx` `PaneLeafView`（:1805）**：`leaf.stacked` 为真时 **map `leaf.tabs` 全部各挂一个 view**（每个走现有 viewType 分流 graph/backlinks/.../markdown·:1825-1837），非 stacked 时维持「只渲 activeTab」。tab 条点击在 stacked 下语义 = **滚动定位到该列 + 设为 active（不再 unmount/remount 切换）**。注册命令 `workspace:toggle-stacked-tabs`（作用于 activePane 所在 leaf）+ tab 组菜单项「Stack/Unstack tabs」+ i18n 键（`dict.*`）。
+> - **`features/editor/EditorPane.tsx`（:593 唯一新协调点）**：挂载时 `if(!modal) view.focus()` 会抢焦——**stacked 一次挂 N 个非 active tab → N 次 focus() 抢焦+滚动跳**。**必须收窄为「仅当 `tab.id===leaf.activeTabId` 才 `focus()`」**（split 下每 leaf 只挂 1 个所以从未暴露此坑·底线①邻接：抢焦会污染 R23 教训面）。确认非 active 挂载不抢 `setActiveView`（闩锁应只认获焦者）。
+> - **`styles/app.css`**：stacked 模式 `.main-content`/`.pane` 内容区改横向 cascade（`flex-direction:row` + `overflow-x:auto`·每 tab 包固定/可折叠宽的「卡片列」·active 展开 inactive 窄条）。无既有 stacked 样式可复用（grep 证）。
+>
+> **分档=逻辑档（碰 editor/EditorPane + workspace 持久化·底线①一票否决）→ data-safety skill 满跑**（重点：① N 编辑器同挂 autosave/flush 各自独立无碍[split 先例坐实·但仍测 stacked 下两 tab 各编辑各落盘]·② `stacked` 字段 persist→reload→restore parity[sanitizeNode]·③ focus 收窄[N 挂载不抢焦/不抢 setActiveView]·④ toggle 时 mount/unmount 竞态[stacked↔unstacked 切换不丢未保存编辑·切换前 flush 或确保 handle 不 drop]·⑤ 同文件在同 stacked 组开两次=同文档跨 view sync[split 双开先例]）→ 简化门 → 多维对抗评审。**文件所有权（并行实现·先冻 core 签名）**：owner A=core（types `stacked` + workspace `toggleStacked`/sanitize parity·**依赖前置先冻**）·owner B=app（App.tsx 渲染 map + 命令 + 菜单 + i18n）·owner C=editor（EditorPane focus 收窄 + app.css cascade）。**测试**：`.calibration/r254-e2e.mjs`（toggle 命令/菜单翻 stacked·stacked 下组内全 tab 同时挂载[多 view 在场]·**两 tab 各自编辑各自 autosave 落盘[底线① 核心]**·focus 不乱跳[active tab 持焦]·**`stacked` persist→reload→restore**·unstack 回单挂载·切换不丢编辑）+ 回归 split 套件（多挂载先例不退）+ workspace persist 套件。**桌面 probe**：纯前端渲染/持久化·跨端同·浏览器权威（同 R253 等价口径）。**实现迭代下一项即取本契约·勿重新 scout。**
+
 ## Round 253 additions — Vim 模式（编辑器 Vim 键位·设置 toggle 门控·🔓 引入 `@replit/codemirror-vim` 新依赖[硬边界#5·用户已授权]·镜像 R232 compartment-toggle）·逻辑档·data-safety【契约冻结 v0.248】
 
 > **状态：As-built（已交付·v0.248）。** **背景（用户 R250 授权·A 系列做完即启）+ A3 verify-first 跳过**：A3「默认打开文件」经 WebSearch 证伪疑似非 vanilla-native（Obsidian 论坛是 feature-request + Bug-graveyard 拒绝·疑 Homepage community plugin 漏入 reference 截图）→ **跳过 A3 防造 phantom（R145/R242 纪律）** → 直接做 Vim（高价值·已授权）。**🔓 引入 `@replit/codemirror-vim`（^6·CM6 6.x 全兼容·peer 全 `^6`）= 硬边界#5·用户明确授权仅此一依赖仅为 Vim**。
