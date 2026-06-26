@@ -196,6 +196,11 @@ export interface PaneLeaf {
   id: string;
   tabs: TabState[];
   activeTabId: string | null;
+  /** R254: Obsidian "Stack tabs" — when true this tab group renders ALL its tabs
+   *  simultaneously as a horizontal cascade (vs only the active tab). Additive &
+   *  optional; absent = false = today's single-tab rendering. Persisted via
+   *  sanitizeNode's leaf branch (must be read there or it's lost on reload). */
+  stacked?: boolean;
 }
 
 export interface PaneSplit {

@@ -16,7 +16,7 @@ import {
 import type { NewTabMode } from "@core/appearance";
 import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
-import type { PaneLeaf, PaneNode, PaneSplit } from "@core/types";
+import type { PaneLeaf, PaneNode, PaneSplit, TabState } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
 import { Icon } from "./icons";
 import { Explorer } from "@features/explorer/Explorer";
@@ -234,6 +234,12 @@ export function App() {
         name: () => t("cmd.toggleSource"),
         hotkey: "Mod+Shift+E",
         callback: () => workspace.toggleActiveSourceMode(),
+      }),
+      commands.register({
+        // R254: Obsidian "Toggle stacked tabs" — stack/unstack the active tab group
+        id: "workspace:toggle-stacked-tabs",
+        name: () => t("cmd.toggleStackedTabs"),
+        callback: () => workspace.toggleStacked(workspace.getActivePane().id),
       }),
       commands.register({
         id: "slides:start",
@@ -1809,6 +1815,25 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const isActive = ws.activePaneId === leaf.id;
   const activeTab = leaf.tabs.find((t) => t.id === leaf.activeTabId) ?? null;
+  const stacked = leaf.stacked === true && leaf.tabs.length > 0;
+
+  // R254: render one tab's content via the viewType dispatch. `autoFocus` gates
+  // EditorPane's mount focus() so a stacked group (all tabs mounted at once)
+  // doesn't fight over focus — only the leaf's active tab grabs it.
+  const renderTab = (tab: TabState, autoFocus: boolean) =>
+    tab.viewType === "graph" ? (
+      <GraphView />
+    ) : tab.viewType === "backlinks" ? (
+      <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
+    ) : tab.viewType === "outgoinglinks" ? (
+      <div className="main-outgoinglinks-view markdown-reading-view"><OutgoingLinksPanel /></div>
+    ) : tab.viewType === "outline" ? (
+      <div className="main-outline-view markdown-reading-view"><OutlinePanel /></div>
+    ) : tab.viewType === "attachment" ? (
+      <AttachmentView key={tab.id} tab={tab} />
+    ) : (
+      <EditorPane key={tab.id} tab={tab} autoFocus={autoFocus} />
+    );
 
   return (
     <section
@@ -1820,21 +1845,39 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
       }}
     >
       <TabBar leaf={leaf} />
-      <div className="main-content">
-        {activeTab ? (
-          activeTab.viewType === "graph" ? (
-            <GraphView />
-          ) : activeTab.viewType === "backlinks" ? (
-            <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
-          ) : activeTab.viewType === "outgoinglinks" ? (
-            <div className="main-outgoinglinks-view markdown-reading-view"><OutgoingLinksPanel /></div>
-          ) : activeTab.viewType === "outline" ? (
-            <div className="main-outline-view markdown-reading-view"><OutlinePanel /></div>
-          ) : activeTab.viewType === "attachment" ? (
-            <AttachmentView key={activeTab.id} tab={activeTab} />
-          ) : (
-            <EditorPane key={activeTab.id} tab={activeTab} />
-          )
+      <div className={`main-content${stacked ? " is-stacked" : ""}`}>
+        {stacked ? (
+          // R254 Stacked tabs: render EVERY tab as a horizontal-cascade column,
+          // all mounted (autosave stays per-file). Clicking a column activates it
+          // (setActiveTab re-keys leaf.activeTabId; EditorPane focuses on activation).
+          leaf.tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`stacked-column${tab.id === leaf.activeTabId ? " is-active" : ""}`}
+              data-testid={`stacked-column-${tab.id}`}
+              onMouseDownCapture={() => {
+                if (tab.id !== leaf.activeTabId) app.workspace.setActiveTab(tab.id);
+              }}
+            >
+              <button
+                type="button"
+                className="stacked-column-header"
+                data-testid={`stacked-column-header-${tab.id}`}
+                title={tab.title}
+                // don't let the button grab focus on mousedown — the column's
+                // onMouseDownCapture already activates the tab, and EditorPane's
+                // activation effect then focuses the editor; without this the button
+                // would steal that focus back on mouseup (R255 review).
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => app.workspace.setActiveTab(tab.id)}
+              >
+                <span className="stacked-column-title">{tab.title}</span>
+              </button>
+              <div className="stacked-column-body">{renderTab(tab, tab.id === leaf.activeTabId)}</div>
+            </div>
+          ))
+        ) : activeTab ? (
+          renderTab(activeTab, true)
         ) : (
           <EmptyState />
         )}
@@ -2079,6 +2122,11 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
             onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("column"); })}
           >
             {t("app.tabSplitDown")}
+          </button>
+          <div className="tab-context-sep" />
+          {/* R254: Stack/Unstack the whole tab group (Obsidian "Stack tabs") */}
+          <button role="menuitem" data-testid="tabctx-toggle-stacked" onClick={() => runMenu(() => app.workspace.toggleStacked(leaf.id))}>
+            {t(leaf.stacked ? "app.tabUnstack" : "app.tabStack")}
           </button>
         </div>
       )}

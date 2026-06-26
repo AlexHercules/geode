@@ -447,6 +447,62 @@ textarea:focus {
   overflow: hidden;
 }
 
+/* R254 Stacked tabs: the pane content area becomes a horizontal cascade of
+   columns — one per tab, all mounted (so autosave stays per-file/底线①), shown
+   side by side at a readable width with horizontal scroll. The active column is
+   emphasized with an accent edge. Clicking a column's header/body activates it. */
+.main-content.is-stacked {
+  flex-direction: row;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.stacked-column {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  flex: 0 0 clamp(360px, 60%, 720px);
+  min-width: 0;
+  border-right: 1px solid var(--border);
+}
+
+.stacked-column-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 2rem;
+  width: 100%;
+  padding: 0 0.6rem;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 0.85em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stacked-column.is-active .stacked-column-header {
+  background: var(--bg-app);
+  color: var(--text-normal);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.stacked-column-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stacked-column-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* R212: main-area aux-panel wrappers (outgoing links / outline) must fill the pane
    as a column-flex child so the panel's height:100% resolves to a bounded scrollable
    viewport (same fix as R211 .main-backlinks-view in backlinks.css). */

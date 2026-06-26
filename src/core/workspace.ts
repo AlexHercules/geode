@@ -709,6 +709,17 @@ export class Workspace {
     this.emitActiveFile();
   }
 
+  /** R254: toggle "Stack tabs" for a pane (tab group). Stacked renders ALL tabs as
+   *  a horizontal cascade. Per-leaf flag, persisted via update() (mirrors
+   *  toggleTabPin). No emitActiveFile — a view toggle doesn't change the active file. */
+  toggleStacked(paneId: string) {
+    this.update((s) => {
+      if (!findLeaf(s.root, paneId)) return s;
+      const root = mapLeaf(s.root, paneId, (l) => ({ ...l, stacked: !l.stacked }));
+      return { ...s, root };
+    });
+  }
+
   /**
    * Split the active pane. The new sibling pane starts with a duplicate of the
    * active tab (Obsidian behaviour); if the pane is empty the split is a no-op.
@@ -1454,7 +1465,9 @@ function sanitizeNode(
     const activeTabId = tabs.some((t) => t.id === n.activeTabId)
       ? (n.activeTabId as string)
       : tabs[0]?.id ?? null;
-    return { kind: "leaf", id: paneId(n.id), tabs, activeTabId };
+    // R254: stacked is an additive persisted leaf flag — must be read here (this
+    // branch returns a fresh literal) or it round-trips to undefined on reload.
+    return { kind: "leaf", id: paneId(n.id), tabs, activeTabId, stacked: n.stacked === true };
   }
   if (n.kind === "split") {
     if (!Array.isArray(n.children)) return null;

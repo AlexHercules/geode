@@ -302,7 +302,7 @@ function InlineTitleInput(props: {
  * returns the SAME object and the CM view survives with its undo history,
  * cursor and scroll intact (R3 defect fix).
  */
-export function EditorPane({ tab }: { tab: TabState }) {
+export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus?: boolean }) {
   const app = useApp();
   const t = useI18n();
   const metaRevision = useStore(app.metadata.revision);
@@ -590,7 +590,11 @@ export function EditorPane({ tab }: { tab: TabState }) {
     // template picker in the same commit) focusing here would steal focus from
     // the modal input — keystrokes would silently land in the document and
     // autosave (R23 review critical). Mirror the modal:closed restore guard.
-    if (!app.workspace.state.get().modal) view.focus();
+    // R254: `autoFocus` is false for non-active tabs in a stacked group — without
+    // this gate all N mounted editors would call focus() on mount and fight (last
+    // one wins, scroll-jumps to an arbitrary column). Only the leaf's active tab
+    // grabs focus. (Split never exposed this: each leaf mounts only its active tab.)
+    if (autoFocus && !app.workspace.state.get().modal) view.focus();
     if (app.workspace.getActiveTab()?.id === tab.id) {
       app.documents.setActiveView(view, handle.path);
     }
@@ -651,6 +655,22 @@ export function EditorPane({ tab }: { tab: TabState }) {
   useEffect(() => {
     viewRef.current?.contentDOM.setAttribute("spellcheck", String(spell));
   }, [spell]);
+
+  /* ---------- R255: stacked-tab activation focus ---------- */
+  // In stacked mode the editor stays mounted across activation, so the mount-time
+  // focus() above never re-fires when this tab becomes active via its header button /
+  // the tab bar / a command (all of which only re-key activeTabId). Focus on the
+  // autoFocus false→true transition so keystrokes land in the now-active column, not
+  // the previously-focused one. Modal-guarded (R23). In non-stacked mode autoFocus is
+  // constant-true per mount, so this never fires there (zero behavior change).
+  const prevAutoFocusRef = useRef(autoFocus);
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view && autoFocus && !prevAutoFocusRef.current && !app.workspace.state.get().modal) {
+      view.focus();
+    }
+    prevAutoFocusRef.current = autoFocus;
+  }, [autoFocus]);
 
   /* ---------- R226: right-to-left preference → live CM contentDOM ---------- */
   useEffect(() => {
