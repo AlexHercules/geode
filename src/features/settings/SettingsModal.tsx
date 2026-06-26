@@ -33,6 +33,8 @@ import {
   setAutoPairMarkdown,
   smartLists,
   setSmartLists,
+  vimMode,
+  setVimMode,
   showBacklinksInDocument,
   setShowBacklinksInDocument,
   detectAllExtensions,
@@ -141,7 +143,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.247.0";
+export const APP_VERSION = "0.248.0";
 
 type SectionId =
   | "about"
@@ -695,6 +697,7 @@ function EditorSection() {
   const autoPair = useStore(autoPairBrackets);
   const autoPairMd = useStore(autoPairMarkdown);
   const smartList = useStore(smartLists);
+  const vim = useStore(vimMode);
   const backlinksInDoc = useStore(showBacklinksInDocument);
   const foldH = useStore(foldHeading);
   const newTabMode = useStore(defaultNewTabMode);
@@ -1038,6 +1041,26 @@ function EditorSection() {
             </button>
           ))}
         </div>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-editor-advanced">{t("settings.subheaderAdvanced")}</h3>
+
+      {/* R253: Vim key bindings — @replit/codemirror-vim in the editor (Obsidian "Vim 模式", Editor › Advanced per reference/01-编辑器.md, default OFF) */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.vimMode")}</div>
+          <div className="setting-desc">{t("settings.vimModeDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${vim ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={vim}
+          aria-label={t("settings.vimMode")}
+          data-testid="settings-vim-mode-toggle"
+          onClick={() => setVimMode(!vim)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
     </section>
   );

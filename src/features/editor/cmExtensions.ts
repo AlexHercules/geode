@@ -16,6 +16,7 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, indentWithTab } from "@codemirror/commands";
+import { vim } from "@replit/codemirror-vim";
 import { markdown, markdownLanguage, markdownKeymap } from "@codemirror/lang-markdown";
 import { HighlightStyle, LanguageSupport, foldService, indentUnit, syntaxHighlighting } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -48,7 +49,7 @@ import type { FileNode, HeadingRef } from "@core/types";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
-import { autoPairBrackets, autoPairMarkdown, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, smartLists, tabIndentSize } from "@core/appearance";
+import { autoPairBrackets, autoPairMarkdown, foldHeading, hideReferenceMarks, indentUsingTabs, showLineNumbers, smartLists, tabIndentSize, vimMode } from "@core/appearance";
 import { getEditorExtensions } from "@core/editorExtensions";
 import { linkPathFormat } from "@core/linkFormat";
 import { attachmentIngest } from "./attachments";
@@ -583,6 +584,21 @@ export function smartListExtension(on: boolean): Extension {
 }
 
 /**
+ * R253: Obsidian's Editor "Vim key bindings" — `on` installs @replit/codemirror-vim's `vim()`
+ * (normal/insert/visual modes, ex commands); `off` → nothing (plain editing). Owned by a
+ * Compartment so EditorPane can flip it without rebuilding the view (mirrors smartLists). vim()
+ * self-manages its keymap precedence (above defaultKeymap); it sits BELOW the R33 Prec.highest
+ * command interception so Geode hotkeys (Cmd+P …) still win over vim's normal-mode keys. Vim's
+ * edits go through the standard CM dispatch, so docChanged → autosave fires unchanged (底线①).
+ * Wrapped in Prec.high so vim's keymap outranks `defaultKeymap` — otherwise defaultKeymap's
+ * `Escape → simplifySelection` (R63 multi-cursor) shadows vim's insert→normal Escape, trapping the
+ * user in insert mode. (Still below the R33 Prec.highest command interceptor.)
+ */
+export function vimExtension(on: boolean): Extension {
+  return on ? Prec.high(vim()) : [];
+}
+
+/**
  * R17 (review fix): lang-markdown's markdown() bundles its own `headerIndent`
  * foldService whose Setext/ATX section folding bypasses the frozen R17 fold
  * semantics — e.g. the pseudo-heading an unclosed/comment-bearing frontmatter
@@ -620,6 +636,8 @@ export function buildEditorExtensions(opts: {
   markdownWrapCompartment: Compartment;
   /** R232: owned by EditorPane — smartLists toggle reconfigures it in place */
   smartListCompartment: Compartment;
+  /** R253: owned by EditorPane — vimMode toggle reconfigures it in place */
+  vimCompartment: Compartment;
   /** R156: owned by EditorPane — the foldHeading toggle reconfigures it in place */
   foldServiceCompartment: Compartment;
   /** R115: owned by EditorPane — plugin-contributed CM6 extensions
@@ -628,7 +646,7 @@ export function buildEditorExtensions(opts: {
   /** stable container for the React PropertiesPanel portal (R22) */
   propertiesHost?: HTMLElement;
 }): Extension[] {
-  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, markdownWrapCompartment, smartListCompartment, foldServiceCompartment, compatExtensionCompartment } =
+  const { app, getPath, mode, modeCompartment, lineNumberCompartment, indentCompartment, closeBracketsCompartment, markdownWrapCompartment, smartListCompartment, vimCompartment, foldServiceCompartment, compatExtensionCompartment } =
     opts;
   return [
     // R33 — route command hotkeys through the app command layer (R32) while the
@@ -644,6 +662,10 @@ export function buildEditorExtensions(opts: {
         keydown: (e) => app.commands.handleKeydown(e),
       }),
     ),
+    // R253: Vim key bindings — empty when off; EditorPane reconfigures on the vimMode toggle. Placed
+    // right below the R33 command interception so Geode hotkeys still win, but above the rest so vim's
+    // normal-mode keys intercept letters. In the BASE list (not modeCompartment) → survives live↔source.
+    vimCompartment.of(vimExtension(vimMode.get())),
     propertiesHostFacet.of(opts.propertiesHost ?? null),
     modeCompartment.of(editorModeExtensions(app, getPath, mode, hideReferenceMarks.get())),
     // R88: line-number gutter — empty when off; EditorPane reconfigures on toggle

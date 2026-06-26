@@ -160,6 +160,18 @@ export function setSmartLists(on: boolean): void {
   persistBool(SMART_LISTS_KEY, on);
 }
 
+/** R253: Obsidian's Editor "Vim key bindings" — use Vim keybindings in the editor (@replit/codemirror-vim).
+ *  Default OFF (Obsidian default). Applied per CM view via a Compartment reconfigured reactively in
+ *  EditorPane (mirrors smartLists). The vim extension lives in the BASE extension list (not the
+ *  live/source modeCompartment) so it survives a live↔source switch. */
+const VIM_MODE_KEY = "geode.vimMode";
+export const vimMode = new Store<boolean>(readBool(VIM_MODE_KEY, false));
+
+export function setVimMode(on: boolean): void {
+  vimMode.set(on);
+  persistBool(VIM_MODE_KEY, on);
+}
+
 /** R154 (㊷): Obsidian's "Backlink in document" — show the note's linked mentions at
  *  the bottom of the reading view. Default OFF (Obsidian opt-in). Read-only: the section
  *  is appended below the rendered content in EditorPane, so it never touches the markdown

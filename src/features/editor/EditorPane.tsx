@@ -14,6 +14,7 @@ import {
   autoPairBrackets,
   autoPairMarkdown,
   smartLists,
+  vimMode,
   showInlineTitle,
   showBacklinksInDocument,
   foldHeading,
@@ -40,6 +41,7 @@ import {
   closeBracketsExtension,
   markdownWrapExtension,
   smartListExtension,
+  vimExtension,
   editorModeExtensions,
   indentExtensions,
   refreshProperties,
@@ -320,6 +322,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const autoPairMd = useStore(autoPairMarkdown);
   /* R232: smart-lists preference — reconfigure the markdownKeymap compartment reactively */
   const smartList = useStore(smartLists);
+  /* R253: Vim key bindings preference — reconfigures the vim compartment reactively */
+  const vim = useStore(vimMode);
   /* R224: hide-reference-marks preference — reconfigures the mode compartment (live preview) */
   const hideRefMarks = useStore(hideReferenceMarks);
   // R156: Fold heading — reconfigure the fold-service compartment on change
@@ -363,6 +367,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
   const markdownWrapCompartmentRef = useRef<Compartment | null>(null);
   /** R232: compartment for the markdownKeymap (list continuation) — smartLists reconfigures it */
   const smartListCompartmentRef = useRef<Compartment | null>(null);
+  /** R253: compartment for the vim() extension — vimMode reconfigures it */
+  const vimCompartmentRef = useRef<Compartment | null>(null);
   /** R156: compartment for the fold service — the foldHeading toggle reconfigures it */
   const foldServiceCompartmentRef = useRef<Compartment | null>(null);
   /** R115: compartment for plugin-contributed CM6 extensions (registerEditorExtension) */
@@ -517,6 +523,8 @@ export function EditorPane({ tab }: { tab: TabState }) {
     markdownWrapCompartmentRef.current = markdownWrapCompartment;
     const smartListCompartment = new Compartment();
     smartListCompartmentRef.current = smartListCompartment;
+    const vimCompartment = new Compartment();
+    vimCompartmentRef.current = vimCompartment;
     const foldServiceCompartment = new Compartment();
     foldServiceCompartmentRef.current = foldServiceCompartment;
     const compatExtensionCompartment = new Compartment();
@@ -537,6 +545,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
           closeBracketsCompartment,
           markdownWrapCompartment,
           smartListCompartment,
+          vimCompartment,
           foldServiceCompartment,
           compatExtensionCompartment,
           // R22: portal target for the live-mode PropertiesPanel
@@ -611,6 +620,7 @@ export function EditorPane({ tab }: { tab: TabState }) {
       closeBracketsCompartmentRef.current = null;
       markdownWrapCompartmentRef.current = null;
       smartListCompartmentRef.current = null;
+      vimCompartmentRef.current = null;
       foldServiceCompartmentRef.current = null;
       compatExtensionCompartmentRef.current = null;
       view.destroy();
@@ -682,6 +692,14 @@ export function EditorPane({ tab }: { tab: TabState }) {
     if (!view || !compartment) return;
     view.dispatch({ effects: compartment.reconfigure(smartListExtension(smartList)) });
   }, [smartList]);
+
+  /* ---------- R253: Vim key bindings preference → CM compartment (vim()) ---------- */
+  useEffect(() => {
+    const view = viewRef.current;
+    const compartment = vimCompartmentRef.current;
+    if (!view || !compartment) return;
+    view.dispatch({ effects: compartment.reconfigure(vimExtension(vim)) });
+  }, [vim]);
 
   /* ---------- R156: fold heading preference → CM compartment ---------- */
   useEffect(() => {
