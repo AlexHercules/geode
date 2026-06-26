@@ -247,13 +247,17 @@ export function parseNote(path: string, content: string): NoteMetadata {
   // same-file anchors `#x` are NOT vault links → skipped. The raw href is kept
   // verbatim as the target (resolveMarkdownLink decodes/strips at resolution).
   for (const m of masked.matchAll(MARKDOWN_LINK_RE)) {
-    if (m[1] === "!") continue; // image embed — markdown embeds deferred (㉞ follow-up)
     const href = m[3];
     if (href.startsWith("#") || href.startsWith("//") || /^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+    // R243: index image embeds `![](x)` too (needed for accurate attachment orphan detection +
+    // so renames rewrite them). The LinkRef span EXCLUDES the leading `!` (from = match + 1) so
+    // R16's rewrite preserves the embed marker automatically — it rewrites only `[text](href)`,
+    // leaving the `!` before the span untouched (`![](old)` → `![](new)`, never demoted to a link).
+    const from = m[1] === "!" ? m.index! + 1 : m.index!;
     links.push({
       target: href,
       alias: m[2] || undefined,
-      from: m.index!,
+      from,
       to: m.index! + m[0].length,
       context: makeSnippet(content, m.index!, m.index! + m[0].length),
       kind: "markdown",
@@ -811,8 +815,8 @@ export class MetadataIndex {
   /**
    * R101 (㊵ 续续续续): every non-md attachment referenced by a note → the set of
    * notes that reference it. Captures `[[img.png]]` / `![[img.png]]` (wikilink
-   * embeds) and `[txt](doc.pdf)` (markdown links); markdown image embeds `![](…)`
-   * are NOT in `meta.links` (parseMarkdown skips them) so they're not indexed here.
+   * embeds), `[txt](doc.pdf)` (markdown links) AND `![](img.png)` (markdown image
+   * embeds — indexed since R243 so attachment orphan detection is complete).
    * Lazily computed, cached per index revision (mirrors getTagMap). Drives the
    * graph "Attachments" nodes — every value is a real vault path (a node id is
    * `attachment:<path>`; openNode strips the prefix to open the actual file).

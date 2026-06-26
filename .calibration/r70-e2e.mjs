@@ -9,7 +9,7 @@
  *  - basename / path-form / anchor / titled md links → new vault-relative href
  *  - %20-encoded paths; wikilink + md link coexist (both rewritten)
  *  - external (https/mailto) + same-file (#anchor) + code-region links untouched
- *  - md image embed ![](pic.png) NOT rewritten (deferred ㉞ follow-up)
+ *  - md image embed ![](pic.png) IS rewritten on rename (R243: indexed, ! preserved)
  *  - relative ../ resolved; folder move rewrites path-form md links
  *
  * Unique mdl/ tree, immune to the sample seed vault.
@@ -86,11 +86,11 @@ await rename("mdl/my note.md", "mdl/my note 2.md");
 const sref = await read("mdl/spaceref.md");
 ok("[s](mdl/my%20note.md) → [s](mdl/my%20note%202.md)", sref.includes("[s](mdl/my%20note%202.md)"), sref);
 
-// ── 3. md image embed NOT rewritten (deferred); md link to attachment IS ─────
-console.log("— md image embed deferral —");
+// ── 3. md image embed IS now rewritten (R243: indexed, ! preserved); md link too ─────
+console.log("— md image embed rewrite (R243) —");
 await rename("mdl/pic.png", "mdl/pic2.png");
 const iref = await read("mdl/imgref.md");
-ok("image embed ![i](pic.png) UNTOUCHED (deferred)", iref.includes("![i](pic.png)"), iref);
+ok("image embed ![i](pic.png) → ![i](mdl/pic2.png) (R243: now rewritten, ! preserved)", iref.includes("![i](mdl/pic2.png)"), iref);
 ok("md LINK [l](pic.png) → [l](mdl/pic2.png) (attachment link rewritten)", iref.includes("[l](mdl/pic2.png)"), iref);
 
 // ── 4. folder move rewrites path-form md links ───────────────────────────────

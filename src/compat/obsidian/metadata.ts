@@ -529,15 +529,17 @@ export class MetadataCache extends Events {
     }
     if (meta.links.length > 0) {
       // R119: split `![[..]]` embeds out of links (Obsidian files them separately).
-      // Core's WIKILINK_RE matches the inner `[[..]]` (l.from points at `[[`), so an
-      // embed's `!` sits at l.from-1; include it in the embed's original/position.
+      // Both core LinkRefs put l.from at the inner bracket (`[[` or `[`) so an embed's
+      // `!` always sits at l.from-1 — true for `![[..]]` (wikilink) AND `![](..)`
+      // (markdown, indexed since R243). A non-embed link's `[` can never be preceded by
+      // `!` (the regex would have captured it as an embed), so `content[l.from-1]==="!"`
+      // alone classifies embeds regardless of kind; include the `!` in original/position.
       // When content is undefined (pre-warm transient, NOT cached) embeds can't be
       // detected → everything stays in links; the next call heals once content lands.
       const links: LinkCache[] = [];
       const embeds: EmbedCache[] = [];
       for (const l of meta.links) {
-        const isEmbed =
-          l.kind === "wikilink" && content !== undefined && l.from > 0 && content[l.from - 1] === "!";
+        const isEmbed = content !== undefined && l.from > 0 && content[l.from - 1] === "!";
         const from = isEmbed ? l.from - 1 : l.from;
         (isEmbed ? embeds : links).push({
           link: l.target,

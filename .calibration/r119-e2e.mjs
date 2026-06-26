@@ -29,13 +29,17 @@ await page.waitForFunction(() => !!window.__app && !!window.app && !!window.app.
 
 const app = (fn, arg) => page.evaluate(fn, arg);
 const MIX = "see [[target]] and embed ![[image.png]] and aliased ![[doc.pdf|My Doc]]\n";
+// R243: markdown image embed `![](x)` is now indexed (kind "markdown", `!` at l.from-1) — buildCache
+// must bucket it into .embeds with `!`-inclusive original, NOT .links (the widen-recheck consumer).
+const MDEMB = "md embed ![](mdpic.png) and md link [reg](mdpic.png) here\n";
 await app(async (cs) => {
   try { await window.__app.vault.create("mix.md", cs[0]); } catch { /* exists */ }
   try { await window.__app.vault.create("onlylink.md", "just a [[plain]] link\n"); } catch { /* exists */ }
   try { await window.__app.vault.create("onlyembed.md", "only an ![[pic.png]] embed\n"); } catch { /* exists */ }
+  try { await window.__app.vault.create("mdembed.md", cs[1]); } catch { /* exists */ }
   // warm the content cache so buildCache sees the text (embeds need content to detect the `!`)
-  for (const p of ["mix.md", "onlylink.md", "onlyembed.md"]) await window.__app.vault.read(p);
-}, [MIX]);
+  for (const p of ["mix.md", "onlylink.md", "onlyembed.md", "mdembed.md"]) await window.__app.vault.read(p);
+}, [MIX, MDEMB]);
 // getFileCache(file) — poll until the content-backed cache (with embeds) is ready
 await page.waitForFunction(() => {
   const c = window.app.metadataCache.getFileCache(window.app.vault.getFileByPath("mix.md"));
@@ -62,6 +66,18 @@ ok("note with only [[..]] → embeds is absent (undefined)", onlyLink.embeds ===
 ok("note with only [[..]] → links present", onlyLink.links?.some((l) => l.link === "plain"));
 const onlyEmbed = await cache("onlyembed.md");
 ok("note with only ![[..]] → embeds present, links absent", onlyEmbed.embeds?.length === 1 && onlyEmbed.links === undefined, JSON.stringify({ e: onlyEmbed.embeds, l: onlyEmbed.links }));
+
+console.log("— R243: markdown image embed ![](x) buckets into embeds (not links), ! preserved —");
+await page.waitForFunction(() => {
+  const c = window.app.metadataCache.getFileCache(window.app.vault.getFileByPath("mdembed.md"));
+  return c && Array.isArray(c.embeds) && c.embeds.length === 1;
+}, null, { timeout: 5000 });
+const mde = await cache("mdembed.md");
+ok("md embed ![](mdpic.png) lands in .embeds (1), not .links", mde.embeds?.length === 1, JSON.stringify({ e: mde.embeds, l: mde.links }));
+ok("md embed link='mdpic.png' with !-inclusive original '![](mdpic.png)'", mde.embeds.some((e) => e.link === "mdpic.png" && e.original === "![](mdpic.png)"), JSON.stringify(mde.embeds));
+ok("md embed position spans the '!' (start offset = index of '!')", mde.embeds.some((e) => e.position?.start?.offset === MDEMB.indexOf("![](mdpic.png)")), JSON.stringify(mde.embeds.map((e) => e.position?.start?.offset)));
+ok("md LINK [reg](mdpic.png) stays in .links (NOT promoted to embed)", mde.links?.some((l) => l.original === "[reg](mdpic.png)") && !mde.embeds.some((e) => e.original.startsWith("[reg]")), JSON.stringify({ e: mde.embeds, l: mde.links }));
+ok("no .embeds entry is a plain link (every embed original starts with '![')", mde.embeds.every((e) => e.original.startsWith("![")), JSON.stringify(mde.embeds.map((e) => e.original)));
 
 console.log(`\nR119 E2E: ${passed} passed, ${failed} failed`);
 if (failed) console.log("FAILED:", fails.join(", "));
