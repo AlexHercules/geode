@@ -71,6 +71,15 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 247 additions — G2-b 续 slice：编辑器页分组 section 子标题（顶部/显示/行为·对齐 Obsidian reference 01）·复用 R246 `.settings-subheader`·JSX 块搬迁 + 子标题 + i18n·零新依赖【契约冻结 v0.243·机械档】
+
+> **状态：As-built（已交付·v0.243）。** **背景**：R246 给外观页建了 `.settings-subheader` 分组模式·R247 推广到编辑器页。reference 01 编辑器页分组 = **顶部(无分组) → 显示(Display) → 行为(Behavior) → 高级(Advanced)**。Geode 编辑器页当前 17 项扁平且顺序非忠实（显示/行为项交错）→ 重排进 顶部/显示/行为 三组 + 加 显示/行为 子标题（**顶部=首组 headerless**；Geode 无 Obsidian 高级项[自动转换 HTML / Vim 模式·Vim 待批依赖]→不造空高级组）。
+> **设计（纯 IA 重排 + i18n·复用 R246 `.settings-subheader` CSS·无新逻辑/无 store/无数据安全面）**：
+> - **`features/settings/SettingsModal.tsx` `EditorSection`**：**仅重排既有 17 个 setting-item 块 + 插 2 个 `<h3 className="settings-subheader">`**（每块逐字保留 testid/绑定/默认值·只移位置）。新顺序：**顶部组**(focus-new-tab-toggle·newtab segmented[default-new-tab-mode]·view-mode-toggle) → `显示` 子标题 → **显示组**(readable-toggle·strict-linebreaks·properties-display·fold-heading·line-numbers·hide-reference-marks·rtl·**backlinks-indoc**) → `行为` 子标题 → **行为组**(spellcheck·autopair·autopair-markdown·smart-lists·indent-tabs·tabsize)。
+> - **deviation（记一句）**：`backlinks-indoc`（在文档中显示反向链接）是 Obsidian **Backlinks 核心插件**设置（非 Editor），Geode 历轮放在 Editor 页——本片不挪动其所属页（超范围）·仅就近归入「显示」组（它控制文档内一个显示元素·最贴近）。
+> - **`core/i18n/dict.views.ts`**：`settings.subheaderDisplay`（EN「Display」/ZH「显示」）+ `settings.subheaderBehavior`（EN「Behavior」/ZH「行为」）×中英。
+> **分档=机械档（diff = SettingsModal EditorSection 块搬迁 + 2 子标题 + i18n 2 键·纯 IA 重排/文案·无新逻辑/无新契约/未碰数据安全面·复用既有 CSS 类）→ 简化门机械档跳过 → scoped review（窄域：① 17 个 setting-item testid/绑定搬迁后逐一保留[byte 级 set-diff]·② 子标题 i18n 键真实·③ 无重复/遗漏·④ 顺序符 reference）**。**测试**：`.calibration/r247-e2e.mjs`（编辑器页 17 原 testid 全在·显示/行为 子标题存在·DOM 顺序 顶部组 → 显示子标题 → 显示组 → 行为子标题 → 行为组）+ 回归 r23 设置模态不退。**桌面 probe N/A**（纯前端 IA·跨端同）。**下一片 G2-b backlog**：文件与链接等其余设置页分组子标题·逐页推进。
+
 ## Round 246 additions — G2-b 续 slice：设置内容区分组 section 子标题（外观页·主题/界面/字体 三组·对齐 Obsidian 页内分组 reference 03 §三/§五）·JSX 块搬迁 + 子标题 + CSS·零新依赖【契约冻结 v0.242·机械档】
 
 > **状态：As-built（已交付·v0.242）。** **背景**：R245 起 G2-b 设置页视觉打磨。reference 03 外观页分组 = **主题 → 界面 → 字体 →（高级）**，每组前有灰色 section 子标题（外观-02 截图实证「高级」子标题：较大较粗·正常色·上方留白·无下划线）。Geode 外观页当前**扁平无分组**且顺序非忠实（theme→字体→界面→obsidian-css）。本片把外观页重排进 主题/界面/字体 三组 + 加 界面/字体 子标题（**主题=首组 headerless·对齐 Obsidian 首组隐式**；Geode 无 Obsidian 的「高级」桌面设置[缩放/原生菜单/窗口边框/半透明/硬件加速]→不造空高级组）。
