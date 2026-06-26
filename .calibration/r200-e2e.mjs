@@ -5,6 +5,8 @@
  *
  * Uses a SYNTHETIC contextmenu event dispatched on the CM contentDOM so a programmatic
  * selection is preserved (a real right-click would move the caret). Clipboard perms granted.
+ * R252 added file-action items AFTER the clipboard items, so assertions about the exact menu
+ * contents were updated to "Cut/Copy/Paste first, file-actions next, plugin items LAST".
  */
 import { chromium } from "playwright";
 
@@ -81,12 +83,12 @@ await setSel(0, 0); // no selection
 await ctxMenu();
 await page.waitForSelector('[data-testid="compat-menu"]', { timeout: 3000 });
 let labels = await menuLabels();
-ok("menu shows on right-click even with NO plugin item (always-show)", labels.length === 3, JSON.stringify(labels));
+ok("menu shows on right-click even with NO plugin item (always-show)", labels.length >= 3, JSON.stringify(labels));
 ok("native items are Cut / Copy / Paste in order", labels[0] === "Cut" && labels[1] === "Copy" && labels[2] === "Paste", JSON.stringify(labels));
 ok("Cut disabled when no selection", (await itemDisabled("Cut")) === true);
 ok("Copy disabled when no selection", (await itemDisabled("Copy")) === true);
 ok("Paste enabled always", (await itemDisabled("Paste")) === false);
-ok("no trailing separator when no plugin items", (await hasSeparator()) === false);
+ok("R252: file-action items follow the clipboard items (>3 total)", labels.length > 3, JSON.stringify(labels));
 await closeMenu();
 
 console.log("B. with a selection → Cut/Copy enabled; Copy writes clipboard");
@@ -133,7 +135,7 @@ await setSel(0, 0);
 await ctxMenu();
 await page.waitForSelector('[data-testid="compat-menu"]', { timeout: 3000 });
 labels = await menuLabels();
-ok("menu = 3 native + 1 plugin item (Cut/Copy/Paste/Plugin Item)", labels.length === 4 && labels[3] === "Plugin Item", JSON.stringify(labels));
+ok("plugin editor-menu item appears LAST (after natives + R252 file-actions)", labels[labels.length - 1] === "Plugin Item" && labels.slice(0, 3).join(",") === "Cut,Copy,Paste", JSON.stringify(labels));
 ok("separator present between native and plugin items", (await hasSeparator()) === true);
 await clickItem("Plugin Item");
 await wait(120);
@@ -145,8 +147,8 @@ await setSel(0, 0);
 await ctxMenu();
 await page.waitForSelector('[data-testid="compat-menu"]', { timeout: 3000 });
 labels = await menuLabels();
-ok("bare-separator plugin → still just Cut/Copy/Paste", labels.length === 3 && labels.join(",") === "Cut,Copy,Paste", JSON.stringify(labels));
-ok("bare-separator plugin → NO trailing/orphan separator (stripped)", (await hasSeparator()) === false);
+ok("bare-separator plugin → no plugin item added (only natives + R252 file-actions)", !labels.includes("Plugin Item") && labels.slice(0, 3).join(",") === "Cut,Copy,Paste", JSON.stringify(labels));
+ok("bare-separator plugin → no dangling trailing separator (last child is an item)", await app(() => { const m = document.querySelector('[data-testid="compat-menu"]'); return !!m && !m.lastElementChild?.classList.contains("menu-separator"); }), "trailing separator not stripped");
 await closeMenu();
 
 ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));

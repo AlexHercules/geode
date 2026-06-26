@@ -62,7 +62,7 @@ ok("the handler received the active MarkdownView info (file = edm.md)", ctx.info
 ok("the handler received a usable Editor (getValue + getSelection)", ctx.editorOk === true);
 if (sawMenu) {
   const labels = await page.$$eval('[data-testid="compat-menu-item"]', (els) => els.map((e) => e.textContent.trim()));
-  ok("R200: menu = native Cut/Copy/Paste + the contributed 'Editor Item'", labels.length === 4 && labels.slice(0, 3).join(",") === "Cut,Copy,Paste" && labels[3].includes("Editor Item"), JSON.stringify(labels));
+  ok("R252: native Cut/Copy/Paste first, file-actions next, plugin 'Editor Item' LAST", labels.slice(0, 3).join(",") === "Cut,Copy,Paste" && labels[labels.length - 1].includes("Editor Item"), JSON.stringify(labels));
   await page.$$eval('[data-testid="compat-menu-item"]', (els) => { const it = els.find((e) => e.textContent.trim().includes("Editor Item")); if (it) it.click(); });
   const fired = await app(() => window.__emFired);
   ok("clicking the contributed item runs its onClick", fired === "fired:edm.md", JSON.stringify(fired));
@@ -79,7 +79,7 @@ await page.click(".cm-content", { button: "right" });
 const stillShows = await page.waitForSelector('[data-testid="compat-menu"]', { timeout: 3000 }).then(() => true).catch(() => false);
 ok("R200: compat Menu shows native items even when no plugin contributes", stillShows === true);
 const natLabels = await page.$$eval('[data-testid="compat-menu-item"]', (els) => els.map((e) => e.textContent.trim()));
-ok("R200: the 3 native items are Cut/Copy/Paste", natLabels.join(",") === "Cut,Copy,Paste", JSON.stringify(natLabels));
+ok("R252: native Cut/Copy/Paste are first 3 (R252 file-actions follow)", natLabels.slice(0, 3).join(",") === "Cut,Copy,Paste", JSON.stringify(natLabels));
 
 console.log(`\nR131 E2E: ${passed} passed, ${failed} failed`);
 if (failed) console.log("FAILED:", fails.join(", "));

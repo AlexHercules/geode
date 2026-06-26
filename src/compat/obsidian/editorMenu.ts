@@ -10,6 +10,8 @@
 import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { t } from "@core/i18n";
+import { getCommandName, type CommandRegistry } from "@core/commands";
+import type { Command } from "@core/types";
 import { Menu } from "./ui";
 import type { Workspace } from "./workspace";
 
@@ -81,14 +83,49 @@ function addClipboardItems(menu: Menu, view: EditorView): void {
   );
 }
 
-export function editorContextMenuExtension(workspace: Workspace): Extension {
+/**
+ * R252: the editor right-click file-action items (reference 08), grouped with separators. Each item
+ * is pure wiring to an EXISTING vetted command via `commands.execute(id)` — the command reads
+ * `workspace.getActiveFile()` itself, so no path is threaded. Labels reuse `getCommandName` (the
+ * bookmark item's name auto-flips bookmark/unbookmark). Delete routes to the vetted `app:delete-file`
+ * (deleteConfirm + flush + recoverable trash + R244 orphan handling) — never a new delete path (底线①);
+ * rename routes to `workspace:edit-file-title` (R16 link rewrite). Desktop-only items (reveal/open in
+ * default app) carry `available: () => isTauri() && …`, so the per-command `available()` gate below
+ * hides them in the browser — necessary because `commands.execute()` does NOT check `available()`.
+ * A separator is added only before a NON-EMPTY group, so hiding the desktop group leaves no dangling rule.
+ */
+const FILE_ACTION_GROUPS: string[][] = [
+  ["bookmarks:bookmark-file", "editor:add-property", "app:export-pdf", "file-explorer:copy-path", "workspace:copy-url"],
+  ["file-explorer:reveal-in-system", "file-explorer:open-in-default-app"],
+  ["workspace:edit-file-title", "app:delete-file"],
+];
+
+function addFileActionItems(menu: Menu, commands: CommandRegistry): void {
+  const byId = new Map(commands.list().map((c) => [c.id, c]));
+  for (const group of FILE_ACTION_GROUPS) {
+    const cmds = group
+      .map((id) => byId.get(id))
+      .filter((c): c is Command => !!c && c.available?.() !== false);
+    if (cmds.length === 0) continue;
+    menu.addSeparator();
+    for (const cmd of cmds) {
+      menu.addItem((item) => {
+        item.setTitle(getCommandName(cmd)).onClick(() => void commands.execute(cmd.id));
+        if (cmd.id === "app:delete-file") item.setWarning(true);
+      });
+    }
+  }
+}
+
+export function editorContextMenuExtension(workspace: Workspace, commands: CommandRegistry): Extension {
   return EditorView.domEventHandlers({
     contextmenu(evt, view) {
       const info = workspace.activeEditor;
       if (!info) return false; // no active markdown editor → let the browser menu through
       const menu = new Menu();
       addClipboardItems(menu, view);
-      const nativeCount = menu.dom.childElementCount; // the 3 native items (no separator yet)
+      addFileActionItems(menu, commands);
+      const nativeCount = menu.dom.childElementCount; // native clipboard + file-action items + separators
       workspace.trigger("editor-menu", menu, info.editor, info);
       // place ONE rule between the native items and plugin-contributed items, only when a
       // plugin actually added a non-separator node (avoids a dangling or doubled rule)
