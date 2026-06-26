@@ -207,10 +207,21 @@
 
 .settings-select {
   flex-shrink: 0;
-  padding: 4px 10px;
+  /* R249 (G2-b): appearance:none drops the native OS arrow; a two-gradient `v` chevron
+     (themeable via --text-muted, no SVG → no currentColor problem) matches Obsidian's custom
+     dropdown look (reference 00 §四「下拉：圆角框 + 右侧 ⌄」). Extra right padding clears it. */
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 4px 28px 4px 10px;
   font-size: 13px;
   color: var(--text-normal);
-  background: var(--bg-input);
+  background-color: var(--bg-input);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) center, calc(100% - 10px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
   border: 1px solid var(--border);
   border-radius: 7px;
   outline: none;
