@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 265 additions — TFile.stat 真 ctime/mtime/size：FS metadata → core tree → compat TFile·跨 Rust+core+compat·逻辑档·零新依赖·只读元数据【As-built·v0.258】
+
+> **状态：As-built（已交付·v0.258）。** Step 0（r264-probe 法：载真 Templater+Dataview 跑基操·捕 reportGap）取最高值非投机 gap = **TFile.stat**：probe 实测 `f.stat.size === 0`（应 501）+ 预存文件 ctime/mtime 0 → Dataview `file.size`/`SORT file.ctime`/`file.mtime` **静默错数据**（像 R262 类型化 frontmatter 的保真 bug）。**Templater 设置渲染证伪搁置**：= Obsidian 1.13 **声明式 settings 框架**（`getSettingDefinitions` → 9 类型 group/folder/page/toggle/dropdown/list/number/text/atom），逆向一插件用法 = 深/脆/多轮，立项再做。
+>
+> **契约冻结**：`FileNode.{ctime,mtime,size}: number`（ms epoch / 字节·可选）= 跨三层单一真源。Tauri 路径**无 TS transform**——`TauriVaultAdapter.listTree` 是裸 `invoke<FolderNode>`，Rust `Node::File` 的额外 serde 字段直接反序列化进 `FileNode`。
+>
+> **三层改动（全只读元数据·零写路径）**：
+> - **Rust `src-tauri/src/main.rs`**：`Node::File` 加 `ctime/mtime/size: f64`；`read_dir_recursive` 的 is_file 分支读 `entry.metadata()` → `.len()`→size、`.modified()`→mtime、`.created()`→ctime（`system_time_ms` 把 SystemTime 转 ms epoch；`.created()` 在某些 Linux FS 不支持 → 退回 mtime；metadata 失败 → 0）。
+> - **core `types.ts` + `vault.ts`**：`FileNode` 加可选 `ctime?/mtime?/size?`。`MemoryVaultAdapter`：`times` Map<path,{ctime,mtime}>（seeded 文件默认 `loadTime`）+ `touch()`（createFile/writeFile/writeBinary）/ `moveTimes()`（rename 各分支）/ `dropTimes()`（remove/trash·防会话泄漏）；`fileStat(path)`（size = `TextEncoder` 字节长度·ctime/mtime 取 times map）；`listTree` 把 `fileStat` 传 `makeFileNode(path, stats?)`。
+> - **compat `files.ts`**：`applyStat(file, node)` 复制已定义的 ctime/mtime/size；`ensureFile(path, fire, node?)` —— rebuild 传 node 时 `applyStat`，live create 无 node 时会话戳 `Date.now()` + `sizeOf`（readCached 字节）；`rebuildFromVault` 存 `geodeVault` + 给每个 FileNode 传 node；`handleModified`/`handleCreated`——内部改用 `sizeOf(readCached)`，**外部改用 `treeNode(path)` 兜底**（外部 sync/git-pull 改在事件前删内容缓存 → sizeOf undefined → 走 re-list 的 tree node 真 FS stat·评审驱动修[minor]）；删 `reportGap("TFile","stat")`。
+>
+> **分档·data-safety**：逻辑档（碰 `core/vault.ts` 红线）→ data-safety skill 满跑。**stat 全程只读元数据**：grep 确认无写路径读 `.stat`（仅 files.ts 写·Dataview 读）；`touch`/`moveTimes`/`dropTimes` 是 `times` map 纯元数据副作用·不碰内容写路径（create/write/rename/delete 字节未动）；4-lens data-safety 维**零数据丢失·零内容损坏**（仅 1 nit）。
+>
+> **评审/验证**：简化门删 `makeFileNode` 中间变量（净 −5·spread 形态等价）。**ultracode 4-lens 对抗 = 4 confirmed（1 minor + 3 nit·均 ship·全已修）+ 17 refuted·全 4 lens ship**：① writeBinary 漏 touch → 加（memory 二进制 create 戳会话 ctime）；② **外部改 stat.size 陈旧（minor）→ handleModified/Created 加 treeNode 兜底**（外部 sync 后 Dataview file.size 实时）；③ `times` map remove/trash 未清 → 加 dropTimes 防泄漏。r265-e2e **11/11**（create size=501·modify size=8 + ctime 保留 + mtime 进·**rebuild ctime+size 存活**[设计守的回归]·Dataview file.size 非零）·回归 r261/r263/r264 插件·r28 rename 23·r93 copy 22·r42 delete 17·r33 字节 37·r24/r127·typecheck 0·cargo check + release build。**桌面 probe by-equivalence**：headless WKWebView 此环境不载 GUI（data-safety §D 无 CDP/App-Nap 类局限）→ Rust `fs::metadata` 经 cargo + release build 验证（编译 + serde derive + 字段名匹配 FileNode）+ `FileNode→TFile.stat` 管线两端同码且浏览器 e2e 证明 + `fs::metadata().len()` 对已存在文件返真值是标准保证 + 只读元数据无写面。
+
 ## Round 264 additions — 编辑器抗插件 inline-query ViewPlugin 崩溃硬化：editorInfoField 非空 + tokenClassNodeProp 桥·逻辑档·零新依赖·纯读【As-built·v0.257】
 
 > **状态：As-built（已交付·v0.257）。** Step 0 改取向：原拟「真插件迁移续深」，但 Templater 设置渲染 = Obsidian 1.13 **声明式 settings 框架**（`getSettingDefinitions` → 9 类型 group/folder/page/toggle/dropdown/list/number/text/atom·base SettingTab.display 编排）—— 逆向一插件用法 = 深/脆/多轮，**证伪跳过立项**。改用**新 probe 法**（`r264-probe`：加载真 Templater + Dataview 跑基操，捕 `[obsidian-compat]` reportGap + 未捕异常）→ 揪出**真崩溃**（非投机 gap）。

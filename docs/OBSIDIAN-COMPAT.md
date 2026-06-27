@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R265 套件回归（2026-06-28，TFile.stat 真 ctime/mtime/size：FS metadata → core tree → compat TFile·跨 Rust+core+compat·逻辑档·零新依赖·只读元数据 · 简化门 −5 · ultracode 4-lens 4 confirmed[1 minor+3 nit·均 ship·全已修]+17 refuted · 桌面 by-equivalence）
+
+R265 = r264-probe 法（载真 Templater+Dataview 跑基操·捕 reportGap）取最高值非投机 gap = **TFile.stat**（probe 实测 `f.stat.size===0`·应 501·Dataview `file.size`/`SORT file.ctime` 静默错数据·像 R262 类型化）。Templater 设置渲染=1.13 声明式框架（9 类型）证伪太深搁置。**详见 ARCHITECTURE「Round 265 additions」**。
+
+**套件矩阵（R265·不回退）**：
+- **r265-e2e 11/11 全绿**（新增）= create size=501（content byte length·原 0）· modify size=8 + ctime 保留 + mtime 进 · **rebuild ctime+size 存活**（设计守的回归：memory times map + tree-carried stats）· 真 Dataview `TABLE file.size` 非零。
+- **修 3 层（全只读元数据·零写路径）**：Rust `read_dir_recursive` 读 `fs::metadata`→ctime/mtime/size 进 `Node::File`（`invoke<FolderNode>` 直反序列化）· core `FileNode` 加可选 stats + `MemoryVaultAdapter` times map（touch/moveTimes/dropTimes）+ fileStat（size=byte length）· compat `applyStat`/`ensureFile(node?)`/`treeNode` 外部改兜底 · 删 `reportGap("TFile","stat")`。
+- **回归不回退**：r261 Dataview 13 · r263 Templater 10 · r264 8 · r262 18 · **r28 rename 23** · **r93 copy 22** · **r42 delete 17** · **r33 字节 37** · r24 12 · r127 15。
+- **🔓 依赖**：零新依赖。**数据安全**：stat 全程**只读元数据**（grep 无写路径读 `.stat`·touch/moveTimes/dropTimes 纯 times-map 副作用·内容写路径未碰）·4-lens data-safety 零数据丢失/零内容损坏（1 nit）。
+- **桌面 probe by-equivalence**：headless WKWebView 此环境不载 GUI → Rust `fs::metadata` cargo+release build 验证 + `FileNode→TFile.stat` 管线两端同码且浏览器证明 + 只读元数据无写面。
+
 ### R264 套件回归（2026-06-28，编辑器抗插件 inline-query ViewPlugin 崩溃硬化：editorInfoField 非空 + tokenClassNodeProp 桥·逻辑档·零新依赖·纯读 · 简化门 clean · ultracode 4-lens 3 confirmed[全文档级·均 ship]+15 refuted · 桌面 N/A-by-equivalence）
 
 R264 = R263 后**用新 probe 法**（载真 Templater+Dataview 跑基操·捕 reportGap+未捕异常）揪出 Dataview inline-query CM6 ViewPlugin 在编辑器开 live 模式时的**真崩溃**（CM6 隔离·编辑器存活·但每开笔记报错+inline 渲染断）：① `field(editorInfoField).file` 读 null（R260 字段初始 null·插件构造期在 seeding microtask 前无守卫读）② `type.prop(tokenClassNodeProp)`（新版 @codemirror/language 删此导出→undefined→崩）。**详见 ARCHITECTURE「Round 264 additions」**。
