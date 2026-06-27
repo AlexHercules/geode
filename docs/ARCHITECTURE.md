@@ -71,6 +71,20 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 268 additions — 第四个真插件 Tasks 8.2.2（查询引擎）+ `app.metadataTypeManager` shim + init-before-plugins 序修·逻辑档·零新依赖【As-built·v0.261】
+
+> **状态：As-built（已交付·v0.261）。商业主轴 breadth 第四大件。** `r266-probe` 深探确认 Dataview/Templater/Calendar 深用已稳 → 取第四个真插件。**Tasks 8.2.2**（obsidian-tasks-group·GPL·882KB·仅 `require("obsidian")` + `require("@codemirror/view")`·零外部 require[rrule/date 全 bundle]·零新依赖·minAppVersion 1.8.7 > Geode 1.8.0 = 仅警告非 block·gitignored 不 commit）= **status=enabled + ```tasks「not done」查询渲染 `.plugin-tasks-query-result`（4 项·经 R132 code-block processor）+ 7+ 命令**（toggle-done/edit-task/set-status-symbol…）。**新表面 = 任务查询引擎 + 状态命令**。
+>
+> **真 gap + 修**：Tasks 的 `setObsidianPropertiesTypes()` 读 `this.app.metadataTypeManager.getAllProperties()` 然后对其 KNOWN 属性 `setType(name, type)`。Geode app shim **缺 `metadataTypeManager`** → `undefined.getAllProperties()` 抛（Tasks try/catch 捕 = 非致命·但 console.error 日志）。**修两处**：① `core/properties.ts`：`PropertyTypeRegistry.getAll(): Map<string,string>`（返 `new Map(regMap)` 副本）。② `compat/obsidian/plugin.ts`：App 加 `get metadataTypeManager`（reportGap-记档·partial）→ `metadataTypeManagerStub`：`getAllProperties()` 投影 R22 property-type 注册表为 `{[name]:{name,type,count:0}}`（小写键·Obsidian-faithful）·`setType(name,type)` → `void propertyTypes.assign(name, type as PropertyType)`（vetted R22 序列化 RMW 写 .obsidian/types.json·未知类型 verbatim 透传）。
+>
+> **⚠️ 评审纠误（「never overclaim」铁律·minor finding 已修）**：Tasks 实际经 setType 注册的是它**自己的 22 个 `TQ_*` 查询-layout widget 属性**（21 个 `type:"checkbox"` 开关 + 1 个 `type:"text"`·bundle 实证 0 个 date）——**非** date 属性（due/scheduled 等）。故价值是**消那个被捕的 getAllProperties 错误 + 注册其 widget 属性类型**，不是「属性 UI 显日期选择器」。
+>
+> **🔑 评审揪 major（已修）= init-before-plugins 序**：原 `propertyTypes.init(vault)` 在 `main.tsx:1540 loadObsidianPlugins` **之后**（1555）。但 `loadObsidianPlugins` 是 await 的（Tasks onload 全程跑完）·Tasks onload 里 `setType→propertyTypes.assign` 跑时 `regVault===null`（init 还没设）→ `assign` 早返**不写 types.json**·随后 init `regMap = map`（重读 types.json·没 Tasks 的类型）→ **Tasks 注册被静默丢弃**（首启）。**修 = `await propertyTypes.init(vault)` 提到 plugins（loadExternal + loadObsidianPlugins）之前**：regVault + regMap 先设 → 插件 onload 的属性类型 assign 经 vetted RMW **持久化**·非 R267 的 plugin-load-vs-render 那种风险（这是 config 读前置·init 设 regVault·零 view-restore 影响）。e2e Part A 现测**真 during-load 路径**（插件 onload setType 必须持久化·原会丢）。
+>
+> **分档·data-safety**：逻辑档（setType 写 .obsidian/types.json + boot 序改）。**data-safety 3-lens 维 0 confirmed**：assign 是 R22 vetted 序列化 RMW（in-memory-first·vault-switch race-guard·保 sibling 键·malformed JSON 中止）·写 config 非笔记内容·无笔记写丢失路径；boot 序改是 config 读前置（init 设 regVault·读 types.json）·非 R267 的 view-restore 风险。getAll 返副本（不可经返回值改内部 regMap）。
+>
+> **评审/验证**：简化门 clean（≤2 文件·getAll 一行·metadataTypeManagerStub 2 真调用法）。**ultracode 3-lens 对抗 = 2 confirmed（1 minor overclaim + 1 major init 序·均已修）+ 11 refuted·data-safety lens 0**。r268-e2e **10/10**（Part A 插件 **onload setType 持久化**[init-before-plugins 序修验证·原首启会丢] + getAllProperties onload 可读 + 不抛；Part B 真 Tasks status=enabled + 命令 + ```tasks 渲染 4 项 + **0 error**[原 1 个被捕 getAllProperties 崩]）·回归 r261 Dataview 13/r263 Templater 10/r266 Calendar 7/r267 10/**r72 property-types 26**/r73 23/r24/r33/r127 全绿·typecheck 0·build。**桌面 by-equivalence**：纯 JS shim + boot 序·两端同码。**🏁 真插件迁移四大件 = Dataview + Templater + Calendar + Tasks。⚠️ 插件 compat 收益递减·R269 建议盘点交用户。**
+
 ## Round 267 additions — 静态 `.app-container` wrapper 包裹 #root → 彻底消 R266 onload-portal 瞬态·机械档·零新依赖【As-built·v0.260】
 
 > **状态：As-built（已交付·v0.260）。** R266 留 1 个 onload 瞬态：Geode 在 `main.tsx:1540` 先 `loadObsidianPlugins`、再 `createRoot().render()`（1580）——plugins 载于 React commit `.app-container` 之前，Calendar 的 **eager onload Svelte `<Portal target=".app-container">`** 抢挂一次失败。

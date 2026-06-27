@@ -251,6 +251,18 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R268 套件回归（2026-06-28，🎉 第四个真插件 Tasks 8.2.2[查询引擎] 载入并渲染任务查询 + `app.metadataTypeManager` shim + init-before-plugins 序修·逻辑档·零新依赖 · 简化门 clean · ultracode 3-lens 2 confirmed[1 minor+1 major·均已修]+11 refuted · data-safety lens 0 · 桌面 by-equivalence）
+
+R268 = `r266-probe` 深探确认 Dataview/Templater/Calendar 已稳 → 第四个真插件 breadth。**Tasks 8.2.2**（GPL·882KB·零外部 require·零新依赖）=enabled + ```tasks 查询渲染 4 项 + 7+ 命令（新表面=任务查询引擎）。真 gap=`app.metadataTypeManager.getAllProperties()`（缺 metadataTypeManager·崩·Tasks try/catch 捕非致命）。修=core `propertyTypes.getAll()` + compat App `metadataTypeManager`（getAllProperties 投影 R22 注册表·setType→vetted assign 写 types.json）+ **init-before-plugins 序修**（onload assign 持久化）。**Tasks 实注册 22 个 TQ_* widget 属性[checkbox/text·非 date·评审纠 overclaim]**。**详见 ARCHITECTURE「Round 268 additions」**。
+
+**套件矩阵（R268·不回退）**：
+- **r268-e2e 10/10 全绿**（新增·Tasks gitignored·e2e header 载 fetch）= Part A 插件 **onload setType 持久化**（init-before-plugins 序修·原首启丢）+ getAllProperties onload 可读 + 不抛；Part B 真 Tasks status=enabled + 命令 + ```tasks「not done」渲染 `.plugin-tasks-query-result` 4 项 + **0 error**（原 1 个被捕 getAllProperties 崩）。
+- **修**：core `propertyTypes.getAll()`（返副本）· compat App `metadataTypeManager`（getAllProperties + setType→vetted assign）· main.tsx `await propertyTypes.init` 提到 plugins 前（评审 major·onload 属性 assign 持久化）。
+- **回归不回退**：r261 Dataview 13 · r263 Templater 10 · r266 Calendar 7 · r267 10 · **r72 property-types 26** · r73 23 · r24 12 · r33 37 · r127 15。
+- **🔓 依赖**：零新依赖（Tasks 自带 rrule/date bundle·零外部 require）。**数据安全**：3-lens 0 confirmed（setType→assign R22 vetted RMW 写 config 非笔记·boot 序改是 config 读前置非 view-restore 风险）。
+- **桌面 probe by-equivalence**：纯 JS shim + boot 序·两端同码。
+- **🏁 真插件迁移四大件 = Dataview + Templater + Calendar + Tasks。⚠️ 插件 compat 收益递减·R269 建议盘点交用户拍板转向。**
+
 ### R267 套件回归（2026-06-28，静态 `.app-container` wrapper 包裹 #root → 彻底消 R266 onload-portal 瞬态·机械档·零新依赖 · 跳简化门 · scoped review clean · 无对抗 Workflow · 桌面 by-equivalence）
 
 R267 = 修 R266 留的 1 个 onload 瞬态（Geode main.tsx plugins 载于 React commit `.app-container` 前·Calendar eager onload Svelte Portal 抢挂失败）。Step 0 纠误弃 A（load 序修有工作区恢复风险）+ B（Calendar daily-note 点击无明确 gap 防 phantom）→ 取彻底修。**修=index.html 静态 `<div class="app-container"><div id="root">`**（最外层根类·页面加载即在 DOM·早于 plugins·wrapper 在 #root 外不撞 React 树）+ app.css `.app-container` 入 height:100% 链 + revert R266 React-div 类。**详见 ARCHITECTURE「Round 267 additions」**。
