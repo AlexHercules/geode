@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R266 套件回归（2026-06-28，🎉 第三个真插件 Calendar 2.0[VIEW+Svelte] 载入并渲染月历 + `.app-container` 忠实 DOM 类·机械档·零新依赖 · 跳简化门 · scoped review clean · 无对抗 Workflow · 桌面 by-equivalence）
+
+R266 = `r266-probe` 深探先证 Dataview/Templater 深用已稳（TASK/GROUP BY/dataviewjs/inline-reading-view 全渲染·tp.file.creation_date→真日期[R265 TFile.stat 生效]·0 崩）→ 转**商业主轴 breadth = 第三个真插件**。load-test **Calendar 2.0**（liamcain·GPL·489KB·零外部 require·Svelte bundled）=enabled + 月历 Svelte 视图渲染 + 3 命令（新表面=自定义 VIEW+Svelte）。真 gap=Calendar `<Portal target=".app-container">`（弹层挂 Obsidian 标准根类）·Geode 根缺 → 修=App.tsx 根加 `app-container` 类。**详见 ARCHITECTURE「Round 266 additions」**。
+
+**套件矩阵（R266·不回退）**：
+- **r266-e2e 7/7 全绿**（新增·Calendar gitignored·e2e header 载 fetch）= Calendar status=enabled · `.app-container` 在 DOM · 3 命令 · setViewState 开 calendar 视图 · 月历 `<table.calendar>` 渲染 + 周行 · 除记档 onload 瞬态外 0 其它 error。
+- **修**：App.tsx 根 div `"app"` → `"app app-container"`（Obsidian 标准根类·additive·惠及任何 `.app-container` portal/popover/主题插件）。**记档 1 onload 瞬态**（载序：main.tsx plugins 载于 React commit .app-container 前·Calendar eager onload portal 抢挂一次失败·非致命·视图+命令工作·重排 boot 有工作区恢复风险搁置）。
+- **回归不回退**：r23 settings 22 · r245 nav visual 7 · r100 status bar 15 · r24 12 · r261 Dataview 13 · r263 Templater 10 · r33 字节 37。
+- **🔓 依赖**：零新依赖（Calendar 自带 Svelte bundle·零外部 require）。**机械档**：纯 additive DOM 类（无逻辑/数据安全面）。
+- **桌面 probe by-equivalence**：Calendar 同 webview 载·`.app-container` 纯 React className·两端同码。
+
 ### R265 套件回归（2026-06-28，TFile.stat 真 ctime/mtime/size：FS metadata → core tree → compat TFile·跨 Rust+core+compat·逻辑档·零新依赖·只读元数据 · 简化门 −5 · ultracode 4-lens 4 confirmed[1 minor+3 nit·均 ship·全已修]+17 refuted · 桌面 by-equivalence）
 
 R265 = r264-probe 法（载真 Templater+Dataview 跑基操·捕 reportGap）取最高值非投机 gap = **TFile.stat**（probe 实测 `f.stat.size===0`·应 501·Dataview `file.size`/`SORT file.ctime` 静默错数据·像 R262 类型化）。Templater 设置渲染=1.13 声明式框架（9 类型）证伪太深搁置。**详见 ARCHITECTURE「Round 265 additions」**。

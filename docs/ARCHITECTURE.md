@@ -71,6 +71,18 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 266 additions — 第三个真插件 Calendar 2.0（VIEW + Svelte）+ `.app-container` 忠实 DOM 类·机械档·零新依赖【As-built·v0.259】
+
+> **状态：As-built（已交付·v0.259）。商业主轴 breadth 第三大件。** Step 0（`r266-probe` 深探）先证 Dataview/Templater **深用已稳**：TASK / GROUP BY / dataviewjs（data.json 启用）/ reading-view inline `= expr` 全渲染，Templater `tp.file.creation_date` → 真日期（R265 TFile.stat 生效），0 崩。余 reportGap（App.internalPlugins partial / dom.onNodeInserted / registerCliHandler）全是可接受 no-op → 转**第三个真插件**。
+>
+> **Calendar 2.0**（liamcain·GPL·489KB·`isDesktopOnly:false`·minAppVersion 0.9.11·零外部 require[Svelte bundled]·gitignored 不 commit）= **status=enabled + 月历 `<table class="calendar">` Svelte 视图经 `registerView("calendar")` + setViewState 渲染 + 3 命令**（show-calendar-view / reveal-active-note / toggle-week-numbers）。**新表面 = 自定义 VIEW + Svelte 渲染**（vs Dataview 查询 / Templater 模板 / Sort&Permute 命令 / read-time 状态栏）。
+>
+> **真 gap + 修**：Calendar 的 `PopoverMenu.svelte` 用 Svelte `<Portal target=".app-container">`（日期 hover 弹层挂进 Obsidian 标准根容器类）。Geode 根是 `<div className="app">`（App.tsx），缺 `.app-container` → Svelte Portal `querySelector` 抛「No element found」。**修 = App.tsx 两处根 div className `"app"` → `"app app-container"`**（Obsidian 标准根类·R20「镜像 Obsidian DOM 类供主题 CSS targeting」先例的延伸·**additive**：`.app` + `data-testid="app-root"` 全保留·惠及任何用 `.app-container` 的 portal/popover/主题的插件）。
+>
+> **记档·1 onload 瞬态（载序·非本轮引入·搁置）**：Geode 在 `main.tsx:1540` 先 `loadObsidianPlugins`，再 `createRoot().render()`（1580）——**plugins 载于 React commit `.app-container` 之前**。Calendar 的 **eager onload 弹层 portal** 抢在 `.app-container` 入 DOM 前挂一次 → 1 个 `.app-container` not-found（load-only 复现·`.app-container` 1s 后在 DOM）。**非致命**（视图 + 命令工作·视图自身 post-render portal 找得到 `.app-container`）。**重排 boot（render-then-load）有真风险**（工作区恢复插件贡献的视图会先于插件载入 → 失败）→ 不在机械档 scope·R267 候选 A 谨慎评估。
+>
+> **分档·评审**：机械档（纯 additive DOM 类 + 第三方插件 load 验证·无新逻辑/控制流/数据安全面）→ 跳简化门 + **scoped review**（testid 保留 / `.app` 保留 / additive 类不破 CSS[Geode 自身 CSS target `.app`·`.app-container` 仅供主题]/ 插件仍载）·**无对抗 Workflow**。r266-e2e **7/7**（Calendar enabled · `.app-container` 在 DOM · 3 命令 · setViewState 开 calendar 视图 · 月历 `<table.calendar>` 渲染 + 周行 · **除记档 onload 瞬态外 0 其它 error**）·回归 r23 22/r245 7/r100 15/r24/r261/r263/r33 全绿·typecheck 0·build。**🏁 真插件迁移三大件 = Dataview（深用+类型化）+ Templater（载入+模板）+ Calendar（VIEW+Svelte）。**
+
 ## Round 265 additions — TFile.stat 真 ctime/mtime/size：FS metadata → core tree → compat TFile·跨 Rust+core+compat·逻辑档·零新依赖·只读元数据【As-built·v0.258】
 
 > **状态：As-built（已交付·v0.258）。** Step 0（r264-probe 法：载真 Templater+Dataview 跑基操·捕 reportGap）取最高值非投机 gap = **TFile.stat**：probe 实测 `f.stat.size === 0`（应 501）+ 预存文件 ctime/mtime 0 → Dataview `file.size`/`SORT file.ctime`/`file.mtime` **静默错数据**（像 R262 类型化 frontmatter 的保真 bug）。**Templater 设置渲染证伪搁置**：= Obsidian 1.13 **声明式 settings 框架**（`getSettingDefinitions` → 9 类型 group/folder/page/toggle/dropdown/list/number/text/atom），逆向一插件用法 = 深/脆/多轮，立项再做。
