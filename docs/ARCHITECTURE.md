@@ -71,6 +71,21 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 267 additions — 静态 `.app-container` wrapper 包裹 #root → 彻底消 R266 onload-portal 瞬态·机械档·零新依赖【As-built·v0.260】
+
+> **状态：As-built（已交付·v0.260）。** R266 留 1 个 onload 瞬态：Geode 在 `main.tsx:1540` 先 `loadObsidianPlugins`、再 `createRoot().render()`（1580）——plugins 载于 React commit `.app-container` 之前，Calendar 的 **eager onload Svelte `<Portal target=".app-container">`** 抢挂一次失败。
+>
+> **Step 0 取向纠误（弃两条·选第三）**：① **A plugin load 序修（render-then-load）实有真风险** → plugins 故意载于 render 前，是为了 App.tsx 工作区恢复 effect 跑时插件视图类型已注册；重排会让保存布局里的插件贡献视图（如 calendar leaf）先于插件 register 而恢复失败 → 弃。② **B Calendar daily-note 深用** → 实测点击日期不建笔记但**无错**（daily-notes 配置完好：folder「Daily Notes」/format「YYYY-MM-DD」/template/autorun），疑测试事件模拟问题或 Calendar 2.0 Beta 行为，**非明确 Geode gap → 防 phantom（R160）弃**。③ 取**彻底修 R266 瞬态**（concrete·消真 error + 惠及所有 onload-portal 插件）。
+>
+> **修（机械档·DOM 结构 + CSS）**：
+> - **`index.html`**：`<div id="root">` → `<div class="app-container"><div id="root"></div></div>`。`.app-container`（Obsidian 最外层根类）是**静态元素·页面加载即在 DOM·早于 plugins 载入** → Calendar 的 eager onload portal `querySelector(".app-container")` 找得到。**wrapper 在 #root 外** → 挂进它的 portal/popover 是 #root 的 SIBLING，永不撞 React 树（`createRoot` 只管 #root）。
+> - **`src/styles/app.css`**：`.app-container` 加入 `html, body, #root` 的 `height:100%; margin:0` 规则 → wrapper 满 body、#root 满 wrapper，**全高链不破**（#root 仍满屏）。
+> - **`App.tsx`**：revert R266 在 React `.app` div 上加的 `app-container` 类（`"app app-container"` → `"app"`）→ **单一忠实 `.app-container` = 最外层 wrapper**（像 Obsidian），非两处。
+>
+> **为何不撞 React + 不破布局**：`createRoot(#root)` 只 reconcile #root 的子树；portal 挂进 wrapper（#root 的 sibling）→ React 不管 → 无 removeChild 冲突。height 链：body 100% → wrapper 100% → #root 100% → `.app` 100%，截图实证满屏 700px。**无 boot 重排·无工作区恢复风险**（plugins 载序不变）。
+>
+> **分档·评审**：机械档（纯 DOM 结构 + CSS·revert 一个 className·无新逻辑/控制流/数据安全面）→ 跳简化门 + **scoped review**（截图实证布局完好 · 单 `.app-container` 包 #root 在外 · 插件仍载 · 高度链不破 · testid 保留）· **无对抗 Workflow**。r267-e2e **10/10**（Part A 单 `.app-container` wrapper 包 #root 在外 · 布局满屏 700px · 工作区渲染 · 0 error；Part B Calendar onload + view portal 找得 `.app-container` = **0 `.app-container` error**[R266 是 1] · view 仍渲染 · 无其它 error）· 回归 r261 Dataview 13/r263 Templater 10/**r266 Calendar 7/7**[wrapper 满足 `.app-container` + view 渲]/r23 22/r245 7/r100 15/r106 12/r24/r33/r131 全绿 · typecheck 0 · build · 截图布局完好。**⚠️ 插件 compat 渐入收益递减**（三大件已强证商业主轴·余项多 niche/深/低值·R268 候选记于 HANDOFF·可考虑盘点交用户）。
+
 ## Round 266 additions — 第三个真插件 Calendar 2.0（VIEW + Svelte）+ `.app-container` 忠实 DOM 类·机械档·零新依赖【As-built·v0.259】
 
 > **状态：As-built（已交付·v0.259）。商业主轴 breadth 第三大件。** Step 0（`r266-probe` 深探）先证 Dataview/Templater **深用已稳**：TASK / GROUP BY / dataviewjs（data.json 启用）/ reading-view inline `= expr` 全渲染，Templater `tp.file.creation_date` → 真日期（R265 TFile.stat 生效），0 崩。余 reportGap（App.internalPlugins partial / dom.onNodeInserted / registerCliHandler）全是可接受 no-op → 转**第三个真插件**。

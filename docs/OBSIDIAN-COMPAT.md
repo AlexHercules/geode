@@ -251,6 +251,18 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R267 套件回归（2026-06-28，静态 `.app-container` wrapper 包裹 #root → 彻底消 R266 onload-portal 瞬态·机械档·零新依赖 · 跳简化门 · scoped review clean · 无对抗 Workflow · 桌面 by-equivalence）
+
+R267 = 修 R266 留的 1 个 onload 瞬态（Geode main.tsx plugins 载于 React commit `.app-container` 前·Calendar eager onload Svelte Portal 抢挂失败）。Step 0 纠误弃 A（load 序修有工作区恢复风险）+ B（Calendar daily-note 点击无明确 gap 防 phantom）→ 取彻底修。**修=index.html 静态 `<div class="app-container"><div id="root">`**（最外层根类·页面加载即在 DOM·早于 plugins·wrapper 在 #root 外不撞 React 树）+ app.css `.app-container` 入 height:100% 链 + revert R266 React-div 类。**详见 ARCHITECTURE「Round 267 additions」**。
+
+**套件矩阵（R267·不回退）**：
+- **r267-e2e 10/10 全绿**（新增）= Part A 单 `.app-container` wrapper 包 #root 在外 · 布局满屏 700px · 工作区渲染 · 0 error；Part B Calendar onload + view portal 找得 `.app-container` = **0 `.app-container` error**（R266 是 1·瞬态彻底消）· view 仍渲染。
+- **修**：index.html 静态 `.app-container` wrapper（Obsidian 最外层根类·惠及所有 onload-portal/popover/主题插件）+ app.css height 链 + revert R266 React-div 类（单一忠实 wrapper）。无 boot 重排/无 React 冲突/无工作区恢复风险。
+- **回归不回退**：r261 Dataview 13 · r263 Templater 10 · **r266 Calendar 7/7**（wrapper 满足 `.app-container` + view 渲）· r23 22 · r245 7 · r100 15 · r106 12 · r24 12 · r33 37 · r131 8。
+- **🔓 依赖**：零新依赖。**机械档**：纯 DOM 结构 + CSS（无逻辑/数据安全面）·截图实证布局完好。
+- **桌面 probe by-equivalence**：纯静态 DOM + CSS·两端同码。
+- **⚠️ 插件 compat 渐入收益递减**：三大件（Dataview/Templater/Calendar）+ 多证明已强证商业主轴·余项多 niche/深/低值·R268 候选记于 HANDOFF（可考虑盘点交用户）。
+
 ### R266 套件回归（2026-06-28，🎉 第三个真插件 Calendar 2.0[VIEW+Svelte] 载入并渲染月历 + `.app-container` 忠实 DOM 类·机械档·零新依赖 · 跳简化门 · scoped review clean · 无对抗 Workflow · 桌面 by-equivalence）
 
 R266 = `r266-probe` 深探先证 Dataview/Templater 深用已稳（TASK/GROUP BY/dataviewjs/inline-reading-view 全渲染·tp.file.creation_date→真日期[R265 TFile.stat 生效]·0 崩）→ 转**商业主轴 breadth = 第三个真插件**。load-test **Calendar 2.0**（liamcain·GPL·489KB·零外部 require·Svelte bundled）=enabled + 月历 Svelte 视图渲染 + 3 命令（新表面=自定义 VIEW+Svelte）。真 gap=Calendar `<Portal target=".app-container">`（弹层挂 Obsidian 标准根类）·Geode 根缺 → 修=App.tsx 根加 `app-container` 类。**详见 ARCHITECTURE「Round 266 additions」**。
