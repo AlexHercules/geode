@@ -12,6 +12,13 @@ export interface FileNode {
   /** name without extension */
   basename: string;
   extension: string;
+  /** R265 — TFile.stat: created time, ms epoch (desktop FS / memory session). Optional:
+   *  carried by the listing when available; compat TFile.stat falls back when absent. */
+  ctime?: number;
+  /** R265 — last-modified time, ms epoch. */
+  mtime?: number;
+  /** R265 — size in bytes. */
+  size?: number;
 }
 
 export interface FolderNode {

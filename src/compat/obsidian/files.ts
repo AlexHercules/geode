@@ -8,14 +8,22 @@
  *  - rename MUTATES the instance in place and fires per-descendant
  *    rename(file, oldPath) (folder renames fire for the folder AND every child).
  *  - folder delete fires ONE 'delete' with the TFolder, children intact.
- *  - TFile.stat: Geode's tree carries no file stats, so ctime/size stay 0 for
- *    pre-existing files (recorded gap); mtime/ctime are tracked session-local
- *    for live modifies/creates so recency ordering is at least monotonic.
+ *  - TFile.stat (R265): real ctime/mtime/size. Desktop reads FS metadata via the Rust
+ *    listing (carried on FileNode → copied here on rebuild); memory computes size from
+ *    content + tracks session ctime/mtime. Live create/modify stamp ctime/mtime + recompute
+ *    size from the just-written content (a content edit doesn't re-list the tree, so the
+ *    listing size would be stale until the next structural refresh).
  */
-import type { FolderNode, VaultNode } from "@core/types";
+import type { FileNode, FolderNode, VaultNode } from "@core/types";
 import { basename, extension, parentPath, stripExtension, type Vault as GeodeVault } from "@core/vault";
-import { reportGap } from "./gaps";
 import type { Vault } from "./vault";
+
+/** R265 — copy any tree-carried stats (FS metadata on desktop, session+size on memory). */
+function applyStat(file: TFile, node: { ctime?: number; mtime?: number; size?: number }): void {
+  if (node.ctime !== undefined) file.stat.ctime = node.ctime;
+  if (node.mtime !== undefined) file.stat.mtime = node.mtime;
+  if (node.size !== undefined) file.stat.size = node.size;
+}
 
 export interface FileStats {
   /** Time of creation, unix ms. */
@@ -54,6 +62,8 @@ export class FileRegistry {
   private byPath = new Map<string, TAbstractFile>();
   readonly root: TFolder;
   private vaultShim: Vault | null = null;
+  /** R265 — set on rebuildFromVault; used to recompute TFile.stat.size from live content. */
+  private geodeVault: GeodeVault | null = null;
 
   constructor() {
     this.root = new TFolder();
@@ -66,11 +76,29 @@ export class FileRegistry {
   attach(vault: Vault): void {
     this.vaultShim = vault;
     this.root.vault = vault;
-    reportGap(
-      "TFile",
-      "stat",
-      "ctime/size stay 0 for pre-existing files (Geode's tree carries no stats); mtime tracks session-local modifies only",
-    );
+  }
+
+  /** R265 — UTF-8 byte size of the live (cached) content, or undefined when not cached. */
+  private sizeOf(path: string): number | undefined {
+    const content = this.geodeVault?.readCached(path);
+    return content === undefined ? undefined : new TextEncoder().encode(content).length;
+  }
+
+  /** R265 — the current tree FileNode for a path (carries real FS stats on desktop / memory
+   *  size+times). Used as the stat source when readCached is empty (external sync/git-pull edits
+   *  drop the content cache before the event fires). O(tree) — only for single-file events. */
+  private treeNode(path: string): FileNode | undefined {
+    const root = this.geodeVault?.tree.get();
+    if (!root) return undefined;
+    let found: FileNode | undefined;
+    const walk = (n: VaultNode): void => {
+      if (found) return;
+      if (n.kind === "file") {
+        if (n.path === path) found = n;
+      } else n.children.forEach(walk);
+    };
+    walk(root);
+    return found;
   }
 
   private trigger(name: "create" | "modify" | "delete" | "rename", ...data: unknown[]): void {
@@ -122,9 +150,12 @@ export class FileRegistry {
     return folder;
   }
 
-  ensureFile(path: string, fireCreate: boolean): TFile {
+  ensureFile(path: string, fireCreate: boolean, node?: FileNode): TFile {
     const existing = this.byPath.get(path);
-    if (existing instanceof TFile) return existing;
+    if (existing instanceof TFile) {
+      if (node) applyStat(existing, node); // R265: rebuild refreshes stats on a known file
+      return existing;
+    }
     const parent = this.ensureFolder(parentPath(path), fireCreate);
     const file = new TFile();
     if (this.vaultShim) file.vault = this.vaultShim;
@@ -135,16 +166,21 @@ export class FileRegistry {
     file.parent = parent;
     parent.children.push(file);
     this.byPath.set(path, file);
-    if (fireCreate) {
-      // live creation (not a silent rebuild) — session-local timestamps
+    if (node) {
+      applyStat(file, node); // R265: tree-carried stats (FS metadata desktop / memory size+times)
+    } else if (fireCreate) {
+      // live creation (no tree node) — session ctime/mtime + size from the just-written content
       file.stat.ctime = file.stat.mtime = Date.now();
-      this.trigger("create", file);
+      const size = this.sizeOf(path);
+      if (size !== undefined) file.stat.size = size;
     }
+    if (fireCreate) this.trigger("create", file);
     return file;
   }
 
   /** Full silent rebuild from the Geode tree (vault load / reload). */
   rebuildFromVault(geodeVault: GeodeVault): void {
+    this.geodeVault = geodeVault; // R265: lets handleModified recompute size from live content
     this.byPath.clear();
     this.root.children = [];
     const tree = geodeVault.tree.get();
@@ -154,7 +190,7 @@ export class FileRegistry {
         if (node.path) this.ensureFolder(node.path, false);
         node.children.forEach(walk);
       } else {
-        this.ensureFile(node.path, false);
+        this.ensureFile(node.path, false, node); // R265: carry the node's stats onto TFile.stat
       }
     };
     walk(tree);
@@ -175,7 +211,9 @@ export class FileRegistry {
 
   handleCreated(path: string): void {
     if (this.byPath.get(path) instanceof TFile) return; // already known
-    this.ensureFile(path, true);
+    // R265: prefer the tree node's real stats (FS metadata / external create) when present;
+    // ensureFile falls back to a session stamp + content size when the tree hasn't re-listed yet.
+    this.ensureFile(path, true, this.treeNode(path));
   }
 
   handleModified(path: string): void {
@@ -183,6 +221,16 @@ export class FileRegistry {
     if (node instanceof TFolder) return;
     const file = node instanceof TFile ? node : this.ensureFile(path, false);
     file.stat.mtime = Date.now();
+    // R265: internal save keeps the content cache → exact new size. An EXTERNAL edit
+    // (sync/git-pull) drops the cache before the event, so fall back to the re-listed tree
+    // node's stat (real FS ctime/mtime/size on desktop) instead of leaving size stale.
+    const size = this.sizeOf(path);
+    if (size !== undefined) {
+      file.stat.size = size;
+    } else {
+      const treeFile = this.treeNode(path);
+      if (treeFile) applyStat(file, treeFile);
+    }
     this.trigger("modify", file);
   }
 

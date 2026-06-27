@@ -130,9 +130,12 @@ function assertSafeRelPath(path: string): void {
   }
 }
 
-export function makeFileNode(path: string): FileNode {
+export function makeFileNode(
+  path: string,
+  stats?: { ctime?: number; mtime?: number; size?: number },
+): FileNode {
   const name = basename(path);
-  return { kind: "file", path, name, basename: stripExtension(name), extension: extension(name) };
+  return { kind: "file", path, name, basename: stripExtension(name), extension: extension(name), ...stats };
 }
 
 /** depth-first list of all files in a tree */
@@ -839,6 +842,10 @@ export class MemoryVaultAdapter implements VaultAdapter {
   private files = new Map<string, string>();
   private binaryFiles = new Map<string, Uint8Array>();
   private folders = new Set<string>();
+  /** R265 — TFile.stat: session ctime/mtime per path (created/modified during the session);
+   *  seeded files (no entry) default to `loadTime`. Size is computed from content in listTree. */
+  private times = new Map<string, { ctime: number; mtime: number }>();
+  private readonly loadTime = Date.now();
 
   constructor(seed?: Record<string, string>) {
     let actual = seed;
@@ -968,11 +975,11 @@ export class MemoryVaultAdapter implements VaultAdapter {
     }
     for (const path of this.files.keys()) {
       if (path.split("/")[0].startsWith(".")) continue; // R42: dot-skip
-      ensureFolder(parentPath(path)).children.push(makeFileNode(path));
+      ensureFolder(parentPath(path)).children.push(makeFileNode(path, this.fileStat(path)));
     }
     for (const path of this.binaryFiles.keys()) {
       if (path.split("/")[0].startsWith(".")) continue; // R42: dot-skip
-      ensureFolder(parentPath(path)).children.push(makeFileNode(path));
+      ensureFolder(parentPath(path)).children.push(makeFileNode(path, this.fileStat(path)));
     }
     return root;
   }
@@ -1001,6 +1008,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
       throw new Error(`File already exists: ${path}`);
     }
     this.binaryFiles.set(path, data);
+    this.touch(path, false); // R265: create-binary stamps a session ctime/mtime like createFile
     let parent = parentPath(path);
     while (parent) {
       this.folders.add(parent);
@@ -1017,6 +1025,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
     // representation, so drop any text twin (mirrors writeFile dropping the binary twin)
     this.binaryFiles.set(path, data);
     this.files.delete(path);
+    this.touch(path, true);
     let parent = parentPath(path);
     while (parent) {
       this.folders.add(parent);
@@ -1024,8 +1033,41 @@ export class MemoryVaultAdapter implements VaultAdapter {
     }
   }
 
+  /** R265 — record a session mtime (and ctime on first write) for TFile.stat. */
+  private touch(path: string, isWrite: boolean): void {
+    const now = Date.now();
+    const prev = this.times.get(path);
+    this.times.set(path, { ctime: isWrite ? (prev?.ctime ?? now) : now, mtime: now });
+  }
+
+  /** R265 — carry stat across a rename (Obsidian rename does not change ctime/mtime). */
+  private moveTimes(oldPath: string, newPath: string): void {
+    const t = this.times.get(oldPath);
+    if (t) {
+      this.times.delete(oldPath);
+      this.times.set(newPath, t);
+    }
+  }
+
+  /** R265 — drop the stat entry for a removed/trashed path (+ descendants), no session leak. */
+  private dropTimes(path: string): void {
+    this.times.delete(path);
+    const prefix = path + "/";
+    for (const p of [...this.times.keys()]) if (p.startsWith(prefix)) this.times.delete(p);
+  }
+
+  /** R265 — stat for a listed file: size = UTF-8 byte length of stored content;
+   *  ctime/mtime from the session times map (seeded files default to loadTime). */
+  private fileStat(path: string): { ctime: number; mtime: number; size: number } {
+    const content = this.files.get(path);
+    const size = content !== undefined ? new TextEncoder().encode(content).length : (this.binaryFiles.get(path)?.length ?? 0);
+    const t = this.times.get(path) ?? { ctime: this.loadTime, mtime: this.loadTime };
+    return { ctime: t.ctime, mtime: t.mtime, size };
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     this.files.set(path, content);
+    this.touch(path, true);
     // one path = one representation (real-fs parity): writing text drops any binary
     // twin so readBinary can't later return stale bytes (e.g. a "Make a copy" note
     // written via createBinary, then edited + saved as text — R93 review).
@@ -1035,6 +1077,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
   async createFile(path: string, content: string): Promise<void> {
     if (this.files.has(path) || this.binaryFiles.has(path)) throw new Error(`File already exists: ${path}`);
     this.files.set(path, content);
+    this.touch(path, false);
     let parent = parentPath(path);
     while (parent) {
       this.folders.add(parent);
@@ -1063,6 +1106,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
       const content = this.files.get(oldPath)!;
       this.files.delete(oldPath);
       this.files.set(newPath, content);
+      this.moveTimes(oldPath, newPath); // R265: rename preserves stat (Obsidian-faithful)
       return;
     }
     // R102: binary attachments (pasted/imported images) live in binaryFiles only —
@@ -1071,6 +1115,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
     if (this.binaryFiles.has(oldPath)) {
       this.binaryFiles.set(newPath, this.binaryFiles.get(oldPath)!);
       this.binaryFiles.delete(oldPath);
+      this.moveTimes(oldPath, newPath); // R265
       return;
     }
     if (this.folders.has(oldPath)) {
@@ -1080,12 +1125,14 @@ export class MemoryVaultAdapter implements VaultAdapter {
         if (p.startsWith(oldPath + "/")) {
           this.files.delete(p);
           this.files.set(newPath + p.slice(oldPath.length), c);
+          this.moveTimes(p, newPath + p.slice(oldPath.length)); // R265
         }
       }
       for (const [p, b] of [...this.binaryFiles]) {
         if (p.startsWith(oldPath + "/")) {
           this.binaryFiles.delete(p);
           this.binaryFiles.set(newPath + p.slice(oldPath.length), b);
+          this.moveTimes(p, newPath + p.slice(oldPath.length)); // R265
         }
       }
       for (const f of [...this.folders]) {
@@ -1100,6 +1147,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
   }
 
   async remove(path: string): Promise<void> {
+    this.dropTimes(path); // R265: clear stat entry (+ descendants) so deleted paths don't leak
     if (this.files.delete(path)) return;
     if (this.binaryFiles.delete(path)) return; // R102: binary attachments
     if (this.folders.has(path)) {
@@ -1127,6 +1175,7 @@ export class MemoryVaultAdapter implements VaultAdapter {
       n++;
     }
     const dest = `.trash/${name}`;
+    this.dropTimes(path); // R265: the .trash copy is dot-skipped from the tree → drop stat entries
     if (this.files.has(path)) {
       this.files.set(dest, this.files.get(path)!);
       this.files.delete(path);

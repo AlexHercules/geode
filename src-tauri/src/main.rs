@@ -23,6 +23,12 @@ enum Node {
         name: String,
         basename: String,
         extension: String,
+        /// ms epoch — birthtime (falls back to mtime where the FS has no created()).
+        ctime: f64,
+        /// ms epoch — last modified.
+        mtime: f64,
+        /// bytes on disk.
+        size: f64,
     },
     Folder {
         path: String,
@@ -90,6 +96,13 @@ fn node_name(p: &Path) -> String {
     p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
+/// SystemTime → ms epoch (R265, TFile.stat). Pre-epoch / errored times → 0.
+fn system_time_ms(t: std::time::SystemTime) -> f64 {
+    t.duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
+}
+
 fn read_dir_recursive(abs: &Path, rel: &str) -> CmdResult<Vec<Node>> {
     let mut children = Vec::new();
     let entries = fs::read_dir(abs).map_err(|e| format!("read_dir {}: {e}", abs.display()))?;
@@ -118,7 +131,21 @@ fn read_dir_recursive(abs: &Path, rel: &str) -> CmdResult<Vec<Node>> {
                 .extension()
                 .map(|s| s.to_string_lossy().to_lowercase())
                 .unwrap_or_default();
-            children.push(Node::File { path: child_rel, name, basename, extension });
+            // R265: TFile.stat — real ctime/mtime/size from FS metadata (read-only, faithful
+            // to Obsidian). created() is unsupported on some Linux FS → fall back to mtime.
+            let meta = entry.metadata().ok();
+            let size = meta.as_ref().map(|m| m.len() as f64).unwrap_or(0.0);
+            let mtime = meta
+                .as_ref()
+                .and_then(|m| m.modified().ok())
+                .map(system_time_ms)
+                .unwrap_or(0.0);
+            let ctime = meta
+                .as_ref()
+                .and_then(|m| m.created().ok())
+                .map(system_time_ms)
+                .unwrap_or(mtime);
+            children.push(Node::File { path: child_rel, name, basename, extension, ctime, mtime, size });
         }
     }
     Ok(children)
