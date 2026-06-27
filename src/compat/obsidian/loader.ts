@@ -16,6 +16,7 @@ import * as cmLanguage from "@codemirror/language";
 import * as cmSearch from "@codemirror/search";
 import * as cmState from "@codemirror/state";
 import * as cmView from "@codemirror/view";
+import { NodeProp } from "@lezer/common";
 import * as lezerHighlight from "@lezer/highlight";
 import type { AppHandle, GeodePlugin, PluginManager } from "@core/plugins";
 import { Store } from "@core/store";
@@ -63,12 +64,22 @@ const obsidianForPlugins = {
   FileView: es5Callable(obsidianModule.FileView),
 };
 
+// R264: newer @codemirror/language dropped the legacy `tokenClassNodeProp` export, but plugins
+// still read it — Dataview's inline-query ViewPlugin does `node.type.prop(language.tokenClassNodeProp)`
+// to detect inline-code; an undefined arg crashes `NodeType.prop` ("reading 'id'"). Re-expose a real
+// (but unset) NodeProp so the call returns undefined gracefully (Geode's markdown nodes don't carry it
+// → inline queries still render in READING view, just not via this editor token-class path).
+const cmLanguageForPlugins = {
+  ...cmLanguage,
+  tokenClassNodeProp: (cmLanguage as { tokenClassNodeProp?: unknown }).tokenClassNodeProp ?? new NodeProp(),
+};
+
 const HOST_MODULES: Record<string, unknown> = {
   obsidian: obsidianForPlugins,
   path: pathShim,
   "@codemirror/state": cmState,
   "@codemirror/view": cmView,
-  "@codemirror/language": cmLanguage,
+  "@codemirror/language": cmLanguageForPlugins,
   "@codemirror/commands": cmCommands,
   "@codemirror/search": cmSearch,
   "@codemirror/autocomplete": cmAutocomplete,
