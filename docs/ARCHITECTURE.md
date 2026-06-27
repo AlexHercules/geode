@@ -71,6 +71,24 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 262 additions — Dataview 深用面 崩哪补哪：compat metadataCache **类型化 frontmatter**（js-yaml 重解析·修真 Dataview 数值/布尔/日期查询）·逻辑档·纯读投影·零新依赖【As-built·v0.255】
+
+> **状态：As-built（已交付·v0.255）。Dataview 深用面第一刀。** Step 0 probe 决定性纠误：R261 milestone 后，`r262-probe` 实测 **LIST / TABLE / TASK / inline-field(`key::`) / inline-`=` 查询全已渲染**（compat metadataCache + cachedRead 已够）；唯一 ERROR=`dataviewjs`（Dataview 自身设置 `enableDataviewJs` 默认 off·faithful·注入 `data.json` 未被 `loadData()` 接管=次要 plumbing 留 R263）。`r262-probe2` 用**判别性数据**揪出真 bug：`TABLE rating WHERE rating > 3` 返**全部 3 行**（应 1）——`rating` 经 compat 投影是字符串 `"5"`，Dataview 的类型序比较令 `string > number` **恒真** → **静默错数据·无报错**（最恶劣失败类·SORT/数值聚合同病）。
+>
+> **根因**：core `FrontmatterData.fields` 是 `Record<string, string | string[]>`（**故意字符串化**·撑 `core/properties.ts` 字节级 frontmatter 写 + properties UI）；compat `buildCache` 此前 `out.frontmatter = {...meta.frontmatter.fields}` 直接投影字符串值。真 Obsidian 的 `metadataCache.getFileCache().frontmatter` 是**类型化 YAML 值**（number/boolean/date/nested），Dataview 整个值模型依赖它。
+>
+> **改动（单文件 `compat/obsidian/metadata.ts`·全加性·纯读投影）**：
+> - 新模块级 helper `typedFrontmatter(content, fm): FrontMatterCache | null`——`content` 缺省（无内容 warm-up transient）返 null；从 `content.slice(fm.from, fm.to)` 取 YAML 块、镜像 core `parseFrontmatter` 的 fence 检测（首行 `\n` 到下一个 `\n---`）切出 body；`parseYaml(body)`（已授权 js-yaml `load`）包 **try/catch**；仅当结果是**纯对象**（非 array/scalar/null）才返回，否则返 null。
+> - `buildCache` 行 `out.frontmatter = typedFrontmatter(content, meta.frontmatter) ?? { ...meta.frontmatter.fields }`——解析失败/坏 YAML/无内容**一律 fallback 到原字符串化行为**，故解析失败永不破坏全 app 依赖的 metadataCache。
+> - `frontmatterPosition` 与 `buildFrontmatterLinks(meta.frontmatter.fields)`（扫**字符串** fields·链接恒为字符串·未加引号 `k:[[X]]` 两种表示都是 YAML 嵌套列表）**逐字未改** → 该消费者零影响。`FrontMatterCache` 本就 `{ [key]: unknown }` → **零契约加宽**。
+> - **消费者核查（R231/R243 widen-recheck 教训）**：compat `util.ts` 的 `parseFrontMatterStringArray/Tags/Aliases`、`getAllTags` 全经 `Array.isArray(v) ? v.map(String) : String(v).split(",")` 强制 coercion → 类型值安全（number→"5"·array 不变）；`tags:[a,b]` 类型化 vs 字符串化解析同结果 → tag pane/getAllTags 零回归。
+>
+> **分档·验证**：逻辑档（新 helper+控制流+js-yaml·但 compat 读投影·**未碰** core/markdown.ts/vault*/documents*/editor 管线/vault IO）。**data-safety**：纯读·**零新写路径**（不碰 properties.ts/DocumentHandle/vault.modify·markdown.ts 未碰·§A 竞态/§C 字节面均不触）。**简化门 clean**（≤2 文件·`typedFrontmatter` 是多步解析的具名 helper·非可内联的单表达式包装）。**安全**：js-yaml@4 `load` 对 `__proto__` 键**不污染** Object.prototype（成无害 own-key·normal 键照读）。**ultracode 5-lens 对抗评审 = 2 confirmed（均 minor·均非回归·均「记档非改码」）+ 28 refuted·全 5 lens ship**：
+> - confirmed① `markdownPostProcess.ts:46` 的 ctx.frontmatter 仍是字符串化 core fields（features **不可 import compat** 的类型投影=分层约束）→ 与 metadataCache 类型不一致的**保真分歧**·**非回归**（ctx 本就字符串化）·Dataview 读 metadataCache 不受影响·统一须 **core 级 typed-frontmatter helper**（R263 候选 B）。
+> - confirmed② `getCache` 无内容时 fallback 字符串化且不缓存、warm-up read 仅自愈内部 cacheByMeta、**不发 "changed" 事件** → 自建持久索引且只在 changed 刷新的消费者，对 **>30M 字符库**（load 期 LRU 驱逐冷文件）的冷文件可能持有字符串化值至该文件被改——同 sections/listItems/positions 既有无内容降级·**strictly better than 改前**（改前全文件字符串化）·非回归。两者均写进 `typedFrontmatter` docstring 的「Known limitations」。
+>
+> **回归/双端**：r262-e2e **18/18**（Part A 类型投影 number=5/bool/float/null/nested + getAllTags 消费者不破 + 坏 YAML fallback 不抛；Part B 真 Dataview `WHERE rating>3`=1 行·NUMERIC SORT 10/2/1[判别 string-sort]·boolean WHERE=2 行）·回归 r126 frontmatterLinks 11/11·r150/r151 tags 20/13·r33 字节 37/37·r261 Dataview LIST 13/13 全绿·typecheck 0·cargo check·build。**桌面 probe N/A-by-equivalence**：纯 JS 读投影（string-slice + js-yaml）·两端同码·content 浏览器(MemoryVault) vs 桌面(真 FS) 无平台分支·Dataview 同 webview 渲染。
+
 ## Round 261 additions — 真插件迁移商业主轴 milestone：🔓 js-yaml parseYaml/stringifyYaml + **真 Dataview 0.5.70 载入并渲染查询**（updateOptions + 旧 CM5 stub 解锁）·逻辑档·data-safety【As-built·v0.254】
 
 > **状态：As-built（已交付·v0.254）。🎉 商业主轴 milestone：真·未改 Dataview（MIT·2.4M）在 Geode 载入 + `dataview LIST` 查询渲染出 vault 笔记列表。** 用户 R260 拐点拍板「授权 js-yaml·试载 Dataview」→ **🔓 硬边界#5 对 `js-yaml@^4.1.0` 解除（仅此一 runtime dep·仅为 parseYaml/stringifyYaml·`npm i` 实装 4.3.0·+1 包·零 transitive·CM6 不重复·argparse 早存在）**。

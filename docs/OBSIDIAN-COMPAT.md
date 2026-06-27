@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R262 套件回归（2026-06-28，Dataview 深用面 崩哪补哪：compat metadataCache **类型化 frontmatter**·逻辑档·纯读投影·零新依赖 · 简化门 clean · ultracode 5-lens 2 confirmed[均 minor·均非回归·记档]+28 refuted · 桌面 N/A-by-equivalence）
+
+R262 = R261 Dataview milestone 之上**深用面第一刀**。**Step 0 probe 决定性纠误**：`r262-probe` 实测 **LIST/TABLE/TASK/inline-field(`key::`)/inline-`=` 查询全已渲染**（compat metadataCache + cachedRead 已够·非缺失）；唯一 ERROR=`dataviewjs`（Dataview 自身 `enableDataviewJs` 默认 off·faithful·注入 data.json 未被 loadData 接管=次要·留 R263）。`r262-probe2` **判别性数据**揪真 bug：`TABLE rating WHERE rating > 3` 返**全部 3 行**（应 1）——`rating` 经 compat 投影是字符串 `"5"`，Dataview 类型序 `string > number` **恒真** → **静默错数据·无报错**。**根因 = compat `metadataCache.frontmatter` 字符串化**（core `FrontmatterData.fields` 故意 `string|string[]` 撑字节级 properties 写）；真 Obsidian 该面是**类型化 YAML 值**。**修=`compat/obsidian/metadata.ts` 单文件**：新 `typedFrontmatter(content,fm)` 用已授权 js-yaml `parseYaml` 重解析原始 YAML 块为类型值（number/bool/date/null/nested）·try/catch+仅纯对象+content 缺省 fallback；`frontmatterPosition`/`frontmatterLinks`（扫字符串 fields）不变·`FrontMatterCache` 本就 `unknown`=零契约加宽。**详见 ARCHITECTURE「Round 262 additions」**。
+
+**套件矩阵（R262·不回退）**：
+- **r262-e2e 18/18 全绿**（新增）= Part A compat 类型投影（getFileCache().frontmatter：number=5/boolean/float=3.5/null/nested map/inline 数组 + getAllTags 消费者不破 + 坏 YAML fallback 不抛）· Part B **真 Dataview 0.5.70 类型查询修复**（`WHERE rating>3`=1 行[改前 3]·NUMERIC SORT 10/2/1[判别 string-sort]·boolean WHERE=2 行）。
+- **回归不回退**：r261 Dataview LIST 13/13 · r126 frontmatterLinks 11/11（保留字符串扫描·零影响）· r150 tags 20/20 · r151 13/13 · r33 markdown 字节 37/37。
+- **🔓 依赖**：零新依赖（复用 R261 已授权 js-yaml）。**数据安全**：纯读投影·零新写路径（5-lens data-safety 维 6 refuted 坐实·不碰 properties/documents/vault 写·markdown.ts 未碰）。
+- **2 记档边界（非回归·均 strictly better than 改前）**：① ctx.frontmatter（`markdownPostProcess.ts`·features 不可 import compat）仍字符串化=保真分歧·Dataview 读 metadataCache 不受影响·统一须 core typed helper（R263 候选 B）；② 无内容 warm-up 不发 changed 事件·仅 >30M 字符库冷文件边缘=同 sections/listItems 既有降级。
+- **桌面 probe N/A-by-equivalence**：纯 JS 读投影·两端同码·Dataview 同 webview。
+
 ### R261 套件回归（2026-06-28，🎉 真插件迁移商业主轴 milestone：js-yaml parseYaml/stringifyYaml + 真 Dataview 0.5.70 载入并渲染查询·逻辑档·data-safety · 简化门 clean · ultracode 4-lens 0 confirmed+17 refuted · 桌面 N/A-by-equivalence）
 
 R261 = 用户 R260 拐点拍板「授权 js-yaml·试载 Dataview」→ **🔓 硬边界#5 对 `js-yaml@^4.1.0` 解除**（仅此一 runtime dep·仅为 parseYaml/stringifyYaml·实装 4.3.0·+1 包·零 net-new transitive[argparse 早存在]·CM6 不重复）。**🎉 结果：真·未改 Dataview（MIT·2.4M·ES6·require obsidian + @codemirror/* 全在 host bridge）在 Geode 载入 + `dataview LIST` 查询渲染出 vault 笔记列表**——商业主轴最高价值 milestone。**详见 ARCHITECTURE「Round 261 additions」**：`yaml.ts`(parseYaml=js-yaml.load/stringifyYaml=js-yaml.dump·薄 wrapper·global.d.ts 最小 declare module 避 @types/js-yaml 守「仅此一依赖」) + **崩哪补哪 against 真 Dataview**(R258 getLastError 硬化逐次 surface 真错误)：① `Workspace.updateOptions()`=bump editorExtensionsRevision(Dataview 第一阻断·register stable 数组+mutate+updateOptions re-apply 模式)；② loader 旧 `window.CodeMirror` CM5 stub(`{defineMode:()=>undefined, getMode:()=>({})}`·Dataview registerDataviewjsCodeHighlighting·Geode 纯 CM6 该模式不用)。
