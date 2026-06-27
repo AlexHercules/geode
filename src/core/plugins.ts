@@ -135,6 +135,10 @@ interface PluginRecord {
   options?: RegisterOptions;
   /** disposers collected while the plugin was active */
   disposers: Array<() => void>;
+  /** R258: the last onload() failure message, surfaced by the compat loader's
+   *  report (otherwise the real reason only reaches the console). Cleared on a
+   *  successful enable so a retry doesn't show a stale error. */
+  lastError?: string;
 }
 
 /** Structural validation for plugin objects coming from user scripts. */
@@ -272,6 +276,7 @@ export class PluginManager {
   async enable(id: string, opts?: { userAction?: boolean }): Promise<void> {
     const record = this.records.get(id);
     if (!record || record.enabled) return;
+    record.lastError = undefined; // R258: clear any stale failure before this attempt
     try {
       await record.plugin.onload(this.makeHandle(record));
       record.enabled = true;
@@ -286,6 +291,9 @@ export class PluginManager {
       }
     } catch (err) {
       console.error(`[plugins] ${id} failed to load`, err);
+      // R258: capture the real reason so the compat loader's report carries it
+      // (not just a generic "see error above"). Native plugins are unaffected.
+      record.lastError = err instanceof Error ? err.message : String(err);
       record.disposers.forEach((d) => d());
       record.disposers = [];
     }
@@ -543,6 +551,12 @@ export class PluginManager {
 
   isEnabled(id: string): boolean {
     return this.records.get(id)?.enabled ?? false;
+  }
+
+  /** R258: the last onload() failure message for a plugin (used by the compat
+   *  loader's report so a failed real plugin surfaces its real reason). */
+  getLastError(id: string): string | undefined {
+    return this.records.get(id)?.lastError;
   }
 
   private loadEnabledSet(): Record<string, boolean> {

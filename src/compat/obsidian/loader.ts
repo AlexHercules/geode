@@ -24,6 +24,7 @@ import { loadComponentAsync } from "./component";
 import { createCompatContext, type CompatContext } from "./context";
 import { installDomAugmentation } from "./dom";
 import { FIXTURE_PLUGIN, FIXTURE_PLUGIN_ID } from "./fixture";
+import { es5Callable } from "./es5compat";
 import { drainGaps, resetGaps } from "./gaps";
 import * as obsidianModule from "./index";
 import { pathShim } from "./path-shim";
@@ -38,8 +39,32 @@ import { apiVersion, moment, semverCompare } from "./util";
  * a tiny posix string shim (plugins require it at evaluate time). Anything
  * else throws — the loader records it as the plugin's failure reason.
  */
+// R258: plugins compiled to ES5 with tslib inherit via `Base.apply(this)`, which the
+// shim's ES6 base classes reject. Hand plugins ES5-callable wrappers of the extendable
+// bases (the shim's own internals + index.ts keep the raw ES6 classes). ES6-target
+// plugins (super()/new) are unaffected — the Proxy forwards [[Construct]] transparently.
+//
+// ONLY throwaway-safe bases are wrapped (see es5compat.ts): field-init (Plugin/Component/
+// MarkdownRenderChild/PluginSettingTab) and detached-DOM-in-fields (View/ItemView/FileView).
+// The suggest/modal families (Modal/SuggestModal/FuzzySuggestModal/EditorSuggest/
+// AbstractInputSuggest) bind `this`-capturing listeners in their constructors, which the
+// throwaway-harvest cannot copy correctly — they are deliberately left UNwrapped, so an
+// ES5/tslib plugin extending them hard-fails to load with a clear, getLastError-surfaced
+// error instead of silently loading a broken instance. (Future round: defer their ctor
+// listener-registration so they become throwaway-safe too.)
+const obsidianForPlugins = {
+  ...obsidianModule,
+  Component: es5Callable(obsidianModule.Component),
+  MarkdownRenderChild: es5Callable(obsidianModule.MarkdownRenderChild),
+  Plugin: es5Callable(obsidianModule.Plugin),
+  PluginSettingTab: es5Callable(obsidianModule.PluginSettingTab),
+  View: es5Callable(obsidianModule.View),
+  ItemView: es5Callable(obsidianModule.ItemView),
+  FileView: es5Callable(obsidianModule.FileView),
+};
+
 const HOST_MODULES: Record<string, unknown> = {
-  obsidian: obsidianModule,
+  obsidian: obsidianForPlugins,
   path: pathShim,
   "@codemirror/state": cmState,
   "@codemirror/view": cmView,
@@ -383,11 +408,12 @@ async function runLoad(
       };
     }
     if (enabled && !plugins.isEnabled(id)) {
-      // PluginManager caught the onload failure — surface it in the report
+      // PluginManager caught the onload failure — surface the captured reason
+      // (R258: getLastError carries the real message, not just "see error above")
       return {
         id,
         status: "failed",
-        detail: "onload failed (see error above)",
+        detail: plugins.getLastError(id) ?? "onload failed (see error above)",
         ...(minAppWarning ? { minAppWarning } : {}),
       };
     }
