@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-read-time-plugin",
+	"name": "Words to Read Time",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Converts word count to reading time for video scripts, voice overs, or estimating reading time.",
+	"author": "ryanschiang",
+	"authorUrl": "https://obsidian.md",
+	"fundingUrl": "https://obsidian.md/pricing",
+	"isDesktopOnly": true
+}

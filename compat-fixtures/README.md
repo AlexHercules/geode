@@ -24,3 +24,19 @@ at test time and injects them via `window.__geodeObsidianPlugins`.
   the Editor shim, so it is also a data-safety (底线①) proof that *plugin* edits flow
   through the same autosave/flush path as native edits.
 - Driven by: `.calibration/r258-e2e.mjs`.
+
+## obsidian-read-time-plugin (R259)
+
+- Source: <https://github.com/ryanschiang/obsidian-read-time-plugin> ("Words to Read Time")
+- Vendored release: **1.0.0** (`main.js` + `manifest.json`, verbatim release artifacts)
+- License: **MIT** (© ryanschiang) — vendoring + redistribution permitted with attribution.
+- Why this plugin: small (12 KB), MIT, zero runtime dependencies, **ES6** (esbuild
+  `class extends`, no tslib) — and a *complementary* API surface to Sort & Permute: it has
+  NO commands, instead exercising `addStatusBarItem` + `registerInterval` +
+  `registerDomEvent(document,"click")` + `getActiveViewOfType(MarkdownView)` + a real
+  `PluginSettingTab` (words-per-minute setting). It reads the active note's word count and
+  writes a `"<m>m <s>s read time"` estimate (default 130 wpm) into the status bar. Proves a
+  real lifecycle/status-bar/settings plugin runs, not just an editor-command one.
+- Note: manifest is `isDesktopOnly: true`; Geode's loader does not gate that (the browser
+  E2E is a dev surface of a desktop app), so it loads in browser mode.
+- Driven by: `.calibration/r259-e2e.mjs`.
