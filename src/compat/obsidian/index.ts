@@ -44,6 +44,8 @@ export {
 } from "./workspace";
 export { HoverPopover, PopoverState, type HoverParent, type Point } from "./hover";
 export { FileView, ItemView, View, type ViewStateResult } from "./view";
+// R260: CM6 editor StateFields (plugins read them from their own CM6 extensions)
+export { editorEditorField, editorInfoField, editorLivePreviewField, editorViewField } from "./editorFields";
 export {
   AbstractInputSuggest,
   EditorSuggest,

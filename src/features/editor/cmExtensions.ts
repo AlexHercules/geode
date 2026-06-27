@@ -46,6 +46,7 @@ import {
 import { tags as t } from "@lezer/highlight";
 import type { GeodeApp } from "@app/AppContext";
 import type { FileNode, HeadingRef } from "@core/types";
+import { editorLivePreviewModeFacet, editorPathFacet } from "@core/editorContext";
 import { MARKDOWN_WRAP_CHARS, markdownWrapInput } from "@core/bracketWrap";
 // aliased: `t` is taken by @lezer/highlight tags in this file
 import { t as tr } from "@core/i18n";
@@ -529,7 +530,13 @@ export function editorModeExtensions(
   mode: "live" | "source",
   hideMarks = true,
 ): Extension {
-  return mode === "live" ? livePreview(app, getPath, hideMarks) : [];
+  return [
+    // R260: expose live-preview mode to the obsidian editorLivePreviewField StateField.
+    // Lives here (inside the mode compartment) so every live↔source reconfigure — all
+    // three EditorPane sites route through editorModeExtensions — re-provides it for free.
+    editorLivePreviewModeFacet.of(mode === "live"),
+    mode === "live" ? livePreview(app, getPath, hideMarks) : [],
+  ];
 }
 
 /**
@@ -667,6 +674,8 @@ export function buildEditorExtensions(opts: {
     // normal-mode keys intercept letters. In the BASE list (not modeCompartment) → survives live↔source.
     vimCompartment.of(vimExtension(vimMode.get())),
     propertiesHostFacet.of(opts.propertiesHost ?? null),
+    // R260: rename-safe path closure for the obsidian editorInfoField StateField (compat reads it)
+    editorPathFacet.of(getPath),
     modeCompartment.of(editorModeExtensions(app, getPath, mode, hideReferenceMarks.get())),
     // R88: line-number gutter — empty when off; EditorPane reconfigures on toggle
     lineNumberCompartment.of(showLineNumbers.get() ? [lineNumbers()] : []),

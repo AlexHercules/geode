@@ -28,6 +28,7 @@ import type { AppHandle, PluginManager } from "@core/plugins";
 import type { Vault as GeodeVault } from "@core/vault";
 import { registerEditorExtension as registerCoreEditorExtension } from "@core/editorExtensions";
 import { editorContextMenuExtension } from "./editorMenu";
+import { editorFieldsExtension } from "./editorFields";
 import { FileRegistry } from "./files";
 import { CollectorMenu } from "./menuCollect";
 import { MetadataCache } from "./metadata";
@@ -238,6 +239,11 @@ export function createCompatContext(
    * turns an editor right-click into a styled menu with native Cut/Copy/Paste + the 'editor-menu' event
    * (plugin items). Compat-only: the editor feature applies it without importing compat. ----- */
   disposers.push(registerCoreEditorExtension(editorContextMenuExtension(workspace, handle.commands)));
+
+  /* ----- R260: obsidian CM6 editor StateFields (editorInfoField / editorEditorField /
+   * editorLivePreviewField) — always-on via the R115 registry, so plugins' own CM6
+   * extensions can read this view's file/editor/mode context. ----- */
+  disposers.push(registerCoreEditorExtension(editorFieldsExtension(app, registry)));
 
   return {
     app,
