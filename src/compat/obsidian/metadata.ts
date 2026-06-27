@@ -16,6 +16,7 @@ import type { AppHandle } from "@core/plugins";
 import type { NoteMetadata } from "@core/types";
 import { Events, type EventRef } from "./events";
 import type { FileRegistry, TFile } from "./files";
+import { parseYaml } from "./yaml";
 
 export interface Loc {
   /** Line number. 0-based. */
@@ -153,6 +154,59 @@ function offsetToLoc(offset: number, starts: number[] | null): Loc {
     else hi = mid - 1;
   }
   return { line: lo, col: offset - starts[lo], offset };
+}
+
+/**
+ * R262: typed frontmatter for the Obsidian-compat metadataCache. Real Obsidian's
+ * `metadataCache.getFileCache().frontmatter` carries TYPED YAML values (numbers,
+ * booleans, dates, nested maps/lists). Dataview's value model assumes this — e.g.
+ * `WHERE rating > 3` needs `rating` to be the NUMBER 5, not the string "5", or
+ * Dataview's type-ordered comparison makes a string-vs-number test always-true
+ * (silently returning every row). Geode's core `FrontmatterData.fields` is
+ * deliberately stringified (it backs the byte-exact properties writer), so we
+ * re-parse the raw YAML block HERE via js-yaml (the authorized dep). This is a
+ * PURE READ projection — it never touches a write path. Returns null (→ caller
+ * falls back to the stringified fields) when content is absent (the no-content
+ * warm-up transient), the YAML is malformed/throws, or the document root isn't a
+ * plain map; so a parse failure can never break the metadataCache the rest of the
+ * app depends on. frontmatterLinks stays derived from the stringified fields
+ * (links are always strings; an unquoted `k: [[X]]` is a YAML nested list either
+ * way), so that consumer is unaffected.
+ *
+ * Known limitations (documented, accepted — both strictly better than the prior
+ * all-stringified behavior, neither a regression):
+ *  - No-content transient: like sections/listItems/positions above, a getCache for
+ *    a path whose content isn't in the LRU yet falls back to stringified fields and
+ *    is NOT cached; the warm-up read heals the INTERNAL cacheByMeta on the next call
+ *    but emits no "changed" event, so a consumer that persists its own index off a
+ *    no-content read (only on a >30M-char vault where load-time LRU eviction beats
+ *    indexing) keeps stringified values until the file is actually modified.
+ *  - The markdown post-processor context frontmatter (features/editor/
+ *    markdownPostProcess.ts) is still the stringified core fields — features cannot
+ *    import this compat projection (layering), so unifying both surfaces on typed
+ *    values would need a core-level typed-frontmatter helper (a future round).
+ *    Dataview reads frontmatter via metadataCache (typed here), not via ctx.
+ */
+function typedFrontmatter(
+  content: string | undefined,
+  fm: { from: number; to: number },
+): FrontMatterCache | null {
+  if (content === undefined) return null;
+  const block = content.slice(fm.from, fm.to);
+  const nl = block.indexOf("\n");
+  if (nl === -1) return null;
+  // mirror core parseFrontmatter's fence detection: the YAML body is between the
+  // opening line's newline and the closing `\n---` (or the end if unterminated).
+  const close = block.indexOf("\n---", nl);
+  const body = close === -1 ? block.slice(nl + 1) : block.slice(nl + 1, close + 1);
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(body);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+  return parsed as FrontMatterCache;
 }
 
 /* R124: top-level block classification by the block's FIRST line (Obsidian's section typing
@@ -571,7 +625,9 @@ export class MetadataCache extends Events {
       }));
     }
     if (meta.frontmatter) {
-      out.frontmatter = { ...meta.frontmatter.fields };
+      // R262: typed values (number/boolean/date/nested) so Dataview's typed query
+      // model works; falls back to the stringified fields on absent content / bad YAML.
+      out.frontmatter = typedFrontmatter(content, meta.frontmatter) ?? { ...meta.frontmatter.fields };
       out.frontmatterPosition = pos(meta.frontmatter.from, meta.frontmatter.to);
       const fmLinks = buildFrontmatterLinks(meta.frontmatter.fields);
       if (fmLinks.length > 0) out.frontmatterLinks = fmLinks;
