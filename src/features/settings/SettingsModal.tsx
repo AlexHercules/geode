@@ -100,7 +100,7 @@ import {
   setUniqueNoteFormat,
   setUniqueNoteTemplate,
 } from "@core/uniqueNote";
-import { getCommandName, hotkeyFromEvent, formatHotkey, isMacPlatform } from "@core/commands";
+import { getCommandName, hotkeyFromEvent, formatHotkey } from "@core/commands";
 import { loadPinnedCommands, setPinnedCommands } from "@core/commandMru";
 import {
   pagePreviewEnabled,
@@ -152,6 +152,7 @@ type SectionId =
   | "appearance"
   | "hotkeys"
   | "keychain"
+  | "core-plugins"
   | "plugins"
   | "command-palette"
   | "quick-switcher"
@@ -190,6 +191,7 @@ const NAV_GROUPS: Array<{
       { id: "appearance", labelKey: "settings.section.appearance", icon: "sun" },
       { id: "hotkeys", labelKey: "settings.section.hotkeys", icon: "command" },
       { id: "keychain", labelKey: "settings.section.keychain", icon: "key" },
+      { id: "core-plugins", labelKey: "settings.section.corePlugins", icon: "puzzle" },
       { id: "plugins", labelKey: "settings.section.plugins", icon: "puzzle" },
     ],
   },
@@ -311,6 +313,7 @@ export function SettingsModal() {
           {section === "appearance" && <AppearanceSection />}
           {section === "hotkeys" && <HotkeysSection />}
           {section === "keychain" && <KeychainSection />}
+          {section === "core-plugins" && <CorePluginsSection setSection={setSection} />}
           {section === "plugins" && <PluginsSection />}
           {section === "command-palette" && <CommandPaletteSection />}
           {section === "quick-switcher" && <QuickSwitcherSection />}
@@ -375,10 +378,11 @@ function AppearanceSection() {
     <section>
       <h2 className="settings-heading">{t("settings.section.appearance")}</h2>
 
+      <div className="settings-card">
       <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">{t("settings.theme")}</div>
-          <div className="setting-desc">{t("settings.themeDesc")}</div>
+          <div className="setting-name">{t("settings.baseColor")}</div>
+          <div className="setting-desc">{t("settings.baseColorDesc")}</div>
         </div>
         {/* G2: Obsidian「基础颜色方案」is a dropdown (跟随系统/浅色/深色), not segmented */}
         <select
@@ -419,100 +423,53 @@ function AppearanceSection() {
         </div>
       </div>
 
-      {/* ---- Obsidian CSS compat (R20) ---- */}
-
       <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianCss")}</div>
-          <div className="setting-desc">{t("settings.obsidianCssDesc")}</div>
+          <div className="setting-name">{t("settings.theme")}</div>
+          <div className="setting-desc">{t("settings.themeManageDesc")}</div>
         </div>
-        <button
-          className={`settings-toggle${obsidianEnabled ? " is-on" : ""}`}
-          role="switch"
-          aria-checked={obsidianEnabled}
-          aria-label={t("settings.obsidianCss")}
-          data-testid="obsidian-css-toggle"
-          onClick={() =>
-            void app.obsidianCss
-              .setEnabled(!obsidianEnabled)
-              .catch((err) => console.warn("[settings] obsidian css toggle failed", err))
-          }
-        >
-          <span className="settings-toggle-thumb" />
-        </button>
+        <div className="settings-control-group">
+          <select
+            className="settings-select"
+            data-testid="obsidian-theme-select"
+            value={obsidianCss.activeTheme}
+            aria-label={t("settings.obsidianTheme")}
+            disabled={!obsidianEnabled}
+            aria-disabled={!obsidianEnabled}
+            onChange={(e) =>
+              void app.obsidianCss
+                .setTheme(e.target.value)
+                .catch((err) => console.warn("[settings] obsidian theme change failed", err))
+            }
+          >
+            <option value="">{t("settings.obsidianThemeDefault")}</option>
+            {obsidianCss.themes.map((th) => (
+              <option key={th.dir} value={th.dir}>
+                {th.name}
+              </option>
+            ))}
+            {/* active theme missing from the discovery list (e.g. files deleted):
+                still shown so the persisted value stays visible (Obsidian口径) */}
+            {!activeThemeListed && (
+              <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
+            )}
+          </select>
+          <button className="settings-action-btn" type="button" data-testid="settings-theme-manage">
+            {t("settings.manage")}
+          </button>
+        </div>
       </div>
 
       <div className="setting-item">
         <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianTheme")}</div>
-          <div className="setting-desc">{t("settings.obsidianThemeDesc")}</div>
-        </div>
-        <select
-          className="settings-select"
-          data-testid="obsidian-theme-select"
-          value={obsidianCss.activeTheme}
-          aria-label={t("settings.obsidianTheme")}
-          disabled={!obsidianEnabled}
-          aria-disabled={!obsidianEnabled}
-          onChange={(e) =>
-            void app.obsidianCss
-              .setTheme(e.target.value)
-              .catch((err) => console.warn("[settings] obsidian theme change failed", err))
-          }
-        >
-          <option value="">{t("settings.obsidianThemeNone")}</option>
-          {obsidianCss.themes.map((th) => (
-            <option key={th.dir} value={th.dir}>
-              {th.name}
-            </option>
-          ))}
-          {/* active theme missing from the discovery list (e.g. files deleted):
-              still shown so the persisted value stays visible (Obsidian口径) */}
-          {!activeThemeListed && (
-            <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
-          )}
-        </select>
-      </div>
-
-      <div className="setting-item">
-        <div className="setting-info">
-          <div className="setting-name">{t("settings.obsidianSnippets")}</div>
-          <div className="setting-desc">{t("settings.obsidianSnippetsDesc")}</div>
+          <div className="setting-name">{t("settings.installedThemes")}</div>
+          <div className="setting-desc">{t("settings.installedThemesCount", { count: obsidianCss.themes.length })}</div>
         </div>
       </div>
-      {obsidianCss.snippets.length === 0 ? (
-        <div className="setting-item" data-testid="obsidian-snippets-empty">
-          <div className="setting-info">
-            <div className="setting-desc">{t("settings.obsidianSnippetsEmpty")}</div>
-          </div>
-        </div>
-      ) : (
-        obsidianCss.snippets.map((sn) => (
-          <div className="setting-item" key={sn.name}>
-            <div className="setting-info">
-              <div className="setting-name">{sn.name}</div>
-            </div>
-            <button
-              className={`settings-toggle${sn.enabled ? " is-on" : ""}`}
-              role="switch"
-              aria-checked={sn.enabled}
-              aria-label={sn.name}
-              disabled={!obsidianEnabled}
-              aria-disabled={!obsidianEnabled}
-              data-testid={`obsidian-snippet-toggle-${sn.name}`}
-              onClick={() => {
-                void app.obsidianCss
-                  .setSnippet(sn.name, !sn.enabled)
-                  .catch((err) => console.warn("[settings] obsidian snippet toggle failed", err));
-              }}
-            >
-              <span className="settings-toggle-thumb" />
-            </button>
-          </div>
-        ))
-      )}
+      </div>
 
       <h3 className="settings-subheader" data-testid="settings-subheader-interface">{t("settings.subheaderInterface")}</h3>
+      <div className="settings-card">
 
       {/* R94: show inline title (filename as H1 atop the note, default ON) */}
       <div className="setting-item">
@@ -585,8 +542,10 @@ function AppearanceSection() {
           <span className="settings-toggle-thumb" />
         </button>
       </div>
+      </div>
 
       <h3 className="settings-subheader" data-testid="settings-subheader-fonts">{t("settings.subheaderFonts")}</h3>
+      <div className="settings-card">
 
       <div className="setting-item">
         <div className="setting-info">
@@ -674,6 +633,69 @@ function AppearanceSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
+      </div>
+
+      <h3 className="settings-subheader" data-testid="settings-subheader-appearance-advanced">{t("settings.subheaderAdvanced")}</h3>
+      <div className="settings-card">
+        <div className="setting-item">
+          <div className="setting-info">
+            <div className="setting-name">{t("settings.obsidianCss")}</div>
+            <div className="setting-desc">{t("settings.obsidianCssDesc")}</div>
+          </div>
+          <button
+            className={`settings-toggle${obsidianEnabled ? " is-on" : ""}`}
+            role="switch"
+            aria-checked={obsidianEnabled}
+            aria-label={t("settings.obsidianCss")}
+            data-testid="obsidian-css-toggle"
+            onClick={() =>
+              void app.obsidianCss
+                .setEnabled(!obsidianEnabled)
+                .catch((err) => console.warn("[settings] obsidian css toggle failed", err))
+            }
+          >
+            <span className="settings-toggle-thumb" />
+          </button>
+        </div>
+
+        <div className="setting-item">
+          <div className="setting-info">
+            <div className="setting-name">{t("settings.obsidianSnippets")}</div>
+            <div className="setting-desc">{t("settings.obsidianSnippetsDesc")}</div>
+          </div>
+        </div>
+        {obsidianCss.snippets.length === 0 ? (
+          <div className="setting-item" data-testid="obsidian-snippets-empty">
+            <div className="setting-info">
+              <div className="setting-desc">{t("settings.obsidianSnippetsEmpty")}</div>
+            </div>
+          </div>
+        ) : (
+          obsidianCss.snippets.map((sn) => (
+            <div className="setting-item" key={sn.name}>
+              <div className="setting-info">
+                <div className="setting-name">{sn.name}</div>
+              </div>
+              <button
+                className={`settings-toggle${sn.enabled ? " is-on" : ""}`}
+                role="switch"
+                aria-checked={sn.enabled}
+                aria-label={sn.name}
+                disabled={!obsidianEnabled}
+                aria-disabled={!obsidianEnabled}
+                data-testid={`obsidian-snippet-toggle-${sn.name}`}
+                onClick={() => {
+                  void app.obsidianCss
+                    .setSnippet(sn.name, !sn.enabled)
+                    .catch((err) => console.warn("[settings] obsidian snippet toggle failed", err));
+                }}
+              >
+                <span className="settings-toggle-thumb" />
+              </button>
+            </div>
+          ))
+        )}
       </div>
 
     </section>
@@ -1703,6 +1725,246 @@ function KeychainSection() {
   );
 }
 
+/* ---------------- Core plugins ---------------- */
+
+type CorePluginRowDef = {
+  id: string;
+  nameKey: I18nKey;
+  descKey: I18nKey;
+  defaultEnabled: boolean;
+  pluginId?: string;
+  settingsSection?: SectionId;
+};
+
+const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
+  {
+    id: "canvas",
+    nameKey: "settings.corePlugin.canvas",
+    descKey: "settings.corePlugin.canvasDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "note-composer",
+    nameKey: "settings.section.noteComposer",
+    descKey: "settings.corePlugin.noteComposerDesc",
+    defaultEnabled: true,
+    settingsSection: "note-composer",
+  },
+  {
+    id: "tags",
+    nameKey: "settings.corePlugin.tags",
+    descKey: "settings.corePlugin.tagsDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "outgoing-links",
+    nameKey: "cmdSource.outgoingLinks",
+    descKey: "settings.corePlugin.outgoingLinksDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "outline",
+    nameKey: "cmdSource.outline",
+    descKey: "settings.corePlugin.outlineDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "publish",
+    nameKey: "settings.corePlugin.publish",
+    descKey: "settings.corePlugin.publishDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "backlinks",
+    nameKey: "cmdSource.backlinks",
+    descKey: "settings.corePlugin.backlinksDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "workspaces",
+    nameKey: "settings.corePlugin.workspaces",
+    descKey: "settings.corePlugin.workspacesDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "graph",
+    nameKey: "cmdSource.graph",
+    descKey: "settings.corePlugin.graphDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "slides",
+    nameKey: "cmdSource.slides",
+    descKey: "settings.corePlugin.slidesDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "quick-switcher",
+    nameKey: "settings.section.quickSwitcher",
+    descKey: "settings.corePlugin.quickSwitcherDesc",
+    defaultEnabled: true,
+    settingsSection: "quick-switcher",
+  },
+  {
+    id: "audio-recorder",
+    nameKey: "settings.corePlugin.audioRecorder",
+    descKey: "settings.corePlugin.audioRecorderDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "random-note",
+    nameKey: "plugin.randomNote.name",
+    descKey: "plugin.randomNote.desc",
+    defaultEnabled: true,
+    pluginId: "random-note",
+  },
+  {
+    id: "command-palette",
+    nameKey: "settings.section.commandPalette",
+    descKey: "settings.corePlugin.commandPaletteDesc",
+    defaultEnabled: true,
+    settingsSection: "command-palette",
+  },
+  {
+    id: "templates",
+    nameKey: "settings.templates",
+    descKey: "settings.corePlugin.templatesDesc",
+    defaultEnabled: true,
+    settingsSection: "templates",
+  },
+  {
+    id: "daily-notes",
+    nameKey: "settings.dailyNotes",
+    descKey: "plugin.dailyNote.desc",
+    defaultEnabled: true,
+    pluginId: "daily-note",
+    settingsSection: "daily-notes",
+  },
+  {
+    id: "unique-notes",
+    nameKey: "settings.uniqueNotes",
+    descKey: "plugin.uniqueNote.desc",
+    defaultEnabled: false,
+    pluginId: "unique-note",
+    settingsSection: "unique-notes",
+  },
+  {
+    id: "word-count",
+    nameKey: "plugin.wordCount.name",
+    descKey: "plugin.wordCount.desc",
+    defaultEnabled: false,
+    pluginId: "word-count",
+  },
+  {
+    id: "file-recovery",
+    nameKey: "settings.corePlugin.fileRecovery",
+    descKey: "settings.corePlugin.fileRecoveryDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "file-explorer",
+    nameKey: "settings.corePlugin.fileExplorer",
+    descKey: "settings.corePlugin.fileExplorerDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "page-preview",
+    nameKey: "settings.pagePreviewHeading",
+    descKey: "settings.pagePreviewDesc",
+    defaultEnabled: true,
+    settingsSection: "page-preview",
+  },
+];
+
+function CorePluginsSection({ setSection }: { setSection: (section: string) => void }) {
+  const app = useApp();
+  const t = useI18n();
+  useStore(app.plugins.revision);
+  const [query, setQuery] = useState("");
+  const entries = app.plugins.list();
+  const entryById = new Map(entries.map((e) => [e.plugin.id, e]));
+  const q = query.trim().toLowerCase();
+  const rows = CORE_PLUGIN_ROWS.filter((row) => {
+    if (!q) return true;
+    return (
+      t(row.nameKey).toLowerCase().includes(q) ||
+      t(row.descKey).toLowerCase().includes(q)
+    );
+  });
+
+  return (
+    <section>
+      <h2 className="settings-heading">{t("settings.section.corePlugins")}</h2>
+      <div className="core-plugins-search">
+        <Icon name="search" size={15} />
+        <input
+          type="text"
+          value={query}
+          placeholder={t("settings.corePluginsSearch")}
+          spellCheck={false}
+          aria-label={t("settings.corePluginsSearch")}
+          data-testid="settings-core-plugins-search"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div className="settings-card core-plugin-list" data-testid="settings-core-plugin-list">
+        {rows.map((row) => {
+          const entry = row.pluginId ? entryById.get(row.pluginId) : undefined;
+          const enabled = entry ? entry.enabled : row.defaultEnabled;
+          return (
+            <div className="core-plugin-row" key={row.id} data-testid={`core-plugin-${row.id}`}>
+              <div className="plugin-info">
+                <div className="plugin-name">{t(row.nameKey)}</div>
+                <div className="plugin-desc">{t(row.descKey)}</div>
+              </div>
+              <div className="core-plugin-actions">
+                <button
+                  className="core-plugin-icon-btn"
+                  type="button"
+                  disabled={!row.settingsSection}
+                  aria-label={t("settings.corePluginSettings")}
+                  title={t("settings.corePluginSettings")}
+                  data-testid={`core-plugin-settings-${row.id}`}
+                  onClick={() => {
+                    if (row.settingsSection) setSection(row.settingsSection);
+                  }}
+                >
+                  <Icon name="settings" size={15} />
+                </button>
+                <button
+                  className="core-plugin-icon-btn"
+                  type="button"
+                  disabled
+                  aria-label={t("settings.corePluginAdd")}
+                  title={t("settings.corePluginAdd")}
+                >
+                  <Icon name="plus" size={15} />
+                </button>
+                <button
+                  className={`settings-toggle${enabled ? " is-on" : ""}`}
+                  role="switch"
+                  aria-checked={enabled}
+                  aria-label={t(enabled ? "settings.disablePlugin" : "settings.enablePlugin", {
+                    name: t(row.nameKey),
+                  })}
+                  data-testid={`core-plugin-toggle-${row.id}`}
+                  onClick={() => {
+                    if (!entry || !row.pluginId) return;
+                    if (entry.enabled) app.plugins.disable(row.pluginId);
+                    else void app.plugins.enable(row.pluginId, { userAction: true });
+                  }}
+                >
+                  <span className="settings-toggle-thumb" />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 /* ---------------- Plugins ---------------- */
 
 /** Badge label key per plugin source ("builtin" reads as "core" in the UI). */
@@ -2013,15 +2275,14 @@ function HotkeysSection() {
   };
 
   const q = filter.trim().toLowerCase();
-  const rows = app.commands
-    .list()
-    .filter(
-      (cmd) =>
-        (!q ||
-          cmdLabel(cmd).toLowerCase().includes(q) ||
-          cmd.id.toLowerCase().includes(q)) &&
-        (!assignedOnly || app.commands.getEffectiveHotkey(cmd.id) !== null),
-    );
+  const commands = app.commands.list();
+  const rows = commands.filter(
+    (cmd) =>
+      (!q ||
+        cmdLabel(cmd).toLowerCase().includes(q) ||
+        cmd.id.toLowerCase().includes(q)) &&
+      (!assignedOnly || app.commands.getEffectiveHotkey(cmd.id) !== null),
+  );
 
   /* CAPTURE mode: a window-level capture-phase listener grabs the next keydown
      before the global hotkey handler and the modal's Escape-to-close (both
@@ -2059,41 +2320,36 @@ function HotkeysSection() {
   return (
     <section>
       <h2 className="settings-heading">{t("settings.section.hotkeys")}</h2>
-      <p className="settings-note">
-        {t("settings.hotkeysNote1")}
-        <em>{t("settings.customize")}</em>
-        {t("settings.hotkeysNote2")}
-        <code>{isMacPlatform ? "⌘" : "Ctrl"}</code>
-        {t("settings.hotkeysNote3")}
-        <code>{isMacPlatform ? "⌥" : "Alt"}</code>
-        {t("settings.hotkeysNote4")}
-        <code>Backspace</code>
-        {t("settings.hotkeysNote5")}
-        <code>Escape</code>
-        {t("settings.hotkeysNote6")}
-      </p>
-
-      <div className="hotkeys-filter-row">
-        <input
-          className="hotkeys-filter"
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder={t("settings.hotkeysFilter")}
-          spellCheck={false}
-          aria-label={t("settings.hotkeysFilter")}
-          data-testid="settings-hotkeys-filter"
-        />
-        <button
-          className={"hotkeys-filter-toggle" + (assignedOnly ? " is-active" : "")}
-          onClick={() => setAssignedOnly((v) => !v)}
-          aria-pressed={assignedOnly}
-          aria-label={t("settings.hotkeysAssignedOnly")}
-          title={t("settings.hotkeysAssignedOnly")}
-          data-testid="settings-hotkeys-assigned-toggle"
-        >
-          <Icon name="filter" size={15} />
-        </button>
+      <div className="settings-card hotkeys-search-card">
+        <div className="hotkeys-search-meta">
+          <div className="setting-name">{t("settings.hotkeysSearchTitle")}</div>
+          <div className="setting-desc">{t("settings.hotkeysCount", { count: commands.length })}</div>
+        </div>
+        <div className="hotkeys-search-controls">
+          <button
+            className={"hotkeys-filter-toggle" + (assignedOnly ? " is-active" : "")}
+            onClick={() => setAssignedOnly((v) => !v)}
+            aria-pressed={assignedOnly}
+            aria-label={t("settings.hotkeysAssignedOnly")}
+            title={t("settings.hotkeysAssignedOnly")}
+            data-testid="settings-hotkeys-assigned-toggle"
+          >
+            <Icon name="filter" size={15} />
+          </button>
+          <label className="hotkeys-search-box">
+            <Icon name="search" size={15} />
+            <input
+              className="hotkeys-filter"
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder={t("settings.hotkeysFilter")}
+              spellCheck={false}
+              aria-label={t("settings.hotkeysFilter")}
+              data-testid="settings-hotkeys-filter"
+            />
+          </label>
+        </div>
       </div>
 
       {rows.length === 0 ? (
