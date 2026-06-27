@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R263 套件回归（2026-06-28，🎉 真 Templater 2.23 = Obsidian 第二大插件载入并执行模板：compat shim 补 newer-app(~1.13) API 面 + CM5 null-mode·逻辑档·零新依赖 · 简化门删 8 死成员 · ultracode 5-lens 1 confirmed[nit·已修]+22 refuted · 桌面 N/A-by-equivalence）
+
+R263 = R261 Dataview milestone 之后**商业主轴 breadth 第二大件**。**Step 0 probe 纠误**：候选 dataviewjs 实为 faithful 非 gap（seed 真 data.json{enableDataviewJs:true} 后 JS 执行真工作·桌面读真 data.json 即生效）→ 转载真 **Templater 2.23（GPL·`isDesktopOnly:false`）**。先 static-diff Templater 的 `require("obsidian")` 用法 vs shim 出口**界定 gap 有界**（非 cascade），再**崩哪补哪 9 blocker**补 newer-app API 面。**详见 ARCHITECTURE「Round 263 additions」**。
+
+**套件矩阵（R263·不回退）**：
+- **r263-e2e 10/10 全绿**（新增·Templater GPL bundle 未 committed=gitignored·e2e header 载 fetch）= 真 Templater status=enabled + 4 命令 + `tp.date.now`/`tp.file.title`/`tp.frontmatter.count=7`（经 R262 typed frontmatter）展开 + **展开 PERSIST 落盘（data-safety）** + frontmatter 块完整 + 0 page error。
+- **新增 compat API 出口**：`ConfirmationModal`/`SettingPage`/`SettingGroup`（newer settings ~1.13·setting UI render 延后记档）·`FileSystemAdapter`（marker·instanceof 正确 false）·`getFrontMatterInfo`/`resolveSubpath`·`Plugin.registerCliHandler`/`SettingTab.update`（no-op/守卫）·**CM5 stub null-mode**（`getMode→{name:"null"}` 哨兵·插件优雅跳过 CM5 高亮·防 StreamLanguage 崩编辑器）。
+- **回归不回退**：**r261 Dataview LIST 13/13（共用 CM5 stub·null-mode 优雅跳过验证不退）** · r258 Sort&Permute 12 · r259 read-time 7 · r260 StateFields 12 · r262 typed-frontmatter 18 · r126 frontmatterLinks 11 · r150 tags 20 · r33 markdown 字节 37。
+- **🔓 依赖**：零新依赖（child_process/util 是 Node built-in·Templater lazy require·null-mode 后未触；非 npm·不触硬边界#5）。**数据安全**：全加性 compat shim·零新写路径（5-lens data-safety 0 confirmed·Templater 模板写经既有 editor→autosave[R258 先例]·纯读 getFrontMatterInfo/resolveSubpath）。
+- **桌面 probe N/A-by-equivalence**：纯 JS·两端同码·Templater 同 webview·写经 R258-vetted autosave。
+
 ### R262 套件回归（2026-06-28，Dataview 深用面 崩哪补哪：compat metadataCache **类型化 frontmatter**·逻辑档·纯读投影·零新依赖 · 简化门 clean · ultracode 5-lens 2 confirmed[均 minor·均非回归·记档]+28 refuted · 桌面 N/A-by-equivalence）
 
 R262 = R261 Dataview milestone 之上**深用面第一刀**。**Step 0 probe 决定性纠误**：`r262-probe` 实测 **LIST/TABLE/TASK/inline-field(`key::`)/inline-`=` 查询全已渲染**（compat metadataCache + cachedRead 已够·非缺失）；唯一 ERROR=`dataviewjs`（Dataview 自身 `enableDataviewJs` 默认 off·faithful·注入 data.json 未被 loadData 接管=次要·留 R263）。`r262-probe2` **判别性数据**揪真 bug：`TABLE rating WHERE rating > 3` 返**全部 3 行**（应 1）——`rating` 经 compat 投影是字符串 `"5"`，Dataview 类型序 `string > number` **恒真** → **静默错数据·无报错**。**根因 = compat `metadataCache.frontmatter` 字符串化**（core `FrontmatterData.fields` 故意 `string|string[]` 撑字节级 properties 写）；真 Obsidian 该面是**类型化 YAML 值**。**修=`compat/obsidian/metadata.ts` 单文件**：新 `typedFrontmatter(content,fm)` 用已授权 js-yaml `parseYaml` 重解析原始 YAML 块为类型值（number/bool/date/null/nested）·try/catch+仅纯对象+content 缺省 fallback；`frontmatterPosition`/`frontmatterLinks`（扫字符串 fields）不变·`FrontMatterCache` 本就 `unknown`=零契约加宽。**详见 ARCHITECTURE「Round 262 additions」**。
