@@ -7,7 +7,14 @@
     <title>Geode</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- R267: static `.app-container` (Obsidian's outermost root class) wrapping React's #root.
+         Exists from page load — BEFORE plugins load (main.tsx loads plugins before React commits),
+         so a plugin's eager onload portal/popover (Calendar's Svelte <Portal target=".app-container">)
+         finds it. The wrapper is OUTSIDE #root, so a portal mounted into it never collides with React's
+         tree. Sized via the `.app-container` height rule in app.css (keeps the html/body/#root chain). -->
+    <div class="app-container">
+      <div id="root"></div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

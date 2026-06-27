@@ -86,7 +86,10 @@ html[data-theme="light"] {
 
 html,
 body,
-#root {
+#root,
+.app-container {
+  /* R267: .app-container is the static wrapper around #root (index.html) — stays in the
+     full-height chain so #root still fills the viewport. */
   height: 100%;
   margin: 0;
 }
