@@ -187,14 +187,32 @@ async function runLoad(
   // fixture paths both come through here). Never overwrite an existing one.
   window.moment ??= moment;
 
-  // R261: legacy CodeMirror 5 stub. Obsidian historically exposes the CM5 instance as
-  // window.CodeMirror; Dataview's registerDataviewjsCodeHighlighting calls
-  // CodeMirror.defineMode/getMode to register a CM5 syntax mode for ```dataviewjs blocks.
-  // Geode is CM6-only (no legacy editor), so that mode is never used — a no-op stub lets
-  // such plugins load (the dataviewjs block still renders via the CM6/markdown path).
+  // R261/R263: legacy CodeMirror 5 stub. Obsidian historically exposes the CM5 instance as
+  // window.CodeMirror; plugins that bundle a CM5 syntax mode register against it at load —
+  // Dataview's registerDataviewjsCodeHighlighting (defineMode/getMode), and Templater bundles
+  // the CM5 JavaScript mode (defineMode + defineMIME + registerHelper at module eval). Geode is
+  // CM6-only (no legacy editor), so these modes are never actually run — a no-op surface lets
+  // such plugins LOAD (their real rendering goes via the CM6/markdown path). Only the members
+  // Templater/Dataview actually call are provided; the mode tokenizer (which would touch
+  // StringStream/Pos) never runs, since the no-op defineMode never invokes its factory.
   (window as { CodeMirror?: unknown }).CodeMirror ??= {
     defineMode: () => undefined,
-    getMode: () => ({}),
+    defineMIME: () => undefined,
+    registerHelper: () => undefined,
+    // CM5's "mode not found" sentinel is a mode NAMED "null" — plugins (Templater) check
+    // `getMode(...).name === "null"` and gracefully skip building a syntax mode, instead of
+    // wrapping it in a CM6 StreamLanguage that would crash the editor. The advancing token is
+    // belt-and-suspenders: if a plugin builds a StreamLanguage from it anyway, it won't stall.
+    getMode: () => ({
+      name: "null",
+      startState: () => ({}),
+      copyState: (s: unknown) => s,
+      token: (stream: { skipToEnd?: () => void; next?: () => unknown }) => {
+        if (typeof stream?.skipToEnd === "function") stream.skipToEnd();
+        else if (typeof stream?.next === "function") stream.next();
+        return null;
+      },
+    }),
   };
 
   // B3③ (R165): Node-targeting plugin bundles (obsidian-git etc.) reference the

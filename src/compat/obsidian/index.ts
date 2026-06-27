@@ -13,10 +13,12 @@ installDomAugmentation();
 export { Events, type EventRef } from "./events";
 export { Component, MarkdownRenderChild } from "./component";
 export { TAbstractFile, TFile, TFolder, type FileStats } from "./files";
-export { Vault, CompatDataAdapter, type DataAdapter, type DataWriteOptions } from "./vault";
+export { Vault, CompatDataAdapter, FileSystemAdapter, type DataAdapter, type DataWriteOptions } from "./vault";
 export {
   MetadataCache,
+  resolveSubpath,
   type BlockCache,
+  type BlockSubpathResult,
   type CachedMetadata,
   type CacheItem,
   type EmbedCache,
@@ -25,6 +27,7 @@ export {
   type FrontMatterCache,
   type FrontmatterLinkCache,
   type HeadingCache,
+  type HeadingSubpathResult,
   type LinkCache,
   type ListItemCache,
   type Loc,
@@ -82,6 +85,7 @@ export {
   BaseComponent,
   ButtonComponent,
   ColorComponent,
+  ConfirmationModal,
   DropdownComponent,
   ExtraButtonComponent,
   FuzzySuggestModal,
@@ -96,6 +100,8 @@ export {
   Scope,
   SearchComponent,
   Setting,
+  SettingGroup,
+  SettingPage,
   SliderComponent,
   SuggestModal,
   TextAreaComponent,
@@ -123,6 +129,7 @@ export {
   debounce,
   getAllTags,
   getBlobArrayBuffer,
+  getFrontMatterInfo,
   getLanguage,
   getLinkpath,
   htmlToMarkdown,
@@ -139,6 +146,7 @@ export {
   requestUrl,
   requireApiVersion,
   type Debouncer,
+  type FrontMatterInfo,
   type RequestUrlParam,
   type RequestUrlResponse,
   type RequestUrlResponsePromise,

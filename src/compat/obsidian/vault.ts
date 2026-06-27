@@ -26,6 +26,22 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
 }
 
 /**
+ * R263: Obsidian's desktop FileSystemAdapter (a DataAdapter subtype). Geode's adapter is a
+ * CompatDataAdapter, NEVER a FileSystemAdapter, so `app.vault.adapter instanceof FileSystemAdapter`
+ * is correctly false — plugins (e.g. Templater) then fall back / throw for absolute-path & system
+ * features that need real Node FS, which Geode's sandbox does not expose. This is a marker class
+ * for the instanceof brand; Geode never instantiates it, so its methods only guard a misuse.
+ */
+export class FileSystemAdapter {
+  getBasePath(): string {
+    throw new Error("FileSystemAdapter is not available in Geode (sandboxed vault adapter)");
+  }
+  getFullPath(normalizedPath: string): string {
+    return normalizedPath;
+  }
+}
+
+/**
  * Minimal DataAdapter: plain string IO. TEXT paths under `.obsidian/` route to the
  * Geode config IO (the only sanctioned dot-folder access); everything else goes
  * through the vault adapter. R111: binary read/write bridge straight to native binary

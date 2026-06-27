@@ -916,6 +916,15 @@ export abstract class Plugin extends Component {
   }
 
   /**
+   * R263: a newer (~app 1.13) Plugin method for registering an Obsidian-CLI command handler.
+   * Geode has no CLI surface, so this is a no-op — the plugin (Templater) loads and its in-app
+   * features work; only the CLI entry point is inert. Records the gap for diagnostics.
+   */
+  registerCliHandler(_id: string, _handler?: unknown): void {
+    reportGap(this.manifest.id, "Plugin.registerCliHandler");
+  }
+
+  /**
    * R132: real — register a READING-VIEW markdown post-processor. Routes through the core
    * markdownPostProcessors registry (compat cannot import features/editor, so the registry is the
    * bridge: the reading view reads it + applies each processor to the freshly-rendered DOM). The
@@ -1022,6 +1031,20 @@ export abstract class SettingTab {
 
   /** 'Override to render the tab' — called when the tab opens. */
   abstract display(): void;
+
+  /**
+   * R263: newer (~app 1.13) re-render hook. Templater's settings tab debounces
+   * `this.update()` on vault create/delete/rename, so it fires during normal use (not just
+   * when settings are open). Re-runs display() into a cleared container, guarded so a tab whose
+   * display() is not a concrete override (settings UI deferred) simply no-ops instead of throwing.
+   */
+  update(): void {
+    const display = (this as { display?: unknown }).display;
+    if (typeof display === "function") {
+      this.containerEl.empty();
+      (display as () => void).call(this);
+    }
+  }
 
   /** 'Hides the contents of the setting tab.' Default clears containerEl. */
   hide(): void {

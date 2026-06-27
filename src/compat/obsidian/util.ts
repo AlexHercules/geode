@@ -72,6 +72,40 @@ export function requireApiVersion(version: string): boolean {
   return semverCompare(apiVersion, version) >= 0;
 }
 
+/* ---------------- getFrontMatterInfo (obsidian.d.ts area; used by Templater) ---------------- */
+
+export interface FrontMatterInfo {
+  /** whether a leading YAML frontmatter block is present. */
+  exists: boolean;
+  /** the YAML text BETWEEN the `---` fences (no fences); "" when absent. */
+  frontmatter: string;
+  /** offset of the frontmatter text start (just after the opening `---\n`). */
+  from: number;
+  /** offset of the frontmatter text end (just before the closing `---`). */
+  to: number;
+  /** offset where the document body begins (after the closing fence line). */
+  contentStart: number;
+}
+
+/**
+ * R263: parse a leading `---`-fenced YAML frontmatter block's bounds (Obsidian's
+ * getFrontMatterInfo). Mirrors core parseFrontmatter's fence detection. Plugins (Templater)
+ * call `parseYaml(getFrontMatterInfo(content).frontmatter)` and slice the body from contentStart.
+ */
+export function getFrontMatterInfo(content: string): FrontMatterInfo {
+  const none: FrontMatterInfo = { exists: false, frontmatter: "", from: 0, to: 0, contentStart: 0 };
+  if (!content.startsWith("---")) return none;
+  const firstNl = content.indexOf("\n");
+  if (firstNl === -1 || content.slice(0, firstNl).trim() !== "---") return none;
+  const close = content.indexOf("\n---", firstNl);
+  if (close === -1) return none;
+  const from = firstNl + 1;
+  const to = close; // end of the YAML contents, EXCLUDING the `\n` that begins the closing fence
+  const closeLineEnd = content.indexOf("\n", close + 1);
+  const contentStart = closeLineEnd === -1 ? content.length : closeLineEnd + 1;
+  return { exists: true, frontmatter: content.slice(from, to), from, to, contentStart };
+}
+
 /* ---------------- normalizePath (rules per API-REFERENCE area 2) ---------------- */
 
 export function normalizePath(path: string): string {

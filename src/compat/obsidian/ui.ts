@@ -302,6 +302,52 @@ export class Modal {
   }
 }
 
+/* ---------------- ConfirmationModal (newer core API ~app 1.13) ---------------- */
+
+/**
+ * R263: a newer Obsidian CORE export (~app 1.13) — a Modal with a footer button row.
+ * Real plugins extend it for confirmations: Templater 2.23 subclasses it for its
+ * "enable dangerous setting" dialog (addCheckbox + addButton(...setCta().onClick) +
+ * addCancelButton). Modeled on the methods plugins actually call; the base ctor is
+ * Modal(app), and the buttons/checkboxes build a `.modal-button-container`. Content is
+ * built by the subclass via contentEl in its own constructor, so no onOpen is needed.
+ */
+export class ConfirmationModal extends Modal {
+  private _buttonContainerEl: HTMLElement | null = null;
+
+  /** lazily-created footer row; created under modalEl on first add*. */
+  private buttonContainer(): HTMLElement {
+    if (!this._buttonContainerEl) {
+      this._buttonContainerEl = document.createElement("div");
+      this._buttonContainerEl.className = "modal-button-container";
+      this.modalEl.appendChild(this._buttonContainerEl);
+    }
+    return this._buttonContainerEl;
+  }
+
+  addButton(cb: (button: ButtonComponent) => unknown): this {
+    cb(new ButtonComponent(this.buttonContainer()));
+    return this;
+  }
+
+  addCheckbox(label: string, cb: (checked: boolean) => unknown): this {
+    const wrap = document.createElement("label");
+    wrap.className = "modal-confirm-checkbox";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.addEventListener("change", () => void cb(input.checked));
+    const span = document.createElement("span");
+    span.textContent = label;
+    wrap.append(input, span);
+    this.buttonContainer().appendChild(wrap);
+    return this;
+  }
+
+  addCancelButton(): this {
+    return this.addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close()));
+  }
+}
+
 /* ---------------- instructions bar (setInstructions, real since R9) ---------------- */
 
 /** Official shape (obsidian.d.ts:3556): both fields REQUIRED. Rendering still
@@ -1455,6 +1501,70 @@ export class Setting {
   clear(): this {
     this.components = [];
     this.controlEl.textContent = "";
+    return this;
+  }
+}
+
+/* ---------------- SettingPage / SettingGroup (newer settings API ~app 1.13) ---------------- */
+
+/**
+ * R263: SettingPage — a newer Obsidian settings base (~app 1.13) for a settings sub-page.
+ * Templater 2.23 subclasses it for its template-mapping page (`super()`, then renders into
+ * `this.containerEl` via SettingGroup). Provides a containerEl so subclass construction +
+ * render don't throw. NOTE: Geode does not yet mount a SettingPage's containerEl into the live
+ * settings dialog (deferred) — a plugin's SettingPage renders into a detached node, so its
+ * settings UI is effectively stubbed; plugin LOAD and non-settings features are unaffected.
+ */
+export class SettingPage {
+  containerEl: HTMLElement;
+  constructor(containerEl?: HTMLElement) {
+    this.containerEl = containerEl ?? document.createElement("div");
+  }
+
+  /** Render/re-render the page. No-op here: Geode does not yet mount a SettingPage's
+   *  containerEl into the live settings dialog (deferred), so a subclass renders into a
+   *  detached node. Subclasses that override display()/update() still work; the base no-ops
+   *  just keep `this.display()` / `this.update()` from throwing during their own logic. */
+  display(): void {}
+  update(): void {}
+  hide(): void {}
+}
+
+/**
+ * R263: SettingGroup — a newer Obsidian settings API (~app 1.13): a titled group of Settings.
+ * Templater builds settings via `new SettingGroup(containerEl).setHeading(t).addClass(c).addSetting(cb)`.
+ * addSetting hands a real Setting bound to the group body, so existing Setting controls work.
+ */
+export class SettingGroup {
+  containerEl: HTMLElement;
+  private groupEl: HTMLElement;
+  private headingEl: HTMLElement;
+  private bodyEl: HTMLElement;
+
+  constructor(containerEl: HTMLElement) {
+    this.containerEl = containerEl;
+    this.groupEl = document.createElement("div");
+    this.groupEl.className = "setting-group";
+    this.headingEl = document.createElement("div");
+    this.headingEl.className = "setting-group-heading setting-item-heading";
+    this.bodyEl = document.createElement("div");
+    this.bodyEl.className = "setting-group-body";
+    this.groupEl.append(this.headingEl, this.bodyEl);
+    containerEl.appendChild(this.groupEl);
+  }
+
+  setHeading(text: string): this {
+    this.headingEl.textContent = text;
+    return this;
+  }
+
+  addClass(cls: string): this {
+    this.groupEl.classList.add(...cls.split(/\s+/).filter(Boolean));
+    return this;
+  }
+
+  addSetting(cb: (setting: Setting) => unknown): this {
+    cb(new Setting(this.bodyEl));
     return this;
   }
 }

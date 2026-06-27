@@ -209,6 +209,61 @@ function typedFrontmatter(
   return parsed as FrontMatterCache;
 }
 
+export interface HeadingSubpathResult {
+  type: "heading";
+  current: HeadingCache;
+  next: HeadingCache | null;
+  start: Loc;
+  end: Loc | null;
+}
+
+export interface BlockSubpathResult {
+  type: "block";
+  block: BlockCache;
+  start: Loc;
+  end: Loc | null;
+}
+
+/**
+ * R263: Obsidian's resolveSubpath — resolve a `#heading` or `#^blockid` subpath against a
+ * file's CachedMetadata to a span. Plugins (Templater's file.include) slice
+ * content.slice(result.start.offset, result.end?.offset). A heading section runs to the next
+ * same-or-higher-level heading (end = that heading's start, or null = to EOF); a block span
+ * covers the block. Returns null on no match.
+ */
+export function resolveSubpath(
+  cache: CachedMetadata,
+  subpath: string,
+): HeadingSubpathResult | BlockSubpathResult | null {
+  let sp = subpath.trim();
+  if (sp.startsWith("#")) sp = sp.slice(1);
+  if (!sp) return null;
+  if (sp.startsWith("^")) {
+    const block = cache.blocks?.[sp.slice(1)];
+    if (!block) return null;
+    return { type: "block", block, start: block.position.start, end: block.position.end };
+  }
+  const headings = cache.headings ?? [];
+  const target = sp.toLowerCase();
+  const idx = headings.findIndex((h) => h.heading.toLowerCase() === target);
+  if (idx === -1) return null;
+  const current = headings[idx];
+  let next: HeadingCache | null = null;
+  for (let i = idx + 1; i < headings.length; i++) {
+    if (headings[i].level <= current.level) {
+      next = headings[i];
+      break;
+    }
+  }
+  return {
+    type: "heading",
+    current,
+    next,
+    start: current.position.start,
+    end: next ? next.position.start : null,
+  };
+}
+
 /* R124: top-level block classification by the block's FIRST line (Obsidian's section typing
  * is explicitly non-exhaustive — Geode segments at the top level, not a full CommonMark parse). */
 const SEC_HEADING = /^#{1,6}\s/;
