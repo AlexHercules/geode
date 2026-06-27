@@ -1177,14 +1177,14 @@ export function App() {
   /* ---- no vault yet (desktop only) ---- */
   if (!tree) {
     return (
-      <div className="app" data-testid="app-root">
+      <div className="app app-container" data-testid="app-root">
         <VaultPicker />
       </div>
     );
   }
 
   return (
-    <div className="app" data-testid="app-root">
+    <div className="app app-container" data-testid="app-root">
       {/* R20: appended "workspace*" classes mirror Obsidian's DOM so community
           theme CSS can target them — resident, additive only (contract) */}
       <div className="app-body workspace">
