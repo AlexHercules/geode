@@ -22,7 +22,9 @@ import {
   buildRemoveProperty,
   buildSetProperty,
   parseProperties,
+  propertyTypes,
   type PropertyEdit,
+  type PropertyType,
   type PropertyValue,
 } from "@core/properties";
 import type { Command as GeodeCommand } from "@core/types";
@@ -556,6 +558,27 @@ const internalPluginsStub = {
   plugins: internalPluginsRecord,
 };
 
+/* R268: `app.metadataTypeManager` — Obsidian's property-type manager. Tasks reads
+ * getAllProperties() then setType(name, "date") to register its date properties (due/scheduled/…)
+ * so the Properties UI shows date pickers. Backed by Geode's R22 property-type registry
+ * (.obsidian/types.json): getAllProperties projects the registry; setType routes to the vetted
+ * `assign` write (serialized RMW). Only these two are implemented (the methods real plugins read). */
+interface PropertyInfo {
+  name: string;
+  type: string;
+  count: number;
+}
+const metadataTypeManagerStub = {
+  getAllProperties(): Record<string, PropertyInfo> {
+    const out: Record<string, PropertyInfo> = {};
+    for (const [name, type] of propertyTypes.getAll()) out[name] = { name, type, count: 0 };
+    return out;
+  },
+  setType(name: string, type: string): void {
+    void propertyTypes.assign(name, type as PropertyType); // unknown types pass through (properties.ts)
+  },
+};
+
 const pluginsStub = {
   getPlugin: (): null => null,
   enabledPlugins: new Set<string>(),
@@ -650,6 +673,11 @@ export class App {
   get internalPlugins(): typeof internalPluginsStub {
     reportGap("App", "App.internalPlugins", 'R158/R159: "bookmarks" (getBookmarks/addItem/removeItem) + "daily-notes" (instance.options) return real instances; other ids → null');
     return internalPluginsStub;
+  }
+
+  get metadataTypeManager(): typeof metadataTypeManagerStub {
+    reportGap("App", "App.metadataTypeManager", "R268: getAllProperties (from .obsidian/types.json registry) + setType (vetted assign) are REAL; other methods absent");
+    return metadataTypeManagerStub;
   }
 
   get plugins(): typeof pluginsStub {

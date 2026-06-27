@@ -1528,6 +1528,12 @@ async function bootstrap() {
     }
   }
 
+  // R22/R268: load the property-type registry (.obsidian/types.json) BEFORE plugins, AWAITED — sets
+  // regVault + regMap first, so a plugin's onload property-type assigns (e.g. Tasks registers its
+  // query-widget property types via app.metadataTypeManager.setType) persist via the vetted RMW
+  // instead of early-returning on a null regVault (which would then be wiped by a later init).
+  await propertyTypes.init(vault);
+
   // external plugins from <vault>/.geode/plugins/*.js (desktop, vault open)
   if (vault.isOpen) {
     try {
@@ -1549,10 +1555,9 @@ async function bootstrap() {
     console.error("[boot] obsidian css init failed", err),
   );
 
-  // R22: property type registry (.obsidian/types.json) — non-blocking;
-  // re-read when the vault ROOT switches (reason "load", initObsidianCss
-  // precedent: per-file events never touch .obsidian config files)
-  void propertyTypes.init(vault);
+  // R22: property type registry — initial load is now AWAITED above (before plugins, R268);
+  // here we only keep it fresh when the vault ROOT switches (reason "load", initObsidianCss
+  // precedent: per-file events never touch .obsidian config files).
   events.on("vault:changed", ({ reason }) => {
     if (reason === "load") void propertyTypes.init(vault);
   });

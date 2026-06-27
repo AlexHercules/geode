@@ -648,6 +648,9 @@ export interface PropertyTypeRegistry {
   revision: Store<number>;
   /** case-insensitive lookup; unknown stored values are passed through */
   get(key: string): string | undefined;
+  /** R268: all assigned properties (lowercased name → stored type) as a COPY — backs the
+   *  compat MetadataTypeManager.getAllProperties() (e.g. Tasks reads it to register its dates). */
+  getAll(): Map<string, string>;
   assign(key: string, type: PropertyType): Promise<void>;
   /** reads .obsidian/types.json (missing/bad JSON → empty, warn once) */
   init(vault: Vault): Promise<void>;
@@ -782,6 +785,7 @@ async function regRunAssign(key: string, type: PropertyType): Promise<void> {
 export const propertyTypes: PropertyTypeRegistry = {
   revision: new Store(0),
   get: (key: string) => regMap.get(key.toLowerCase()),
+  getAll: () => new Map(regMap),
   assign: (key: string, type: PropertyType) =>
     regEnqueue("assign", () => regRunAssign(key, type)),
   // idempotent + reentrant: serialized on the module chain, re-reads fresh
