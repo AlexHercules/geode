@@ -251,6 +251,18 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R264 套件回归（2026-06-28，编辑器抗插件 inline-query ViewPlugin 崩溃硬化：editorInfoField 非空 + tokenClassNodeProp 桥·逻辑档·零新依赖·纯读 · 简化门 clean · ultracode 4-lens 3 confirmed[全文档级·均 ship]+15 refuted · 桌面 N/A-by-equivalence）
+
+R264 = R263 后**用新 probe 法**（载真 Templater+Dataview 跑基操·捕 reportGap+未捕异常）揪出 Dataview inline-query CM6 ViewPlugin 在编辑器开 live 模式时的**真崩溃**（CM6 隔离·编辑器存活·但每开笔记报错+inline 渲染断）：① `field(editorInfoField).file` 读 null（R260 字段初始 null·插件构造期在 seeding microtask 前无守卫读）② `type.prop(tokenClassNodeProp)`（新版 @codemirror/language 删此导出→undefined→崩）。**详见 ARCHITECTURE「Round 264 additions」**。
+
+**套件矩阵（R264·不回退）**：
+- **r264-e2e 8/8 全绿**（新增）= Part A probe 插件 CM6 ViewPlugin 构造期读 `editorInfoField` **非空** + `.file` 不抛 + `app` 在（直接复现 Dataview 崩路径）· Part B 真 Dataview 开笔记 live 模式编辑器渲染 + **0「CodeMirror plugin crashed」**（原 2）。
+- **修两处（全只读·零写路径）**：`editorFields.ts` editorInfoField.create() 返非空 info（新 editorInfoHostFacet 携 {app,registry}·editor 省略·microtask 仍 reseed 全 info）·`loader.ts` 桥 @codemirror/language 加 `tokenClassNodeProp ?? new NodeProp()`（NodeProp 取已 bundle 的 @lezer/common·零新依赖·未动 package.json）。
+- **回归不回退**：**r260 StateFields 12/12（editorFields 重写不退）** · **r261 Dataview LIST 13/13** · **r263 Templater 10/10** · r262 typed-frontmatter 18 · r115 editor-extension 7 · r134 code-block 24 · r106 editor 12 · r33 字节 37。
+- **🔓 依赖**：零新依赖（@lezer/common 是 @codemirror 的 transitive dep·已 bundle·已直接 import 先例 formatCommands.ts·未动 package.json）。**数据安全**：纯读·零新写路径（4-lens data-safety 0 confirmed·create 只读 info·microtask effect-only 不触 autosave）。
+- **2 记档 + 1 nit（均 ship·非码缺陷）**：① @lezer/common phantom（守边界不动 package.json）；② editorEditorField 留 null 真因（create 无 view + Dataview 不读·latent gap 记档）；③ reading-view inline 渲染降级声明（验证的是 reading-view BLOCK·inline 未断言）。
+- **桌面 probe N/A-by-equivalence**：纯 JS editor-field/bridge·两端同码。
+
 ### R263 套件回归（2026-06-28，🎉 真 Templater 2.23 = Obsidian 第二大插件载入并执行模板：compat shim 补 newer-app(~1.13) API 面 + CM5 null-mode·逻辑档·零新依赖 · 简化门删 8 死成员 · ultracode 5-lens 1 confirmed[nit·已修]+22 refuted · 桌面 N/A-by-equivalence）
 
 R263 = R261 Dataview milestone 之后**商业主轴 breadth 第二大件**。**Step 0 probe 纠误**：候选 dataviewjs 实为 faithful 非 gap（seed 真 data.json{enableDataviewJs:true} 后 JS 执行真工作·桌面读真 data.json 即生效）→ 转载真 **Templater 2.23（GPL·`isDesktopOnly:false`）**。先 static-diff Templater 的 `require("obsidian")` 用法 vs shim 出口**界定 gap 有界**（非 cascade），再**崩哪补哪 9 blocker**补 newer-app API 面。**详见 ARCHITECTURE「Round 263 additions」**。
