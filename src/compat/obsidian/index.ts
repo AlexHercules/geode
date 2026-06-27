@@ -46,6 +46,8 @@ export { HoverPopover, PopoverState, type HoverParent, type Point } from "./hove
 export { FileView, ItemView, View, type ViewStateResult } from "./view";
 // R260: CM6 editor StateFields (plugins read them from their own CM6 extensions)
 export { editorEditorField, editorInfoField, editorLivePreviewField, editorViewField } from "./editorFields";
+// R261: general-purpose YAML (js-yaml-backed) — Dataview/Templater/Tasks read inline fields with it
+export { parseYaml, stringifyYaml } from "./yaml";
 export {
   AbstractInputSuggest,
   EditorSuggest,

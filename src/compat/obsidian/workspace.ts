@@ -6,6 +6,7 @@
  */
 import { openSearchPanel } from "@codemirror/search";
 import type { AppHandle } from "@core/plugins";
+import { editorExtensionsRevision } from "@core/editorExtensions";
 import { findActiveTab } from "@core/workspace";
 import { Editor } from "./editor";
 import { Events, type EventRef } from "./events";
@@ -441,6 +442,19 @@ export class Workspace extends Events {
       }
     }
     this.trigger("layout-ready");
+  }
+
+  /**
+   * R261: Obsidian `Workspace.updateOptions()` — re-apply editor options/extensions to
+   * every open editor. A CM6-extension plugin (Dataview) registers a STABLE
+   * editor-extensions array via registerEditorExtension, mutates it, then calls this to
+   * reconfigure. Maps to bumping editorExtensionsRevision: each mounted EditorPane
+   * re-snapshots getEditorExtensions() and reconfigures its compat compartment, picking up
+   * the mutated array. (Per-Store editor settings — tab size, line numbers — already
+   * reconfigure reactively, so this only needs to re-push the registered extensions.)
+   */
+  updateOptions(): void {
+    editorExtensionsRevision.update((n) => n + 1);
   }
 
   getLeaf(newLeaf?: "split", direction?: SplitDirection): WorkspaceLeaf;

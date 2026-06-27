@@ -187,6 +187,16 @@ async function runLoad(
   // fixture paths both come through here). Never overwrite an existing one.
   window.moment ??= moment;
 
+  // R261: legacy CodeMirror 5 stub. Obsidian historically exposes the CM5 instance as
+  // window.CodeMirror; Dataview's registerDataviewjsCodeHighlighting calls
+  // CodeMirror.defineMode/getMode to register a CM5 syntax mode for ```dataviewjs blocks.
+  // Geode is CM6-only (no legacy editor), so that mode is never used — a no-op stub lets
+  // such plugins load (the dataviewjs block still renders via the CM6/markdown path).
+  (window as { CodeMirror?: unknown }).CodeMirror ??= {
+    defineMode: () => undefined,
+    getMode: () => ({}),
+  };
+
   // B3③ (R165): Node-targeting plugin bundles (obsidian-git etc.) reference the
   // Node global `global` as a free variable and crash with "Can't find variable:
   // global" when main.js evaluates. Point it at globalThis so the lookup resolves

@@ -13,6 +13,14 @@ declare module "moment/min/moment-with-locales" {
   export = moment;
 }
 
+/** R261: js-yaml ships no own typings — minimal ambient decl for the only two functions
+ *  the obsidian parseYaml/stringifyYaml wrappers use (keeps the authorization to the single
+ *  RUNTIME package js-yaml; no @types/js-yaml needed). */
+declare module "js-yaml" {
+  export function load(input: string, options?: unknown): unknown;
+  export function dump(input: unknown, options?: unknown): string;
+}
+
 interface DomElementInfo {
   /** The class to be assigned. Can be a space-separated string or an array of strings. */
   cls?: string | string[];
