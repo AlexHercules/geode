@@ -16,6 +16,7 @@ import {
 import type { NewTabMode } from "@core/appearance";
 import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
+import { getCommandName } from "@core/commands";
 import type { PaneLeaf, PaneNode, PaneSplit, TabState } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
 import { Icon } from "./icons";
@@ -1931,8 +1932,10 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const tabBarVisible = useStore(showTabTitleBar); // R100: hide each pane's tab strip when off
   const { setDraggingTabId } = useContext(TabDragContext);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
-  // R81: tab right-click context menu (TagsPanel inline pattern)
-  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  // R81: tab right-click context menu (TagsPanel inline pattern). R256: `kind`
+  // discriminates the tab right-click menu ("tab") from the view-header "…"
+  // more-options menu ("viewopts"), which share the dismiss/runMenu machinery.
+  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string; kind: "tab" | "viewopts" } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!menu) return;
@@ -1951,6 +1954,25 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
   const runMenu = (fn: () => void) => {
     fn();
     setMenu(null);
+  };
+  // R256: render a view-options menu item that delegates to an existing vetted
+  // command (mirrors R252 editorMenu's addFileActionItems, but as React JSX — the
+  // shell can't import compat). Hidden when the command is missing or its
+  // available() gate is false (desktop-only reveal/open hide in the browser).
+  const cmdMenuItem = (id: string, testid: string, danger = false) => {
+    const cmd = app.commands.list().find((c) => c.id === id);
+    if (!cmd || cmd.available?.() === false) return null;
+    return (
+      <button
+        key={id}
+        role="menuitem"
+        data-testid={testid}
+        className={danger ? "is-danger" : undefined}
+        onClick={() => runMenu(() => void app.commands.execute(id))}
+      >
+        {getCommandName(cmd)}
+      </button>
+    );
   };
 
   /** Insert index from the pointer x relative to each tab's midpoint. */
@@ -2044,7 +2066,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           onAuxClick={(e) => e.button === 1 && app.workspace.closeTab(tab.id)}
           onContextMenu={(e) => {
             e.preventDefault();
-            setMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+            setMenu({ x: e.clientX, y: e.clientY, tabId: tab.id, kind: "tab" });
           }}
           title={tab.filePath ?? title}
         >
@@ -2080,7 +2102,24 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
       >
         <Icon name="plus" size={16} />
       </button>
-      {menu && menuTab && (
+      {/* R256: view-header "…" more-options menu (Obsidian native·tab/view 顶部「更多选项」)
+          — opens an aggregate menu of view-mode + file actions + tab/pane ops for the
+          active tab. The "…" button activates its own pane via the pane's mousedown
+          capture, so the wired commands target this leaf's active file. */}
+      <button
+        className="tab-more-options"
+        data-testid={`view-header-more-${leaf.id}`}
+        title={t("app.moreOptions")}
+        aria-label={t("app.moreOptions")}
+        disabled={!leaf.activeTabId}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          if (leaf.activeTabId) setMenu({ x: r.left, y: r.bottom, tabId: leaf.activeTabId, kind: "viewopts" });
+        }}
+      >
+        <Icon name="more-vertical" size={16} />
+      </button>
+      {menu && menuTab && menu.kind === "tab" && (
         <div
           ref={menuRef}
           className="tab-context-menu"
@@ -2127,6 +2166,62 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           {/* R254: Stack/Unstack the whole tab group (Obsidian "Stack tabs") */}
           <button role="menuitem" data-testid="tabctx-toggle-stacked" onClick={() => runMenu(() => app.workspace.toggleStacked(leaf.id))}>
             {t(leaf.stacked ? "app.tabUnstack" : "app.tabStack")}
+          </button>
+        </div>
+      )}
+      {menu && menuTab && menu.kind === "viewopts" && (
+        <div
+          ref={menuRef}
+          className="tab-context-menu"
+          data-testid="view-options-menu"
+          role="menu"
+          style={{
+            left: Math.max(0, Math.min(menu.x, window.innerWidth - 220)),
+            top: Math.max(0, Math.min(menu.y, window.innerHeight - 380)),
+          }}
+        >
+          {/* view mode (markdown only) */}
+          {menuTab.viewType === "markdown" && cmdMenuItem("app:toggle-mode", "viewopt-toggle-mode")}
+          {menuTab.viewType === "markdown" && <div className="tab-context-sep" />}
+          {/* file actions (file-bearing tabs; markdown-only ones gated separately) */}
+          {menuTab.filePath !== null && cmdMenuItem("bookmarks:bookmark-file", "viewopt-bookmark")}
+          {menuTab.viewType === "markdown" && cmdMenuItem("editor:add-property", "viewopt-add-property")}
+          {menuTab.viewType === "markdown" && cmdMenuItem("app:export-pdf", "viewopt-export-pdf")}
+          {menuTab.filePath !== null && cmdMenuItem("file-explorer:copy-path", "viewopt-copy-path")}
+          {menuTab.filePath !== null && cmdMenuItem("workspace:copy-url", "viewopt-copy-url")}
+          {/* R256 review: in-app "Reveal file in navigation" — cross-platform, so the only
+              reveal option in the browser (both desktop reveals below hide via available()) */}
+          {menuTab.filePath !== null && cmdMenuItem("file-explorer:reveal-active-file", "viewopt-reveal-nav")}
+          {menuTab.filePath !== null && cmdMenuItem("file-explorer:reveal-in-system", "viewopt-reveal")}
+          {menuTab.filePath !== null && cmdMenuItem("file-explorer:open-in-default-app", "viewopt-open-default")}
+          {menuTab.filePath !== null && cmdMenuItem("workspace:edit-file-title", "viewopt-rename")}
+          {menuTab.filePath !== null && cmdMenuItem("app:delete-file", "viewopt-delete", true)}
+          {(menuTab.viewType === "markdown" || menuTab.filePath !== null) && <div className="tab-context-sep" />}
+          {/* tab / pane ops (always available) */}
+          <button role="menuitem" data-testid="viewopt-pin" onClick={() => runMenu(() => app.workspace.toggleTabPin(menu.tabId))}>
+            {t(menuTab.pinned ? "app.tabUnpin" : "app.tabPin")}
+          </button>
+          <button
+            role="menuitem"
+            data-testid="viewopt-split-right"
+            disabled={isFilelessSingletonView(menuTab.viewType)}
+            onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("row"); })}
+          >
+            {t("app.tabSplitRight")}
+          </button>
+          <button
+            role="menuitem"
+            data-testid="viewopt-split-down"
+            disabled={isFilelessSingletonView(menuTab.viewType)}
+            onClick={() => runMenu(() => { app.workspace.setActiveTab(menu.tabId); app.workspace.splitActivePane("column"); })}
+          >
+            {t("app.tabSplitDown")}
+          </button>
+          <button role="menuitem" data-testid="viewopt-close" onClick={() => runMenu(() => app.workspace.closeTab(menu.tabId))}>
+            {t("app.tabClose")}
+          </button>
+          <button role="menuitem" data-testid="viewopt-close-others" onClick={() => runMenu(() => app.workspace.closeOtherTabs(menu.tabId))}>
+            {t("app.tabCloseOthers")}
           </button>
         </div>
       )}

@@ -670,6 +670,26 @@ textarea:focus {
   color: var(--text-normal);
 }
 
+/* R256: view-header "…" more-options button — right edge of the tab bar */
+.tab-more-options {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  margin-left: auto; /* push to the far right (Obsidian view-actions area) */
+}
+.tab-more-options:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+.tab-more-options:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .tab-nav {
   display: flex;
   gap: 2px;
@@ -997,6 +1017,9 @@ textarea:focus {
 .tab-context-menu button:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+.tab-context-menu button.is-danger {
+  color: var(--danger); /* R256: destructive item (delete) */
 }
 .tab-context-sep {
   height: 1px;
