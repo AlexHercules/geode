@@ -71,6 +71,19 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 272 additions — defaultNewTabMode 3-way segmented → 2 个正交下拉（视图模式 × 编辑模式）·逻辑档·非数据安全·零新依赖【As-built·v0.265】
+
+> **状态：As-built（已交付·v0.265）。表面复刻续第 4 项 — 完成 R271 控件原生化弧**（3 个旧 segmented 现全用 Obsidian 真实控件型：tab-indent=slider·new-note-location=dropdown·new-tab-mode=2 dropdowns）。Obsidian 把 new-tab-mode 拆成两个独立设置（reference `01-编辑器-01`）：「默认视图模式」编辑视图/阅读视图 × 「默认编辑模式」实时预览/源码 —— 不是 Geode 原来的单个 3-way segmented(reading/live/source)。
+>
+> **设计要点 = combined 仍是单一真源·消费者零改**：
+> - `defaultNewTabMode`（`NewTabMode = "live"|"source"|"preview"`）保持不变 = `workspace.openFile`（`core/workspace.ts:455` `mode: defaultNewTabMode.get()`）消费的单一真源；`App.tsx:352` 的 `app:toggle-default-new-tab-view` cycle 命令也不改。**两个消费者字节级未动**。
+> - 新增 `defaultEditMode`（`EditMode = "live"|"source"`·持久化 `geode.defaultEditMode`）= 记住的「编辑模式」。**为何需要**：combined 是 3 态枚举，当视图=阅读时塌成 "preview"，会丢失 live-vs-source 信息；Obsidian 的两个设置是正交独立的，所以编辑模式偏好必须单独持久化，才能在 read↔edit 间保留。`readEditMode()` 首载从 combined derive（`defaultNewTabMode.get()==="source"?"source":"live"`）。
+> - `setDefaultNewTabMode(mode)` 末尾加 `if(mode==="live"||mode==="source") setDefaultEditMode(mode)` —— 记住末次编辑模式，**也让 cycle 命令（调 setDefaultNewTabMode）自动同步 defaultEditMode**。无环（setDefaultNewTabMode→setDefaultEditMode 不回调前者）。
+>
+> **SettingsModal 2 下拉协调**（`.settings-select`）：① view 下拉 value=`newTabMode==="preview"?"read":"edit"`·onChange=`setDefaultNewTabMode(e.target.value==="read"?"preview":editMode)`（切回 edit 用记住的 editMode）；② editmode 下拉 value=`editMode`·onChange=`setDefaultEditMode(m); if(newTabMode!=="preview") setDefaultNewTabMode(m)`（仅在 edit 视图下令 combined 跟随；read 时只更新偏好不离开 read）。+4 i18n 键×2 语言（defaultEditMode/Desc/viewEditing/viewReading）。
+>
+> **逻辑档**（新 store + 协调控制流·**非数据安全**：display-mode preference·零 vault/file/markdown/editor-管线 IO·消费者未碰）→ 简化门 clean（defaultEditMode 基建镜像 defaultNewTabMode 但读不同 key/校验·非 token 级重复·新代码单一用途）→ **多维对抗评审 7 维**（状态机穷举所有 view×edit 转换无丢失/无错值 · 首载 derive 正确 · cycle 命令副作用无环且 editMode 始终合理 · consumer workspace.openFile 字节未变 · onChange 非 effect→无 StrictMode 双发 · i18n 键真实 · testid 唯一+旧退）。**评审揪 1 confirmed 已修**（[[geode-collection-widen-recheck-consumers]] 同型）：`r271-e2e` 在 R271 写了「defaultNewTabMode segmented 故意保留（R272 backlog）」断言——R272 兑现了那个 backlog → 该断言变 stale/red（9/10）→ 翻为「segmented GONE + view 下拉 present」（11/11）。**教训：做掉一个 deferred 项时，grep 之前轮里断言它「仍存在/未做」的 assertion，一并翻转。** r272-e2e **14/14**（2 下拉型 + 旧 segmented testid 消 · **read 保留 editMode + 回 edit 恢复 source · read 时改 editmode 不离开 read · consumer 用 combined 开 source tab**）· 回归 r271 11/r88 13/r177 53/r247 11/**r195 11**(cycle) · typecheck 0 · prod build✓ · **桌面 by-equivalence**（settings state + localStorage · 纯 UI · 零 Rust/FS · consumer 未碰）。**控件原生化弧完成。下一项 = R273 fresh scout（表面近尾声·宜盘点转向）。**
+
 ## Round 271 additions — 设置控件原生化（segmented → Obsidian 真实控件型）·机械档·零新依赖【As-built·v0.264】
 
 > **状态：As-built（已交付·v0.264）。表面复刻续第 3 项。** Geode 自造 3-way `.settings-segmented` 与 Obsidian 控件形态不符。**Step 0 verify-first 逐控件（关键纪律——segmented 不统一 →dropdown）**：对照 reference 截图实测 3 个 segmented 的 Obsidian 真实控件型：① **`tabIndentSize`[2,4,8] → SLIDER**（reference `01-编辑器-02` 制表符宽度 = 1–8 滑块·**不是下拉**·盲目 →dropdown 就是 faithfulness miss）；② **`newNoteLocation`(root/current/folder) → DROPDOWN**（reference `02-文件与链接-01` 新建笔记存放位置 = 下拉）；③ **`defaultNewTabMode`(reading/live/source) → 2 个下拉**（Obsidian「新标签页默认视图模式」编辑/阅读 × 「默认编辑模式」实时预览/源码·`01-编辑器-01`）·拆分需 store 拆 + tab-open 接线 = **逻辑档 → 留 R272**。

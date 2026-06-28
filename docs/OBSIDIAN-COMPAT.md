@@ -251,7 +251,16 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
-### R271 套件回归（2026-06-28，设置控件原生化 segmented → Obsidian 真实控件型 = 表面复刻续第 3 项·机械档·零新依赖 · 跳简化门 + scoped review 5 窄域 0 confirmed · 桌面 by-equivalence）
+### R272 套件回归（2026-06-28，defaultNewTabMode 3-way segmented → 2 个正交下拉[视图模式×编辑模式] = 表面复刻续第 4 项·逻辑档·非数据安全·零新依赖 · 简化门 clean · 多维对抗 7 维揪 1 confirmed[r271 stale 断言]已修 · 桌面 by-equivalence）
+
+R272 = 表面复刻续·**完成 R271 控件原生化弧**（3 segmented 现全用 Obsidian 真实控件型）。Obsidian 拆成「默认视图模式」editing/reading × 「默认编辑模式」live/source（reference 01-编辑器-01）。**设计**：combined `defaultNewTabMode` 仍是 workspace.openFile 消费的单一真源（消费者零改）+ 新增持久化 `defaultEditMode` 记住编辑模式（read 视图下 combined 塌成 preview 会丢 live/source）。**评审揪 1 已修**：r271-e2e 的「segmented 故意保留(R272 backlog)」断言被 R272 兑现→翻为 segmented-gone。**详见 ARCHITECTURE「Round 272 additions」**。
+
+**套件矩阵（R272·不回退）**：
+- **r272-e2e 14/14 全绿**（新增）= 2 下拉型（view[edit/read]+editmode[live/source]）+ 旧 settings-newtab-{reading,live,source} segmented testid 消 · **read 保留 editMode + 回 edit 恢复 source · read 时改 editmode 不离开 read · consumer workspace.openFile 用 combined 开 source tab**。
+- **修**：`appearance.ts`（+EditMode/defaultEditMode store/setter·setDefaultNewTabMode 加 editMode sync）· `SettingsModal.tsx`（2 `.settings-select`）· `dict.views.ts` +4 键×2 语言。
+- **改控件型同步更新 tracked 套件**：r88 13（view selectOption）· r177 53 · r247 11（testid 列表）· **r195 11**（cycle 命令 setDefaultNewTabMode 同步 defaultEditMode·不退）· **r271 11**（R271 的 segmented-remains 断言翻为 segmented-gone+view-dropdown·原 10→11）· typecheck 0 · prod build✓。
+
+### R271 套件回归（2026-06-28，设置控件原生化 segmented → Obsidian 真实控件型 = 表面复刻续第 3 项·机械档·零新依赖 · 跳简化门 + scoped review 5 窄域 0 confirmed · 桌面 by-equivalence · **R272 起 r271-e2e 10→11**[segmented-remains 断言翻 segmented-gone]）
 
 R271 = 表面复刻续（控件形态保真）。**Step 0 verify-first 逐控件纠误**：3 个 `.settings-segmented` 不统一 →dropdown——`tabIndentSize`→**slider**（reference 01-编辑器-02·非下拉）·`newNoteLocation`→**dropdown**（reference 02-文件与链接-01）·`defaultNewTabMode`→**2 下拉**（拆分=逻辑档·R272）。**修（纯控件 form swap·复用既有控件/setter·零 editor 改）**：tabIndentSize segmented→`.settings-slider` 1–8·newNoteLocation segmented→`.settings-select` 3 option。**控件型变→同步扫 5 个引用旧 testid 的 tracked 套件**（R177 纪律）。**详见 ARCHITECTURE「Round 271 additions」**。
 
