@@ -71,6 +71,22 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 270 additions — 设置页 settings-card 圆角卡 → 扁平行（表面复刻续）·机械档·纯 CSS·零新依赖【As-built·v0.263】
+
+> **状态：As-built（已交付·v0.263）。表面复刻续第 2 项（R269 scout 的次高值偏差）。** **偏差**：Obsidian 设置是**扁平整宽行 + 细分隔线**（reference 00 §四）·无卡片盒；Geode 把 Appearance(4)/CorePlugins(1)/Hotkeys(2) 的行装进圆角 `--bg-input`/`--bg-modal` 卡 + 20px 横向内缩 —— 而 Geode **自己的 Editor/Files 页**早是裸 `.setting-item` 扁平行 → **内部不一致**（同 app 一半卡片一半扁平）。
+>
+> **修（纯 CSS·`src/features/settings/settings.css` 一文件 5 处规则·零 JSX/逻辑）**：
+> - `.settings-card`（4 个纯 Appearance 卡）：删 `background: var(--bg-input)` + `border-radius: 12px` + `padding: 0 20px`·`margin-bottom: 18px→0` → 透明零内缩 passthrough（class 仍留在 6 个 JSX wrapper 上·只去视觉盒）。
+> - `.core-plugin-list`：`padding: 0 20px → 0`（行 flush）。
+> - `.hotkeys-search-card`：`padding: 18px 20px → 18px 0`（搜索头 flush）。
+> - `.hotkey-list`：删 `background: var(--bg-modal)` + `border-radius: 12px` + `padding: 0 20px` → flat（**评审揪的漏项**，见下）。
+> - `.settings-subheader`：`margin: 24px 20px 12px → 24px 0 12px`（横向 inset 20→0）→ 行与 subheader 同 0 inset；**顺带修 Editor/Files 页 subheader(20px) vs 裸行(0px) 的既有 20px 错位**。
+> - 结果：每页都 = 行 flush（46px content padding 下 0 额外 inset）+ subheader 同左缘 + 扁平无卡 + `.setting-item` 细分隔线保留。
+>
+> **机械档**（纯样式·无新承载逻辑·未碰数据安全面）→ 跳简化门 + **scoped review**。**评审揪 1 major 已修**（[[geode-collection-widen-recheck-consumers]] 同型 = flatten 一组样式漏掉同组配对元素）：`.hotkey-list`（hotkeys 命令列表）是**另一个** `--bg-modal` 圆角卡，但**未 classed `settings-card`** → 首轮 grep `settings-card` 漏判；只扁平了它上方配对的 `.hotkeys-search-card` 搜索头 → 半扁平页 + 搜索头(0)vs 命令行(20px) 错位 → 补扁平 `.hotkey-list`。其余 3 维评审证伪无回退：① 卡内交互控件（select/input/toggle/slider）各自带 `--bg-input`+`--border` 边框·去卡背景后对比更强不隐形；② subheader 0-inset 全 9 处一致（多卡页 subheader 同步 20→0·裸行页修错位）；③ 分隔线 `.setting-item`/`*:last-child` 规则未改·行仍有线、末行无线、无双线。
+>
+> **验收**（computed-style 锁视觉·R245 先例）：**r270-e2e 14/14** = 4 Appearance 卡 + `.core-plugin-list` + `.hotkeys-search-card` + `.hotkey-list` 全 `backgroundColor: rgba(0,0,0,0)` + `border-radius: 0` + `padding-left: 0`·行仍有 1px 分隔线·Appearance/Editor subheader 与行左对齐·hotkeys 搜索头与命令行左对齐·**反真空断言**（`--bg-input` resolve 为非透明·证「卡背景透明」非 vacuous）。回归 r245 7/r231 13/r242 11/r229 9/r145 hotkeys 15 全绿·typecheck 0·prod build✓·**桌面 by-equivalence**（纯 CSS·跨端同渲染·零 Rust/FS）。**下一项 = 控件原生化或下一页偏差（fresh scout）。**
+
 ## Round 269 additions — 编辑器右键菜单补图标（表面复刻最后一公里首项）·机械档·零新依赖【As-built·v0.262】
 
 > **状态：As-built（已交付·v0.262）。用户拍板转向「Surface-replica last-mile」后首轮。** Step 0 = 截图 diff scout（Geode 实际 UI 截图 vs `reference/_截图` PNG ground truth）→ explorer value-ranked 出两高值偏差：① 右键菜单空图标槽（高频操作面）② settings-card 圆角卡 vs 扁平行。取 ①——对齐用户「高频操作」优先 + compat 自包含 + **目标确定**（空槽→填图标）胜过推断目标（设置扁平化触面广 + 哪个 inset 的判断）。

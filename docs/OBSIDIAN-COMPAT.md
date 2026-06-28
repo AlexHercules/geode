@@ -251,6 +251,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R270 套件回归（2026-06-28，设置页 settings-card 圆角卡 → 扁平行 = 表面复刻续第 2 项·机械档·纯 CSS·零新依赖 · 跳简化门 + scoped review 揪 1 major[hotkey-list 漏项]已修 · 桌面 by-equivalence）
+
+R270 = 表面复刻续（脱离插件 compat·设置视觉忠实）。**偏差**：Obsidian 设置=扁平整宽行+细分隔线无卡·Geode 把 Appearance(4)/CorePlugins(1)/Hotkeys(2) 装进圆角 `--bg-input`/`--bg-modal` 卡+20px 内缩（而 Geode 自己 Editor/Files 页早扁平=内部不一致）。**修（纯 CSS·settings.css 5 处）**：`.settings-card`/`.core-plugin-list`/`.hotkeys-search-card`/`.hotkey-list` 去卡背景+圆角+20px 内缩·`.settings-subheader` 横向 margin 20→0（顺带修 Editor/Files subheader-vs-row 既有错位）。**评审揪 1 major 已修**：`.hotkey-list`（命令列表·未 classed settings-card→grep 漏）是另一 `--bg-modal` 卡·只扁平了配对搜索头→半扁平+错位→补扁平。**详见 ARCHITECTURE「Round 270 additions」**。
+
+**套件矩阵（R270·不回退）**：
+- **r270-e2e 14/14 全绿**（新增·computed-style 锁视觉 R245 先例）= 4 Appearance 卡 + `.core-plugin-list` + `.hotkeys-search-card` + `.hotkey-list` 全 transparent bg + 0 圆角 + 0 inset·行仍有分隔线·Appearance/Editor subheader 与行左对齐·hotkeys 搜索头与命令行左对齐·**反真空**（`--bg-input` 非透明）。
+- **修**：`settings.css` 5 处规则（去卡片视觉 + subheader 对齐）·纯 CSS 零 JSX/逻辑。
+- **回归不回退**：r245 设置视觉 7 · r231 快切设置 13 · r242 删除确认 11 · r229 视图模式 9 · r145 热键页 15 · typecheck 0 · prod build✓。
+
 ### R269 套件回归（2026-06-28，编辑器右键菜单补图标 = 表面复刻最后一公里首项·机械档·零新依赖·compat 自包含 · 跳简化门 + scoped review 4 窄域 0 confirmed · 桌面 by-equivalence）
 
 R269 = 用户拍板转向「Surface-replica last-mile」首轮（脱离插件 compat）。截图 diff scout（Geode 实际 vs `reference/_截图` PNG）出两高值偏差·取 ① 右键菜单空图标槽（高频操作·compat 自包含·目标确定）。**真偏差**：Obsidian 右键菜单每项带 lucide 图标·Geode compat `Menu` 项总有 16px 空图标槽（`editorMenu.ts` 从不 setIcon·`ui.ts` 仅 `setNoIcon()` 才折叠→编辑菜单不折叠→空槽=半成品）。**修（纯展示）**：① `icons.ts` BUILTIN +8 手绘 lucide-ish 图标（scissors/copy/clipboard/bookmark/file-output/link/folder/external-link·非拷库）；② `editorMenu.ts` 剪贴板 3 项 + 文件动作项（`ICON_BY_COMMAND` map）逐项 setIcon。**clipboard/delete 逻辑字节级未动**（仅链式装饰）。**详见 ARCHITECTURE「Round 269 additions」**。
