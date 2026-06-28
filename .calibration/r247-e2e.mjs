@@ -44,7 +44,7 @@ const ORIGINAL = [
   "settings-spellcheck-toggle", "settings-strict-linebreaks-toggle", "settings-line-numbers-toggle",
   "settings-hide-reference-marks-toggle", "settings-rtl-toggle", "settings-autopair-toggle",
   "settings-autopair-markdown-toggle", "settings-smart-lists-toggle", "settings-backlinks-indoc-toggle",
-  "settings-fold-heading-toggle", "settings-newtab-reading", "settings-newtab-live", "settings-newtab-source",
+  "settings-fold-heading-toggle", "settings-newtab-view", "settings-newtab-editmode",
   "settings-indent-tabs-toggle", "settings-tab-indent-size",
   "settings-properties-display",
 ];

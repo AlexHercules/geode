@@ -213,9 +213,11 @@ export function setFoldHeading(on: boolean): void {
   persistBool(FOLD_HEADING_KEY, on);
 }
 
-/** R88 (㊶ 续): the mode a NEW markdown tab opens in (Obsidian's "Default view for
- *  new tabs" + "Default editing mode" combined). Default "live" = current behaviour
- *  (zero regression). Consumed by workspace.openFile. */
+/** R88 (㊶ 续): the COMBINED mode a NEW markdown tab opens in. This stays the single
+ *  source of truth consumed by workspace.openFile (R272: unchanged) — Obsidian's two
+ *  orthogonal settings ("Default view" edit/read × "Default editing mode" live/source)
+ *  are presented as two dropdowns over this combined value + `defaultEditMode` below.
+ *  Default "live" = current behaviour (zero regression). */
 export type NewTabMode = "live" | "source" | "preview";
 const DEFAULT_TAB_MODE_KEY = "geode.defaultNewTabMode";
 
@@ -230,9 +232,36 @@ function readTabMode(): NewTabMode {
 
 export const defaultNewTabMode = new Store<NewTabMode>(readTabMode());
 
+/** R272: the remembered "Default editing mode" (Obsidian splits 视图模式 × 编辑模式 into
+ *  two independent dropdowns). Persisted separately so the edit-mode choice survives switching
+ *  the view to Reading (where the combined value collapses to "preview" and would otherwise
+ *  lose live-vs-source). First run derives from the combined default. */
+export type EditMode = "live" | "source";
+const DEFAULT_EDIT_MODE_KEY = "geode.defaultEditMode";
+
+function readEditMode(): EditMode {
+  try {
+    const v = localStorage.getItem(DEFAULT_EDIT_MODE_KEY);
+    if (v === "source" || v === "live") return v;
+  } catch {
+    /* fall through to derive */
+  }
+  return defaultNewTabMode.get() === "source" ? "source" : "live";
+}
+
+export const defaultEditMode = new Store<EditMode>(readEditMode());
+
+export function setDefaultEditMode(mode: EditMode): void {
+  defaultEditMode.set(mode);
+  persistString(DEFAULT_EDIT_MODE_KEY, mode);
+}
+
 export function setDefaultNewTabMode(mode: NewTabMode): void {
   defaultNewTabMode.set(mode);
   persistString(DEFAULT_TAB_MODE_KEY, mode);
+  // remember the last EDIT mode so the edit-mode dropdown persists across read↔edit (R272).
+  // also keeps defaultEditMode synced when the cycle command (App.tsx) drives the combined value.
+  if (mode === "live" || mode === "source") setDefaultEditMode(mode);
 }
 
 /** R234: Obsidian native Note composer "Replace selection with" (笔记重组「替代原文的方式」).

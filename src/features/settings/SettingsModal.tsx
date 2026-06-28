@@ -43,6 +43,8 @@ import {
   setFoldHeading,
   defaultNewTabMode,
   setDefaultNewTabMode,
+  defaultEditMode,
+  setDefaultEditMode,
   tabIndentSize,
   setTabIndentSize,
   indentUsingTabs,
@@ -143,7 +145,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.264.0";
+export const APP_VERSION = "0.265.0";
 
 type SectionId =
   | "about"
@@ -723,6 +725,7 @@ function EditorSection() {
   const backlinksInDoc = useStore(showBacklinksInDocument);
   const foldH = useStore(foldHeading);
   const newTabMode = useStore(defaultNewTabMode);
+  const editMode = useStore(defaultEditMode);
   /* R92: editor indentation — indent using tabs + tab indent size */
   const useTabs = useStore(indentUsingTabs);
   const indentSize = useStore(tabIndentSize);
@@ -751,38 +754,48 @@ function EditorSection() {
         </button>
       </div>
 
-      {/* R88: default mode a new markdown tab opens in (reading / live / source) */}
+      {/* R272: Obsidian splits this into two orthogonal dropdowns (reference 01-编辑器-01):
+          「默认视图模式」editing/reading × 「默认编辑模式」live/source — not one 3-way control.
+          The combined `defaultNewTabMode` stays the single source of truth consumed by
+          workspace.openFile; these dropdowns read/write it + the remembered `defaultEditMode`,
+          so the edit-mode choice survives switching the view to Reading (R272). */}
       <div className="setting-item">
         <div className="setting-info">
           <div className="setting-name">{t("settings.defaultNewTabMode")}</div>
           <div className="setting-desc">{t("settings.defaultNewTabModeDesc")}</div>
         </div>
-        <div className="settings-segmented" role="group" aria-label={t("settings.defaultNewTabMode")}>
-          <button
-            className={newTabMode === "preview" ? "is-active" : ""}
-            aria-pressed={newTabMode === "preview"}
-            data-testid="settings-newtab-reading"
-            onClick={() => setDefaultNewTabMode("preview")}
-          >
-            {t("settings.modeReading")}
-          </button>
-          <button
-            className={newTabMode === "live" ? "is-active" : ""}
-            aria-pressed={newTabMode === "live"}
-            data-testid="settings-newtab-live"
-            onClick={() => setDefaultNewTabMode("live")}
-          >
-            {t("settings.modeLive")}
-          </button>
-          <button
-            className={newTabMode === "source" ? "is-active" : ""}
-            aria-pressed={newTabMode === "source"}
-            data-testid="settings-newtab-source"
-            onClick={() => setDefaultNewTabMode("source")}
-          >
-            {t("settings.modeSource")}
-          </button>
+        <select
+          className="settings-select"
+          data-testid="settings-newtab-view"
+          value={newTabMode === "preview" ? "read" : "edit"}
+          aria-label={t("settings.defaultNewTabMode")}
+          onChange={(e) => setDefaultNewTabMode(e.target.value === "read" ? "preview" : editMode)}
+        >
+          <option value="edit">{t("settings.viewEditing")}</option>
+          <option value="read">{t("settings.viewReading")}</option>
+        </select>
+      </div>
+
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.defaultEditMode")}</div>
+          <div className="setting-desc">{t("settings.defaultEditModeDesc")}</div>
         </div>
+        <select
+          className="settings-select"
+          data-testid="settings-newtab-editmode"
+          value={editMode}
+          aria-label={t("settings.defaultEditMode")}
+          onChange={(e) => {
+            const m = e.target.value === "source" ? "source" : "live";
+            setDefaultEditMode(m);
+            // when already in editing view, the combined value follows the edit-mode change
+            if (newTabMode !== "preview") setDefaultNewTabMode(m);
+          }}
+        >
+          <option value="live">{t("settings.modeLive")}</option>
+          <option value="source">{t("settings.modeSource")}</option>
+        </select>
       </div>
 
       {/* R229: show the edit/read view-mode toggle button on each tab (default ON) */}

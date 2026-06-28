@@ -47,14 +47,16 @@ await goNav("编辑器|Editor");
       isRange: el?.tagName === "INPUT" && el?.type === "range",
       min: el?.min, max: el?.max,
       oldSegmented: !!document.querySelector('[data-testid="settings-tabsize-2"]') || !!document.querySelector('[data-testid="settings-tabsize-4"]'),
-      // defaultNewTabMode segmented is intentionally still present (R272 backlog: needs 2-dropdown split)
-      newtabSegmentedStillThere: !!document.querySelector('[data-testid="settings-newtab-reading"]'),
+      // R272 superseded: defaultNewTabMode is now a 2-dropdown split (view × edit mode)
+      newtabSegmentedGone: !document.querySelector('[data-testid="settings-newtab-reading"]'),
+      newtabViewDropdown: document.querySelector('[data-testid="settings-newtab-view"]')?.tagName === "SELECT",
     };
   });
   ok("tab-indent control is an <input type=range>", res.isRange === true);
   ok("slider range is 1–8 (Obsidian-faithful)", res.min === "1" && res.max === "8", `${res.min}–${res.max}`);
   ok("old settings-tabsize-* segmented buttons are GONE", res.oldSegmented === false);
-  ok("defaultNewTabMode segmented intentionally remains (R272 backlog: 2-dropdown split)", res.newtabSegmentedStillThere === true);
+  ok("defaultNewTabMode segmented is GONE (R272 split it into 2 dropdowns)", res.newtabSegmentedGone === true);
+  ok("defaultNewTabMode view dropdown present (R272)", res.newtabViewDropdown === true);
 }
 
 // ---------- Files & links page: new-note location is a dropdown, not segmented ----------

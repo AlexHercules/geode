@@ -87,7 +87,7 @@ await nav("editor");
 ok("editor section container active", await present(tid("settings-section-editor")));
 for (const id of ["settings-readable-toggle", "settings-spellcheck-toggle", "settings-strict-linebreaks-toggle",
   "settings-line-numbers-toggle", "settings-autopair-toggle", "settings-fold-heading-toggle",
-  "settings-newtab-reading", "settings-tab-indent-size", "settings-properties-display"]) {
+  "settings-newtab-view", "settings-newtab-editmode", "settings-tab-indent-size", "settings-properties-display"]) {
   ok(`editor has ${id}`, await present(tid(id)));
 }
 ok("editor does NOT show appearance theme control", !(await present(tid("settings-theme-select"))));

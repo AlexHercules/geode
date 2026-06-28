@@ -90,10 +90,10 @@ ok("default-mode live → new tab opens in live", (await app(([p]) => window.__g
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 200)); });
 await page.click('[data-testid="settings-nav-editor"]');
 await new Promise((r) => setTimeout(r, 80));
-ok("default-mode segmented control present", await app(() => !!document.querySelector('[data-testid="settings-newtab-reading"]')));
-await page.click('[data-testid="settings-newtab-reading"]');
+ok("default-view dropdown present (R272: was segmented)", await app(() => document.querySelector('[data-testid="settings-newtab-view"]')?.tagName === "SELECT"));
+await page.selectOption('[data-testid="settings-newtab-view"]', "read");
 await wait(120);
-ok("segmented Reading persists (preview)", (await ls("geode.defaultNewTabMode")) === "preview");
+ok("view=Reading persists combined as preview", (await ls("geode.defaultNewTabMode")) === "preview");
 await app(() => window.__app.workspace.closeModal());
 await create("nt4.md", "# nt4\n");
 const tabMode = await app(async ([p]) => {
