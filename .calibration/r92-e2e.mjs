@@ -114,16 +114,19 @@ await app(async () => { window.__app.workspace.openModal("settings"); await new 
 await page.click('[data-testid="settings-nav-editor"]');
 await new Promise((r) => setTimeout(r, 80));
 ok("indent-using-tabs toggle present", await app(() => !!document.querySelector('[data-testid="settings-indent-tabs-toggle"]')));
-ok("tab-size segmented present (2/4/8)", await app(() =>
-  !!document.querySelector('[data-testid="settings-tabsize-2"]') &&
-  !!document.querySelector('[data-testid="settings-tabsize-4"]') &&
-  !!document.querySelector('[data-testid="settings-tabsize-8"]')));
+ok("tab-size slider present (R271: 1–8 slider, was 2/4/8 segmented)", await app(() =>
+  !!document.querySelector('[data-testid="settings-tab-indent-size"]')));
 await page.click('[data-testid="settings-indent-tabs-toggle"]');
 await wait(100);
 ok("toggle flips indent-using-tabs to true via UI", (await ls("geode.indentUsingTabs")) === "true");
-await page.click('[data-testid="settings-tabsize-4"]');
+// drive the React-controlled range input via native value setter + input event
+await page.$eval('[data-testid="settings-tab-indent-size"]', (el) => {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+  setter.call(el, "4");
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+});
 await wait(100);
-ok("segmented sets tab size to 4 via UI", (await ls("geode.tabIndentSize")) === "4");
+ok("slider sets tab size to 4 via UI", (await ls("geode.tabIndentSize")) === "4");
 await app(() => window.__app.workspace.closeModal());
 await wait(150);
 // after the UI flip (tabs-on, size 4) the live editor follows reactively

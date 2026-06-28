@@ -45,7 +45,7 @@ const ORIGINAL = [
   "settings-hide-reference-marks-toggle", "settings-rtl-toggle", "settings-autopair-toggle",
   "settings-autopair-markdown-toggle", "settings-smart-lists-toggle", "settings-backlinks-indoc-toggle",
   "settings-fold-heading-toggle", "settings-newtab-reading", "settings-newtab-live", "settings-newtab-source",
-  "settings-indent-tabs-toggle", "settings-tabsize-2", "settings-tabsize-4", "settings-tabsize-8",
+  "settings-indent-tabs-toggle", "settings-tab-indent-size",
   "settings-properties-display",
 ];
 const present = await app((ids) => ids.filter((id) => !!document.querySelector(`[data-testid="${id}"]`)), ORIGINAL);

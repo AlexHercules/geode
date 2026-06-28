@@ -87,7 +87,7 @@ await nav("editor");
 ok("editor section container active", await present(tid("settings-section-editor")));
 for (const id of ["settings-readable-toggle", "settings-spellcheck-toggle", "settings-strict-linebreaks-toggle",
   "settings-line-numbers-toggle", "settings-autopair-toggle", "settings-fold-heading-toggle",
-  "settings-newtab-reading", "settings-tabsize-4", "settings-properties-display"]) {
+  "settings-newtab-reading", "settings-tab-indent-size", "settings-properties-display"]) {
   ok(`editor has ${id}`, await present(tid(id)));
 }
 ok("editor does NOT show appearance theme control", !(await present(tid("settings-theme-select"))));
@@ -95,7 +95,7 @@ ok("editor does NOT show appearance theme control", !(await present(tid("setting
 console.log("— Files & links page hosts migrated file/link controls —");
 await nav("files-and-links");
 for (const id of ["settings-detect-extensions-toggle", "settings-auto-update-links", "settings-link-use-markdown",
-  "settings-link-path-format", "settings-newnote-root", "settings-attachment-folder", "settings-excluded-files"]) {
+  "settings-link-path-format", "settings-newnote-location", "settings-attachment-folder", "settings-excluded-files"]) {
   ok(`files-and-links has ${id}`, await present(tid(id)));
 }
 

@@ -41,7 +41,7 @@ await wait(80);
 console.log("— every original Files&Links setting-item testid is preserved (pure reorder) —");
 const ORIGINAL = [
   "settings-detect-extensions-toggle", "settings-auto-update-links", "settings-link-use-markdown",
-  "settings-link-path-format", "settings-newnote-root", "settings-newnote-current", "settings-newnote-folder",
+  "settings-link-path-format", "settings-newnote-location",
   "settings-attachment-folder", "settings-excluded-files", "settings-delete-confirm-toggle",
   "settings-attachment-delete-mode", "settings-rebuild-cache",
 ];
@@ -65,7 +65,7 @@ const top = (sel) => app((s) => { const el = document.querySelector(s); return e
 const o = await app(() => {
   const t = (s) => { const el = document.querySelector(s); return el ? el.getBoundingClientRect().top : NaN; };
   return {
-    newnote: t('[data-testid="settings-newnote-root"]'),
+    newnote: t('[data-testid="settings-newnote-location"]'),
     attach: t('[data-testid="settings-attachment-folder"]'),
     linksSub: t('[data-testid="settings-subheader-links"]'),
     linkPath: t('[data-testid="settings-link-path-format"]'),
@@ -84,7 +84,7 @@ ok("回收站组 above 高级 subheader", o.delConfirm < o.advSub, JSON.stringif
 ok("高级 subheader above 高级组 (excluded-files)", o.advSub < o.excluded, JSON.stringify(o));
 
 console.log("— the conditional newnote-folder-path stays in 顶部 (above the 链接 subheader) when chosen —");
-await page.click('[data-testid="settings-newnote-folder"]');
+await page.selectOption('[data-testid="settings-newnote-location"]', "folder");
 await wait(80);
 const condTop = await top('[data-testid="settings-newnote-folder-path"]');
 ok("newnote-folder-path appears and sits in 顶部 group (above 链接 subheader)", !Number.isNaN(condTop) && condTop < o.linksSub, `path=${condTop} linksSub=${o.linksSub}`);

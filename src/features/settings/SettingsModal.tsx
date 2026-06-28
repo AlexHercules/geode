@@ -143,7 +143,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.263.0";
+export const APP_VERSION = "0.264.0";
 
 type SectionId =
   | "about"
@@ -1050,18 +1050,22 @@ function EditorSection() {
           <div className="setting-name">{t("settings.tabIndentSize")}</div>
           <div className="setting-desc">{t("settings.tabIndentSizeDesc")}</div>
         </div>
-        <div className="settings-segmented" role="group" aria-label={t("settings.tabIndentSize")}>
-          {[2, 4, 8].map((n) => (
-            <button
-              key={n}
-              className={indentSize === n ? "is-active" : ""}
-              aria-pressed={indentSize === n}
-              data-testid={`settings-tabsize-${n}`}
-              onClick={() => setTabIndentSize(n)}
-            >
-              {n}
-            </button>
-          ))}
+        {/* R271: Obsidian renders 制表符宽度 as a 1–8 slider (reference 01-编辑器-02), not a
+            segmented control — match the form (setTabIndentSize already clamps to 1–8). */}
+        <div className="settings-slider">
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={1}
+            value={indentSize}
+            aria-label={t("settings.tabIndentSize")}
+            data-testid="settings-tab-indent-size"
+            onChange={(e) => setTabIndentSize(Number(e.target.value))}
+          />
+          <span className="settings-slider-value" data-testid="settings-tab-indent-size-value">
+            {indentSize}
+          </span>
         </div>
       </div>
 
@@ -1116,32 +1120,21 @@ function FilesAndLinksSection() {
           <div className="setting-name">{t("settings.newNoteLocation")}</div>
           <div className="setting-desc">{t("settings.newNoteLocationDesc")}</div>
         </div>
-        <div className="settings-segmented" role="group" aria-label={t("settings.newNoteLocation")}>
-          <button
-            className={newNoteLoc === "root" ? "is-active" : ""}
-            aria-pressed={newNoteLoc === "root"}
-            data-testid="settings-newnote-root"
-            onClick={() => setNewNoteLocation("root")}
-          >
-            {t("settings.newNoteLocationRoot")}
-          </button>
-          <button
-            className={newNoteLoc === "current" ? "is-active" : ""}
-            aria-pressed={newNoteLoc === "current"}
-            data-testid="settings-newnote-current"
-            onClick={() => setNewNoteLocation("current")}
-          >
-            {t("settings.newNoteLocationCurrent")}
-          </button>
-          <button
-            className={newNoteLoc === "folder" ? "is-active" : ""}
-            aria-pressed={newNoteLoc === "folder"}
-            data-testid="settings-newnote-folder"
-            onClick={() => setNewNoteLocation("folder")}
-          >
-            {t("settings.newNoteLocationFolder")}
-          </button>
-        </div>
+        {/* R271: Obsidian renders 新建笔记的存放位置 as a dropdown (reference 02-文件与链接-01),
+            not a segmented control — match the form (same root/current/folder values + setter). */}
+        <select
+          className="settings-select"
+          data-testid="settings-newnote-location"
+          value={newNoteLoc}
+          aria-label={t("settings.newNoteLocation")}
+          onChange={(e) =>
+            setNewNoteLocation(e.target.value === "current" ? "current" : e.target.value === "folder" ? "folder" : "root")
+          }
+        >
+          <option value="root">{t("settings.newNoteLocationRoot")}</option>
+          <option value="current">{t("settings.newNoteLocationCurrent")}</option>
+          <option value="folder">{t("settings.newNoteLocationFolder")}</option>
+        </select>
       </div>
       {newNoteLoc === "folder" && (
         <div className="setting-item">

@@ -66,15 +66,15 @@ console.log("— settings UI —");
 await app(async () => { window.__app.workspace.openModal("settings"); await new Promise((r) => setTimeout(r, 250)); });
 await page.click('[data-testid="settings-nav-files-and-links"]');
 await new Promise((r) => setTimeout(r, 80));
-ok("location segmented present", await app(() =>
-  !!document.querySelector('[data-testid="settings-newnote-root"]') &&
-  !!document.querySelector('[data-testid="settings-newnote-current"]') &&
-  !!document.querySelector('[data-testid="settings-newnote-folder"]')));
+ok("location dropdown present with 3 options (R271: was segmented)", await app(() => {
+  const sel = document.querySelector('[data-testid="settings-newnote-location"]');
+  return !!sel && sel.tagName === "SELECT" && sel.querySelectorAll("option").length === 3;
+}));
 // folder input hidden until "In folder…" chosen
-await page.click('[data-testid="settings-newnote-root"]');
+await page.selectOption('[data-testid="settings-newnote-location"]', "root");
 await wait(80);
 ok("folder input hidden when location ≠ folder", !(await app(() => !!document.querySelector('[data-testid="settings-newnote-folder-path"]'))));
-await page.click('[data-testid="settings-newnote-folder"]');
+await page.selectOption('[data-testid="settings-newnote-location"]', "folder");
 await wait(80);
 ok("folder input appears when 'In folder…' chosen", await app(() => !!document.querySelector('[data-testid="settings-newnote-folder-path"]')));
 ok("location persists to localStorage (folder)", (await ls("geode.newNoteLocation")) === "folder");
