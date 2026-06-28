@@ -42,6 +42,29 @@ const BUILTIN: Record<string, string> = {
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   pencil: '<path d="m4 20 .9-4.2L16.4 4.3a2 2 0 0 1 2.8 0l.5.5a2 2 0 0 1 0 2.8L8.2 19.1z"/>',
   trash: '<path d="M4.5 6.5h15"/><path d="M8 6.5V4h8v2.5"/><path d="M6.5 6.5 7.5 21h9l1-14.5"/>',
+  // R269: editor right-click menu icons (reference 08) — drawn here in the same lucide-ish
+  // stroke style as the set above (NOT copied from a library), one per editorMenu item.
+  scissors:
+    '<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/>' +
+    '<path d="M20 4 8.5 15.5"/><path d="M14.5 14.5 20 20"/><path d="M8.5 8.5 12 12"/>',
+  copy:
+    '<rect x="8" y="8" width="13" height="13" rx="2"/>' +
+    '<path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2"/>',
+  clipboard:
+    '<rect x="8" y="2.5" width="8" height="4" rx="1"/>' +
+    '<path d="M16 4.5h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h2"/>',
+  bookmark: '<path d="M19 21.5 12 17l-7 4.5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>',
+  "file-output":
+    '<path d="M14 2.5H6.5a2 2 0 0 0-2 2v15a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8z"/>' +
+    '<path d="M14 2.5V8h5.5"/><path d="M12 11.5v5.5"/><path d="m9.5 14.5 2.5 2.5 2.5-2.5"/>',
+  link:
+    '<path d="M9.5 13.5a4 4 0 0 0 6 .5l3-3a4 4 0 0 0-5.7-5.7l-1.7 1.7"/>' +
+    '<path d="M14.5 10.5a4 4 0 0 0-6-.5l-3 3a4 4 0 0 0 5.7 5.7l1.7-1.7"/>',
+  folder:
+    '<path d="M4 5h5l2 2.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5V6.5A1.5 1.5 0 0 1 4 5z"/>',
+  "external-link":
+    '<path d="M14 4h6v6"/><path d="M20 4 11 13"/>' +
+    '<path d="M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
 };
 
 /** 'Adds an icon to the library.' svgContent = inner SVG markup (100x100 box). */

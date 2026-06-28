@@ -26,6 +26,7 @@ function addClipboardItems(menu: Menu, view: EditorView): void {
   menu.addItem((item) =>
     item
       .setTitle(t("editorMenu.cut"))
+      .setIcon("scissors")
       .setDisabled(!hasSelection)
       .onClick(() => {
         const sel = view.state.selection.main;
@@ -53,6 +54,7 @@ function addClipboardItems(menu: Menu, view: EditorView): void {
   menu.addItem((item) =>
     item
       .setTitle(t("editorMenu.copy"))
+      .setIcon("copy")
       .setDisabled(!hasSelection)
       .onClick(() => {
         const sel = view.state.selection.main;
@@ -62,7 +64,7 @@ function addClipboardItems(menu: Menu, view: EditorView): void {
       }),
   );
   menu.addItem((item) =>
-    item.setTitle(t("editorMenu.paste")).onClick(() => {
+    item.setTitle(t("editorMenu.paste")).setIcon("clipboard").onClick(() => {
       void navigator.clipboard
         .readText()
         .then((text) => {
@@ -100,6 +102,23 @@ const FILE_ACTION_GROUPS: string[][] = [
   ["workspace:edit-file-title", "app:delete-file"],
 ];
 
+/**
+ * R269: one leading icon per file-action item (reference 08 — Obsidian's menu items are iconed).
+ * Names resolve in the compat icon registry (`icons.ts` BUILTIN); the gutter is already 16px wide
+ * (no `setNoIcon()`), so each entry just fills the existing blank column. Pure presentation.
+ */
+const ICON_BY_COMMAND: Record<string, string> = {
+  "bookmarks:bookmark-file": "bookmark",
+  "editor:add-property": "plus",
+  "app:export-pdf": "file-output",
+  "file-explorer:copy-path": "copy",
+  "workspace:copy-url": "link",
+  "file-explorer:reveal-in-system": "folder",
+  "file-explorer:open-in-default-app": "external-link",
+  "workspace:edit-file-title": "pencil",
+  "app:delete-file": "trash",
+};
+
 function addFileActionItems(menu: Menu, commands: CommandRegistry): void {
   const byId = new Map(commands.list().map((c) => [c.id, c]));
   for (const group of FILE_ACTION_GROUPS) {
@@ -111,6 +130,8 @@ function addFileActionItems(menu: Menu, commands: CommandRegistry): void {
     for (const cmd of cmds) {
       menu.addItem((item) => {
         item.setTitle(getCommandName(cmd)).onClick(() => void commands.execute(cmd.id));
+        const icon = ICON_BY_COMMAND[cmd.id];
+        if (icon) item.setIcon(icon);
         if (cmd.id === "app:delete-file") item.setWarning(true);
       });
     }
