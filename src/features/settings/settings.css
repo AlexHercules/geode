@@ -125,7 +125,10 @@
    Obsidian groups each settings page's items under gray subheadings (reference 03 §三/§五).
    Larger/bolder than a row name, normal color, clear gap above, NO underline. */
 .settings-subheader {
-  margin: 24px 20px 12px;
+  /* R270: 0 horizontal inset (was 20px, aligning with the old cards) so subheaders line up flush
+     with the now-flush rows on EVERY page — also fixes the pre-existing Editor/Files misalignment
+     (those bare-row pages had 0-inset rows under 20px-inset subheaders). */
+  margin: 24px 0 12px;
   font-size: 15px;
   font-weight: 700;
   color: var(--text-normal);
@@ -187,10 +190,12 @@
 }
 
 .settings-card {
-  background: var(--bg-input);
-  border-radius: 12px;
-  padding: 0 20px;
-  margin-bottom: 18px;
+  /* R270: flattened — Obsidian settings are flat full-width rows + thin dividers, NOT cards
+     (reference 00 §四 + the app's OWN Editor/Files pages are already bare rows). The old
+     rounded `--bg-input` box (12px radius + 20px inset) is removed so every settings page reads
+     the same flat way; rows now sit flush with the bare-row pages. The 2 special cards
+     (.core-plugin-list / .hotkeys-search-card) keep their own padding/flex (rules below). */
+  margin-bottom: 0;
 }
 
 .settings-card > .setting-item:last-child,
@@ -413,7 +418,8 @@
 }
 
 .core-plugin-list {
-  padding: 0 20px;
+  /* R270: 0 inset (was 0 20px) so core-plugin rows align flush with every other settings row */
+  padding: 0;
 }
 
 .core-plugin-row {
@@ -675,8 +681,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  /* R270: 0 horizontal inset (was 18px 20px) so the flat search header aligns with the rows below */
+  padding: 18px 0;
+  margin-bottom: 4px;
 }
 
 .hotkeys-search-meta {
@@ -753,9 +760,8 @@
 .hotkey-list {
   display: flex;
   flex-direction: column;
-  background: var(--bg-modal);
-  border-radius: 12px;
-  padding: 0 20px;
+  /* R270: flattened to match the now-flat search header above + every other settings list —
+     the rounded `--bg-modal` box + 20px inset are removed so the command rows sit flush. */
 }
 
 .hotkey-row {
