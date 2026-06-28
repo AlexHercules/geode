@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 271 additions — 设置控件原生化（segmented → Obsidian 真实控件型）·机械档·零新依赖【As-built·v0.264】
+
+> **状态：As-built（已交付·v0.264）。表面复刻续第 3 项。** Geode 自造 3-way `.settings-segmented` 与 Obsidian 控件形态不符。**Step 0 verify-first 逐控件（关键纪律——segmented 不统一 →dropdown）**：对照 reference 截图实测 3 个 segmented 的 Obsidian 真实控件型：① **`tabIndentSize`[2,4,8] → SLIDER**（reference `01-编辑器-02` 制表符宽度 = 1–8 滑块·**不是下拉**·盲目 →dropdown 就是 faithfulness miss）；② **`newNoteLocation`(root/current/folder) → DROPDOWN**（reference `02-文件与链接-01` 新建笔记存放位置 = 下拉）；③ **`defaultNewTabMode`(reading/live/source) → 2 个下拉**（Obsidian「新标签页默认视图模式」编辑/阅读 × 「默认编辑模式」实时预览/源码·`01-编辑器-01`）·拆分需 store 拆 + tab-open 接线 = **逻辑档 → 留 R272**。
+>
+> **修（纯控件 form swap·`SettingsModal.tsx` 一文件·复用既有控件/setter·零 editor/store 改）**：
+> - **tabIndentSize**：segmented 三按钮 → `.settings-slider`（`<input type=range min=1 max=8 step=1>` + value label·镜像字体大小 slider）。`setTabIndentSize` 本就 `clampTabSize(n)=min(8,max(1,round(n)))`（core/appearance.ts），slider range 与 clamp 完全一致；editor 端 `indentUnitString(size)=" ".repeat(size)`（cmExtensions.ts）本就接受任意整数 → 新可达宽度 1/3/5/6/7 被既有 `indentCompartment` reconfigure 安全吸收（**本轮未碰 editor 文件**）。
+> - **newNoteLocation**：segmented 三按钮 → `.settings-select`（`<select>` + 3 `<option>`·镜像 properties-display select）。onChange 三元把 `e.target.value` 收窄为 `NewNoteLocation = "root"|"current"|"folder"` union（default → "root"·无漏 case）。`{newNoteLoc==="folder" && …}` 文件夹路径输入条件块未动。
+>
+> **机械档**（控件 form swap·复用既有 setter/控件·无新承载逻辑·未碰 editor 管线/vault/数据安全面）→ 跳简化门 + **scoped review 5 窄域**（binding/value/setter 对·union 收窄无错值·i18n 键复用真实·新 testid 唯一+旧 segmented testid 全退·folder conditional 完好·editor 接线未碰）= **0 confirmed**。**控件型变 → 同步扫 5 个引用旧 testid 的 tracked e2e 套件**（R177 纪律「换控件型必扫 UI-驱动套件」）：`r92`(slider 驱动改 native value setter+input 事件)/`r89`(selectOption)/`r177`/`r247`(testid 列表)/`r248`(IA 顺序+selectOption) 全更新。**r271-e2e 10/10**（tab-indent 是 `input[type=range]` 1–8 + 旧 `settings-tabsize-*` 消失 + defaultNewTabMode segmented 故意保留；newnote 是 `<select>` `.settings-select` 3 option + 旧 `settings-newnote-{root,current,folder}` 消失 + 选 folder 显 folder-path）·回归 r92 21/r89 16/r88 13/r177 52/r247 11/r248 13 全绿·typecheck 0·prod build✓·**桌面 by-equivalence**（标准 HTML slider/select·纯 UI·零 Rust/FS）。**下一项 = R272 defaultNewTabMode 2-下拉拆分（逻辑档）或 fresh scout。表面复刻渐入收益递减（两高值 R269/R270 已清·R271 中值·1-2 轮后宜盘点转向）。**
+
 ## Round 270 additions — 设置页 settings-card 圆角卡 → 扁平行（表面复刻续）·机械档·纯 CSS·零新依赖【As-built·v0.263】
 
 > **状态：As-built（已交付·v0.263）。表面复刻续第 2 项（R269 scout 的次高值偏差）。** **偏差**：Obsidian 设置是**扁平整宽行 + 细分隔线**（reference 00 §四）·无卡片盒；Geode 把 Appearance(4)/CorePlugins(1)/Hotkeys(2) 的行装进圆角 `--bg-input`/`--bg-modal` 卡 + 20px 横向内缩 —— 而 Geode **自己的 Editor/Files 页**早是裸 `.setting-item` 扁平行 → **内部不一致**（同 app 一半卡片一半扁平）。

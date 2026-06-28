@@ -251,6 +251,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R271 套件回归（2026-06-28，设置控件原生化 segmented → Obsidian 真实控件型 = 表面复刻续第 3 项·机械档·零新依赖 · 跳简化门 + scoped review 5 窄域 0 confirmed · 桌面 by-equivalence）
+
+R271 = 表面复刻续（控件形态保真）。**Step 0 verify-first 逐控件纠误**：3 个 `.settings-segmented` 不统一 →dropdown——`tabIndentSize`→**slider**（reference 01-编辑器-02·非下拉）·`newNoteLocation`→**dropdown**（reference 02-文件与链接-01）·`defaultNewTabMode`→**2 下拉**（拆分=逻辑档·R272）。**修（纯控件 form swap·复用既有控件/setter·零 editor 改）**：tabIndentSize segmented→`.settings-slider` 1–8·newNoteLocation segmented→`.settings-select` 3 option。**控件型变→同步扫 5 个引用旧 testid 的 tracked 套件**（R177 纪律）。**详见 ARCHITECTURE「Round 271 additions」**。
+
+**套件矩阵（R271·不回退）**：
+- **r271-e2e 10/10 全绿**（新增·控件型保真锁）= tab-indent 是 `input[type=range]` min1max8 + 旧 `settings-tabsize-*` 消失 + defaultNewTabMode segmented 故意留（R272 拆）；newnote 是 `<select>.settings-select` 3 option（root/current/folder）+ 旧 `settings-newnote-{root,current,folder}` 消失 + 选 folder 显 folder-path。
+- **修**：`SettingsModal.tsx` 2 控件 form swap（slider + select·复用既有控件/setter）。
+- **改控件型同步更新 tracked 套件**：r92 21（slider 驱动 native value setter+input）· r89 16（selectOption）· r177 52 · r247 11（testid 列表）· r248 13（IA 顺序+selectOption）· r88 13（defaultNewTabMode 未动·不退）· typecheck 0 · prod build✓。
+
 ### R270 套件回归（2026-06-28，设置页 settings-card 圆角卡 → 扁平行 = 表面复刻续第 2 项·机械档·纯 CSS·零新依赖 · 跳简化门 + scoped review 揪 1 major[hotkey-list 漏项]已修 · 桌面 by-equivalence）
 
 R270 = 表面复刻续（脱离插件 compat·设置视觉忠实）。**偏差**：Obsidian 设置=扁平整宽行+细分隔线无卡·Geode 把 Appearance(4)/CorePlugins(1)/Hotkeys(2) 装进圆角 `--bg-input`/`--bg-modal` 卡+20px 内缩（而 Geode 自己 Editor/Files 页早扁平=内部不一致）。**修（纯 CSS·settings.css 5 处）**：`.settings-card`/`.core-plugin-list`/`.hotkeys-search-card`/`.hotkey-list` 去卡背景+圆角+20px 内缩·`.settings-subheader` 横向 margin 20→0（顺带修 Editor/Files subheader-vs-row 既有错位）。**评审揪 1 major 已修**：`.hotkey-list`（命令列表·未 classed settings-card→grep 漏）是另一 `--bg-modal` 卡·只扁平了配对搜索头→半扁平+错位→补扁平。**详见 ARCHITECTURE「Round 270 additions」**。
