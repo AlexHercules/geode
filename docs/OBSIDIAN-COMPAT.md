@@ -251,6 +251,15 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R269 套件回归（2026-06-28，编辑器右键菜单补图标 = 表面复刻最后一公里首项·机械档·零新依赖·compat 自包含 · 跳简化门 + scoped review 4 窄域 0 confirmed · 桌面 by-equivalence）
+
+R269 = 用户拍板转向「Surface-replica last-mile」首轮（脱离插件 compat）。截图 diff scout（Geode 实际 vs `reference/_截图` PNG）出两高值偏差·取 ① 右键菜单空图标槽（高频操作·compat 自包含·目标确定）。**真偏差**：Obsidian 右键菜单每项带 lucide 图标·Geode compat `Menu` 项总有 16px 空图标槽（`editorMenu.ts` 从不 setIcon·`ui.ts` 仅 `setNoIcon()` 才折叠→编辑菜单不折叠→空槽=半成品）。**修（纯展示）**：① `icons.ts` BUILTIN +8 手绘 lucide-ish 图标（scissors/copy/clipboard/bookmark/file-output/link/folder/external-link·非拷库）；② `editorMenu.ts` 剪贴板 3 项 + 文件动作项（`ICON_BY_COMMAND` map）逐项 setIcon。**clipboard/delete 逻辑字节级未动**（仅链式装饰）。**详见 ARCHITECTURE「Round 269 additions」**。
+
+**套件矩阵（R269·不回退）**：
+- **r269-e2e 18/18 全绿**（新增）= Part A 编辑器右键菜单 10 项全有 svg 图标·**无 `.geode-icon-missing` 占位**·菜单非折叠（`.no-icon` 不在）·cut=唯一带 `<circle>` 的 scissors·delete=warning+图标·0 page error；Part B 8 个新 BUILTIN 图标路径全解析为合法 `SVGSVGElement`（含浏览器隐藏的桌面专属 folder/external-link）。
+- **修**：`icons.ts` BUILTIN +8 stroke 图标 · `editorMenu.ts` 剪贴板 setIcon + `ICON_BY_COMMAND` 文件动作 setIcon。
+- **回归不回退**：r252 编辑器菜单文件动作 20 · r200 菜单剪贴板 21 · r131 菜单事件 8 · r267 compat 10 · typecheck 0 · prod build✓。
+
 ### R268 套件回归（2026-06-28，🎉 第四个真插件 Tasks 8.2.2[查询引擎] 载入并渲染任务查询 + `app.metadataTypeManager` shim + init-before-plugins 序修·逻辑档·零新依赖 · 简化门 clean · ultracode 3-lens 2 confirmed[1 minor+1 major·均已修]+11 refuted · data-safety lens 0 · 桌面 by-equivalence）
 
 R268 = `r266-probe` 深探确认 Dataview/Templater/Calendar 已稳 → 第四个真插件 breadth。**Tasks 8.2.2**（GPL·882KB·零外部 require·零新依赖）=enabled + ```tasks 查询渲染 4 项 + 7+ 命令（新表面=任务查询引擎）。真 gap=`app.metadataTypeManager.getAllProperties()`（缺 metadataTypeManager·崩·Tasks try/catch 捕非致命）。修=core `propertyTypes.getAll()` + compat App `metadataTypeManager`（getAllProperties 投影 R22 注册表·setType→vetted assign 写 types.json）+ **init-before-plugins 序修**（onload assign 持久化）。**Tasks 实注册 22 个 TQ_* widget 属性[checkbox/text·非 date·评审纠 overclaim]**。**详见 ARCHITECTURE「Round 268 additions」**。

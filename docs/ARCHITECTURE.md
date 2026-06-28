@@ -71,6 +71,19 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 269 additions — 编辑器右键菜单补图标（表面复刻最后一公里首项）·机械档·零新依赖【As-built·v0.262】
+
+> **状态：As-built（已交付·v0.262）。用户拍板转向「Surface-replica last-mile」后首轮。** Step 0 = 截图 diff scout（Geode 实际 UI 截图 vs `reference/_截图` PNG ground truth）→ explorer value-ranked 出两高值偏差：① 右键菜单空图标槽（高频操作面）② settings-card 圆角卡 vs 扁平行。取 ①——对齐用户「高频操作」优先 + compat 自包含 + **目标确定**（空槽→填图标）胜过推断目标（设置扁平化触面广 + 哪个 inset 的判断）。
+>
+> **真偏差**：Obsidian 编辑器右键菜单每项左侧带 lucide 图标；Geode 的 compat `Menu`（`ui.ts` MenuItem）每项**总有 16px `.menu-item-icon` 列**（`compat.css:155` `width:16px`），仅当显式 `menu.setNoIcon()`（`ui.ts:722`，给 `.geode-compat-menu` 加 `.no-icon`→`display:none`）才折叠。`editorMenu.ts` 从不调 `setNoIcon` 也从不调 `setIcon` → **每项是 16px 空图标槽（空白缩进）= 看着半成品**。
+>
+> **修（纯展示·compat 自包含·零 features 改）**：
+> - **`icons.ts` BUILTIN +8 图标**：`scissors`/`copy`/`clipboard`/`bookmark`/`file-output`/`link`/`folder`/`external-link`——**本地手绘 24×24 stroke**（与既有 dice/pencil/trash 同 lucide-ish 风格·**非拷库**·icons.ts 注释明示「drawn here, NOT copied」）。`getIconSvg` 对未知名返 null → `setIcon` 落 `.geode-icon-missing` 空占位（永不崩）；新增名都真解析。
+> - **`editorMenu.ts` setIcon 装饰**：剪贴板 3 项链式 `.setIcon`（cut→scissors / copy→copy / paste→clipboard）；文件动作项新增 `ICON_BY_COMMAND: Record<string,string>` map（bookmark-file→bookmark / add-property→plus / export-pdf→file-output / copy-path→copy / copy-url→link / reveal-in-system→folder / open-in-default-app→external-link / edit-file-title→pencil / delete-file→trash），`const icon = ICON_BY_COMMAND[cmd.id]; if (icon) item.setIcon(icon)`。
+> - **clipboard/delete/file-action 逻辑字节级未动**：`.setIcon()` 链式装饰插在 `.setTitle()` 与 `.setDisabled()`/`.onClick()` 之间（`MenuItem.setIcon` 返 `this`·不断链）；cut 的「copy 成功后才删」+ re-validate（底线①剪切不丢选区）、`commands.execute` 接线、`setWarning(true)`、`available()` 门控、separator 分组全未碰。
+>
+> **机械档**（图标注册 + setIcon 装饰·无新承载逻辑控制流[仅 icon 存在性 guard]·未碰 clipboard/edit/vault 管线·非数据安全面）→ 跳简化门 + **scoped review 4 窄域**（图标全解析无 missing / 逻辑零改 / 8 SVG 路径合法 / 语义不离谱）= **0 confirmed**。**r269-e2e 18/18**（Part A 菜单 10 项全 svg 图标·无 missing 占位·`.no-icon` 不在·cut=唯一带 `<circle>` 的 scissors·delete=warning+图标；Part B 8 新图标路径全解析为合法 `SVGSVGElement`·含浏览器隐藏的桌面专属 folder/external-link）。回归 r252 20/r200 21/r131 8/r267 10 全绿·typecheck 0·prod build✓。**桌面 by-equivalence**（纯 DOM/SVG·跨端同 compat 码·零 Rust/FS）。**下一项排队 = settings-card 扁平化（scout ②）**。
+
 ## Round 268 additions — 第四个真插件 Tasks 8.2.2（查询引擎）+ `app.metadataTypeManager` shim + init-before-plugins 序修·逻辑档·零新依赖【As-built·v0.261】
 
 > **状态：As-built（已交付·v0.261）。商业主轴 breadth 第四大件。** `r266-probe` 深探确认 Dataview/Templater/Calendar 深用已稳 → 取第四个真插件。**Tasks 8.2.2**（obsidian-tasks-group·GPL·882KB·仅 `require("obsidian")` + `require("@codemirror/view")`·零外部 require[rrule/date 全 bundle]·零新依赖·minAppVersion 1.8.7 > Geode 1.8.0 = 仅警告非 block·gitignored 不 commit）= **status=enabled + ```tasks「not done」查询渲染 `.plugin-tasks-query-result`（4 项·经 R132 code-block processor）+ 7+ 命令**（toggle-done/edit-task/set-status-symbol…）。**新表面 = 任务查询引擎 + 状态命令**。
