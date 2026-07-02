@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R274 套件回归（2026-07-02，编辑器右键菜单补 Open in new tab / Open to the right = 表面复刻 fresh scout 最小闭环缺口·机械档·零新依赖 · 简化门 clean · scoped reviewer 0 confirmed · desktop probe 11/11）
+
+R274 = editor context menu 补 reference `08-右键菜单` 缺口。新增两个 app command (`file-explorer:open-in-new-tab` / `file-explorer:open-to-right`) 并把它们接进 compat editor menu 第一组；标签复用既有 explorer i18n 键，图标 `external-link` + 新 compat `panel-right`，无新依赖、无 vault/editor 字节写。
+
+**套件矩阵（R274·不回退）**：
+- **r274-e2e 16/16 全绿（新增）** = command 注册名解析 · editor menu 出现 Open in new tab / Open to the right · 两项都有 SVG 且非 `.geode-icon-missing` · browser 仍隐藏 desktop-only reveal/open-default · delete warning 保持 · 点击 Open in new tab 增加同文件 tab · 点击 Open to the right 增加 pane。
+- **r274-probe 11/11 全绿（新增 desktop WKWebView）** = release binary + 真 fs vault + `.geode/plugins` probe；用插件 `onload(app)` 原生 handle 等待具体 command id 后打开 editor menu 并点击两项，验证 tab/pane 增量与 active file。
+- **回归不退**：r252 20/20（editor menu file-action 行为/删除 vetted path/bookmark label flip）· r269 18/18（菜单图标非 missing + 既有 8 icon paths）· typecheck 0 · cargo check(`src-tauri`) · prod build✓（仅既有 Rollup/chunk warnings）。
+
+**教训**：desktop probe 若用早期 compat `window.app` 或未等待 React command registration，容易读到 partial registry 假阴性；app shell command probe 应使用 Geode 外部插件收到的 `app` handle，并等待目标 command id。
+
 ### R273 套件回归（2026-07-02，附件默认位置 text input → Obsidian 4-mode dropdown = 表面复刻收尾项·逻辑档·非数据安全·零新依赖 · 简化门 clean · 多维 reviewer 0 confirmed · desktop probe 6/6）
 
 R273 = 表面复刻收尾项。Files & Links「新附件默认位置」从手写 grammar text input 改为 Obsidian-style dropdown + conditional path input；底层仍是单个 `attachmentFolder` string（`/` root · `path` specified · `./` current · `./path` subfolder），`resolveAttachmentDir` / importer / Store shape 未改。保留 Geode 既有默认 `assets`（decode 为 specified），Explorer 右键 raw path 写入 reload 后仍 specified。另把未 wired 的 theme Manage + not-yet-pluginified core-plugin toggles 显示为 disabled/honest non-operable。详见 ARCHITECTURE「Round 273 additions」。

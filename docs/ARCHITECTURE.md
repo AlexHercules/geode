@@ -71,6 +71,16 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 274 additions — 编辑器右键菜单补「在新标签页打开 / 在右侧打开」·机械档·零新依赖【As-built·v0.267】
+
+> **状态：As-built（已交付·v0.267）。表面复刻 fresh scout 结论：bounded surface pool 未枯竭，但多数余项要么是 disabled-honesty 视觉补丁、要么触及启动/设置存储；R274 取 reference `08-右键菜单` 中最小且有真实行为闭环的缺口：编辑器右键 file-action 组缺「Open in new tab / Open to the right」。Explorer 右键早有同功能（`Explorer.tsx` 的 `openInNewTab` / `openToRight`），但 editor compat menu（R252/R269）只列 bookmark/property/export/copy/reveal/open-default/rename/delete，少了这两项。
+>
+> **As-built 接线**：新增两个 command registry item，均读取 `workspace.getActiveFile()`，`available: () => workspace.getActiveFile() !== null`，不接收路径参数、不新建写路径：`file-explorer:open-in-new-tab` → `workspace.openFile(path, { newTab: true })`；`file-explorer:open-to-right` → `const paneId = workspace.splitActivePane("row"); workspace.openFile(path, paneId ? { paneId } : { newTab: true })`。`splitActivePane` 已 vetted（R93/R202/R215/R255），fileless singleton 下返回 null，本命令只在 active markdown file 可用，fallback 是普通新标签页。
+>
+> **菜单接线**：`compat/obsidian/editorMenu.ts` 的 `FILE_ACTION_GROUPS` 在第一组 copy-url 后追加两个 command id；`ICON_BY_COMMAND` 给 `file-explorer:open-in-new-tab` 用 `external-link`，`file-explorer:open-to-right` 用新增 compat BUILTIN `panel-right`（本地手绘 stroke，非外部依赖）。菜单仍通过 `getCommandName(cmd)` 取 label，支持 i18n/命令面板/热键页同一真源；separator 逻辑不变。
+>
+> **分档：机械档**（tracked diff 47 行/4 文件 + 新增 e2e/probe；纯 command/menu/icon/验收接线，无 vault/editor 字节/markdown IO、无新依赖、无新 store/action 语义）。简化门 **clean**（4 角度 reuse/simplification/efficiency/altitude 均无 net-negative 机会；Explorer 局部 handler 与命令回调路径来源不同，抽 helper 会增加间接层；compat icon registry 与 app icon registry 独立）。scoped reviewer **0 confirmed**（command availability/name binding、i18n 键、图标注册、separator、分层、split/open 行为全 PASS）。**验证**：runtime GUI verification PASS（Playwright 驱动真实 app 右键菜单，点击两项；probe 非 editor graph surface 不泄漏菜单）· `r274-e2e 16/16` · 回归 `r252 20/20` / `r269 18/18` · `npm run typecheck` 0 · `cargo check --manifest-path src-tauri/Cargo.toml` · `npm run build`（仅既有 Rollup/chunk warning）· release desktop probe `r274-probe 11/11`（WKWebView 真 fs vault + `.geode` probe 点击两项）。**教训：桌面 probe 插件 `onload` 早于 React command registration/compat `window.app` 注入，验证 app shell command 时要用插件收到的原生 `app` handle，并等待具体 command id 出现；否则会得到早期 `window.app`/partial registry 的假阴性。下一项 = R275 fresh scout：bounded surface tail 剩余候选（如 Files&Links 默认打开文件/URI 链接、Page Preview 情景修饰键、disabled Manage honesty）先再次 verify-first，撞硬边界即停。**
+
 ## Round 273 additions — 附件默认位置 text input → Obsidian 4-mode dropdown · 逻辑档 · 非数据安全 · 零新依赖【As-built·v0.266】
 
 > **状态：As-built（已交付·v0.266）。表面复刻收尾项。** Obsidian 的 Files & Links「Default location for new attachments / 新附件默认位置」（reference `02-文件与链接-01`）是原生下拉，而 Geode 旧 UI 是一个让用户手写 `assets` / `/` / `./` / `./name` 的 text input。R273 把 UI 改为 Obsidian-style **4-mode dropdown + 条件路径输入**，但底层仍只存一个 `attachmentFolder` 字符串，**不改 Store shape / importer / `resolveAttachmentDir` 冻结语义**。

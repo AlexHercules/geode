@@ -22,6 +22,10 @@ shim 建立其上。
 
 ## 已完成
 
+### R274 — v0.267（2026-07-02）编辑器右键菜单补「在新标签页打开 / 在右侧打开」（表面复刻 fresh scout 最小闭环缺口）
+
+表面复刻 tail scout 后确认 bounded pool 未完全枯竭，取 reference `08-右键菜单` 最小且有真实行为闭环的缺口：编辑器右键 file-action 组缺 Obsidian 的 **Open in new tab / Open to the right**。新增 `file-explorer:open-in-new-tab` / `file-explorer:open-to-right` 两个命令（active file → `openFile({newTab:true})` / `splitActivePane("row")` + fallback newTab），并接入 `compat/obsidian/editorMenu.ts` 第一组；新增 compat `panel-right` 手绘图标。机械档、零新依赖、零 vault/editor 字节/markdown IO。简化门 clean，scoped reviewer 0 confirmed。验证：runtime GUI PASS、`r274-e2e 16/16`、回归 `r252 20/20` / `r269 18/18`、typecheck 0、`cargo check --manifest-path src-tauri/Cargo.toml`、prod build✓（既有 warnings）、release desktop probe `r274-probe 11/11`。教训：desktop probe 验 app shell command 时使用插件 `onload(app)` 原生 handle + 等待具体 command id，避免早期 compat `window.app`/partial registry 假阴性。
+
 ### R1 — v0.1（2026-06-10）核心复刻
 
 vault/文件树/CM6 编辑器（wikilink 补全+跳转）/阅读视图/反链/图谱/全文搜索/
@@ -1563,6 +1567,7 @@ Tab/Shift-Tab 列表缩进、空列表项 Backspace 出列 **均已工作**—�
 | ~~**始终聚焦新标签页 toggle**~~（**R233 done**）| 01:12 | ✅ done·`focusNewTab` Store 门控 openFile 新 tab 抢焦·加性 `focus?` opt·Cmd+T/reopen 旁路 focus:true | r233-e2e 17/17·default ON 零回归·评审修 probe 自卫 | 逻辑(碰 core openFile) |
 | ~~view-header 聚合「…」菜单~~（**R256 done**）| 08:35(纠误:实为编辑器右键·但功能 web 证实真 native) | ✅ done·TabBar「…」按钮 + viewopts 菜单·wire 既有 vetted 命令 | r256-e2e 30/30·scoped review 1 confirmed[reveal-nav 补]+13 refuted·DEFER linked-view 子菜单 | 机械档 |
 | ~~默认打开文件 下拉~~（**R253 verify-first 跳过**）| 02:12 | ⚠️ 疑非 vanilla-native(forum=feature-request + Bug-graveyard 拒绝·疑 Homepage community plugin 漏入 reference) | 跳过防 phantom·R145/R242 纪律 | — |
+| ~~编辑器右键：在新标签页打开 / 在右侧打开~~（**R274 done**） | 08:35-48 | ✅ done·editor compat menu 追加两项并 wire command registry | r274-e2e 16/16·r274-probe 11/11·回归 r252/r269 | 机械档 |
 | 删除文件时确认 toggle | 02:29 | missing·Geode 恒确认 | ⚠️ data-safety-邻接(gate 删除路径·忠实复刻默认 OFF 会放松防护)·**谨慎·非首选** | data-safety 邻接 |
 | F2 类型对齐残片(Vault/Workspace) | ROADMAP F2 | partial | 纯类型面·零依赖·oracle 仓库内·**用户降为填充料** | 类型面 |
 
