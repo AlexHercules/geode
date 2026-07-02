@@ -71,6 +71,18 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 273 additions — 附件默认位置 text input → Obsidian 4-mode dropdown · 逻辑档 · 非数据安全 · 零新依赖【As-built·v0.266】
+
+> **状态：As-built（已交付·v0.266）。表面复刻收尾项。** Obsidian 的 Files & Links「Default location for new attachments / 新附件默认位置」（reference `02-文件与链接-01`）是原生下拉，而 Geode 旧 UI 是一个让用户手写 `assets` / `/` / `./` / `./name` 的 text input。R273 把 UI 改为 Obsidian-style **4-mode dropdown + 条件路径输入**，但底层仍只存一个 `attachmentFolder` 字符串，**不改 Store shape / importer / `resolveAttachmentDir` 冻结语义**。
+>
+> **单串语法（保持 R17 消费者不变）**：`root → "/"`（vault root）· `specified → "<path>"`（固定 vault 文件夹）· `current → "./"`（当前笔记所在文件夹）· `subfolder → "./<path>"`（当前笔记文件夹下子文件夹）。`core/attachments.ts` 新增 `AttachmentMode` + `decodeAttachmentMode(setting)` + `encodeAttachmentMode(mode,path)` + `coerceAttachmentMode(value)`，三者均是纯字符串 view transform；`resolveAttachmentDir(notePath, setting)`、`importAttachment`、`setAttachmentFolder(string)` 均未改。既有默认 `DEFAULT_FOLDER="assets"` 继续保留（首开 decode 为 `specified` + path=`assets`，避免存量行为跳到 vault root）。Explorer 右键「Set as attachment folder」仍写裸 folder path（如 `myassets`），reload 后 decode 为 `specified/myassets`。
+>
+> **SettingsModal 协调**：Files & Links 页的 `settings-attachment-folder` 从 `<input type=text>` 改为 `<select class="settings-select">`，4 个 option 走新 i18n 键；仅 `specified/subfolder` 显示 `settings-attachment-folder-path` 文本框。组件用本地 `{mode,path}` state（mount 时从 `attachmentFolder.get()` decode）而不是直接 `useStore(attachmentFolder)` 驱动：这样用户清空 path 时，存储语法会按 grammar 塌缩（specified `""`→root 的 `""` / subfolder `""`→`"./"`），但**本次打开的 UI dropdown 不会 visibly jump**；reload 后由持久化 grammar 重新 decode，是刻意的 grammar-wins 取舍。
+>
+> **同轮表面 honesty 小修**：Appearance 的 theme `Manage` 按钮尚未 wired，改为 disabled + title；Core plugins 列表中没有真实 plugin entry 的行（File recovery/File explorer/Page preview 等 not-yet-pluginified/always-on features）toggle 改为 disabled/honest non-operable，避免 phantom switch。CSS 只加 disabled opacity/cursor/hover 规则，颜色全走变量。
+>
+> **分档：逻辑档（新增 encode/decode + UI state 协调；非数据安全）**。未碰 `core/vault*`、`core/documents*`、editor/markdown 管线或任何 vault/file IO；attachment import 的真实落点仍由既有 `resolveAttachmentDir` 消费同一 string。data-safety skill 判定无需 r18/byte/竞态满跑，但保留 R17/R230 消费者回归。简化门 **clean**（无死代码/脚手架/≥8 行重复；新增 helper 均有真实调用且非公共契约膨胀）。多维 reviewer **0 confirmed**（数据安全/契约/分层/i18n/testid/CSS/版本全 PASS）。**验证**：手驱运行 app 观察 dropdown/path/localStorage；`r273-e2e 24/24`（select form、四模式精确存储、empty-path 不跳 mode、reload decode、Explorer 裸路径 raw write）·回归 `r272 14` / `r271 11` / `r248 13` / `r88 13` / `r177 53` / `r247 11` / `r230 8` · `npm run typecheck` 0 · `cargo check` · `npm run build`（仅既有 Rollup chunk/export warning）· release desktop probe `r273-probe 6/6`（WKWebView 真 Settings UI + localStorage）。**教训：把一个 hand-written grammar setting 改成 Obsidian dropdown 时，必须锁「raw string ↔ mode/path」双向映射 + 旧入口 raw writes（Explorer/compat）+ empty-path collision，而不是只断言 DOM 是 select。下一项 = R274 fresh scout / surface tail depletion check。**
+
 ## Round 272 additions — defaultNewTabMode 3-way segmented → 2 个正交下拉（视图模式 × 编辑模式）·逻辑档·非数据安全·零新依赖【As-built·v0.265】
 
 > **状态：As-built（已交付·v0.265）。表面复刻续第 4 项 — 完成 R271 控件原生化弧**（3 个旧 segmented 现全用 Obsidian 真实控件型：tab-indent=slider·new-note-location=dropdown·new-tab-mode=2 dropdowns）。Obsidian 把 new-tab-mode 拆成两个独立设置（reference `01-编辑器-01`）：「默认视图模式」编辑视图/阅读视图 × 「默认编辑模式」实时预览/源码 —— 不是 Geode 原来的单个 3-way segmented(reading/live/source)。
