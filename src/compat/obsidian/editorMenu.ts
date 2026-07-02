@@ -97,7 +97,15 @@ function addClipboardItems(menu: Menu, view: EditorView): void {
  * A separator is added only before a NON-EMPTY group, so hiding the desktop group leaves no dangling rule.
  */
 const FILE_ACTION_GROUPS: string[][] = [
-  ["bookmarks:bookmark-file", "editor:add-property", "app:export-pdf", "file-explorer:copy-path", "workspace:copy-url"],
+  [
+    "bookmarks:bookmark-file",
+    "editor:add-property",
+    "app:export-pdf",
+    "file-explorer:copy-path",
+    "workspace:copy-url",
+    "file-explorer:open-in-new-tab",
+    "file-explorer:open-to-right",
+  ],
   ["file-explorer:reveal-in-system", "file-explorer:open-in-default-app"],
   ["workspace:edit-file-title", "app:delete-file"],
 ];
@@ -113,6 +121,8 @@ const ICON_BY_COMMAND: Record<string, string> = {
   "app:export-pdf": "file-output",
   "file-explorer:copy-path": "copy",
   "workspace:copy-url": "link",
+  "file-explorer:open-in-new-tab": "external-link",
+  "file-explorer:open-to-right": "panel-right",
   "file-explorer:reveal-in-system": "folder",
   "file-explorer:open-in-default-app": "external-link",
   "workspace:edit-file-title": "pencil",

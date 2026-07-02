@@ -526,6 +526,29 @@ export function App() {
           showCommandNotice(t("explorer.copiedUrl"));
         },
       }),
+      // R274: editor/file context actions — open the active file as another tab or
+      // in a right split. These mirror Explorer's vetted right-click handlers and
+      // carry no path parameter; the active markdown file is read at click time.
+      commands.register({
+        id: "file-explorer:open-in-new-tab",
+        name: () => t("explorer.openInNewTab"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (path) workspace.openFile(path, { newTab: true });
+        },
+      }),
+      commands.register({
+        id: "file-explorer:open-to-right",
+        name: () => t("explorer.openToRight"),
+        available: () => workspace.getActiveFile() !== null,
+        callback: () => {
+          const path = workspace.getActiveFile();
+          if (!path) return;
+          const paneId = workspace.splitActivePane("row");
+          workspace.openFile(path, paneId ? { paneId } : { newTab: true });
+        },
+      }),
       // R218 (G3 §6): reveal / open the active file via the OS shell. Desktop-only
       // (isTauri gate hides them in browser mode — host capability, like Obsidian
       // mobile hiding desktop commands). The webview passes the vault-relative path;

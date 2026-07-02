@@ -65,6 +65,9 @@ const BUILTIN: Record<string, string> = {
   "external-link":
     '<path d="M14 4h6v6"/><path d="M20 4 11 13"/>' +
     '<path d="M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
+  "panel-right":
+    '<rect x="3" y="4" width="18" height="16" rx="2"/>' +
+    '<path d="M14.5 4v16"/><path d="m9.5 9 3 3-3 3"/>',
 };
 
 /** 'Adds an icon to the library.' svgContent = inner SVG markup (100x100 box). */
