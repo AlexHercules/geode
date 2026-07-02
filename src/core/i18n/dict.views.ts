@@ -184,8 +184,12 @@ export const en = {
   "settings.newNoteLocationFolder": "In folder…",
   "settings.newNoteFolder": "New note folder",
   "settings.attachmentFolder": "Default location for new attachments",
-  "settings.attachmentFolderDesc":
-    'Folder for pasted or dropped images. "/" = vault root, "./" = same folder as the note, "./name" = subfolder under the note\'s folder, "name" = fixed vault folder.',
+  "settings.attachmentFolderDesc": "Where pasted or dropped attachments are saved.",
+  "settings.attachmentLocationRoot": "Vault folder",
+  "settings.attachmentLocationSpecified": "In the folder specified below",
+  "settings.attachmentLocationCurrent": "Same folder as current file",
+  "settings.attachmentLocationSubfolder": "In subfolder under current folder",
+  "settings.attachmentFolderPath": "Attachment folder",
   "settings.excludedFiles": "Excluded files",
   "settings.excludedFilesDesc":
     'Files whose path matches a pattern (one per line) are hidden from search + the graph and dimmed in the file explorer. Use "*" as a wildcard, or prefix "{regex}" for a regular expression. They stay openable.',
@@ -613,8 +617,12 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.newNoteLocationFolder": "指定文件夹…",
   "settings.newNoteFolder": "新笔记文件夹",
   "settings.attachmentFolder": "新附件默认位置",
-  "settings.attachmentFolderDesc":
-    "粘贴/拖入图片的保存目录。「/」表示库根目录，「./」表示笔记所在目录，「./名称」表示笔记所在目录下的子文件夹，「名称」表示库内固定文件夹。",
+  "settings.attachmentFolderDesc": "粘贴或拖入的附件的保存位置。",
+  "settings.attachmentLocationRoot": "仓库根目录",
+  "settings.attachmentLocationSpecified": "在下面指定的文件夹中",
+  "settings.attachmentLocationCurrent": "与当前文件相同的文件夹",
+  "settings.attachmentLocationSubfolder": "当前文件所在文件夹下的子文件夹中",
+  "settings.attachmentFolderPath": "附件文件夹",
   "settings.excludedFiles": "排除的文件",
   "settings.excludedFilesDesc":
     "路径匹配任一模式（每行一条）的文件会从搜索和图谱中隐藏、并在文件树中变暗。用「*」作通配符，或以「{regex}」前缀启用正则。文件仍可正常打开。",

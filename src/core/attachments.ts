@@ -65,6 +65,52 @@ export function resolveAttachmentDir(notePath: string, setting: string): string 
   return stripSlashes(s);
 }
 
+/**
+ * R273: the attachment-folder dropdown's four modes — the UI-facing
+ * decomposition of the single mode-encoding string consumed above.
+ *   root      -> "/"          (vault root)
+ *   specified -> "<path>"     (fixed vault folder)
+ *   current   -> "./"         (same folder as the note)
+ *   subfolder -> "./<path>"   (subfolder under the note's folder)
+ * encode/decode round-trip the SAME grammar as resolveAttachmentDir; the store
+ * shape and the importer are untouched (the dropdown is a pure view transform).
+ */
+export type AttachmentMode = "root" | "specified" | "current" | "subfolder";
+
+/** Decode the stored setting into the dropdown mode + its path field. Mirrors
+ *  resolveAttachmentDir's branching so a stored string round-trips losslessly;
+ *  the mode collapses only when the path is empty (held in UI state there). */
+export function decodeAttachmentMode(setting: string): { mode: AttachmentMode; path: string } {
+  const s = setting.trim();
+  if (stripSlashes(s) === "") return { mode: "root", path: "" }; // "" or "/"
+  if (s === "." || s === "./") return { mode: "current", path: "" };
+  if (s.startsWith("./")) return { mode: "subfolder", path: stripSlashes(s.slice(2)) };
+  return { mode: "specified", path: stripSlashes(s) };
+}
+
+/** Encode the dropdown mode + path back into the stored grammar. An empty path
+ *  in specified/subfolder mode collapses to root/current (the UI holds the mode
+ *  so the dropdown doesn't visibly jump while the field is being cleared). */
+export function encodeAttachmentMode(mode: AttachmentMode, path: string): string {
+  const p = stripSlashes(path.trim());
+  if (mode === "root") return "/";
+  if (mode === "current") return "./";
+  if (mode === "subfolder") return `./${p}`;
+  return p; // "specified"
+}
+
+/** Narrow a <select> value to AttachmentMode (defaults to "root"). */
+export function coerceAttachmentMode(value: string): AttachmentMode {
+  switch (value) {
+    case "specified":
+    case "current":
+    case "subfolder":
+      return value;
+    default:
+      return "root";
+  }
+}
+
 // Path separators, Windows-illegal punctuation and control characters.
 // eslint-disable-next-line no-control-regex
 const ILLEGAL_NAME_CHARS = new RegExp('[\\\\/:*?"<>|\\u0000-\\u001f\\u007f]', "g");

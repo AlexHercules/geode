@@ -653,6 +653,27 @@
   background: var(--accent-hover);
 }
 
+/* disabled toggle = shown for parity but not operable (e.g. not-yet-pluginified
+   core features). Dimmed + not-allowed; hover must not highlight. */
+.settings-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.settings-toggle:disabled:hover {
+  background: var(--border-strong);
+}
+
+.settings-toggle.is-on:disabled:hover {
+  background: var(--accent);
+}
+
+/* theme «Manage» button: shown for Obsidian parity, not yet wired → disabled */
+.settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .settings-toggle-thumb {
   position: absolute;
   top: 3px;

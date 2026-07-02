@@ -79,7 +79,14 @@ import {
   setExtractTemplatePath,
 } from "@core/appearance";
 import { excludedRaw, setExcludedFiles } from "@core/excludedFiles";
-import { attachmentFolder, setAttachmentFolder } from "@core/attachments";
+import {
+  attachmentFolder,
+  setAttachmentFolder,
+  decodeAttachmentMode,
+  encodeAttachmentMode,
+  coerceAttachmentMode,
+  type AttachmentMode,
+} from "@core/attachments";
 import {
   newNoteLocation,
   setNewNoteLocation,
@@ -145,7 +152,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.265.0";
+export const APP_VERSION = "0.266.0";
 
 type SectionId =
   | "about"
@@ -456,7 +463,14 @@ function AppearanceSection() {
               <option value={obsidianCss.activeTheme}>{obsidianCss.activeTheme}</option>
             )}
           </select>
-          <button className="settings-action-btn" type="button" data-testid="settings-theme-manage">
+          <button
+            className="settings-action-btn"
+            type="button"
+            disabled
+            aria-disabled
+            title={t("settings.themeManageDesc")}
+            data-testid="settings-theme-manage"
+          >
             {t("settings.manage")}
           </button>
         </div>
@@ -1119,7 +1133,17 @@ function FilesAndLinksSection() {
   /* R89: default location for new notes */
   const newNoteLoc = useStore(newNoteLocation);
   const newNoteFolderVal = useStore(newNoteFolder);
-  const attachFolder = useStore(attachmentFolder);
+  /* R273: attachment folder location — Obsidian renders this as a dropdown
+     (root / specified / current / subfolder) + a conditional path input, where
+     the mode is encoded into the single attachmentFolder string. Hold the mode +
+     path in local state (seeded fresh on mount — the section remounts per open)
+     so clearing the path field doesn't visibly collapse the dropdown to another
+     mode. */
+  const [attachLoc, setAttachLoc] = useState(() => decodeAttachmentMode(attachmentFolder.get()));
+  const applyAttachLoc = (mode: AttachmentMode, path: string): void => {
+    setAttachLoc({ mode, path });
+    setAttachmentFolder(encodeAttachmentMode(mode, path));
+  };
   /* R96: excluded files (search/graph/explorer filter) */
   const excluded = useStore(excludedRaw);
 
@@ -1167,22 +1191,43 @@ function FilesAndLinksSection() {
         </div>
       )}
 
+      {/* R273: Obsidian renders 附件默认存放路径 as a dropdown (reference 02-文件与链接-01);
+          Geode preserves the existing "assets" default and encodes the mode into the single attachmentFolder string. */}
       <div className="setting-item">
         <div className="setting-info">
           <div className="setting-name">{t("settings.attachmentFolder")}</div>
           <div className="setting-desc">{t("settings.attachmentFolderDesc")}</div>
         </div>
-        <input
-          className="settings-text-input"
-          type="text"
-          value={attachFolder}
-          placeholder="assets"
-          spellCheck={false}
-          aria-label={t("settings.attachmentFolder")}
+        <select
+          className="settings-select"
           data-testid="settings-attachment-folder"
-          onChange={(e) => setAttachmentFolder(e.target.value)}
-        />
+          value={attachLoc.mode}
+          aria-label={t("settings.attachmentFolder")}
+          onChange={(e) => applyAttachLoc(coerceAttachmentMode(e.target.value), attachLoc.path)}
+        >
+          <option value="root">{t("settings.attachmentLocationRoot")}</option>
+          <option value="specified">{t("settings.attachmentLocationSpecified")}</option>
+          <option value="current">{t("settings.attachmentLocationCurrent")}</option>
+          <option value="subfolder">{t("settings.attachmentLocationSubfolder")}</option>
+        </select>
       </div>
+      {(attachLoc.mode === "specified" || attachLoc.mode === "subfolder") && (
+        <div className="setting-item">
+          <div className="setting-info">
+            <div className="setting-name">{t("settings.attachmentFolderPath")}</div>
+          </div>
+          <input
+            className="settings-text-input"
+            type="text"
+            value={attachLoc.path}
+            placeholder="assets"
+            spellCheck={false}
+            aria-label={t("settings.attachmentFolderPath")}
+            data-testid="settings-attachment-folder-path"
+            onChange={(e) => applyAttachLoc(attachLoc.mode, e.target.value)}
+          />
+        </div>
+      )}
 
       <h3 className="settings-subheader" data-testid="settings-subheader-links">{t("settings.subheaderLinks")}</h3>
 
@@ -1917,6 +1962,11 @@ function CorePluginsSection({ setSection }: { setSection: (section: string) => v
         {rows.map((row) => {
           const entry = row.pluginId ? entryById.get(row.pluginId) : undefined;
           const enabled = entry ? entry.enabled : row.defaultEnabled;
+          // 真插件化 step 1: only rows backed by a registered plugin have a working
+          // toggle. The rest are always-on / not-yet-pluginified features whose toggle
+          // is shown (Obsidian parity) but disabled — honest non-operable state rather
+          // than a phantom switch. Future rounds wire each feature as a real plugin.
+          const wired = !!entry;
           return (
             <div className="core-plugin-row" key={row.id} data-testid={`core-plugin-${row.id}`}>
               <div className="plugin-info">
@@ -1954,6 +2004,8 @@ function CorePluginsSection({ setSection }: { setSection: (section: string) => v
                     name: t(row.nameKey),
                   })}
                   data-testid={`core-plugin-toggle-${row.id}`}
+                  disabled={!wired}
+                  aria-disabled={!wired}
                   onClick={() => {
                     if (!entry || !row.pluginId) return;
                     if (entry.enabled) app.plugins.disable(row.pluginId);
