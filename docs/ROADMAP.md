@@ -22,6 +22,10 @@ shim 建立其上。
 
 ## 已完成
 
+### R275 — v0.268（2026-07-04）Files & Links「启用 URI 链接」toggle（表面复刻 tail）
+
+表面复刻 fresh scout 后从 reference `02-文件与链接.md` advanced 组取最小行为可闭环项：Obsidian「启用 URI 链接」开关（默认 OFF）。Geode 自 R46 起恒开 in-app `obsidian://` 路由，现补设置开关；**默认 ON 以保留既有行为**（Obsidian 默认 OFF，显式 deviation 记档）。实现 = `core/obsidianUri.ts` 持久化 `uriLinksEnabled` Store + `SettingsModal` Files & Links advanced 组 toggle + `EditorPane` 阅读视图 `obsidian://` 路由 gate（OFF 时 preventDefault no-op）。逻辑档、零新依赖、未碰 vault/editor 字节/markdown IO。简化门 clean，多维对抗评审 0 confirmed。验证：`r275-e2e 11/11`（默认/持久化/ON 导航/OFF 不导航/探测未 gate）、回归 `r46 18/18` / `r273 24/24` / `r248 13/13` / `r177 53/53`、typecheck 0、`cargo check --manifest-path src-tauri/Cargo.toml`、prod build✓（既有 warnings）、release desktop probe `r275-probe 6/6`（WKWebView Settings UI + localStorage）。教训：surface tail 多候选时优先选行为边界可闭环的项；给既有恒开行为补开关默认取 prior behavior，faithfulness 默认差异显式记档。
+
 ### R274 — v0.267（2026-07-02）编辑器右键菜单补「在新标签页打开 / 在右侧打开」（表面复刻 fresh scout 最小闭环缺口）
 
 表面复刻 tail scout 后确认 bounded pool 未完全枯竭，取 reference `08-右键菜单` 最小且有真实行为闭环的缺口：编辑器右键 file-action 组缺 Obsidian 的 **Open in new tab / Open to the right**。新增 `file-explorer:open-in-new-tab` / `file-explorer:open-to-right` 两个命令（active file → `openFile({newTab:true})` / `splitActivePane("row")` + fallback newTab），并接入 `compat/obsidian/editorMenu.ts` 第一组；新增 compat `panel-right` 手绘图标。机械档、零新依赖、零 vault/editor 字节/markdown IO。简化门 clean，scoped reviewer 0 confirmed。验证：runtime GUI PASS、`r274-e2e 16/16`、回归 `r252 20/20` / `r269 18/18`、typecheck 0、`cargo check --manifest-path src-tauri/Cargo.toml`、prod build✓（既有 warnings）、release desktop probe `r274-probe 11/11`。教训：desktop probe 验 app shell command 时使用插件 `onload(app)` 原生 handle + 等待具体 command id，避免早期 compat `window.app`/partial registry 假阴性。

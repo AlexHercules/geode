@@ -251,6 +251,17 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R275 套件回归（2026-07-04，Files & Links「启用 URI 链接」toggle = 表面复刻 tail·逻辑档·非数据安全·零新依赖 · 简化门 clean · 多维 reviewer 0 confirmed · desktop probe 6/6）
+
+R275 = 表面复刻 fresh scout 后从 reference `02-文件与链接.md` advanced 组取最小行为可闭环项。Geode 自 R46 起恒开 in-app `obsidian://` 路由，现补设置开关；**默认 ON 保留 Geode 既有行为**（Obsidian 默认 OFF，显式 deviation 记档）。实现 = `core/obsidianUri.ts` 持久化 `uriLinksEnabled` Store + `SettingsModal` Files & Links advanced 组 toggle + `EditorPane` 阅读视图 `obsidian://` 路由 gate（OFF 时 preventDefault no-op）。未碰 compat/obsidian 层，`__geodeUri.handle` 探测保持未 gate。详见 ARCHITECTURE「Round 275 additions」。
+
+**套件矩阵（R275·不回退）**：
+- **r275-e2e 11/11 全绿（新增）** = toggle present in Files & Links advanced group · default ON (absent localStorage) · click OFF writes `geode.uriLinksEnabled="false"` · reload honors OFF · click back ON · ON: reading-view `obsidian://` click navigates to target · OFF: click stays on source · `__geodeUri.handle` probe ungated (creates/opens target while setting OFF).
+- **r275-probe 6/6 全绿（新增 desktop WKWebView）** = release binary + 真 fs vault + `.geode/plugins` probe；用插件 `onload(app)` 原生 handle 打开 Settings → Files & Links，验证 toggle present/default ON、OFF/ON localStorage 写入、`__geodeUri.handle` 仍可达。
+- **回归不退**：r46 18/18（obsidian:// parser/executor/in-app routing）· r273 24/24（attachment dropdown）· r248 13/13（Files & Links IA）· r177 53/53（settings nav）· typecheck 0 · cargo check(`src-tauri`) · prod build✓（仅既有 Rollup/chunk warnings）。
+
+**教训**：surface tail 多候选时优先选行为边界可闭环的项（「默认打开文件」选项集不明则 defer）；给既有恒开行为补开关默认取 prior behavior，与 Obsidian 默认差异显式记档；小功能也补桌面 probe 锁 WKWebView Settings UI + localStorage。
+
 ### R274 套件回归（2026-07-02，编辑器右键菜单补 Open in new tab / Open to the right = 表面复刻 fresh scout 最小闭环缺口·机械档·零新依赖 · 简化门 clean · scoped reviewer 0 confirmed · desktop probe 11/11）
 
 R274 = editor context menu 补 reference `08-右键菜单` 缺口。新增两个 app command (`file-explorer:open-in-new-tab` / `file-explorer:open-to-right`) 并把它们接进 compat editor menu 第一组；标签复用既有 explorer i18n 键，图标 `external-link` + 新 compat `panel-right`，无新依赖、无 vault/editor 字节写。

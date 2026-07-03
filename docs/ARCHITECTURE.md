@@ -71,6 +71,61 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 276 additions — 图谱 Obsidian-style 圆形力导向布局·逻辑档·非数据安全·零新依赖【Contract·v0.269】
+
+> **状态：Contract（已冻结）。本轮按用户 2026-07-03 指令单开 loop：参考 Obsidian 全局关系图截图，解决 Geode 当前 force layout 容易摊成长条/偏团块、整体不像 Obsidian 那样形成近似圆形知识星云的问题。** R276 与 R275 URI toggle 分离；不要复用 R275 编号或改动 R275 的源码范围。
+
+**目标观感**：全局图谱默认应形成近似圆形的整体包络：高连接度节点/星型中心更靠内，低度节点和叶子节点自然散在外圈；孤立或小组件仍围绕整体分布，而不是把画布拉成横向/纵向长带。保留现有 Obsidian-like hover 高亮、拖拽、缩放、Fit、3k sampling、标签/附件/过滤/分组着色行为。
+
+**布局契约**：
+1. `GraphForces` 新增 `circle: number`，持久化在 `geode.graphPrefs.forces.circle`；旧 prefs blob 缺字段时补默认值，corrupt/out-of-range 走默认。`GRAPH_RANGES.circle = { min: 0, max: 0.25, step: 0.01 }`，默认 `0.06`。
+2. `GraphView.tsx` 引入 `forceRadial`（已有 `d3-force` 依赖，无新增 npm 包）。仿真在 `link/charge/center/collide` 之外追加 `force("circle", forceRadial(radiusAccessor, 0, 0).strength(...))`。
+3. 圆形力只默认作用于 `prefs.mode === "global"`；local graph 本轮保持 R103/R110 语义和锚点布局不变，避免局部图 anchor 被拉离中心。未来如要局部圆形布局，另轮设计 anchor=0 的局部专用半径。
+4. `radiusAccessor` 不是所有节点同一半径：新增纯 helper（放 `graphPrefs.ts`，便于 probe/E2E）按渲染节点数和节点度数算目标半径。建议形状：
+   - `base = clamp(160, 720, 40 + sqrt(nodeCount) * 12)`；
+   - `degreeWeight = maxDegree > 0 ? sqrt(node.degree) / sqrt(maxDegree) : 0`；
+   - `target = base * (0.45 + 0.55 * (1 - clamp01(degreeWeight)))`。
+   这样 hub 更靠内、叶子更靠外，避免单纯 `forceRadial(constant)` 造成空心甜甜圈。
+5. 新节点初始位置改为确定性 annulus 初始化（例如按稳定 id hash / golden-angle 分布在 `0.55base..base`），替换当前 `Math.random()` 初始角度/距离。已存在节点仍复用旧位置，维持编辑/过滤后的连续感。
+6. `applyForces` 或等价 helper 必须能更新 `circle` force 的 strength；拖动 slider 时轻量 reheat，不重建节点集。
+
+**UI 契约**：
+1. Graph settings 的 Forces 组追加 slider：testid `graph-force-circle`，i18n 键 `graph.forceCircle`（en: `Circle force`，zh: `圆形力`）。位置放在 `graph.forceCenter` 之后，表示它是整体形状约束，不是边/点显示项。
+2. Reset 恢复 `DEFAULT_PREFS.forces`，包含 `circle`。旧用户 prefs 无 `circle` 时默认启用，保证打开全局图谱即改善圆形感。
+3. 不新增单独布局 preset、不改 graph toolbar 主按钮；本轮只补一个 force slider，保持 R78 设置面板模型。
+
+**验证契约**：
+1. `r276-e2e.mjs` 新增 parse/prefs 覆盖：旧 blob 自动得到 `forces.circle === 0.06`；`circle:-1/999` 被 clamp；设置面板 slider 持久化；Reset 恢复默认。
+2. 新增布局 probe（建议 `window.__geodeGraphLayoutStats()`，只读 `stateRef.current.nodes`）：返回节点数、bbox width/height、aspect ratio、中心半径均值/分位数、maxDegree、positionsHash。probe 不暴露可写对象。
+3. 用确定性测试 vault（一个高连接 hub + 多个小星型/链式组件 + orphans）打开全局图，等待首轮 settle，断言：
+   - `aspectRatio = width / height` 落在 `[0.75, 1.33]`；
+   - 度数最高的一组节点 median radius 小于度数最低的一组节点 median radius；
+   - 关闭/调低 `graph-force-circle` 后 slider 仍可持久化，不要求视觉指标继续满足。
+4. 回归 `r78`（graph prefs）、`r84`（filters）、`r90`（groups）、`r99`（tags）、`r101`（attachments）、`r103`（local depth/direction）、`r110`（neighbor links）、`r240`（open local graph）。R103/R110 尤其要证 local mode 未被 circle force 改写。
+5. 性能：`?bench=10000` sampled 3k 仍不得明显退化；记录 `graphSettleMs` / `graphDrawMs` 到 `docs/PERFORMANCE.md` 的 R276 小节。目标口径：sampled graph settle 不超过 R7/R15 基线 2x，single draw 不因 circle force 增加可见成本。
+6. 视觉验收：浏览器模式截一张全局图谱截图（可用 bench=1000 或自造 fixture），确认整体不再横向/纵向拉长；桌面端按 by-equivalence 可不做 Rust probe（纯 React + d3-force + canvas，无 Tauri/Rust/FS 新路径），但若本轮已起 release probe，附一张桌面截图更好。
+
+**文件范围**：`src/features/graph/graphPrefs.ts`、`src/features/graph/GraphView.tsx`、`src/core/i18n/dict.views.ts`、`src/main.tsx`（仅 probe，如需要）、`.calibration/r276-e2e.mjs`、`docs/PERFORMANCE.md`（bench 记录）。不碰 `core/metadata.ts` 图数据模型，不碰 vault/documents/editor 写路径，不新增依赖。
+
+**不做项**：不做 WebGL/Worker 仿真，不做 component packing 引擎，不做 DeepNotion 右侧预览/图谱内卡片，不做 chain/path 高亮，不改变节点点击打开逻辑，不改变 local graph 的锚点语义。
+
+**分档预估：逻辑档**（新增持久化 force 字段 + d3 force 接线 + 可视化指标 probe；纯读/渲染路径，零 vault/file/editor 字节写，非数据安全）。
+
+## Round 275 additions — Files & Links「启用 URI 链接」toggle·逻辑档·非数据安全·零新依赖【As-built·v0.268】
+
+> **状态：As-built（已交付·v0.268）。R275 fresh scout 后从 reference `02-文件与链接.md` advanced 组取最小 bounded 项。** 表面复刻 tail 剩余候选中，「默认打开文件」dropdown 涉及启动/空 tab 语义且 Obsidian 选项不完全明确（本机 asar 版本无此 key），而「启用 URI 链接」是 reference 中明确的 toggle（开关·默认关·允许 `obsidian://` URI），行为可闭环：Geode 自 R46 已在 EditorPane 阅读视图拦截 `obsidian://` 链接并 in-app 执行，但缺少设置开关。
+>
+> **契约**：
+> 1. `core/obsidianUri.ts` 新增 `uriLinksEnabled: Store<boolean>`（持久化 key `geode.uriLinksEnabled`）。**默认值取 `true` 以保留 Geode 既有行为**（Obsidian 官方默认 OFF，此为显式 deviation；收尾报告须记一句）。
+> 2. `src/features/settings/SettingsModal.tsx` 的 `FilesAndLinksSection` advanced 组在「排除文件」与「重建仓库缓存」之间插入该 toggle：控件用 `.settings-toggle`，testid `settings-uri-links-enabled`，i18n 键 `settings.uriLinksEnabled` / `settings.uriLinksEnabledDesc`。
+> 3. `src/features/editor/EditorPane.tsx` 阅读视图 link router（`href` 匹配 `/^obsidian:/i` 处）加 gate：仅当 `uriLinksEnabled.get()` 为 true 时调用 `handleObsidianUri(app, href)` 并阻止默认导航；为 false 时按非 HTTP 链接处理——`preventDefault()` 后 no-op，不触发任何 vault/导航动作。
+> 4. `window.__geodeUri.handle` probe 不 gate（它测 parser + executor 的直接调用，不是用户点击路由）。
+> 5. **零新依赖、零 vault/file/editor 字节写路径、非数据安全**；仅控制一个已有 in-app 路由是否生效。
+>
+> **As-built 验证**：`npm run typecheck` 0 错误；`r275-e2e 11/11`（默认 ON/持久化/OFF 不导航/ON 导航/探测未 gate）；回归 `r46 18/18` / `r273 24/24` / `r248 13/13` / `r177 53/53`；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过；`npm run build` 成功（仅既有 Rollup chunk warning）；release desktop probe `r275-probe 6/6`（WKWebView 真 Settings UI + localStorage 持久化 + `__geodeUri.handle` 可达）。**分档：逻辑档**（新 Store + 1 处控制流 gate + 1 处 Settings UI；未碰数据安全面）·简化门 **clean**（无死代码/脚手架/≥8 行重复； reviewers 0 confirmed）。
+>
+> **分档预估：逻辑档**（新 Store + 1 处控制流 gate + 1 处 Settings UI；未碰数据安全面）。
+
 ## Round 274 additions — 编辑器右键菜单补「在新标签页打开 / 在右侧打开」·机械档·零新依赖【As-built·v0.267】
 
 > **状态：As-built（已交付·v0.267）。表面复刻 fresh scout 结论：bounded surface pool 未枯竭，但多数余项要么是 disabled-honesty 视觉补丁、要么触及启动/设置存储；R274 取 reference `08-右键菜单` 中最小且有真实行为闭环的缺口：编辑器右键 file-action 组缺「Open in new tab / Open to the right」。Explorer 右键早有同功能（`Explorer.tsx` 的 `openInNewTab` / `openToRight`），但 editor compat menu（R252/R269）只列 bookmark/property/export/copy/reveal/open-default/rename/delete，少了这两项。
