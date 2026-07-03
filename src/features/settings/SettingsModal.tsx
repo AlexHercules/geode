@@ -93,6 +93,7 @@ import {
   newNoteFolder,
   setNewNoteFolder,
 } from "@core/newNote";
+import { uriLinksEnabled, setUriLinksEnabled } from "@core/obsidianUri";
 import {
   dailyNoteFolder,
   dailyNoteFormat,
@@ -152,7 +153,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.267.0";
+export const APP_VERSION = "0.268.0";
 
 type SectionId =
   | "about"
@@ -1146,6 +1147,8 @@ function FilesAndLinksSection() {
   };
   /* R96: excluded files (search/graph/explorer filter) */
   const excluded = useStore(excludedRaw);
+  /* R275: enable obsidian:// URI in-app routing (Files & Links → Advanced). */
+  const uriLinks = useStore(uriLinksEnabled);
 
   return (
     <section>
@@ -1366,6 +1369,24 @@ function FilesAndLinksSection() {
           data-testid="settings-excluded-files"
           onChange={(e) => setExcludedFiles(e.target.value)}
         />
+      </div>
+
+      {/* R275: enable obsidian:// URI in-app routing (Obsidian "Enable URI links", Advanced). */}
+      <div className="setting-item">
+        <div className="setting-info">
+          <div className="setting-name">{t("settings.uriLinksEnabled")}</div>
+          <div className="setting-desc">{t("settings.uriLinksEnabledDesc")}</div>
+        </div>
+        <button
+          className={`settings-toggle${uriLinks ? " is-on" : ""}`}
+          role="switch"
+          aria-checked={uriLinks}
+          aria-label={t("settings.uriLinksEnabled")}
+          data-testid="settings-uri-links-enabled"
+          onClick={() => setUriLinksEnabled(!uriLinks)}
+        >
+          <span className="settings-toggle-thumb" />
+        </button>
       </div>
 
       {/* R228: rebuild the in-memory metadata cache (Obsidian "Rebuild vault cache", Advanced) */}

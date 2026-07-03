@@ -193,6 +193,9 @@ export const en = {
   "settings.excludedFiles": "Excluded files",
   "settings.excludedFilesDesc":
     'Files whose path matches a pattern (one per line) are hidden from search + the graph and dimmed in the file explorer. Use "*" as a wildcard, or prefix "{regex}" for a regular expression. They stay openable.',
+  "settings.uriLinksEnabled": "Enable URI links",
+  "settings.uriLinksEnabledDesc":
+    "Allow obsidian:// URIs to be handled in-app when clicked in the reading view.",
 
   // ---- settings: templates (R23) ----
   "settings.templates": "Templates",
@@ -626,6 +629,9 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.excludedFiles": "排除的文件",
   "settings.excludedFilesDesc":
     "路径匹配任一模式（每行一条）的文件会从搜索和图谱中隐藏、并在文件树中变暗。用「*」作通配符，或以「{regex}」前缀启用正则。文件仍可正常打开。",
+  "settings.uriLinksEnabled": "启用 URI 链接",
+  "settings.uriLinksEnabledDesc":
+    "允许在阅读视图中点击 obsidian:// URI 时在应用内处理。",
 
   // ---- settings: templates (R23) ----
   "settings.templates": "模板",

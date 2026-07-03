@@ -57,6 +57,7 @@ import { PropertiesPanel } from "./PropertiesPanel";
 import { BacklinksInDocument } from "./BacklinksInDocument";
 import { openWikilink } from "./wikilinks";
 import { handleObsidianUri } from "./obsidianUriHandler";
+import { uriLinksEnabled } from "@core/obsidianUri";
 import "./editor.css";
 
 /**
@@ -1110,12 +1111,14 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
           anchor.getAttribute("href") ??
           anchor.getAttributeNS("http://www.w3.org/1999/xlink", "href") ??
           "";
-        // R46: obsidian:// links route in-app — intercept the default navigation
-        // and execute the parsed action (open/new/search). Sits before the generic
-        // non-http preventDefault so the webview never tries to navigate to it.
+        // R46/R275: obsidian:// links route in-app only when "Enable URI links" is
+        // ON (Files & Links → Advanced). When OFF, treat them like any other
+        // non-HTTP anchor: preventDefault so the webview does not navigate.
         if (/^obsidian:/i.test(href)) {
           e.preventDefault();
-          void handleObsidianUri(app, href);
+          if (uriLinksEnabled.get()) {
+            void handleObsidianUri(app, href);
+          }
           return;
         }
         if (!/^https?:/i.test(href)) e.preventDefault();

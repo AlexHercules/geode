@@ -4,6 +4,36 @@
  * features/editor/obsidianUriHandler.ts; this stays pure so it is the reusable
  * core for both in-app routing and a future OS deep-link handler.
  */
+import { Store } from "./store";
+
+const URI_LINKS_KEY = "geode.uriLinksEnabled";
+
+function readUriLinksEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem(URI_LINKS_KEY);
+    // Default ON preserves Geode's pre-R275 behavior (Obsidian's own default is OFF).
+    return raw === null ? true : raw === "true";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * R275: "Files & Links → Enable URI links" setting. When false, obsidian:// links
+ * in the reading view are treated as non-actionable non-HTTP anchors (preventDefault
+ * with no navigation). The parser and the __geodeUri probe are intentionally NOT
+ * gated — this only affects user-facing click routing.
+ */
+export const uriLinksEnabled = new Store<boolean>(readUriLinksEnabled());
+
+export function setUriLinksEnabled(value: boolean): void {
+  uriLinksEnabled.set(value);
+  try {
+    localStorage.setItem(URI_LINKS_KEY, String(value));
+  } catch {
+    /* storage unavailable */
+  }
+}
 export type ObsidianAction =
   | { kind: "open"; vault?: string; file?: string; path?: string; heading?: string; block?: string }
   | { kind: "new"; vault?: string; file?: string; name?: string; content?: string }
