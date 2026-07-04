@@ -4,10 +4,12 @@ import {
   forceCollide,
   forceLink,
   forceManyBody,
+  forceRadial,
   forceSimulation,
   type ForceCenter,
   type ForceLink,
   type ForceManyBody,
+  type ForceRadial,
   type Simulation,
   type SimulationLinkDatum,
   type SimulationNodeDatum,
@@ -23,6 +25,7 @@ import {
   ATTACHMENT_PREFIX,
   buildAttachmentGraph,
   buildTagGraph,
+  circleTargetRadius,
   DEFAULT_PREFS,
   GRAPH_RANGES,
   loadPrefs,
@@ -45,6 +48,7 @@ function applyForces(sim: Simulation<SimNode, SimLink>, f: GraphForces): void {
     .strength(f.linkForce);
   (sim.force("charge") as ForceManyBody<SimNode> | undefined)?.strength(-f.repel);
   (sim.force("center") as ForceCenter<SimNode> | undefined)?.strength(f.center);
+  (sim.force("circle") as ForceRadial<SimNode> | undefined)?.strength(f.circle);
 }
 
 /* ---------------- types & helpers ---------------- */
@@ -122,6 +126,19 @@ const fmt = (n: number) => n.toLocaleString("en-US");
 function nodeRadius(n: SimNode, scale = 1): number {
   return (Math.min(14, 4 + Math.sqrt(n.degree) * 2)) * scale;
 }
+
+/** R276: stable 32-bit hash for deterministic initial node placement. */
+function hashString(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+const PHI = (1 + Math.sqrt(5)) / 2;
+const GOLDEN_ANGLE = Math.PI * 2 / (PHI * PHI);
 
 /** Stash a perf number on window.__geodePerf (dev/bench inspection only). */
 function perfMark(key: string, value: number): void {
@@ -623,9 +640,14 @@ export function GraphView() {
     const reAnchor = anchorId !== null && anchorId !== lastAnchorRef.current;
     lastAnchorRef.current = anchorId;
 
+    // R276: circular-layout parameters for deterministic new-node placement.
+    const nodeCount = picked.length;
+    const maxDegree = nodeCount > 0 ? Math.max(...picked.map((n) => n.degree)) : 0;
+    const baseRadius = Math.min(720, Math.max(160, 40 + Math.sqrt(nodeCount) * 12));
+
     // keep positions of surviving nodes across rebuilds
     const prev = new Map(s.nodes.map((n) => [n.id, n]));
-    const nodes: SimNode[] = picked.map((n) => {
+    const nodes: SimNode[] = picked.map((n, i) => {
       const old = prev.get(n.id);
       if (old) {
         old.label = n.label;
@@ -633,8 +655,11 @@ export function GraphView() {
         old.degree = n.degree;
         return old;
       }
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 60 + Math.random() * 180;
+      // Deterministic annulus init: golden-angle spacing + stable id hash for
+      // radius/angle jitter, distributed between 0.55*base and base.
+      const h = hashString(n.id);
+      const angle = (i * GOLDEN_ANGLE + (h % 1000) / 1000 * Math.PI * 2) % (Math.PI * 2);
+      const dist = baseRadius * (0.55 + 0.45 * ((h % 1000000) / 1000000));
       return { ...n, x: Math.cos(angle) * dist, y: Math.sin(angle) * dist };
     });
     const links: SimLink[] = renderedEdges.map((e) => ({ source: e.source, target: e.target }));
@@ -656,6 +681,12 @@ export function GraphView() {
         )
         .force("charge", forceManyBody<SimNode>().strength(-f.repel).distanceMax(420))
         .force("center", forceCenter(0, 0).strength(f.center))
+        .force(
+          "circle",
+          prefs.mode === "global"
+            ? forceRadial<SimNode>((d) => circleTargetRadius(d, nodeCount, maxDegree)).strength(f.circle)
+            : null,
+        )
         .force("collide", forceCollide<SimNode>((d) => nodeRadius(d, s.prefs.display.nodeSize) + 5))
         .alpha(prev.size > 0 ? 0.45 : 1)
         .alphaDecay(0.03);
@@ -765,6 +796,64 @@ export function GraphView() {
       delete g.__geodeGraphClickNode;
     };
   }, [openNode]);
+
+  // R276 probe: read-only layout metrics for the E2E aspect-ratio / radius assertions.
+  useEffect(() => {
+    const g = globalThis as unknown as {
+      __geodeGraphLayoutStats?: () => Record<string, unknown> | null;
+    };
+    g.__geodeGraphLayoutStats = () => {
+      const s = stateRef.current;
+      const nodes = s.nodes;
+      if (nodes.length === 0) return null;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      let maxDegree = 0;
+      for (const n of nodes) {
+        const r = nodeRadius(n, s.prefs.display.nodeSize);
+        const x = n.x ?? 0;
+        const y = n.y ?? 0;
+        if (x - r < minX) minX = x - r;
+        if (y - r < minY) minY = y - r;
+        if (x + r > maxX) maxX = x + r;
+        if (y + r > maxY) maxY = y + r;
+        if (n.degree > maxDegree) maxDegree = n.degree;
+      }
+      // per-node radii sorted ascending; derive the quantiles from the same array
+      const nodeRadii = nodes
+        .map((n) => ({ id: n.id, degree: n.degree, radius: Math.hypot(n.x ?? 0, n.y ?? 0) }))
+        .sort((a, b) => a.radius - b.radius);
+      const radii = nodeRadii.map((n) => n.radius);
+      const medianRadius = radii[Math.floor(radii.length / 2)];
+      const meanRadius = radii.reduce((a, b) => a + b, 0) / radii.length;
+      const p25 = radii[Math.floor(radii.length * 0.25)];
+      const p75 = radii[Math.floor(radii.length * 0.75)];
+      // deterministic positions hash (xor-folded sum of rounded coords)
+      let positionsHash = 0;
+      for (const n of nodes) {
+        positionsHash = Math.imul(positionsHash ^ ((Math.round((n.x ?? 0) * 100) + 0x9e3779b9) >>> 0), 0x85ebca77);
+        positionsHash = Math.imul(positionsHash ^ ((Math.round((n.y ?? 0) * 100) + 0x9e3779b9) >>> 0), 0xc2b2ae3d);
+      }
+      return {
+        nodeCount: nodes.length,
+        width: maxX - minX,
+        height: maxY - minY,
+        aspectRatio: maxY > minY ? (maxX - minX) / (maxY - minY) : 1,
+        maxDegree,
+        medianRadius,
+        meanRadius,
+        p25Radius: p25,
+        p75Radius: p75,
+        positionsHash: positionsHash >>> 0,
+        nodes: nodeRadii,
+      };
+    };
+    return () => {
+      delete g.__geodeGraphLayoutStats;
+    };
+  }, []);
 
   /* ---------- pointer + wheel interactions ---------- */
 
@@ -1032,6 +1121,7 @@ export function GraphView() {
         <div className="graph-settings-panel" data-testid="graph-settings">
           <div className="graph-settings-group">{t("graph.forces")}</div>
           {slider("graph-force-center", "graph.forceCenter", GRAPH_RANGES.center, prefs.forces.center, (v) => setForce("center", v))}
+          {slider("graph-force-circle", "graph.forceCircle", GRAPH_RANGES.circle, prefs.forces.circle, (v) => setForce("circle", v))}
           {slider("graph-force-repel", "graph.forceRepel", GRAPH_RANGES.repel, prefs.forces.repel, (v) => setForce("repel", v))}
           {slider("graph-force-link", "graph.forceLink", GRAPH_RANGES.linkForce, prefs.forces.linkForce, (v) => setForce("linkForce", v))}
           {slider("graph-link-distance", "graph.linkDistance", GRAPH_RANGES.linkDistance, prefs.forces.linkDistance, (v) => setForce("linkDistance", v))}

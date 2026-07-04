@@ -10,6 +10,8 @@ import type { GraphNode, GraphEdge } from "@core/types";
 export interface GraphForces {
   /** pull toward the origin (forceCenter strength) */
   center: number;
+  /** R276: radial force strength that pulls the graph into a circular envelope */
+  circle: number;
   /** node repulsion magnitude (applied as a NEGATIVE forceManyBody strength) */
   repel: number;
   /** link strength (forceLink strength) */
@@ -65,6 +67,7 @@ export interface GraphPrefs {
 /** Slider ranges (also the clamp bounds for parseGraphPrefs). */
 export const GRAPH_RANGES = {
   center: { min: 0, max: 0.3, step: 0.01 },
+  circle: { min: 0, max: 0.25, step: 0.01 },
   repel: { min: 20, max: 600, step: 10 },
   linkForce: { min: 0, max: 1, step: 0.05 },
   linkDistance: { min: 20, max: 200, step: 5 },
@@ -84,7 +87,7 @@ export const DEFAULT_PREFS: GraphPrefs = Object.freeze({
   // neighbour-to-neighbour links shown = prior behaviour (zero regression)
   neighborLinks: true,
   showAll: false,
-  forces: Object.freeze({ center: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
+  forces: Object.freeze({ center: 0.06, circle: 0.06, repel: 200, linkForce: 0.5, linkDistance: 70 }),
   display: Object.freeze({ nodeSize: 1, linkThickness: 1, labelThreshold: 0.8, arrows: false, tags: false, attachments: false }),
   // defaults = "show everything" (zero regression vs the pre-R84 unfiltered graph)
   filters: Object.freeze({ orphans: true, existingOnly: false }),
@@ -125,6 +128,7 @@ export function parseGraphPrefs(raw: string | null): GraphPrefs {
       showAll: p.showAll === true,
       forces: {
         center: num(f.center, D.forces.center, GRAPH_RANGES.center),
+        circle: num(f.circle, D.forces.circle, GRAPH_RANGES.circle),
         repel: num(f.repel, D.forces.repel, GRAPH_RANGES.repel),
         linkForce: num(f.linkForce, D.forces.linkForce, GRAPH_RANGES.linkForce),
         linkDistance: num(f.linkDistance, D.forces.linkDistance, GRAPH_RANGES.linkDistance),
@@ -183,6 +187,21 @@ export function nodeGroupColor(
     }
   }
   return defaultColor;
+}
+
+/** R276: per-node radial target radius for the circle force. Hub nodes get a
+ *  smaller radius (pulled inward), leaves get a larger radius (pushed outward),
+ *  so the settled graph forms a filled circular cloud rather than a hollow ring.
+ *  Pure; exported for the probe.
+ */
+export function circleTargetRadius(
+  node: { degree: number },
+  nodeCount: number,
+  maxDegree: number,
+): number {
+  const base = Math.min(720, Math.max(160, 40 + Math.sqrt(nodeCount) * 12));
+  const degreeWeight = maxDegree > 0 ? Math.sqrt(node.degree) / Math.sqrt(maxDegree) : 0;
+  return base * (0.45 + 0.55 * (1 - Math.max(0, Math.min(1, degreeWeight))));
 }
 
 /**
