@@ -71,9 +71,9 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
-## Round 276 additions — 图谱 Obsidian-style 圆形力导向布局·逻辑档·非数据安全·零新依赖【Contract·v0.269】
+## Round 276 additions — 图谱 Obsidian-style 圆形力导向布局·逻辑档·非数据安全·零新依赖【As-built·v0.269】
 
-> **状态：Contract（已冻结）。本轮按用户 2026-07-03 指令单开 loop：参考 Obsidian 全局关系图截图，解决 Geode 当前 force layout 容易摊成长条/偏团块、整体不像 Obsidian 那样形成近似圆形知识星云的问题。** R276 与 R275 URI toggle 分离；不要复用 R275 编号或改动 R275 的源码范围。
+> **状态：As-built（已交付·v0.269）。本轮按用户 2026-07-03 指令单开 loop：参考 Obsidian 全局关系图截图，解决 Geode 当前 force layout 容易摊成长条/偏团块、整体不像 Obsidian 那样形成近似圆形知识星云的问题。** R276 与 R275 URI toggle 分离；不要复用 R275 编号或改动 R275 的源码范围。
 
 **目标观感**：全局图谱默认应形成近似圆形的整体包络：高连接度节点/星型中心更靠内，低度节点和叶子节点自然散在外圈；孤立或小组件仍围绕整体分布，而不是把画布拉成横向/纵向长带。保留现有 Obsidian-like hover 高亮、拖拽、缩放、Fit、3k sampling、标签/附件/过滤/分组着色行为。
 
@@ -110,6 +110,8 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 **不做项**：不做 WebGL/Worker 仿真，不做 component packing 引擎，不做 DeepNotion 右侧预览/图谱内卡片，不做 chain/path 高亮，不改变节点点击打开逻辑，不改变 local graph 的锚点语义。
 
 **分档预估：逻辑档**（新增持久化 force 字段 + d3 force 接线 + 可视化指标 probe；纯读/渲染路径，零 vault/file/editor 字节写，非数据安全）。
+
+> **As-built 验证**：`npm run typecheck` 0 错误；`r276-e2e 14/14`（旧 blob 补 circle 0.06 / clamp / slider 位置+持久化 / reset / 全局图 aspect-ratio 0.75–1.33 / hub median radius < leaf median radius / local graph 未破坏）；回归 `r78 16/16` / `r84 17/17` / `r90 17/17` / `r99 16/16` / `r101 23/23` / `r103 23/23` / `r110 10/10` / `r240 13/13`；`r276-bench.mjs` @ bench=10000 sampled 3k 录得 `graphSettleMs=4587` / `graphDrawMs=1.7`，在 R7/R15 基线（3958–5771 / 2.9–3.9）范围内无退化；`npm run build` 成功（仅既有 Rollup chunk / `tokenClassNodeProp` warning）；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。**分档：逻辑档**（新 Store 字段 + d3 force 控制流 + probe；未碰数据安全面）·简化门删 `circleTargetRadius` 泛型与单用局部 clamp + probe 重复 hypot（2 处）·**多维对抗评审 0 confirmed**。
 
 ## Round 275 additions — Files & Links「启用 URI 链接」toggle·逻辑档·非数据安全·零新依赖【As-built·v0.268】
 

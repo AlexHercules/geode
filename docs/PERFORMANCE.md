@@ -154,6 +154,28 @@ metadataIndexMs **151ms**（优于 R15 基线 185，零回归）；归一化 `in
 **测量教训**：同机后台跑着 release 编译/多个浏览器实例时测出过 321ms 假回归——
 立案排查前先在干净负载下复测（隔离探针 `.calibration/r16-bench2.js`）。
 
+## R276: Graph circle force layout (2026-07-04, browser dev, v0.269.0)
+
+Added `forceRadial` (d3-force, already bundled) with per-node radius derived from
+`nodeCount` and `node.degree` — hub nodes pulled inward, leaves pushed outward —
+to give the global graph an Obsidian-like circular cloud instead of an elongated
+strip. Local graph mode keeps the prior anchor-centered layout (circle force
+omitted when `prefs.mode === "local"`).
+
+| Metric @ bench=10000 sampled 3k | R7/R15 baseline | R276 | Verdict |
+|---|---|---|---|
+| graphSettleMs | ~3958–5771 | **4587** | no visible regression |
+| graphDrawMs | ~2.9–3.9 | **1.7** | no extra draw cost |
+| Single-frame settle time | ~24 ms | ~24–28 ms | within noise |
+
+Measured on the dev server with `?bench=10000` after the layout settled; the
+radial force adds ~0–10% to settle time because it runs inside the same d3-force
+tick loop and the radius accessor is O(1) per node. Deterministic initial
+placement (golden-angle annulus) does not affect runtime.
+
+**R276-specific perf marks**: `graphSettleMs` and `graphDrawMs` remain the
+primary signals; no new marks added.
+
 ## Remaining bottlenecks & recommendations (R3 list)
 - **Search debounce (250 ms) now dominates** perceived search latency (scan is
   53 ms at 10k). Could drop to ~150 ms, or make it adaptive to vault size.
