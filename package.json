@@ -3,6 +3,25 @@
   "private": true,
   "version": "0.269.0",
   "description": "Geode — a local-first markdown knowledge base (Obsidian-style), built with Tauri 2 + React + CodeMirror 6",
+  "license": "Apache-2.0",
+  "author": "AlexHercules",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlexHercules/geode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AlexHercules/geode/issues"
+  },
+  "homepage": "https://github.com/AlexHercules/geode#readme",
+  "keywords": [
+    "markdown",
+    "notes",
+    "knowledge-base",
+    "obsidian",
+    "tauri",
+    "codemirror",
+    "local-first"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -12,6 +12,12 @@ bench-vault/
 .calibration/**/*-results.md
 .calibration/__*/
 .calibration/*-vault/
+# local community-plugin bundles used during compatibility probes; do not publish
+# vendored plugin packages without an explicit license review.
+.calibration/calendar/
+.calibration/dataview/
+.calibration/tasks/
+.calibration/templater/
 # vendored Obsidian type defs / extracts — legal boundary: NEVER commit (OBSIDIAN-COMPAT.md §法律边界)
 .calibration/obsidian.d.ts
 .calibration/API-REFERENCE.md
