@@ -100,9 +100,9 @@ ok("settings panel near 900px target", await ev(() => {
   const w = document.querySelector('[data-testid="settings-modal"]').offsetWidth;
   return w >= 880 && w <= 904;
 }));
-ok("left nav widened toward 200 (was 170)", await ev(() => {
+ok("left nav widened toward 232 (was 170 → 200 → 232)", await ev(() => {
   const nav = document.querySelector(".settings-nav");
-  return !!nav && nav.offsetWidth >= 196 && nav.offsetWidth <= 206;
+  return !!nav && nav.offsetWidth >= 226 && nav.offsetWidth <= 238;
 }));
 ok("section heading has a bottom divider", await ev(() => {
   const h = document.querySelector(".settings-heading");

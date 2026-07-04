@@ -2,8 +2,10 @@
 
 .modal-panel.settings-panel {
   /* G2: Obsidian's settings window is markedly wider than a regular modal —
-     bumped 760→900 to match its content density (audit: "弹窗整体更窄"). */
-  width: min(1000px, 94vw);
+     bumped 760→900 to match its content density (audit: "弹窗整体更窄").
+     R277: keep 900px target; the in-tree 1000px restoration deviated from
+     Obsidian's actual proportions and broke the R178 computed-style lock. */
+  width: min(900px, 94vw);
   height: min(760px, 78vh);
   max-height: 78vh;
   flex-direction: row;
@@ -631,11 +633,12 @@
 
 /* ---------- toggle switch ---------- */
 
+/* R277: Obsidian toggle is a 42×24 pill with an 18px thumb; 3px inset, 18px travel. */
 .settings-toggle {
   flex-shrink: 0;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
+  width: 42px;
+  height: 24px;
+  border-radius: 12px;
   background: var(--border-strong);
   position: relative;
   transition: background 0.15s ease;
@@ -668,25 +671,19 @@
   background: var(--accent);
 }
 
-/* theme «Manage» button: shown for Obsidian parity, not yet wired → disabled */
-.settings-action-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 .settings-toggle-thumb {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   background: var(--text-on-accent);
   transition: transform 0.15s ease;
 }
 
 .settings-toggle.is-on .settings-toggle-thumb {
-  transform: translateX(16px);
+  transform: translateX(18px);
 }
 
 /* ---------- hotkeys ---------- */
@@ -1195,13 +1192,22 @@
   gap: 8px;
 }
 .settings-accent-input {
-  width: 36px;
-  height: 26px;
+  /* R277: Obsidian uses a circular accent swatch, not a rectangular color input. */
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 50%;
   background: var(--bg-input);
   cursor: pointer;
+  overflow: hidden;
+}
+.settings-accent-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.settings-accent-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
 }
 .settings-accent-reset {
   padding: 4px 10px;
@@ -1217,7 +1223,8 @@
   color: var(--text-normal);
 }
 
-/* R228: generic settings action button (e.g. Rebuild vault cache) */
+/* R228: generic settings action button (e.g. Rebuild vault cache).
+   R277: add `is-primary` for Obsidian-style filled accent buttons (theme Manage). */
 .settings-action-btn {
   flex-shrink: 0;
   padding: 5px 12px;
@@ -1230,4 +1237,24 @@
 }
 .settings-action-btn:hover {
   background: var(--bg-hover);
+}
+
+.settings-action-btn.is-primary {
+  color: var(--text-on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.settings-action-btn.is-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* disabled action buttons (including primary stubs) are dimmed and non-operable */
+.settings-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.settings-action-btn.is-primary:disabled:hover {
+  background: var(--accent);
+  border-color: var(--accent);
 }
