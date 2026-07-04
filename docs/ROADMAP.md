@@ -20,7 +20,21 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
+## 下一轮候选（2026-07-04 截图对比校准）
+
+### R280 候选 — Vault 管理/切换器补齐 + Obsidian shell 差距复查
+
+用户用两张截图对比 Geode 与 Obsidian 后，要求把本次差距记录为下一轮。已确认现状：Geode 的底栏库名是 `status-vault` 按钮，点击执行 `app:switch-vault` 打开 `VaultSwitcherModal`；R203 已有最近仓库 store、列表、点击切换、移除最近项、打开其他仓库，R237 已把底栏库名接成常驻入口。验证：`r237-e2e 9/9`、`r203-e2e 21/21` 通过。
+
+R280 应把「切换仓库」与「管理仓库」拆清楚：`切换仓库` 维持 done；`管理仓库` 改按 partial 处理。缺口是 Obsidian 式点击后能同时选择切换与管理，而 Geode 当前只做到切换器首片，缺完整管理选择（新建仓库、打开已有仓库、管理最近/已知仓库列表、启动选择或默认库等，具体以 reference/Obsidian 实测校准）。实现时必须保留 `switchToVault` 的 flush-first 数据安全全序，最近列表移除仍只删 localStorage、绝不触碰真实 vault 数据。
+
+同轮 scout 还要带上这次截图里的 shell 观感差距，优先挑可闭环的小项：顶部缺 Obsidian 面包屑/路径语境；文件树选中态、缩进密度、真实内容密度仍偏空；左 ribbon 仍有 `L/O/R` 文字占位；Markdown 列表层级、链接、缩进线、拼写红线等成熟度弱于 Obsidian；右侧日历在 Geode 中更显著、压窄主编辑区；状态栏信息已有但工作态密度仍不如 Obsidian。不要一次性吞整轮大视觉重构，先取最能被截图验证的 bounded 子项。
+
 ## 已完成
+
+### R279 — v0.272（2026-07-04）第三方插件列表设置齿轮图标（表面复刻 tail）
+
+Obsidian 的已安装社区插件列表会在每个「有设置页」的插件右侧显示齿轮按钮，点击直接打开该插件的设置 tab。Geode 自 R163 已支持 per-plugin 左侧设置 tab，但插件列表只有启用开关 + 卸载按钮；R279 补齿轮：读取 `app.plugins.settingsSections`，匹配 `pluginId` 即渲染 `plugin-settings-${plugin.id}` 按钮，点击 `setSection(`plugin:${section.id}`)` 跳转；新增 i18n 键 `settings.pluginSettings`。机械档、零新依赖、未碰 vault/editor/markdown/文件 IO。简化门：机械档跳过。scoped review 5 项全过·0 缺陷。验证：`r279-e2e 6/6`、回归 `r163 20/20` / `r166 18/18` / `r275 11/11` / `r277 16/16` / `r278 15/15`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过。桌面按 by-equivalence（纯 UI 层，无 Rust/FS 新路径）。
 
 ### R275 — v0.268（2026-07-04）Files & Links「启用 URI 链接」toggle（表面复刻 tail）
 

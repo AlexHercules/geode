@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 279 additions — 第三方插件列表设置齿轮图标·机械档·零新依赖【As-built·v0.272】
+
+> **状态：As-built（已交付·v0.272）。续表面复刻「第三方插件页结构」：Obsidian 的已安装社区插件列表会在每个「有设置页」的插件右侧显示齿轮按钮，点击直接打开该插件的设置 tab。Geode 自 R163 已支持 per-plugin 左侧设置 tab，但插件列表只有启用开关 + 卸载按钮；R279 补齿轮。**
+
+**UI 契约**：
+1. `PluginsSection` 接收 `setSection` 回调并透传给 `PluginList`；`PluginList` 内读取 `app.plugins.settingsSections`。
+2. 对每条插件，若 `settingsSections.find((s) => s.pluginId === plugin.id)` 存在，则在插件操作区渲染 `.plugin-settings-btn` 按钮，图标 `Icon name="settings" size={15}`，`data-testid={`plugin-settings-${plugin.id}`}`，aria-label/title 使用 i18n `settings.pluginSettings`（插值 `{name: getPluginName(plugin)}`）。
+3. 齿轮按钮点击调用 `setSection(`plugin:${settingsSection.id}`)`，与 R163 左侧导航 `settings-nav-plugin-${id}` 选中态一致。
+4. 无 settings section 的插件不渲染齿轮按钮；齿轮与卸载按钮视觉独立，hover 色分别为 `--text-normal` 与 `--danger`。
+
+**数据/行为契约**：
+- 零新状态；完全依赖既有 `PluginManager.settingsSections` Store（R163）。
+- 零 .md / vault / editor / markdown IO；纯 SettingsModal 渲染路径。
+
+**验证契约**：
+1. 新增 `.calibration/r279-e2e.mjs`：注册两个 external 测试插件（一个有 settings section、一个无），打开 Settings → Plugins，断言有设置插件显示齿轮、点击齿轮左侧导航高亮且设置主体挂载、无设置插件无齿轮。
+2. 回归 `r163-e2e`（per-plugin 左侧 tab 机制）、`r166-e2e`（卸载按钮）、`r275/r277/r278-e2e`（Settings 相关）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+
+**文件范围**：`src/features/settings/SettingsModal.tsx`、`src/features/settings/settings.css`、`src/core/i18n/dict.views.ts`、`.calibration/r279-e2e.mjs`。
+
+**分档预估：机械档**（纯 UI/IA 补全，无新状态/算法，未碰数据安全面）。
+
+> **As-built 验证**：`npm run typecheck` 0 错误；`r279-e2e 6/6`；回归 `r163 20/20` / `r166 18/18` / `r275 11/11` / `r277 16/16` / `r278 15/15`；`npm run build` 成功（既有 chunk size warning）；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。**分档：机械档**（纯 UI/IA 补全，无新逻辑/状态/算法，未碰数据安全面）·简化门：机械档跳过·scoped review 5 项全过·0 缺陷。
+
 ## Round 278 additions — 热键页 Obsidian 控件结构：chip + 圆形加号/删除·机械档·零新依赖【As-built·v0.271】
 
 > **状态：As-built（已交付·v0.271）。续表面复刻「热键页结构」：把 HotkeysSection 右侧控件从「自定义」按钮 + 重置箭头改为 Obsidian 同款的键位 chip（含内联 ×）+ 圆形 + 按钮。保留单 override 语义：+ 打开 capture，chip × 显式 unbind。不碰 core/commands.ts API。**
