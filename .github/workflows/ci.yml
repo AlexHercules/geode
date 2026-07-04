@@ -4,7 +4,7 @@ name: CI
 # 回归基线不再依赖某台开发机的本地状态（呼应 data-safety skill「换机即失守」风险）。
 on:
   push:
-    branches: [master, opus]
+    branches: [main, master, opus]
   pull_request:
 
 jobs:
