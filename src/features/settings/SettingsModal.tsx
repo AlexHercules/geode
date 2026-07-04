@@ -153,7 +153,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.271.0";
+export const APP_VERSION = "0.272.0";
 
 type SectionId =
   | "about"
@@ -324,7 +324,7 @@ export function SettingsModal() {
           {section === "hotkeys" && <HotkeysSection />}
           {section === "keychain" && <KeychainSection />}
           {section === "core-plugins" && <CorePluginsSection setSection={setSection} />}
-          {section === "plugins" && <PluginsSection />}
+          {section === "plugins" && <PluginsSection setSection={setSection} />}
           {section === "command-palette" && <CommandPaletteSection />}
           {section === "quick-switcher" && <QuickSwitcherSection />}
           {section === "note-composer" && <NoteComposerSection />}
@@ -2053,7 +2053,7 @@ const SOURCE_LABEL_KEY: Record<PluginSource, I18nKey> = {
   obsidian: "settings.sourceBadgeObsidian",
 };
 
-function PluginsSection() {
+function PluginsSection({ setSection }: { setSection: (section: string) => void }) {
   const app = useApp();
   const t = useI18n();
   useStore(app.plugins.revision); // re-render on enable/disable/register
@@ -2086,7 +2086,7 @@ function PluginsSection() {
       <div className="plugin-group-header">
         <h3 className="plugin-group-title">{t("settings.pluginGroupBuiltin")}</h3>
       </div>
-      <PluginList entries={builtin} group="builtin" />
+      <PluginList entries={builtin} group="builtin" setSection={setSection} />
 
       <div className="plugin-group-header">
         <h3 className="plugin-group-title">{t("settings.pluginGroupExternal")}</h3>
@@ -2125,7 +2125,7 @@ function PluginsSection() {
         <code>docs/PLUGINS.md</code>
         {t("settings.pluginPathHint4")}
       </p>
-      <PluginList entries={external} group="external" />
+      <PluginList entries={external} group="external" setSection={setSection} />
 
       <div className="plugin-group-header">
         <h3 className="plugin-group-title">{t("settings.pluginGroupObsidian")}</h3>
@@ -2135,7 +2135,7 @@ function PluginsSection() {
         <code>&lt;vault&gt;/.obsidian/plugins/</code>
         {t("settings.obsidianHintPost")}
       </p>
-      <PluginList entries={obsidian} group="obsidian" warnings={obsidianWarnings} />
+      <PluginList entries={obsidian} group="obsidian" warnings={obsidianWarnings} setSection={setSection} />
       {/* R163: per-plugin settings moved OUT of this group into left-nav tabs */}
 
       {obsidianIssues.length > 0 && (
@@ -2203,14 +2203,17 @@ function PluginList({
   entries,
   group,
   warnings,
+  setSection,
 }: {
   entries: ReturnType<PluginManager["list"]>;
   group: PluginSource;
   /** plugin id -> manifest warning (e.g. minAppVersion exceeds apiVersion) */
   warnings?: ReadonlyMap<string, string>;
+  setSection: (section: string) => void;
 }) {
   const app = useApp();
   const t = useI18n();
+  const settingsSections = useStore(app.plugins.settingsSections);
 
   if (entries.length === 0) {
     return (
@@ -2248,6 +2251,21 @@ function PluginList({
             )}
           </div>
           <div className="plugin-actions">
+            {(() => {
+              const settingsSection = settingsSections.find((s) => s.pluginId === plugin.id);
+              return settingsSection ? (
+                <button
+                  className="plugin-settings-btn"
+                  type="button"
+                  aria-label={t("settings.pluginSettings", { name: getPluginName(plugin) })}
+                  title={t("settings.pluginSettings", { name: getPluginName(plugin) })}
+                  data-testid={`plugin-settings-${plugin.id}`}
+                  onClick={() => setSection(`plugin:${settingsSection.id}`)}
+                >
+                  <Icon name="settings" size={15} />
+                </button>
+              ) : null;
+            })()}
             {/* R166 (B1): uninstall — community (obsidian) plugins only; builtin is
                 packaged, external (.geode dev scripts) has no id→file map (deferred) */}
             {source === "obsidian" && (

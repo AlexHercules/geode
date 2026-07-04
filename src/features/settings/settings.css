@@ -537,6 +537,7 @@
   flex-shrink: 0;
 }
 
+.plugin-settings-btn,
 .plugin-uninstall-btn {
   display: grid;
   place-items: center;
@@ -544,6 +545,11 @@
   height: 28px;
   border-radius: 6px;
   color: var(--text-muted);
+}
+
+.plugin-settings-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
 }
 
 .plugin-uninstall-btn:hover {
