@@ -153,7 +153,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.270.0";
+export const APP_VERSION = "0.271.0";
 
 type SectionId =
   | "about"
@@ -2461,28 +2461,30 @@ function HotkeysSection() {
                   ) : effective !== null ? (
                     <span className={`hotkey-chip${conflicts.length > 0 ? " has-conflict" : ""}`}>
                       {formatHotkey(effective)}
+                      <button
+                        className="hotkey-chip-delete"
+                        title={t("settings.hotkeyRemoveTitle")}
+                        aria-label={t("settings.hotkeyRemoveAria", { name: cmdLabel(cmd) })}
+                        data-testid={`hotkey-delete-${cmd.id}`}
+                        onClick={() => app.commands.setHotkeyOverride(cmd.id, null)}
+                      >
+                        <Icon name="x" size={10} />
+                      </button>
                     </span>
                   ) : (
-                    <span className="hotkey-chip is-empty">{t("settings.hotkeyNotSet")}</span>
+                    <span className="hotkey-unset">{t("settings.hotkeyNotSet")}</span>
                   )}
-                  {!capturing && app.commands.hasHotkeyOverride(cmd.id) && (
+                  {!capturing && (
                     <button
-                      className="hotkey-reset"
-                      title={t("settings.hotkeyResetTitle")}
-                      aria-label={t("settings.hotkeyResetAria", { name: cmdLabel(cmd) })}
-                      data-testid={`hotkey-reset-${cmd.id}`}
-                      onClick={() => app.commands.clearHotkeyOverride(cmd.id)}
+                      className="hotkey-add"
+                      title={t("settings.hotkeyAddTitle")}
+                      aria-label={t("settings.hotkeyAddAria", { name: cmdLabel(cmd) })}
+                      data-testid={`hotkey-add-${cmd.id}`}
+                      onClick={() => setCapturingId(cmd.id)}
                     >
-                      <Icon name="corner-up-left" size={12} />
+                      <Icon name="plus" size={12} />
                     </button>
                   )}
-                  <button
-                    className={`hotkey-edit${capturing ? " is-capturing" : ""}`}
-                    data-testid={`hotkey-edit-${cmd.id}`}
-                    onClick={() => setCapturingId(capturing ? null : cmd.id)}
-                  >
-                    {capturing ? t("settings.cancel") : t("settings.customize")}
-                  </button>
                 </div>
               </div>
             );

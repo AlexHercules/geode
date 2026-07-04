@@ -817,27 +817,29 @@
 .hotkey-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
+.hotkey-unset {
+  font-size: 13px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
 .hotkey-chip {
-  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 8px;
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--code-bg);
+  background: var(--bg-input);
   font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
   font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   user-select: none;
-}
-
-.hotkey-chip.is-empty {
-  font-style: italic;
-  background: transparent;
-  border-style: dashed;
-  color: var(--text-faint);
 }
 
 .hotkey-chip.has-conflict {
@@ -858,32 +860,37 @@
   }
 }
 
-.hotkey-reset {
+.hotkey-chip-delete {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+}
+
+.hotkey-chip-delete:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
+
+.hotkey-add {
+  flex-shrink: 0;
   display: grid;
   place-items: center;
   width: 22px;
   height: 22px;
+  padding: 0;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 50%;
   background: var(--bg-input);
   color: var(--text-muted);
 }
 
-.hotkey-reset:hover {
-  background: var(--bg-hover);
-  color: var(--text-normal);
-}
-
-.hotkey-edit {
-  padding: 3px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-input);
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.hotkey-edit:hover {
+.hotkey-add:hover {
   background: var(--bg-hover);
   color: var(--text-normal);
 }
@@ -1003,11 +1010,6 @@
 .cmdpalette-unpin:hover {
   background: var(--bg-hover);
   color: var(--danger);
-}
-
-.hotkey-edit.is-capturing {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 /* ---------- updates (About section, desktop only) ---------- */
