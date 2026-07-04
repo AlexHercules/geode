@@ -71,6 +71,31 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 277 additions — 设置弹窗控件像素级视觉对齐 Obsidian·机械档·非数据安全·零新依赖【As-built·v0.270】
+
+> **状态：As-built（已交付·v0.270）。用户 2026-07-04 指令「像素级别复制 obsidian 界面」，本轮聚焦 Settings 弹窗控件向 Obsidian `_截图/03-外观/` 对齐。** 只动 `src/features/settings/settings.css` 与 `SettingsModal.tsx` 一个 className；零新依赖；不碰 vault/editor/markdown/文件 IO。
+
+**视觉契约**：
+1. 开关（`.settings-toggle`）改为 Obsidian 比例：width 42px / height 24px / border-radius 12px；thumb 18px×18px，padding 3px；ON 态 translateX 18px；OFF 态背景 `--border-strong`，hover `--text-faint`；ON 态背景 `--accent`，hover `--accent-hover`。
+2. 主题「管理」按钮（`[data-testid="settings-theme-manage"]`）增加 `.is-primary` 类，渲染为填充 `--accent` / 白字（`--text-on-accent`）/ 边框同色的主按钮；hover 时 `--accent-hover`；disabled 时 opacity 0.45（按钮未 wired，仅视觉占位）。
+3. 强调色取色器（`.settings-accent-input`）改为 28px×28px 圆形（`border-radius: 50%`），去除默认 color input 的 wrapper padding 与 swatch 直角，与 Obsidian 圆形 swatch 一致。
+4. 设置弹窗宽度从 in-tree 误恢复的 `min(1000px, 94vw)` 调回 `min(900px, 94vw)`，恢复 R178 锁定的 Obsidian 比例；左导航宽度保持 232px（in-tree 加宽以容长条目），同步更新 `r178-e2e` 断言。
+5. 颜色/间距继续全部走 CSS 变量（`--accent`/`--border-strong`/`--text-on-accent` 等），不引入硬编码色值；浅/深色主题与 accent 切换自动跟随。
+
+**验证契约**：
+1. 新增 `.calibration/r277-e2e.mjs`：用 Playwright computed-style / offsetWidth 锁 toggle 42×24/18px、thumb 圆形/ON  translate 18px、Manage 按钮 `is-primary` 且背景等于 `--accent` 计算色、accent swatch 正方形+圆形、modal 宽度 900±12px。
+2. 回归 `r178-e2e`（更新左导航宽度断言 196–206 → 226–238）、`r270-e2e`（settings-card 扁平）、`r275-e2e`（URI 链接 toggle）。
+3. 浏览器模式在 light/dark 主题下各截一张 Appearance 设置页截图，与 `reference/_截图/03-外观/` 目视比对。
+4. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+
+**文件范围**：`src/features/settings/settings.css`、`src/features/settings/SettingsModal.tsx`、`.calibration/r277-e2e.mjs`、`.calibration/r178-e2e.mjs`（断言更新）。
+
+**不做项**：不实现字体「管理」弹窗（需系统字体枚举·功能非纯视觉·硬边界#5 或 Tauri API）；不实现全局 native 桌面阴影尺寸（需更多 reference 截图与平台级样式）；不改 setting row 行高/字号（本轮只调控件尺寸）；不新增 runtime 依赖。
+
+**分档预估：机械档**（纯 CSS/JSX className，无新逻辑/状态/算法，未碰数据安全面）。
+
+> **As-built 验证**：`npm run typecheck` 0 错误；`r277-e2e 16/16`（toggle 尺寸/primary 按钮/accent swatch/modal 宽度）；回归 `r178 16/16` / `r270 14/14` / `r275 11/11`；`npm run build` 成功（仅既有 chunk size warning）；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。**分档：机械档**（纯 CSS/JSX，无新逻辑/状态/算法，未碰数据安全面）·简化门：机械档跳过·**scoped review 发现 2 处测试断言脆弱性并已修复**（toggle 显式置 ON 后再断言 transform；primary 按钮背景直接比对 `--accent` 计算色而非启发式）。
+
 ## Round 276 additions — 图谱 Obsidian-style 圆形力导向布局·逻辑档·非数据安全·零新依赖【As-built·v0.269】
 
 > **状态：As-built（已交付·v0.269）。本轮按用户 2026-07-03 指令单开 loop：参考 Obsidian 全局关系图截图，解决 Geode 当前 force layout 容易摊成长条/偏团块、整体不像 Obsidian 那样形成近似圆形知识星云的问题。** R276 与 R275 URI toggle 分离；不要复用 R275 编号或改动 R275 的源码范围。
