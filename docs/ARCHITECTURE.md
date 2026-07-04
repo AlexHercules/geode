@@ -71,6 +71,33 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 278 additions — 热键页 Obsidian 控件结构：chip + 圆形加号/删除·机械档·零新依赖【As-built·v0.271】
+
+> **状态：As-built（已交付·v0.271）。续表面复刻「热键页结构」：把 HotkeysSection 右侧控件从「自定义」按钮 + 重置箭头改为 Obsidian 同款的键位 chip（含内联 ×）+ 圆形 + 按钮。保留单 override 语义：+ 打开 capture，chip × 显式 unbind。不碰 core/commands.ts API。**
+
+**UI 契约**：
+1. 未绑定命令右侧显示 `.hotkey-unset` 文本（`settings.hotkeyNotSet`）+ `.hotkey-add` 圆形加号按钮；已绑定命令显示 `.hotkey-chip`（key combo）+ chip 内联 `.hotkey-chip-delete`（×）+ 圆形加号按钮。
+2. `.hotkey-chip` 使用 `display: inline-flex`，背景 `--bg-input`，边框 `--border`；冲突时边框/文字 `--danger`；capture 时边框/背景/文字 `--accent`。
+3. `.hotkey-add` 22px 圆形按钮，border `--border`，背景 `--bg-input`，hover `--bg-hover`；使用 `Icon name="plus" size={12}`。
+4. `.hotkey-chip-delete` 14px 透明内联按钮，hover 背景 `--bg-hover`、文字 `--danger`；使用 `Icon name="x" size={10}`。
+5. 搜索框 placeholder 改为 "Search…"/"搜索…"，匹配 Obsidian 截图。
+6. 保留 capture 行为：+ 进入 capture；Escape 取消；Backspace/Delete unbind；其他合法 chord 写入 override。
+
+**数据/行为契约**：
+- 单命令仍只保留一条有效 override（R6 模型不变）；+ 在已绑定行上打开 capture 会**覆盖**旧绑定（与 Obsidian 多热键不同，为本轮忠实度与复杂度的显式取舍）。
+- chip × 点击始终调用 `commands.setHotkeyOverride(id, null)`（显式 unbind，包括默认热键）。
+
+**验证契约**：
+1. 新增 `.calibration/r278-e2e.mjs`：未绑行 + 按钮存在；点击 + capture `Shift+F7` 后 chip 出现且含 F7；点击 chip × 回到 unset；默认热键行 chip 可 unbind；+ 在已绑定行 rebinding；Escape 保留旧绑定。
+2. 回归 `r145-e2e`（assigned-only filter / 显式 unbind 仍过滤）与 `r251-e2e`（来源前缀/扁平列表）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+
+**文件范围**：`src/features/settings/SettingsModal.tsx`、`src/features/settings/settings.css`、`src/core/i18n/dict.views.ts`（placeholder + 新 add/remove 键）、`.calibration/r278-e2e.mjs`。
+
+**分档预估：机械档**（纯 UI form swap，无新状态/算法，core API 调用不变，未碰数据安全面）。
+
+> **As-built 验证**：`npm run typecheck` 0 错误；`r278-e2e 15/15`；回归 `r145 15/15` / `r251 14/14`；`npm run build` 成功（既有 chunk size warning）；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。**分档：机械档**（UI form swap + 失效 CSS/i18n 清理，无新逻辑/状态/算法，未碰数据安全面）·简化门 clean（≤3 源文件，已手动移除失效 `.hotkey-edit`/`.hotkey-reset` CSS 与未引用 i18n 键）·scoped review 1 minor：ARCHITECTURE R6 热键控件旧契约已同步更新。
+
 ## Round 277 additions — 设置弹窗控件像素级视觉对齐 Obsidian·机械档·非数据安全·零新依赖【As-built·v0.270】
 
 > **状态：As-built（已交付·v0.270）。用户 2026-07-04 指令「像素级别复制 obsidian 界面」，本轮聚焦 Settings 弹窗控件向 Obsidian `_截图/03-外观/` 对齐。** 只动 `src/features/settings/settings.css` 与 `SettingsModal.tsx` 一个 className；零新依赖；不碰 vault/editor/markdown/文件 IO。
@@ -9347,7 +9374,7 @@ Implement per API-REFERENCE-R6 (official shapes):
 - Filter input (`data-testid="settings-hotkeys-filter"`); rows from
   `commands.list()` + `useStore(commands.revision)`, each row
   (`data-testid="hotkey-row-<id>"`): command name, effective-hotkey chip (or "Not set"),
-  customize button (`data-testid="hotkey-edit-<id>"`) entering CAPTURE mode:
+  circular add button (`data-testid="hotkey-add-<id>"`) entering CAPTURE mode:
   - capture takes the NEXT keydown with a non-modifier key → candidate hotkey string
     (built consistently with `matchHotkey`'s grammar, via `normalizeHotkey`);
     Escape cancels; Backspace/Delete sets the override to null (unbound);
@@ -9355,7 +9382,8 @@ Implement per API-REFERENCE-R6 (official shapes):
   - Conflict check via `findHotkeyConflicts(candidate, id)`: warning inline
     (`data-testid="hotkey-conflict-<id>"`) naming the conflicting command; saving is still
     allowed (Obsidian behavior) — both rows then show a conflict badge.
-  - Reset-to-default button when `hasHotkeyOverride(id)` (`data-testid="hotkey-reset-<id>"`).
+  - Chip inline delete button (`data-testid="hotkey-delete-<id>"`) calls
+    `setHotkeyOverride(id, null)` to explicitly unbind (including default hotkeys).
 - `features/palette/CommandPalette.tsx`: hotkey chip reads `getEffectiveHotkey`.
 
 ### As-built deltas (post-review, adversarially confirmed — R6)
