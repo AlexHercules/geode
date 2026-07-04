@@ -3,7 +3,7 @@
 [![CI](https://github.com/AlexHercules/geode/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexHercules/geode/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-Geode is a local-first markdown knowledge base inspired by Obsidian. It is built as a desktop app with Tauri, React, TypeScript, and CodeMirror 6.
+Geode is an open-source, Obsidian-like, local-first markdown knowledge base and note-taking app. It is built as a desktop app with Tauri, React, TypeScript, and CodeMirror 6.
 
 The core promise is simple: your notes are plain `.md` files in a folder you own. Geode indexes and visualizes them, but it does not lock them into a database.
 
@@ -13,7 +13,7 @@ The core promise is simple: your notes are plain `.md` files in a folder you own
 
 ## Why Geode exists
 
-Obsidian has proven that plain files plus a great interaction model can feel better than a traditional note database. Geode explores that same local-first direction with an open desktop codebase, a plugin runtime, and a compatibility layer for Obsidian-style plugins.
+Obsidian has proven that plain files plus a great interaction model can feel better than a traditional note database. Geode explores that same local-first direction as an open-source Obsidian alternative with a desktop codebase, a plugin runtime, and a compatibility layer for Obsidian-style plugins.
 
 Geode is not affiliated with Obsidian or Dynalist Inc. Obsidian is a trademark of its respective owner. The compatibility work in this repository is a clean-room implementation intended to help users keep their markdown vaults portable.
 

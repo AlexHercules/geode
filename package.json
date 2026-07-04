@@ -15,9 +15,15 @@
   "homepage": "https://github.com/AlexHercules/geode#readme",
   "keywords": [
     "markdown",
+    "markdown-editor",
     "notes",
+    "note-taking",
     "knowledge-base",
     "obsidian",
+    "obsidian-like",
+    "obsidian-alternative",
+    "pkm",
+    "personal-knowledge-management",
     "tauri",
     "codemirror",
     "local-first"
