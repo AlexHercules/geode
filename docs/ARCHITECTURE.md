@@ -71,6 +71,56 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 280 additions — Vault 管理器补齐 + Explorer 选中态强化·逻辑档·零新依赖【As-built·v0.273】
+
+> **状态：As-built（已交付·v0.273）。** R279 已交付，用户截图对比要求把 Geode vs Obsidian 的 vault 管理与 shell 差距记为下一轮。R203 已把「切换仓库」做到 done（最近列表 + 点击切换 + 移除 + 打开其他仓库），但 Obsidian 底栏库名点击后打开的是**管理器**，同时提供「打开/切换」「新建」「管理最近」三条路径；本轮把 `VaultSwitcherModal` 升级为 `VaultManagerModal`，补 `app:create-new-vault`（桌面 only），并保留 `switchToVault` flush-first 数据安全全序。另从 shell 差距中截取最小可闭环项：**Explorer 活动文件选中态视觉强化**（纯 CSS，让 `is-active` 更像 Obsidian 的 accent 背景高亮）。
+
+**UI/行为契约**：
+1. `app/App.tsx` 内 `VaultSwitcherModal` 改名 `VaultManagerModal`（内部组件，无导出），模态结构改为 Obsidian-style 管理器：
+   - 标题 `vaultManager.title`（"Open or manage vaults" / "打开或管理仓库"）。
+   - 最近仓库列表每行显示：左侧 vault 名 + 完整路径；右侧「打开」按钮（`data-testid="vaultmanager-open"`）和「从列表移除」按钮（`data-testid="vaultmanager-remove"`）。点击整行或「打开」均调用 `switchToVault`。
+   - 空列表时显示提示文本 `vaultManager.empty`。
+   - 底部两个按钮：「打开其他仓库」`vaultManager.openOther`（已有行为）和「新建仓库」`vaultManager.createNew`（桌面 only；浏览器隐藏）。
+2. `app:create-new-vault` 命令（桌面 only）：
+   - `available` 门控 `app.vault.adapter.kind !== "memory"`（等价 `isTauri`，浏览器不可用）。
+   - callback：调用 `app.vault.adapter.pickVaultFolder()`；若用户取消则 return；否则直接 `switchToVault(app, picked)`。
+   - 不新增 adapter API；复用 `pickVaultFolder` + `switchToVault`。
+3. 保留 `switchToVault` 的完整 flush-first 全序（`flushAll` → `lastActiveFile.set(null)` → `setVaultPath` → `LAST_VAULT_KEY` → `vault.load()` → `pushRecentVault` → `closeMissingFileTabs` → 插件重载）。唯一新增调用点是 create-new-vault 命令，它最终和 openVaultFlow 一样走 `switchToVault`。
+4. `core/i18n/dict.app.ts` 新增/重命名键：
+   - `cmd.createNewVault`（Create new vault / 新建仓库）
+   - `vaultManager.title` / `vaultManager.empty` / `vaultManager.open` / `vaultManager.openOther` / `vaultManager.remove` / `vaultManager.createNew` / `vaultManager.createNonEmptyConfirm`
+   - 原 `vaultSwitcher.*` 键全部替换为 `vaultManager.*`。
+5. `core/types.ts`：`ModalKind` 中的 `"vaultswitcher"` 改名为 `"vaultmanager"`；`app:switch-vault` 命令仍打开同一模态（id 不变，用户可见名不变）。
+6. **Explorer 选中态 CSS**：`src/features/explorer/explorer.css` 调整 `.explorer-item.is-active`：
+   - 背景改为半透明 accent（`background: hsl(from var(--accent) h s l / 18%)`），保持 `color: var(--accent)`；hover 时背景再深一点。
+   - 添加左侧 2px accent 竖线（`box-shadow: inset 2px 0 0 0 var(--accent)`），让活动文件在树中更醒目。
+   - 这是纯视觉、零逻辑、零数据安全面；仅改 CSS。
+
+**数据安全契约**：
+- `create-new-vault` 最终走 `switchToVault`，继承 R203 全序（flushAll 先于 setVaultPath，防旧库 late-save 覆盖新库；lastActiveFile 清零防同名跨库串）。
+- 「从列表移除」只调用 `removeRecentVault`，仍只写 localStorage，绝不触碰 vault 文件数据（硬边界 #3）。
+- 不新增 .md / editor / markdown / vault 写机制。
+
+**As-built 调整**：
+- 契约初稿要求用 `adapter.listTree(picked)` 检查所选目录非空并 confirm；实际 `VaultAdapter.listTree()` 无参数，无法对任意路径做空检查。**As-built 改为不检查非空**，直接 `switchToVault(picked)`——与 Obsidian「选择文件夹即作为仓库打开」语义一致，且避免新增 adapter API。
+- 新增 `vaultManager.open` 键（"Open" / "打开"），供列表项「打开」按钮使用，避免硬编码英文。
+
+**验证契约**：
+1. 新增 `.calibration/r280-e2e.mjs`：浏览器模式 13/13（模态标题/最近列表/移除/打开其他仓库/新建按钮不存在/移除后 localStorage 更新/Explorer active 态 CSS）。
+2. 回归 `r203-e2e`（21/21）与 `r237-e2e`（9/9）；已同步更新 testid 为 `vaultmanager-*`。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面 release 二进制 probe `.calibration/r280-probe.mjs` 9/9：`app:create-new-vault` 注册且可用、桌面模式「新建仓库」按钮存在、`app:switch-vault` 打开管理器模态。
+
+**文件范围**：
+- `src/app/App.tsx`（VaultManagerModal + create-new-vault 命令 + ModalKind 使用处）
+- `src/core/i18n/dict.app.ts`（键重命名/新增）
+- `src/core/types.ts`（ModalKind `"vaultmanager"`）
+- `src/features/explorer/explorer.css`（active 态样式）
+- `.calibration/r280-e2e.mjs`、`.calibration/r280-probe.mjs`
+- `.calibration/r203-e2e.mjs`、`.calibration/r237-e2e.mjs`（testid 同步更新）
+
+**分档：逻辑档**（命中数据安全红线：新增命令最终调用 `switchToVault`/`vault.load()`；新增 `create-new-vault` 控制流；diff 含 vault 切换路径与 ModalKind 枚举迁移）·**简化门：clean**（无 ≥8 行重复/无死代码/无脚手架）·**多维对抗评审：待更新**。
+
 ## Round 279 additions — 第三方插件列表设置齿轮图标·机械档·零新依赖【As-built·v0.272】
 
 > **状态：As-built（已交付·v0.272）。续表面复刻「第三方插件页结构」：Obsidian 的已安装社区插件列表会在每个「有设置页」的插件右侧显示齿轮按钮，点击直接打开该插件的设置 tab。Geode 自 R163 已支持 per-plugin 左侧设置 tab，但插件列表只有启用开关 + 卸载按钮；R279 补齿轮。**

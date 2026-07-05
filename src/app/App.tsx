@@ -1125,7 +1125,7 @@ export function App() {
       commands.register({
         id: "app:switch-vault",
         name: () => t("cmd.switchVault"),
-        callback: () => workspace.openModal("vaultswitcher"),
+        callback: () => workspace.openModal("vaultmanager"),
       }),
     );
     if (isTauri()) {
@@ -1134,6 +1134,18 @@ export function App() {
           id: "app:open-vault",
           name: () => t("cmd.openVault"),
           callback: () => void openVaultFlow(app),
+        }),
+      );
+      disposers.push(
+        commands.register({
+          id: "app:create-new-vault",
+          name: () => t("cmd.createNewVault"),
+          available: () => app.vault.adapter.kind !== "memory",
+          callback: () => void (async () => {
+            const picked = await app.vault.adapter.pickVaultFolder();
+            if (!picked) return;
+            await switchToVault(app, picked);
+          })(),
         }),
       );
     }
@@ -1492,7 +1504,7 @@ export function App() {
       {ws.modal === "workspaces" && <WorkspacesModal />}
       {ws.modal === "recovery" && <RecoveryModal />}
       {ws.modal === "slides" && <SlidesOverlay />}
-      {ws.modal === "vaultswitcher" && <VaultSwitcherModal />}
+      {ws.modal === "vaultmanager" && <VaultManagerModal />}
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />
@@ -2286,12 +2298,13 @@ function VaultPicker() {
 }
 
 /**
- * R203 (G C1): the vault switcher modal — lists recently-opened vaults; click to reopen one,
- * or open another folder. Local `useState` reflects the recents list (it has no reactive store);
- * removing a row, or a failed switch (a recent path that no longer exists), prunes it from the list.
- * Mirrors the shared modal shell (overlay-click close); Escape→closeModal is global.
+ * R280 (G C1): the vault manager modal — lists recently-opened vaults; click to open one,
+ * open another folder, or create a new vault (desktop only). Local `useState` reflects
+ * the recents list (it has no reactive store); removing a row, or a failed switch (a recent
+ * path that no longer exists), prunes it from the list. Mirrors the shared modal shell
+ * (overlay-click close); Escape→closeModal is global.
  */
-function VaultSwitcherModal() {
+function VaultManagerModal() {
   const app = useApp();
   const t = useI18n();
   const [vaults, setVaults] = useState<string[]>(() => loadRecentVaults());
@@ -2310,26 +2323,35 @@ function VaultSwitcherModal() {
     removeRecentVault(path);
     setVaults(loadRecentVaults());
   };
+  const isDesktop = app.vault.adapter.kind !== "memory";
   return (
-    <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="vaultswitcher-modal-overlay">
-      <div className="modal-panel" role="dialog" aria-label={t("vaultSwitcher.title")} data-testid="vaultswitcher-modal">
-        <div className="vaultswitcher-header">{t("vaultSwitcher.title")}</div>
+    <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="vaultmanager-modal-overlay">
+      <div className="modal-panel" role="dialog" aria-label={t("vaultManager.title")} data-testid="vaultmanager-modal">
+        <div className="vaultswitcher-header" data-testid="vaultmanager-title">{t("vaultManager.title")}</div>
         {vaults.length === 0 ? (
-          <p className="vaultswitcher-empty" data-testid="vaultswitcher-empty">
-            {t("vaultSwitcher.empty")}
+          <p className="vaultswitcher-empty" data-testid="vaultmanager-empty">
+            {t("vaultManager.empty")}
           </p>
         ) : (
           <ul className="vaultswitcher-list">
             {vaults.map((path) => (
-              <li key={path} className="vaultswitcher-item" data-testid="vaultswitcher-item">
+              <li key={path} className="vaultswitcher-item" data-testid="vaultmanager-item">
                 <button className="vaultswitcher-open" onClick={() => open(path)} title={path}>
                   <span className="vaultswitcher-name">{basename(path)}</span>
                   <span className="vaultswitcher-path">{path}</span>
                 </button>
                 <button
+                  className="vaultmanager-open"
+                  data-testid="vaultmanager-open"
+                  aria-label={t("vaultManager.open")}
+                  onClick={() => open(path)}
+                >
+                  {t("vaultManager.open")}
+                </button>
+                <button
                   className="vaultswitcher-remove"
-                  data-testid="vaultswitcher-remove"
-                  aria-label={t("vaultSwitcher.remove")}
+                  data-testid="vaultmanager-remove"
+                  aria-label={t("vaultManager.remove")}
                   onClick={() => forget(path)}
                 >
                   ✕
@@ -2338,9 +2360,16 @@ function VaultSwitcherModal() {
             ))}
           </ul>
         )}
-        <button className="btn-accent vaultswitcher-open-other" data-testid="vaultswitcher-open-other" onClick={() => { close(); void openVaultFlow(app); }}>
-          {t("vaultSwitcher.openOther")}
-        </button>
+        <div className="vaultmanager-footer">
+          <button className="vaultmanager-open-other" data-testid="vaultmanager-open-other" onClick={() => { close(); void openVaultFlow(app); }}>
+            {t("vaultManager.openOther")}
+          </button>
+          {isDesktop && (
+            <button className="btn-accent vaultmanager-create-new" data-testid="vaultmanager-create-new" onClick={() => { close(); void app.commands.execute("app:create-new-vault"); }}>
+              {t("vaultManager.createNew")}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

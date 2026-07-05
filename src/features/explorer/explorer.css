@@ -57,8 +57,14 @@
 }
 
 .explorer-item.is-active {
-  background: var(--bg-active);
+  background: hsl(from var(--accent) h s l / 18%);
   color: var(--accent);
+  box-shadow: inset 2px 0 0 0 var(--accent);
+  border-radius: 0 5px 5px 0;
+}
+
+.explorer-item.is-active:hover {
+  background: hsl(from var(--accent) h s l / 26%);
 }
 
 /* R96: excluded files (Settings → Excluded files) are dimmed but still openable */

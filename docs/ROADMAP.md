@@ -20,17 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-04 截图对比校准）
+## 下一轮候选（2026-07-05 R280 后）
 
-### R280 候选 — Vault 管理/切换器补齐 + Obsidian shell 差距复查
+### R281 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
 
-用户用两张截图对比 Geode 与 Obsidian 后，要求把本次差距记录为下一轮。已确认现状：Geode 的底栏库名是 `status-vault` 按钮，点击执行 `app:switch-vault` 打开 `VaultSwitcherModal`；R203 已有最近仓库 store、列表、点击切换、移除最近项、打开其他仓库，R237 已把底栏库名接成常驻入口。验证：`r237-e2e 9/9`、`r203-e2e 21/21` 通过。
-
-R280 应把「切换仓库」与「管理仓库」拆清楚：`切换仓库` 维持 done；`管理仓库` 改按 partial 处理。缺口是 Obsidian 式点击后能同时选择切换与管理，而 Geode 当前只做到切换器首片，缺完整管理选择（新建仓库、打开已有仓库、管理最近/已知仓库列表、启动选择或默认库等，具体以 reference/Obsidian 实测校准）。实现时必须保留 `switchToVault` 的 flush-first 数据安全全序，最近列表移除仍只删 localStorage、绝不触碰真实 vault 数据。
-
-同轮 scout 还要带上这次截图里的 shell 观感差距，优先挑可闭环的小项：顶部缺 Obsidian 面包屑/路径语境；文件树选中态、缩进密度、真实内容密度仍偏空；左 ribbon 仍有 `L/O/R` 文字占位；Markdown 列表层级、链接、缩进线、拼写红线等成熟度弱于 Obsidian；右侧日历在 Geode 中更显著、压窄主编辑区；状态栏信息已有但工作态密度仍不如 Obsidian。不要一次性吞整轮大视觉重构，先取最能被截图验证的 bounded 子项。
+R280 已完成 vault manager 与 Explorer active 态 CSS。R281 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：顶部面包屑/路径语境（编辑器 tab 或顶栏轻量面包屑）、文件树内容密度与缩进线、Markdown 阅读视图列表层级/链接/缩进线/拼写红线、状态栏工作态信息密度。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
 
 ## 已完成
+
+### R280 — v0.273（2026-07-05）Vault 管理器补齐 + Explorer 选中态强化
+
+把 R203 的 `VaultSwitcherModal` 升级为 Obsidian-style `VaultManagerModal`：标题改为「打开或管理仓库」；最近列表每项右侧增加显式「打开」和「移除」按钮；底部增加「打开其他仓库」与桌面 only 的「新建仓库」按钮。新增 `app:create-new-vault` 命令（桌面 only，复用 `pickVaultFolder` + `switchToVault`）。`ModalKind` 从 `"vaultswitcher"` 迁移为 `"vaultmanager"`，i18n 键同步迁移为 `vaultManager.*`。保留 `switchToVault` flush-first 全序（flushAll → lastActiveFile.set(null) → setVaultPath → … → vault.load() → pushRecentVault）。另从 shell 差距截取最小项：`.explorer-item.is-active` 改为半透明 accent 背景 + 左侧 accent 竖线。
+
+逻辑档、零新依赖、未新增 .md/editor/markdown/vault 写机制。简化门 clean。验证：`r280-e2e 13/13`、回归 `r203 21/21` / `r237 9/9`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过；桌面 release probe `r280-probe 9/9`。已同步更新 `r203-e2e`/`r237-e2e` 的 testid 引用。
 
 ### R279 — v0.272（2026-07-04）第三方插件列表设置齿轮图标（表面复刻 tail）
 

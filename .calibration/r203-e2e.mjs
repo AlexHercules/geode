@@ -67,21 +67,21 @@ ok("app:switch-vault registered + name resolves (not isTauri-gated)", reg.presen
 await clearRecents();
 await app(() => { window.__geodeRecentVaults.push("/Users/me/Alpha"); window.__geodeRecentVaults.push("/Users/me/Beta"); });
 await app(() => window.__app.commands.execute("app:switch-vault"));
-await page.waitForSelector('[data-testid="vaultswitcher-modal"]', { timeout: 3000 });
-let items = await page.$$eval('[data-testid="vaultswitcher-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
+await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
+let items = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
 ok("modal lists recents by basename, most-recent first ([Beta, Alpha])", JSON.stringify(items) === JSON.stringify(["Beta", "Alpha"]), JSON.stringify(items));
-const paths = await page.$$eval('[data-testid="vaultswitcher-item"] .vaultswitcher-path', (els) => els.map((e) => e.textContent));
+const paths = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-path', (els) => els.map((e) => e.textContent));
 ok("modal shows full paths too", paths.includes("/Users/me/Beta") && paths.includes("/Users/me/Alpha"), JSON.stringify(paths));
-ok("'Open another vault' button present", (await page.$('[data-testid="vaultswitcher-open-other"]')) !== null);
+ok("'Open another vault' button present", (await page.$('[data-testid="vaultmanager-open-other"]')) !== null);
 await app(() => window.__app.workspace.closeModal());
 await wait(80);
 
 // empty state
 await clearRecents();
 await app(() => window.__app.commands.execute("app:switch-vault"));
-await page.waitForSelector('[data-testid="vaultswitcher-modal"]', { timeout: 3000 });
-ok("empty recents → empty-state message", (await page.$('[data-testid="vaultswitcher-empty"]')) !== null);
-ok("empty recents → no items", (await page.$$('[data-testid="vaultswitcher-item"]')).length === 0);
+await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
+ok("empty recents → empty-state message", (await page.$('[data-testid="vaultmanager-empty"]')) !== null);
+ok("empty recents → no items", (await page.$$('[data-testid="vaultmanager-item"]')).length === 0);
 await app(() => window.__app.workspace.closeModal());
 await wait(80);
 
@@ -90,10 +90,10 @@ await app(async () => { try { await window.__app.vault.create("r203-keep.md", "k
 await clearRecents();
 await app(() => { window.__geodeRecentVaults.push("/Users/me/Alpha"); window.__geodeRecentVaults.push("/Users/me/Beta"); });
 await app(() => window.__app.commands.execute("app:switch-vault"));
-await page.waitForSelector('[data-testid="vaultswitcher-modal"]', { timeout: 3000 });
-await page.click('[data-testid="vaultswitcher-item"] [data-testid="vaultswitcher-remove"]'); // removes the first (Beta)
+await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
+await page.click('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-remove"]'); // removes the first (Beta)
 await wait(120);
-items = await page.$$eval('[data-testid="vaultswitcher-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
+items = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
 ok("remove button drops the row (only Alpha remains)", JSON.stringify(items) === JSON.stringify(["Alpha"]), JSON.stringify(items));
 ok("localStorage updated (Beta gone)", !(await load()).includes("/Users/me/Beta"));
 ok("硬边界#3: removing a recent does NOT delete vault data (r203-keep.md intact)", await app(() => window.__app.vault.fileExists("r203-keep.md")));
@@ -104,14 +104,14 @@ console.log("D. click a recent → switch flow runs + reorders recents to front 
 await clearRecents();
 await app(() => { window.__geodeRecentVaults.push("/Users/me/Gamma"); window.__geodeRecentVaults.push("/Users/me/Delta"); }); // recents [Delta, Gamma]
 await app(() => window.__app.commands.execute("app:switch-vault"));
-await page.waitForSelector('[data-testid="vaultswitcher-modal"]', { timeout: 3000 });
+await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
 // click the OLDER row (Gamma, 2nd) → switchToVault must push it to the front and retain Delta
-await page.$$eval('[data-testid="vaultswitcher-item"]', (items) => {
+await page.$$eval('[data-testid="vaultmanager-item"]', (items) => {
   const it = items.find((el) => el.querySelector(".vaultswitcher-name")?.textContent === "Gamma");
   it?.querySelector(".vaultswitcher-open")?.click();
 });
 await wait(250);
-ok("click closes the modal", (await app(() => document.querySelector('[data-testid="vaultswitcher-modal"]') === null)));
+ok("click closes the modal", (await app(() => document.querySelector('[data-testid="vaultmanager-modal"]') === null)));
 ok("click ran switchToVault → clicked (Gamma) moved to recents front, Delta retained ([Gamma, Delta])", JSON.stringify(await load()) === JSON.stringify(["/Users/me/Gamma", "/Users/me/Delta"]), JSON.stringify(await load()));
 ok("vault still functional after switch flow (r203-keep.md intact)", await app(() => window.__app.vault.fileExists("r203-keep.md")));
 

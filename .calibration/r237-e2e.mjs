@@ -43,8 +43,8 @@ console.log("— clicking it opens the vault switcher modal —");
 ok("no modal open initially", (await modal()) === null);
 await page.click('[data-testid="status-vault"]');
 await wait(120);
-ok("clicking the vault name opens the vault switcher", (await modal()) === "vaultswitcher");
-ok("the vault switcher modal is in the DOM", await app(() => !!document.querySelector('[data-testid="vaultswitcher-modal"]')));
+ok("clicking the vault name opens the vault switcher", (await modal()) === "vaultmanager");
+ok("the vault switcher modal is in the DOM", await app(() => !!document.querySelector('[data-testid="vaultmanager-modal"]')));
 
 console.log("— the modal closes (and the entry still works a second time) —");
 await app(() => window.__app.workspace.closeModal());
@@ -52,7 +52,7 @@ await wait(80);
 ok("modal closed", (await modal()) === null);
 await page.click('[data-testid="status-vault"]');
 await wait(120);
-ok("the vault name re-opens the switcher (idempotent entry)", (await modal()) === "vaultswitcher");
+ok("the vault name re-opens the switcher (idempotent entry)", (await modal()) === "vaultmanager");
 await app(() => window.__app.workspace.closeModal());
 
 ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
