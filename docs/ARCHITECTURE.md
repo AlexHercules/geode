@@ -119,7 +119,7 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 - `.calibration/r280-e2e.mjs`、`.calibration/r280-probe.mjs`
 - `.calibration/r203-e2e.mjs`、`.calibration/r237-e2e.mjs`（testid 同步更新）
 
-**分档：逻辑档**（命中数据安全红线：新增命令最终调用 `switchToVault`/`vault.load()`；新增 `create-new-vault` 控制流；diff 含 vault 切换路径与 ModalKind 枚举迁移）·**简化门：clean**（无 ≥8 行重复/无死代码/无脚手架）·**多维对抗评审：待更新**。
+**分档：逻辑档**（命中数据安全红线：新增命令最终调用 `switchToVault`/`vault.load()`；新增 `create-new-vault` 控制流；diff 含 vault 切换路径与 ModalKind 枚举迁移）·**简化门：clean**（无 ≥8 行重复/无死代码/无脚手架）·**多维对抗评审：0 confirmed**（data-safety lens 确认 switchToVault 全序未变、remove 只写 localStorage；fidelity lens 确认浏览器隐藏新建按钮、桌面命令可用；wiring lens 确认 i18n en+zh、testid 一致、命令 dispose 在 useEffect cleanup；CSS lens 确认 is-active 不影响 is-selected）。
 
 ## Round 279 additions — 第三方插件列表设置齿轮图标·机械档·零新依赖【As-built·v0.272】
 
