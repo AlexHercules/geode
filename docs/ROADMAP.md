@@ -20,13 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-05 R281 后）
+## 下一轮候选（2026-07-05 R282 后）
 
-### R282 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
+### R283 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
 
-R281 已完成阅读视图列表缩进线与文件树密度微调。R282 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：顶部面包屑/路径语境（编辑器 tab 或顶栏轻量面包屑）、Markdown 阅读视图链接样式/拼写红线、状态栏工作态信息密度。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
+R282 已完成 EditorPane 顶部面包屑路径。R283 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：Markdown 阅读视图链接样式/拼写红线、状态栏工作态信息密度。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
 
 ## 已完成
+
+### R282 — v0.275（2026-07-05）EditorPane 顶部只读面包屑路径
+
+从 2026-07-04 截图对比的 shell 差距中取「顶部缺 Obsidian 面包屑/路径语境」。在 `EditorPane` 的 `.editor-header` 内、`.editor-title` 上方增加 `.editor-breadcrumbs` 条：显示当前文件相对 vault root 的路径分段，用 `›` 分隔；最后一段（文件名）去掉 `.md` 扩展名并以普通文本色高亮，前面文件夹段用 `--text-muted`。只读展示，零交互，零 vault 写。
+
+逻辑档、零新依赖、未碰 .md/editor/vault/文件 IO 写路径。简化门 clean。验证：`r282-e2e 7/7`、回归 `r281 6/6` / `r280 13/13` / `r203 21/21` / `r237 9/9`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过。桌面按 by-equivalence（纯展示）。
 
 ### R281 — v0.274（2026-07-05）Markdown 阅读视图列表缩进线 + 文件树密度微调
 

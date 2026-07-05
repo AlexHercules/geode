@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Compartment } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
@@ -1241,6 +1241,26 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
       data-leaf-path={tab.filePath ?? undefined}
     >
       <div className="editor-header">
+        {tab.filePath && (() => {
+          const segments = tab.filePath.split("/");
+          const lastIndex = segments.length - 1;
+          segments[lastIndex] = segments[lastIndex].replace(/\.md$/i, "");
+          return (
+            <div className="editor-breadcrumbs" data-testid="editor-breadcrumbs">
+              {segments.map((seg, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span className="sep">›</span>}
+                  <span
+                    className={i === lastIndex ? "tail" : ""}
+                    data-testid="editor-breadcrumb-segment"
+                  >
+                    {seg}
+                  </span>
+                </React.Fragment>
+              ))}
+            </div>
+          );
+        })()}
         <div className="editor-title" title={tab.filePath ?? undefined}>
           {tab.title}
         </div>

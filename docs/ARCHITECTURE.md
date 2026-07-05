@@ -71,6 +71,40 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 282 additions — EditorPane 顶部只读面包屑路径·逻辑档·零新依赖【As-built·v0.275】
+
+> **状态：As-built（已交付·v0.275）。** R281 已交付阅读视图列表缩进线与文件树密度微调。R282 继续从 2026-07-04 截图对比的 shell 差距中取 bounded 子项：顶部缺 Obsidian 面包屑/路径语境。本轮在 `EditorPane` 顶栏增加一条**只读面包屑**，显示当前文件在 vault 内的相对路径分段，用 `›` 分隔，解决"打开文件后看不到自己在哪"的语境缺失。保持零交互、零 vault 写、零新依赖。
+
+**UI/行为契约**：
+1. `src/features/editor/EditorPane.tsx`：
+   - 在 `.editor-header` 内、`.editor-title` 上方渲染一个 `.editor-breadcrumbs` 条。
+   - 仅当 `tab.filePath` 非空时显示；空文件/新标签不显示。
+   - 面包屑内容是 `tab.filePath` 按 `/` 拆分后的相对路径段（vault root 为基准），最后一段即文件名（与 `tab.title` 一致）。
+   - 段之间用 `›`（U+203A）分隔，最后一段使用普通文本色，前面各段使用 `--text-muted`。
+   - 只读展示，**不实现点击导航**（保持 bounded；后续可扩展）。
+   - 添加 `data-testid="editor-breadcrumbs"`，每一小段 `data-testid="editor-breadcrumb-segment"`。
+2. `src/features/editor/editor.css`：
+   - 新增 `.editor-breadcrumbs`：小字号（`0.85em`）、`color: var(--text-muted)`、与 title 保持适当间距（`margin-bottom: 2px`）。
+   - `.editor-breadcrumbs .sep`：左右小 padding，颜色同 muted。
+   - `.editor-breadcrumbs .tail`：颜色 `var(--text-normal)`，表示当前文件。
+3. 无 TypeScript / store / i18n / types 改动；不新增运行时依赖。
+
+**数据安全契约**：
+- 纯展示组件，只读 `tab.filePath` / `tab.title`，不新增任何 .md / editor / vault / 文件 IO 写路径。
+
+**验证契约**：
+1. 新增 `.calibration/r282-e2e.mjs`：浏览器模式 7/7（创建 `folder/nested/r282-test.md` 后打开，断言 `.editor-breadcrumbs` 存在、三段分别为 `folder`/`nested`/`r282-test`、分隔符 `›` 存在、无 page errors）。
+2. 回归 `r281-e2e`（6/6）与 `r280-e2e`（13/13）/`r203-e2e`（21/21）/`r237-e2e`（9/9）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面按 by-equivalence（纯展示，无 Rust/FS 新路径）。
+
+**文件范围**：
+- `src/features/editor/EditorPane.tsx`
+- `src/features/editor/editor.css`
+- `.calibration/r282-e2e.mjs`
+
+**分档：逻辑档**（新增 React 渲染逻辑与路径 split，但未碰数据安全面；非纯 CSS，故不是机械档）·**简化门：clean**（无死代码/脚手架/重复/冗余间接）·**多维对抗评审：待更新**。
+
 ## Round 281 additions — Markdown 阅读视图列表缩进线 + 文件树密度微调·机械档·零新依赖【As-built·v0.274】
 
 > **状态：As-built（已交付·v0.274）。** R280 已交付 vault manager 与 Explorer active 态 CSS。R281 继续从 2026-07-04 截图对比的 shell 差距中取最小可闭环子项：① Markdown 阅读视图列表增加左侧缩进引导线（list guide lines），让嵌套列表层级更像 Obsidian；② 文件树 item 密度微调（更紧凑），减少偏空感。两者均为纯 CSS，零逻辑，零数据安全面。
