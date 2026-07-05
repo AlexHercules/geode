@@ -71,6 +71,43 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 283 additions — Markdown 阅读视图链接样式 + 拼写检查默认 ON + 状态栏信息密度·CSS/默认翻转·零新依赖
+
+> **状态：As-built（已交付·v0.276）。** R283 继续补齐 2026-07-04 截图对比的 shell 差距，取 2 个 bounded 子项：① Markdown 阅读视图链接样式成熟度（internal/external/unresolved 区分，Obsidian 风格）；② 拼写检查默认 ON（匹配 Obsidian Editor 默认，让红毛线默认出场）；③ 状态栏工作态信息密度（更紧凑的间距）。全部为零新依赖的表面/默认调整。
+
+**UI/行为契约**：
+1. `src/features/editor/editor.css`：
+   - `.preview-content a.internal-link`：颜色 `var(--accent)`，无下划线；hover 显示下划线。
+   - `.preview-content a.internal-link.is-unresolved`：颜色 `var(--link-unresolved)`，下划线为 `dashed`（Obsidian 未解析链接风格）。
+   - `.preview-content a.external-link`：颜色 `var(--accent)`，默认 `underline`（外部链接可辨识度）。
+   - `.preview-content a.footnote-backref`：保持无下划线、muted 色，避免与正文链接混淆。
+   - 保留兜底 `.preview-content a`（accent + hover underline），覆盖脚注引用/TOC 等无 class 锚点。
+2. `src/core/appearance.ts`：
+   - `spellcheckEnabled` 默认值由 `false` 翻为 `true`（Obsidian Editor 默认 ON）。
+   - 仅改默认值，不改动 setter/持久化键/命令/UI；现有用户若已存 localStorage 则保持其选择。
+3. `src/styles/app.css`：
+   - `.status-bar`：`gap` 由 14px 降至 8px，`padding` 由 `0 12px` 降至 `0 10px`，在不缩小字号的前提下提升信息密度。
+   - `.status-item`：增加左右 `padding: 0 4px`，保证紧凑后的点击/视觉呼吸感。
+
+**数据安全契约**：
+- 纯 CSS/默认翻转，不新增任何 .md / editor / vault / 文件 IO 写路径；spellcheck 仅控制浏览器原生 `spellcheck` DOM 属性。
+
+**验证契约**：
+1. 新增 `.calibration/r283-e2e.mjs`：浏览器模式 7/7 断言——internal/external/unresolved 链接的 `text-decoration`/`color` 计算样式、status bar `gap`/`padding` 计算样式、默认 spellcheck 为 `true`。
+2. 回归：`r50-e2e`（拼写默认 ON 断言更新）、`r185-e2e`（默认更新）、`r66-e2e`（status bar 文本不变）、`r100-e2e`（status bar 显隐不变）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面按 by-equivalence（纯 CSS/默认属性，无 Rust/FS 新路径）。
+
+**文件范围**：
+- `src/features/editor/editor.css`
+- `src/core/appearance.ts`
+- `src/styles/app.css`
+- `.calibration/r283-e2e.mjs`
+- `.calibration/r50-e2e.mjs`（更新默认断言）
+- `.calibration/r185-e2e.mjs`（更新默认断言）
+
+**分档：机械档为主**（CSS 调整 + 默认值翻转，未新增控制流/未碰数据安全面；仅测试断言跟随默认翻转）·**简化门：clean**（无 ≥8 行重复/无死代码/无脚手架）·**评审：3 处 stale 注释已修，0 逻辑缺陷**。
+
 ## Round 282 additions — EditorPane 顶部只读面包屑路径·逻辑档·零新依赖【As-built·v0.275】
 
 > **状态：As-built（已交付·v0.275）。** R281 已交付阅读视图列表缩进线与文件树密度微调。R282 继续从 2026-07-04 截图对比的 shell 差距中取 bounded 子项：顶部缺 Obsidian 面包屑/路径语境。本轮在 `EditorPane` 顶栏增加一条**只读面包屑**，显示当前文件在 vault 内的相对路径分段，用 `›` 分隔，解决"打开文件后看不到自己在哪"的语境缺失。保持零交互、零 vault 写、零新依赖。
