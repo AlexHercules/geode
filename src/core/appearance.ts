@@ -2,8 +2,8 @@
  * R50 Appearance settings — readable line length + editor spellcheck (#⑲).
  * Mirrors the localStorage-backed Store + setter pattern (autoUpdateLinks /
  * templateFolder / dailyNoteFolder). App-level zoom reuses workspace.fontSize
- * (commands in App.tsx). Defaults preserve the prior behavior (readable line ON =
- * the existing 46em cap; spellcheck OFF).
+ * (commands in App.tsx). Defaults: readable line ON = the existing 46em cap;
+ * spellcheck ON = Obsidian default).
  */
 import { Store } from "./store";
 import type { ExplorerSortKey } from "./vault";
@@ -50,9 +50,9 @@ export function setReadableLineLength(on: boolean): void {
   applyReadableLineLength(on);
 }
 
-/** Editor spellcheck (browser squiggles on the CM contentDOM). Default OFF (prior
- *  behavior). EditorPane applies it per-view reactively via useStore. */
-export const spellcheckEnabled = new Store<boolean>(readBool(SPELLCHECK_KEY, false));
+/** Editor spellcheck (browser squiggles on the CM contentDOM). Default ON
+ *  (Obsidian default). EditorPane applies it per-view reactively via useStore. */
+export const spellcheckEnabled = new Store<boolean>(readBool(SPELLCHECK_KEY, true));
 
 export function setSpellcheckEnabled(on: boolean): void {
   spellcheckEnabled.set(on);

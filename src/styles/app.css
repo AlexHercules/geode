@@ -727,8 +727,8 @@ textarea:focus {
   height: 26px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 12px;
+  gap: 8px;
+  padding: 0 10px;
   background: var(--bg-panel);
   border-top: 1px solid var(--border);
   font-size: 12px;
@@ -742,6 +742,7 @@ textarea:focus {
 
 .status-item {
   white-space: nowrap;
+  padding: 0 4px;
 }
 
 /* R237: the vault name is a button (opens the vault switcher) — strip the native

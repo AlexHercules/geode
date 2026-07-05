@@ -892,8 +892,34 @@ iframe.geode-embed-pdf {
   text-decoration: underline;
 }
 
+/* R283: Obsidian-style reading-view link distinctions. */
+.preview-content a.internal-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.preview-content a.internal-link:hover {
+  text-decoration: underline;
+}
+
 .preview-content a.internal-link.is-unresolved {
   color: var(--link-unresolved);
+  text-decoration: underline;
+  text-decoration-style: dashed;
+}
+
+.preview-content a.external-link {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.preview-content a.external-link:hover {
+  color: var(--accent-hover);
+}
+
+.preview-content a.footnote-backref {
+  color: var(--text-muted);
+  text-decoration: none;
 }
 
 .preview-content .tag-pill {

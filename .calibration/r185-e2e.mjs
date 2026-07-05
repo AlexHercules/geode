@@ -41,7 +41,7 @@ const ls = (k) => app(([key]) => localStorage.getItem(key), [k]);
 const TOGGLES = [
   { id: "editor:toggle-line-numbers", key: "geode.showLineNumbers", def: false },
   { id: "editor:toggle-readable-line-length", key: "geode.readableLineLength", def: true },
-  { id: "editor:toggle-spellcheck", key: "geode.spellcheck", def: false },
+  { id: "editor:toggle-spellcheck", key: "geode.spellcheck", def: true },
   { id: "app:toggle-ribbon", key: "geode.showRibbon", def: true },
 ];
 const valOf = (raw, def) => (raw === null ? def : raw === "true");

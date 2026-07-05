@@ -62,13 +62,13 @@ await wait(200);
 
 // ── B. spellcheck (contentDOM) ───────────────────────────────────────────────
 console.log("B. editor spellcheck");
-ok("spellcheck off by default (contentDOM)", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "false");
-await app(() => window.__geodeAppearance.setSpellcheck(true));
-await wait(150);
-ok("setSpellcheck(true) → contentDOM spellcheck=true", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "true", JSON.stringify(await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))));
+ok("spellcheck on by default (contentDOM)", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "true");
 await app(() => window.__geodeAppearance.setSpellcheck(false));
 await wait(150);
 ok("setSpellcheck(false) → contentDOM spellcheck=false", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "false");
+await app(() => window.__geodeAppearance.setSpellcheck(true));
+await wait(150);
+ok("setSpellcheck(true) → contentDOM spellcheck=true", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "true", JSON.stringify(await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))));
 
 // ── C. app zoom commands ─────────────────────────────────────────────────────
 console.log("C. app zoom commands");
@@ -98,13 +98,20 @@ ok("settings readable toggle flips the setting (→ none)", (await app(() => win
 await app(() => document.querySelector("[data-testid=settings-readable-toggle]")?.click());
 await wait(120);
 ok("settings readable toggle flips back (→ default)", (await app(() => window.__geodeAppearance.readableVar())) === "(default)");
+// default ON → first click disables spellcheck
 await app(() => document.querySelector("[data-testid=settings-spellcheck-toggle]")?.click());
 await wait(120);
 await app(() => window.__app.workspace.closeModal());
 await wait(120);
-ok("settings spellcheck toggle enables spellcheck on the editor", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "true");
-// reset
-await app(() => window.__geodeAppearance.setSpellcheck(false));
+ok("settings spellcheck toggle disables spellcheck on the editor", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "false");
+await app(() => window.__app.workspace.openModal("settings"));
+await page.click('[data-testid="settings-nav-editor"]');
+await wait(80);
+await app(() => document.querySelector("[data-testid=settings-spellcheck-toggle]")?.click());
+await wait(120);
+await app(() => window.__app.workspace.closeModal());
+await wait(120);
+ok("settings spellcheck toggle re-enables spellcheck on the editor", (await app(() => document.querySelector(".cm-content")?.getAttribute("spellcheck"))) === "true");
 
 console.log(`\nR50 E2E: ${passed} passed, ${failed} failed`);
 if (failed) console.log("FAILED:", fails.join(", "));
