@@ -20,13 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-05 R280 后）
+## 下一轮候选（2026-07-05 R281 后）
 
-### R281 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
+### R282 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
 
-R280 已完成 vault manager 与 Explorer active 态 CSS。R281 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：顶部面包屑/路径语境（编辑器 tab 或顶栏轻量面包屑）、文件树内容密度与缩进线、Markdown 阅读视图列表层级/链接/缩进线/拼写红线、状态栏工作态信息密度。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
+R281 已完成阅读视图列表缩进线与文件树密度微调。R282 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：顶部面包屑/路径语境（编辑器 tab 或顶栏轻量面包屑）、Markdown 阅读视图链接样式/拼写红线、状态栏工作态信息密度。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
 
 ## 已完成
+
+### R281 — v0.274（2026-07-05）Markdown 阅读视图列表缩进线 + 文件树密度微调
+
+从 2026-07-04 截图对比的 shell 差距中取两个纯 CSS bounded 子项：① 给 `.preview-content ul/ol` 增加左侧 `::before` 缩进引导线（1px `var(--border)`），让嵌套列表层级更像 Obsidian；② 调紧文件树 item 密度（height 26→24px、gap 4→3px、padding-right 6→4px、border-radius 5→4px）。
+
+机械档、零新依赖、零逻辑、零数据安全面。简化门：机械档跳过；scoped review 0 confirmed。验证：`r281-e2e 6/6`、回归 `r280 13/13` / `r203 21/21` / `r237 9/9`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过。桌面按 by-equivalence（纯 CSS）。
 
 ### R280 — v0.273（2026-07-05）Vault 管理器补齐 + Explorer 选中态强化
 

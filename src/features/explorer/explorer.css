@@ -31,10 +31,10 @@
 .explorer-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding-right: 6px;
-  border-radius: 5px;
+  gap: 3px;
+  height: 24px;
+  padding-right: 4px;
+  border-radius: 4px;
   font-size: 13px;
   color: var(--text-muted);
   cursor: pointer;
@@ -60,7 +60,7 @@
   background: hsl(from var(--accent) h s l / 18%);
   color: var(--accent);
   box-shadow: inset 2px 0 0 0 var(--accent);
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 4px 4px 0;
 }
 
 .explorer-item.is-active:hover {

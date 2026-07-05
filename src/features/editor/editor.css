@@ -609,6 +609,18 @@ iframe.geode-embed-pdf.cm-live-embed {
 .preview-content ol {
   margin: 0.4em 0;
   padding-left: 1.6em;
+  position: relative;
+}
+
+.preview-content ul::before,
+.preview-content ol::before {
+  content: "";
+  position: absolute;
+  left: 0.8em;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
 }
 
 .preview-content li {

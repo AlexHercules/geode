@@ -71,6 +71,38 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 281 additions — Markdown 阅读视图列表缩进线 + 文件树密度微调·机械档·零新依赖【As-built·v0.274】
+
+> **状态：As-built（已交付·v0.274）。** R280 已交付 vault manager 与 Explorer active 态 CSS。R281 继续从 2026-07-04 截图对比的 shell 差距中取最小可闭环子项：① Markdown 阅读视图列表增加左侧缩进引导线（list guide lines），让嵌套列表层级更像 Obsidian；② 文件树 item 密度微调（更紧凑），减少偏空感。两者均为纯 CSS，零逻辑，零数据安全面。
+
+**UI 契约**：
+1. **阅读视图列表缩进线**（`src/features/editor/editor.css`）：
+   - 给 `.preview-content ul` 与 `.preview-content ol` 添加左侧竖线引导线。
+   - 实现方式：在 ul/ol 上设置 `position: relative`，并用 `::before` 伪元素画一条 `1px` 宽、`var(--border)` 色的竖线，从第一个 list item 顶部对齐到最后一个 list item 底部。
+   - 竖线水平位置与列表 marker 对齐（约 `padding-left` 的一半，即 `0.8em` 处）。
+   - 仅影响阅读视图渲染，不动 `core/markdown.ts` 字节管线。
+2. **文件树密度微调**（`src/features/explorer/explorer.css`）：
+   - `.explorer-item`：`height` 从 `26px` 改为 `24px`；`gap` 从 `4px` 改为 `3px`；`padding-right` 从 `6px` 改为 `4px`；`border-radius` 从 `5px` 改为 `4px`。
+   - `.explorer-chevron` 保持 `15px`，但可适当缩小（契约不强制）。
+   - 目标：item 更紧凑、减少空白，更接近 Obsidian 文件树密度。
+3. 无 TypeScript / store / i18n / types 改动。
+
+**数据安全契约**：
+- 纯 CSS，不新增任何 .md / editor / vault / 文件 IO 写路径。
+
+**验证契约**：
+1. 新增 `.calibration/r281-e2e.mjs`：浏览器模式 6/6（嵌套列表阅读视图 `::before` guide line 宽度 1px 且可见；`.explorer-item` 高度 ≤ 24px；无 page errors）。
+2. 回归 `r280-e2e`（13/13）与 `r203-e2e`（21/21）/`r237-e2e`（9/9）——Explorer 样式改动不影响 vault manager。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面按 by-equivalence（纯 CSS，无 Rust/FS 新路径）。
+
+**文件范围**：
+- `src/features/editor/editor.css`
+- `src/features/explorer/explorer.css`
+- `.calibration/r281-e2e.mjs`
+
+**分档：机械档**（纯 CSS/视觉调整，无新逻辑/状态/算法，未碰数据安全面）·**简化门：机械档跳过**·**scoped review：0 confirmed**（无新 data-testid/图标/i18n 键，纯样式属性调整）。
+
 ## Round 280 additions — Vault 管理器补齐 + Explorer 选中态强化·逻辑档·零新依赖【As-built·v0.273】
 
 > **状态：As-built（已交付·v0.273）。** R279 已交付，用户截图对比要求把 Geode vs Obsidian 的 vault 管理与 shell 差距记为下一轮。R203 已把「切换仓库」做到 done（最近列表 + 点击切换 + 移除 + 打开其他仓库），但 Obsidian 底栏库名点击后打开的是**管理器**，同时提供「打开/切换」「新建」「管理最近」三条路径；本轮把 `VaultSwitcherModal` 升级为 `VaultManagerModal`，补 `app:create-new-vault`（桌面 only），并保留 `switchToVault` flush-first 数据安全全序。另从 shell 差距中截取最小可闭环项：**Explorer 活动文件选中态视觉强化**（纯 CSS，让 `is-active` 更像 Obsidian 的 accent 背景高亮）。
