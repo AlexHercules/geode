@@ -22,11 +22,17 @@ shim 建立其上。
 
 ## 下一轮候选（2026-07-05 R283 后）
 
-### R285 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
+### R286 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
 
-R284 已完成右侧日历默认显著性、主编辑区宽度对齐。R285 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：ribbon 文字占位 L/O/R、主编辑区其他细节（如滚动条/空态/inline-title 字重等）。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
+R285 已完成滚动条、inline-title 字号对齐。R286 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：ribbon 文字占位 L/O/R、主编辑区其他细节（如空态/滚动条内边距/inline-title 行高等）。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
 
 ## 已完成
+
+### R285 — v0.278（2026-07-07）滚动条 + inline-title 字号对齐 Obsidian
+
+从 2026-07-04 截图对比的 shell 差距中取 2 个 bounded 子项：① 全应用滚动条样式对齐 Obsidian——新增 `--scrollbar-*` 主题变量、滚动条宽度由 10px 改为 12px、thumb 增加 `min-height: 45px` 与 `background-clip: padding-box` 透明间隙、补 hover/active 态及 Firefox `scrollbar-color`；② inline-title 字号由 `1.9em` 改为 `calc(var(--editor-font-size) * 1.8)`，匹配 Obsidian `--h1-size: 1.802em`，字重保持 700。
+
+机械档、零新依赖、未碰 .md/editor/vault/文件 IO 写路径。简化门：机械档跳过。scoped review 1 处 minor 覆盖缺口已补（`r285-e2e` 增加 dark/light 滚动条颜色差异断言）。验证：`r285-e2e 11/11`、回归 `r284 8/8` / `r282 7/7` / `r50 16/16` / `r160 24/24`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过。桌面按 by-equivalence（纯 CSS，无 Rust/FS 新路径）。
 
 ### R284 — v0.277（2026-07-06）右侧日历默认显著性 + 主编辑区宽度对齐 Obsidian
 

@@ -143,6 +143,41 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（默认值翻转 + CSS fallback 常量替换，无新增控制流/无数据安全面）·**简化门：机械档跳过**·**评审：1 处 stale 标签已修（`r50-probe` 测试文案 46em→700px），0 逻辑缺陷**。
 
+## Round 285 additions — 滚动条 + inline-title 字号对齐 Obsidian·机械档·零新依赖
+
+> **状态：As-built（已交付·v0.278）。** R285 继续从 2026-07-04 截图对比的 shell 差距中取 bounded 子项：① 全应用滚动条样式对齐 Obsidian（宽度/圆角/hover/active 色）；② inline-title 字号由 1.9em 改为 `calc(var(--editor-font-size) * 1.8)`，匹配 Obsidian 默认主题 `--h1-size: 1.802em`。全部为零新依赖的纯 CSS 调整。
+
+**UI/行为契约**：
+1. `src/styles/app.css`：
+   - 新增主题变量：`--scrollbar-bg`（透明）、`--scrollbar-thumb-bg`（`var(--border-strong)`）、`--scrollbar-active-thumb-bg`（`var(--text-muted)`），在 dark/light 两段分别定义，保证深浅主题都有合适对比。
+   - 更新全局 `::-webkit-scrollbar` 规则：
+     - `width`/`height` 由 `10px` 改为 `12px`。
+     - thumb 增加 `min-height: 45px`。
+     - thumb border 改为 `3px 3px 3px 2px solid transparent`，`background-clip: padding-box`（Obsidian 风格，thumb 与轨道间留出透明间隙）。
+     - 新增 `::-webkit-scrollbar-thumb:hover` 使用 `--scrollbar-active-thumb-bg`。
+     - 新增 `::-webkit-scrollbar-thumb:active` 同样使用 active 色。
+     - track 保持透明。
+   - 为 Firefox 增加 `html { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg); }`（使用 `:root` 变量，非 WebKit 引擎也能获得近似细滚动条）。
+2. `src/features/editor/editor.css`：
+   - `.inline-title` 的 `font-size` 由 `1.9em` 改为 `calc(var(--editor-font-size) * 1.8)`（匹配 Obsidian `--h1-size: 1.802em` 的 editor-relative 语义）；`font-weight` 保持 `700`（与 Obsidian `--h1-weight: 700` 一致）。
+   - 其余 `line-height`/`padding`/`color` 不变。
+
+**数据安全契约**：
+- 纯 CSS 调整，不新增任何 .md / editor / vault / 文件 IO 写路径；不影响自动保存/重命名/外部修改等逻辑。
+
+**验证契约**：
+1. 新增 `.calibration/r285-e2e.mjs`：浏览器模式断言——① WebKit 滚动条 thumb 宽度为 `12px`、最小高度 `45px`、hover 态背景色为 `--text-muted` 计算值；② `.inline-title` 计算 `font-size` 为 `28.8px`（16px×1.8em）且 `font-weight` 为 `700`；③ dark/light 主题下滚动条颜色有差异（深浅均存在）。
+2. 回归：`r284-e2e`（右栏默认/宽度不回退）、`r282-e2e`（面包屑存在且 inline-title 字号变化后布局仍正常）、`r50-e2e`（reading view properties 对齐宽度）、`r160-e2e`（sidebar 显隐/切换正常）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面按 by-equivalence（纯 CSS，无 Rust/FS 新路径）。
+
+**文件范围**：
+- `src/styles/app.css`
+- `src/features/editor/editor.css`
+- `.calibration/r285-e2e.mjs`
+
+**分档：机械档**（纯 CSS 常量与变量调整，无新增控制流/无数据安全面）·**简化门：机械档跳过**·**评审：1 处 minor 覆盖缺口已补（r285-e2e 增加 dark/light 滚动条颜色差异断言），0 逻辑缺陷**。
+
 ## Round 282 additions — EditorPane 顶部只读面包屑路径·逻辑档·零新依赖【As-built·v0.275】
 
 > **状态：As-built（已交付·v0.275）。** R281 已交付阅读视图列表缩进线与文件树密度微调。R282 继续从 2026-07-04 截图对比的 shell 差距中取 bounded 子项：顶部缺 Obsidian 面包屑/路径语境。本轮在 `EditorPane` 顶栏增加一条**只读面包屑**，显示当前文件在 vault 内的相对路径分段，用 `›` 分隔，解决"打开文件后看不到自己在哪"的语境缺失。保持零交互、零 vault 写、零新依赖。
