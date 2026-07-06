@@ -129,7 +129,8 @@
   max-width: var(--readable-line-width, 700px);
   margin: 0 auto;
   padding: 28px 32px 0;
-  font-size: 1.9em;
+  /* R285: match Obsidian --h1-size (1.802em) relative to --editor-font-size */
+  font-size: calc(var(--editor-font-size) * 1.8);
   font-weight: 700;
   line-height: 1.25;
   color: var(--text-normal);

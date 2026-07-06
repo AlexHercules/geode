@@ -30,6 +30,9 @@ html[data-theme="dark"] {
   --selection: rgba(139, 124, 246, 0.3);
   --danger: #e06c75;
   --editor-font-size: 16px;
+  --scrollbar-bg: transparent;
+  --scrollbar-thumb-bg: var(--border-strong);
+  --scrollbar-active-thumb-bg: var(--text-muted);
   /* R18: ==highlight== background (dark) */
   --text-highlight-bg: rgba(255, 208, 0, 0.22);
   /* R18: callout palette — frozen rgb triplets, same values in both themes */
@@ -73,6 +76,9 @@ html[data-theme="light"] {
   --code-bg: rgba(0, 0, 0, 0.05);
   --selection: rgba(108, 92, 231, 0.25);
   --danger: #d04848;
+  --scrollbar-bg: transparent;
+  --scrollbar-thumb-bg: var(--border-strong);
+  --scrollbar-active-thumb-bg: var(--text-muted);
   /* R18: ==highlight== background (light); callout triplets inherit :root */
   --text-highlight-bg: rgba(255, 208, 0, 0.35);
   color-scheme: light;
@@ -133,18 +139,32 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+/* R285: Obsidian-style scrollbars — wider thumb, transparent track, hover/active states */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 5px;
-  border: 2px solid transparent;
-  background-clip: content-box;
+  background: var(--scrollbar-thumb-bg);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  border-left-width: 2px;
+  background-clip: padding-box;
+  min-height: 45px;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-active-thumb-bg);
+  border: 3px solid transparent;
+  border-left-width: 2px;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-bg);
+}
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg);
 }
 
 /* ============ app layout ============ */
