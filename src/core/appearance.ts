@@ -2,8 +2,8 @@
  * R50 Appearance settings — readable line length + editor spellcheck (#⑲).
  * Mirrors the localStorage-backed Store + setter pattern (autoUpdateLinks /
  * templateFolder / dailyNoteFolder). App-level zoom reuses workspace.fontSize
- * (commands in App.tsx). Defaults: readable line ON = the existing 46em cap;
- * spellcheck ON = Obsidian default).
+ * (commands in App.tsx). Defaults: readable line ON = the existing 700px cap
+ * (Obsidian --file-line-width default); spellcheck ON = Obsidian default).
  */
 import { Store } from "./store";
 import type { ExplorerSortKey } from "./vault";
@@ -29,15 +29,16 @@ function persistBool(key: string, value: boolean): void {
   }
 }
 
-/** Cap the editor/preview body width at ~46em, centered (default ON = the prior
- *  always-on behavior). OFF → full width via `--readable-line-width: none`; the
- *  editor + preview CSS read `var(--readable-line-width, 46em)`. */
+/** Cap the editor/preview body width at 700px, centered (default ON = the prior
+ *  always-on behavior, now matching Obsidian's --file-line-width default). OFF →
+ *  full width via `--readable-line-width: none`; the editor + preview CSS read
+ *  `var(--readable-line-width, 700px)`. */
 export const readableLineLength = new Store<boolean>(readBool(READABLE_KEY, true));
 
 function applyReadableLineLength(on: boolean): void {
   try {
     const el = document.documentElement;
-    if (on) el.style.removeProperty("--readable-line-width"); // → CSS 46em fallback
+    if (on) el.style.removeProperty("--readable-line-width"); // → CSS 700px fallback
     else el.style.setProperty("--readable-line-width", "none");
   } catch {
     /* no DOM (non-browser test context) */

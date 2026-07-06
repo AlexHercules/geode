@@ -305,7 +305,7 @@ function defaultState(): WorkspaceState {
     root,
     activePaneId: root.id,
     leftPanel: "explorer",
-    rightPanel: "backlinks",
+    rightPanel: "calendar",
     leftSidebarOpen: true,
     rightSidebarOpen: true,
     leftWidth: 270,

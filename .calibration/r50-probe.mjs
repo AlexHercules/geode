@@ -84,7 +84,7 @@ const J = (v) => JSON.stringify(v);
 console.log("— __geodeAppearance on real WKWebView —");
 ok("error-free probe run", data.error === undefined, J(data.error));
 ok("__geodeAppearance present", data.present === true);
-ok("default readable var → (default) [CSS 46em fallback]", data.defaultVar === "(default)", J(data.defaultVar));
+ok("default readable var → (default) [CSS 700px fallback]", data.defaultVar === "(default)", J(data.defaultVar));
 ok("setReadable(false) → --readable-line-width: none", data.offVar === "none", J(data.offVar));
 ok("setReadable(true) → back to (default)", data.onVar === "(default)", J(data.onVar));
 ok("setSpellcheck toggles without error", data.spellcheckOk === true);

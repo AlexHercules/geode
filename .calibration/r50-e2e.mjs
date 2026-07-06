@@ -32,7 +32,7 @@ await wait(180);
 
 // ── A. readable line length ──────────────────────────────────────────────────
 console.log("A. readable line length");
-ok("default: --readable-line-width unset (CSS 46em fallback)", (await app(() => window.__geodeAppearance.readableVar())) === "(default)");
+ok("default: --readable-line-width unset (CSS 700px fallback)", (await app(() => window.__geodeAppearance.readableVar())) === "(default)");
 ok("editor content is width-capped by default", (await cmMaxWidth()) !== null && (await cmMaxWidth()) !== "none", JSON.stringify(await cmMaxWidth()));
 await app(() => window.__geodeAppearance.setReadable(false));
 await wait(100);

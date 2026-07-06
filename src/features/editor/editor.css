@@ -115,7 +115,7 @@
 .editor-loading {
   flex: 1;
   /* R50: skeleton mirrors the editor body column → follow readable line length */
-  max-width: var(--readable-line-width, 46em);
+  max-width: var(--readable-line-width, 700px);
   width: 100%;
   margin: 0 auto;
   padding: 36px 32px;
@@ -126,7 +126,7 @@
 .inline-title {
   box-sizing: border-box;
   width: 100%;
-  max-width: var(--readable-line-width, 46em);
+  max-width: var(--readable-line-width, 700px);
   margin: 0 auto;
   padding: 28px 32px 0;
   font-size: 1.9em;
@@ -576,7 +576,7 @@ iframe.geode-embed-pdf.cm-live-embed {
 
 .preview-content {
   /* R50: readable line length — full width when --readable-line-width is "none" */
-  max-width: var(--readable-line-width, 46em);
+  max-width: var(--readable-line-width, 700px);
   margin: 0 auto;
   padding: 28px 32px 120px;
   font-size: var(--editor-font-size);
@@ -1563,7 +1563,7 @@ mark {
    follow the same --readable-line-width var so it stays aligned when readable line
    length is toggled OFF (R50 review) */
 .editor-preview > .properties-panel {
-  max-width: var(--readable-line-width, 46em);
+  max-width: var(--readable-line-width, 700px);
   margin: 0 auto;
   padding: 20px 32px 0;
 }
@@ -1911,7 +1911,7 @@ mark {
    column like the .properties-panel sibling above (tracks --readable-line-width, 32px inset);
    carries the note's bottom scroll breathing room now that it's the last element. */
 .editor-preview > .embedded-backlinks {
-  max-width: var(--readable-line-width, 46em);
+  max-width: var(--readable-line-width, 700px);
   margin: 0 auto;
   padding: 16px 32px 120px;
   border-top: 1px solid var(--border);
