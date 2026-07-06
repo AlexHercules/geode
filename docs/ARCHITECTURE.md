@@ -108,6 +108,41 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档为主**（CSS 调整 + 默认值翻转，未新增控制流/未碰数据安全面；仅测试断言跟随默认翻转）·**简化门：clean**（无 ≥8 行重复/无死代码/无脚手架）·**评审：3 处 stale 注释已修，0 逻辑缺陷**。
 
+## Round 284 additions — 右侧日历默认显著性 + 主编辑区宽度对齐 Obsidian·机械档·零新依赖
+
+> **状态：As-built（已交付·v0.277）。** R284 继续从 2026-07-04 截图对比的 shell 差距中取 2 个 bounded 子项：① 右侧日历默认显著性（Calendar 右栏 tab 默认选中，给新用户/新会话一个与 Obsidian 截图一致的右栏首因）；② 主编辑区宽度对齐 Obsidian（`--file-line-width` 默认值由 46em 改为 700px，让 `.editor-loading` 骨架与 live/reading 内容列宽度一致）。全部为零新依赖的表面/默认调整。
+
+**UI/行为契约**：
+1. `src/core/workspace.ts`：
+   - `defaultState().rightPanel` 由 `"backlinks"` 改为 `"calendar"`。
+   - 仅影响无持久化状态的新会话/新用户；已有 `localStorage` 中 `geode.workspace.v1` 的 `rightPanel` 仍按其 persisted 值恢复。
+2. `src/features/editor/editor.css`：
+   - 所有 `max-width: var(--readable-line-width, 46em)` 的 fallback 统一改为 `700px`（Obsidian 默认主题 `--file-line-width: 700px`）。
+   - 涉及选择器：`.editor-loading`、`.inline-title`、`.preview-content`、`.editor-preview > .properties-panel`、`.editor-preview > .embedded-backlinks`。
+3. `src/features/editor/cmExtensions.ts`：
+   - CodeMirror `.cm-content` 的 `maxWidth` 同样改为 `var(--readable-line-width, 700px)`，保证 live/source 模式与 reading 模式宽度一致。
+4. `src/core/appearance.ts`：
+   - 更新注释中的 `46em` 为 `700px`，保持文档与实现一致；`applyReadableLineLength` 行为不变（ON 时移除内联变量 → 由 CSS fallback 提供默认值）。
+
+**数据安全契约**：
+- 纯默认值/CSS 调整，不新增任何 .md / editor / vault / 文件 IO 写路径；`rightPanel` 默认值仅控制 UI 初始展示，不影响持久化/恢复逻辑。
+
+**验证契约**：
+1. 新增 `.calibration/r284-e2e.mjs`：浏览器模式断言——① 初始右侧面板为 `calendar`、calendar tab 有 `is-active`、CalendarPanel 可见；② live/reading/loading 三种视图的内容列 `max-width` 计算值均为 `700px`；③ readable-line 关闭时 max-width 为 `none`。
+2. 回归：`r50-e2e`（readable-line 变量默认状态断言不变，仅注释更新）、`r43-e2e`（calendar 面板功能不回退）、`r160-e2e`（右栏默认显隐不变）、任意已有打开 backlinks 面板的套件（显式点击 `right-tab-backlinks`，不受影响）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面按 by-equivalence（纯默认值/CSS，无 Rust/FS 新路径）。
+
+**文件范围**：
+- `src/core/workspace.ts`
+- `src/core/appearance.ts`（注释）
+- `src/features/editor/editor.css`
+- `src/features/editor/cmExtensions.ts`
+- `.calibration/r284-e2e.mjs`
+- `.calibration/r50-e2e.mjs`（注释更新）
+
+**分档：机械档**（默认值翻转 + CSS fallback 常量替换，无新增控制流/无数据安全面）·**简化门：机械档跳过**·**评审：1 处 stale 标签已修（`r50-probe` 测试文案 46em→700px），0 逻辑缺陷**。
+
 ## Round 282 additions — EditorPane 顶部只读面包屑路径·逻辑档·零新依赖【As-built·v0.275】
 
 > **状态：As-built（已交付·v0.275）。** R281 已交付阅读视图列表缩进线与文件树密度微调。R282 继续从 2026-07-04 截图对比的 shell 差距中取 bounded 子项：顶部缺 Obsidian 面包屑/路径语境。本轮在 `EditorPane` 顶栏增加一条**只读面包屑**，显示当前文件在 vault 内的相对路径分段，用 `›` 分隔，解决"打开文件后看不到自己在哪"的语境缺失。保持零交互、零 vault 写、零新依赖。

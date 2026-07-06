@@ -22,11 +22,17 @@ shim 建立其上。
 
 ## 下一轮候选（2026-07-05 R283 后）
 
-### R284 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
+### R285 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
 
-R283 已完成 Markdown 阅读视图链接样式、拼写检查默认 ON、状态栏信息密度。R284 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：右侧日历默认显著性（Calendar 右栏 tab 默认选中 / 视觉权重）与 Obsidian 主编辑区宽度差异（`.editor-loading` / 内容区 max-width 对齐）。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
+R284 已完成右侧日历默认显著性、主编辑区宽度对齐。R285 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：ribbon 文字占位 L/O/R、主编辑区其他细节（如滚动条/空态/inline-title 字重等）。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
 
 ## 已完成
+
+### R284 — v0.277（2026-07-06）右侧日历默认显著性 + 主编辑区宽度对齐 Obsidian
+
+从 2026-07-04 截图对比的 shell 差距中取 2 个 bounded 子项：① 右侧日历默认显著性——`core/workspace.ts` 的 `defaultState().rightPanel` 由 `"backlinks"` 改为 `"calendar"`，让新会话首次打开右栏即显示 Calendar 面板且 calendar tab 高亮；② 主编辑区宽度对齐——所有 `var(--readable-line-width, 46em)` fallback 统一改为 `700px`（提取自 Obsidian 默认主题 `--file-line-width: 700px`），覆盖 `.cm-content`、`.preview-content`、`.editor-loading`、`.inline-title`、阅读视图 properties / embedded backlinks，保证 live/reading/loading 三态内容列宽度一致。
+
+机械档、零新依赖、未碰 .md/editor/vault/文件 IO 写路径。简化门：机械档跳过。scoped review 1 处 stale 标签已修（`r50-probe` 注释）。验证：`r284-e2e 8/8`、回归 `r50 16/16` / `r43 22/22` / `r160 24/24` / `r185 19/19` / `r283 7/7` / `r82 27/27` / `r213 13/13` / `r98 15/15`；`r50-probe 6/6`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过。桌面按 by-equivalence（纯默认值/CSS，无 Rust/FS 新路径）。
 
 ### R282 — v0.275（2026-07-05）EditorPane 顶部只读面包屑路径
 
