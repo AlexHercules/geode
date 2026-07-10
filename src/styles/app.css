@@ -191,7 +191,15 @@ html {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 8px 0;
+  padding: 0 0 8px;
+}
+
+.ribbon-top-spacer {
+  width: 100%;
+  height: var(--workspace-topbar-height);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 var(--workspace-topbar-height);
+  margin-bottom: 4px;
 }
 
 .ribbon-btn {
@@ -209,8 +217,14 @@ html {
 }
 
 .ribbon-btn.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.ribbon-btn svg,
+.sidebar-primary-tab svg,
+.right-tab svg {
+  filter: grayscale(1);
 }
 
 .ribbon-spacer {
@@ -218,7 +232,7 @@ html {
 }
 
 .sidebar {
-  background: var(--bg-panel);
+  background: var(--bg-app);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -295,18 +309,54 @@ html {
 }
 
 /* right sidebar panel tabs */
+.sidebar-primary-tabs,
 .right-tabs {
   display: flex;
-  gap: 2px;
-  padding: 6px 8px 0;
+  align-items: center;
+  gap: 4px;
+  height: var(--workspace-topbar-height);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+.right-tabs {
+  gap: 2px;
+  padding-inline: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.right-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.sidebar-primary-tab {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  color: var(--text-muted);
+}
+
+.sidebar-primary-tab:hover,
+.sidebar-primary-tab.is-active {
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.sidebar-primary-spacer,
+.right-tabs-spacer {
+  flex: 1;
 }
 
 .right-tab {
   display: grid;
   place-items: center;
-  width: 30px;
+  width: 28px;
   height: 26px;
+  flex: 0 0 28px;
   border-radius: 6px;
   color: var(--text-muted);
 }
@@ -317,8 +367,12 @@ html {
 }
 
 .right-tab.is-active {
-  background: var(--accent-muted);
-  color: var(--accent);
+  background: var(--bg-active);
+  color: var(--text-normal);
+}
+
+.sidebar-collapse-tab {
+  color: var(--text-muted);
 }
 
 .right-panel-body {
@@ -1038,7 +1092,9 @@ html {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 12px 8px;
+  height: var(--workspace-topbar-height);
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -1060,6 +1116,12 @@ html {
   place-items: center;
   border-radius: 5px;
   color: var(--text-muted);
+}
+
+.panel-header .panel-actions button svg {
+  width: 18px;
+  height: 18px;
+  filter: grayscale(1);
 }
 
 .panel-header .panel-actions button:hover {

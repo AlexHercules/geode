@@ -1226,36 +1226,7 @@ export function App() {
         {/* ribbon (R94: hidden when showRibbon is off) */}
         {ribbonVisible && (
         <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
-          <RibbonButton
-            icon="files"
-            title={t("app.ribbonExplorer")}
-            active={ws.leftSidebarOpen && effectiveLeft === "explorer"}
-            onClick={() =>
-              effectiveLeft === "explorer" && ws.leftSidebarOpen
-                ? app.workspace.toggleLeftSidebar()
-                : app.workspace.setLeftPanel("explorer")
-            }
-          />
-          <RibbonButton
-            icon="search"
-            title={t("app.ribbonSearch")}
-            active={ws.leftSidebarOpen && effectiveLeft === "search"}
-            onClick={() =>
-              effectiveLeft === "search" && ws.leftSidebarOpen
-                ? app.workspace.toggleLeftSidebar()
-                : app.workspace.setLeftPanel("search")
-            }
-          />
-          <RibbonButton
-            icon="bookmark"
-            title={t("app.ribbonBookmarks")}
-            active={ws.leftSidebarOpen && effectiveLeft === "bookmarks"}
-            onClick={() =>
-              effectiveLeft === "bookmarks" && ws.leftSidebarOpen
-                ? app.workspace.toggleLeftSidebar()
-                : app.workspace.setLeftPanel("bookmarks")
-            }
-          />
+          <div className="ribbon-top-spacer" aria-hidden="true" />
           <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />
           <RibbonButton
             icon="command"
@@ -1302,6 +1273,51 @@ export function App() {
             style={{ width: ws.leftWidth }}
             data-testid="left-sidebar"
           >
+            <div className="sidebar-primary-tabs" role="tablist" aria-label={t("app.leftPanelAria")}>
+              <button
+                role="tab"
+                aria-selected={effectiveLeft === "explorer"}
+                className={`sidebar-primary-tab${effectiveLeft === "explorer" ? " is-active" : ""}`}
+                title={t("app.ribbonExplorer")}
+                aria-label={t("app.ribbonExplorer")}
+                data-testid="left-tab-explorer"
+                onClick={() => app.workspace.setLeftPanel("explorer")}
+              >
+                <Icon name="folder" size={18} />
+              </button>
+              <button
+                role="tab"
+                aria-selected={effectiveLeft === "search"}
+                className={`sidebar-primary-tab${effectiveLeft === "search" ? " is-active" : ""}`}
+                title={t("app.ribbonSearch")}
+                aria-label={t("app.ribbonSearch")}
+                data-testid="left-tab-search"
+                onClick={() => app.workspace.setLeftPanel("search")}
+              >
+                <Icon name="search" size={18} />
+              </button>
+              <button
+                role="tab"
+                aria-selected={effectiveLeft === "bookmarks"}
+                className={`sidebar-primary-tab${effectiveLeft === "bookmarks" ? " is-active" : ""}`}
+                title={t("app.ribbonBookmarks")}
+                aria-label={t("app.ribbonBookmarks")}
+                data-testid="left-tab-bookmarks"
+                onClick={() => app.workspace.setLeftPanel("bookmarks")}
+              >
+                <Icon name="bookmark" size={18} />
+              </button>
+              <span className="sidebar-primary-spacer" />
+              <button
+                className="sidebar-primary-tab sidebar-collapse-tab"
+                title={t("cmd.toggleLeftSidebar")}
+                aria-label={t("cmd.toggleLeftSidebar")}
+                data-testid="sidebar-toggle-left"
+                onClick={() => app.workspace.toggleLeftSidebar()}
+              >
+                <Icon name="panel-left" size={18} />
+              </button>
+            </div>
             {activeLeftPanel ? (
               <SidebarPanelHost key={activeLeftPanel.id} panel={activeLeftPanel} />
             ) : ws.leftPanel === "search" ? (
@@ -1425,6 +1441,16 @@ export function App() {
                   <SidebarPanelIcon panel={p} />
                 </button>
               ))}
+              <span className="right-tabs-spacer" />
+              <button
+                className="right-tab sidebar-collapse-tab"
+                title={t("cmd.toggleRightSidebar")}
+                aria-label={t("cmd.toggleRightSidebar")}
+                data-testid="sidebar-toggle-right"
+                onClick={() => app.workspace.toggleRightSidebar()}
+              >
+                <Icon name="panel-right" size={17} />
+              </button>
             </div>
             <div className="right-panel-body">
               {activeRightPanel ? (
@@ -1704,7 +1730,7 @@ function RibbonButton(props: { icon: string; title: string; active?: boolean; on
       aria-label={props.title}
       onClick={props.onClick}
     >
-      <Icon name={props.icon} size={20} />
+      <Icon name={props.icon} size={18} />
     </button>
   );
 }
@@ -1722,6 +1748,9 @@ function SidebarToggle(props: {
   label: string;
   onToggle: () => void;
 }) {
+  // The open-state control lives in the matching sidebar top bar. Keep this
+  // edge affordance only for reopening a collapsed sidebar.
+  if (props.open) return null;
   const inward = props.side === "left" ? "chevron-left" : "chevron-right";
   const outward = props.side === "left" ? "chevron-right" : "chevron-left";
   return (

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
 import { parentPath, basename, sortTreeNodes, isTauri, type ExplorerSortKey } from "@core/vault";
@@ -876,7 +877,7 @@ export function Explorer() {
         data-testid="explorer-item"
         data-path={node.path}
         data-hover-path={isFolder ? undefined : node.path}
-        style={{ paddingLeft: 4 + depth * 14 }}
+        style={{ paddingLeft: 4 + depth * 14, "--tree-depth": depth } as CSSProperties}
         draggable={!isRenaming}
         onDragStart={(e) => {
           e.dataTransfer.setData(EXPLORER_MIME, node.path);

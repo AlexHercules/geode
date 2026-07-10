@@ -4,9 +4,9 @@
  * Contract: docs/ARCHITECTURE.md "Round 160 additions" (Tier 7 C5).
  *
  * C5 state/methods/commands/persistence already existed (R2+); this round adds
- * the only missing piece — a dedicated, always-visible collapse/expand affordance
- * ([data-testid=sidebar-toggle-left|right]) straddling each sidebar↔main border.
- * Commands stay UNBOUND (Obsidian's real default); the toggle is the visible path.
+ * Open sidebars use Obsidian-style buttons in their horizontal top bars. A compact
+ * edge affordance appears only while a sidebar is closed, preserving discoverability
+ * without leaving non-native pills over the editor canvas.
  */
 import { chromium } from "playwright";
 
@@ -38,6 +38,7 @@ await page.waitForFunction(() => !!window.__app, null, { timeout: 5000 });
 
 const present = (sel) => page.$(sel).then((h) => !!h);
 const chevronD = (testid) => page.getAttribute(`[data-testid=${testid}] svg path`, "d");
+const iconPaths = (testid) => page.$$eval(`[data-testid=${testid}] svg path`, (paths) => paths.map((path) => path.getAttribute("d")));
 const centerX = (testid) => page.$eval(`[data-testid=${testid}]`, (el) => {
   const r = el.getBoundingClientRect();
   return r.left + r.width / 2;
@@ -45,6 +46,8 @@ const centerX = (testid) => page.$eval(`[data-testid=${testid}]`, (el) => {
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const CHEVRON_LEFT = "M15 18l-6-6 6-6";
 const CHEVRON_RIGHT = "M9 18l6-6-6-6";
+const PANEL_LEFT_RULE = "M9 3v18";
+const PANEL_RIGHT_RULE = "M15 3v18";
 
 console.log("— toggles exist + visible, default both sidebars open —");
 ok("sidebar-toggle-left present", await present("[data-testid=sidebar-toggle-left]"));
@@ -54,13 +57,13 @@ ok("right toggle visible", await page.isVisible("[data-testid=sidebar-toggle-rig
 ok("left sidebar shown by default", await present("[data-testid=left-sidebar]"));
 ok("right sidebar shown by default", await present("[data-testid=right-sidebar]"));
 
-console.log("— icon points inward (collapse) when open —");
-ok("left toggle = chevron-left (inward) when open", (await chevronD("sidebar-toggle-left")) === CHEVRON_LEFT);
-ok("right toggle = chevron-right (inward) when open", (await chevronD("sidebar-toggle-right")) === CHEVRON_RIGHT);
+console.log("— open-state controls live in the aligned sidebar top bars —");
+ok("left toggle uses panel-left icon when open", (await iconPaths("sidebar-toggle-left")).includes(PANEL_LEFT_RULE));
+ok("right toggle uses panel-right icon when open", (await iconPaths("sidebar-toggle-right")).includes(PANEL_RIGHT_RULE));
 
-console.log("— toggle repositions with sidebar width (left toggle near border when open) —");
+console.log("— open left toggle is inside the sidebar top bar —");
 const leftXopen = await centerX("sidebar-toggle-left");
-ok("left toggle center near sidebar/main border when open (>300px)", leftXopen > 300, `got ${Math.round(leftXopen)}`);
+ok("left toggle center is inside the left sidebar", leftXopen > 44 && leftXopen < 320, `got ${Math.round(leftXopen)}`);
 
 console.log("— left toggle collapses then expands the left sidebar —");
 await page.click("[data-testid=sidebar-toggle-left]");
@@ -72,7 +75,7 @@ ok("left toggle moved toward ribbon when collapsed (<100px)", leftXclosed < 100,
 await page.click("[data-testid=sidebar-toggle-left]");
 await wait(60);
 ok("left sidebar restored after expand", await present("[data-testid=left-sidebar]"));
-ok("left toggle back to chevron-left when re-opened", (await chevronD("sidebar-toggle-left")) === CHEVRON_LEFT);
+ok("left toggle returns to panel-left icon when re-opened", (await iconPaths("sidebar-toggle-left")).includes(PANEL_LEFT_RULE));
 
 console.log("— right toggle collapses then expands the right sidebar —");
 await page.click("[data-testid=sidebar-toggle-right]");

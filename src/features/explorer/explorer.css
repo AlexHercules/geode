@@ -11,11 +11,12 @@
   min-width: 0;
 }
 
+.explorer .panel-actions {
+  margin-left: 0;
+}
+
 .explorer-vault-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+  display: none;
 }
 
 /* ---- tree ---- */
@@ -29,10 +30,11 @@
 }
 
 .explorer-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 3px;
-  height: 24px;
+  height: 26px;
   padding-right: 4px;
   border-radius: 4px;
   font-size: 13px;
@@ -40,6 +42,21 @@
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+}
+
+.explorer-item::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  bottom: 0;
+  width: calc(var(--tree-depth, 0) * 14px);
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0 13px,
+    var(--border) 13px 14px
+  );
+  pointer-events: none;
 }
 
 .explorer-item:hover {
@@ -57,14 +74,14 @@
 }
 
 .explorer-item.is-active {
-  background: hsl(from var(--accent) h s l / 18%);
-  color: var(--accent);
-  box-shadow: inset 2px 0 0 0 var(--accent);
-  border-radius: 0 4px 4px 0;
+  background: var(--bg-active);
+  color: var(--text-normal);
+  box-shadow: none;
+  border-radius: 6px;
 }
 
 .explorer-item.is-active:hover {
-  background: hsl(from var(--accent) h s l / 26%);
+  background: var(--bg-active);
 }
 
 /* R96: excluded files (Settings → Excluded files) are dimmed but still openable */
@@ -89,7 +106,7 @@
 
 .explorer-item.is-active .explorer-icon,
 .explorer-item.is-active .explorer-chevron {
-  color: var(--accent);
+  color: var(--text-muted);
 }
 
 /* R28 drag-to-move (mirrors BookmarksPanel .is-drop-into) */

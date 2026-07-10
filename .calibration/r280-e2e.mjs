@@ -5,7 +5,7 @@
  *
  * A = vault manager modal: title/recents/remove/open-other present; create-new absent (browser only).
  * B = remove a recent → list update.
- * C = Explorer active state: accent background alpha + left accent bar.
+ * C = Explorer active state: neutral background with no colored accent edge.
  */
 import { chromium } from "playwright";
 
@@ -77,22 +77,26 @@ const activeStyle = await page.evaluate(() => {
   const el = document.querySelector(".explorer-item.is-active");
   if (!el) return null;
   const cs = getComputedStyle(el);
+  const probe = document.createElement("span");
+  probe.style.color = getComputedStyle(document.documentElement).getPropertyValue("--text-normal").trim();
+  document.body.appendChild(probe);
+  const neutralColor = getComputedStyle(probe).color;
+  probe.remove();
   return {
     background: cs.backgroundColor,
     boxShadow: cs.boxShadow,
     borderLeft: cs.borderLeft,
     color: cs.color,
+    neutralColor,
   };
 });
 ok(".explorer-item.is-active exists", activeStyle !== null);
 if (activeStyle) {
-  // background should not be transparent/default (should have accent alpha)
+  // Obsidian's file list uses a neutral active row, not the accent color.
   const bg = activeStyle.background;
   ok("active background is not transparent", bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent" && bg !== "");
-  // box-shadow should exist for the left accent bar
-  ok("active box-shadow exists (left accent bar)", activeStyle.boxShadow !== "none");
-  // color should be accent
-  ok("active color is set", activeStyle.color !== "");
+  ok("active row has no colored left accent bar", activeStyle.boxShadow === "none");
+  ok("active color is neutral text", activeStyle.color === activeStyle.neutralColor, JSON.stringify(activeStyle));
 }
 
 // clean up

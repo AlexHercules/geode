@@ -17,7 +17,8 @@
   height: var(--workspace-topbar-height);
   padding: 0 16px;
   flex-shrink: 0;
-  background: var(--bg-app);
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
 }
 
 .editor-title {
@@ -109,6 +110,7 @@
 
 .view-header-action-icon svg {
   color: inherit;
+  filter: grayscale(1);
 }
 
 .tab-context-menu.editor-view-options-menu {
