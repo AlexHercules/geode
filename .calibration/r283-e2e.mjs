@@ -67,8 +67,8 @@ const statusStyles = await page.evaluate(() => {
   const st = window.getComputedStyle(bar);
   return { gap: st.gap, padding: st.padding };
 });
-ok("status-bar gap is 8px", statusStyles?.gap === "8px", JSON.stringify(statusStyles));
-ok("status-bar padding is 0px 10px", statusStyles?.padding === "0px 10px", JSON.stringify(statusStyles));
+ok("status-bar gap is 6px", statusStyles?.gap === "6px", JSON.stringify(statusStyles));
+ok("status-bar padding is 0px 7px", statusStyles?.padding === "0px 7px", JSON.stringify(statusStyles));
 
 console.log("C. spellcheck default ON");
 await app(() => {

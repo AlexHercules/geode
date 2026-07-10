@@ -18,7 +18,7 @@
   padding: 0 16px;
   flex-shrink: 0;
   background: var(--bg-panel);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
 }
 
 .editor-title {

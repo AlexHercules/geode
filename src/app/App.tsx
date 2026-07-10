@@ -1224,21 +1224,21 @@ export function App() {
   /* ---- no vault yet (desktop only) ---- */
   if (!tree) {
     return (
-      <div className="app" data-testid="app-root">
+      <div className={`app${isTauri() ? " is-native-window" : ""}`} data-testid="app-root">
         <VaultPicker />
       </div>
     );
   }
 
   return (
-    <div className="app" data-testid="app-root">
+    <div className={`app${isTauri() ? " is-native-window" : ""}`} data-testid="app-root">
       {/* R20: appended "workspace*" classes mirror Obsidian's DOM so community
           theme CSS can target them — resident, additive only (contract) */}
       <div className="app-body workspace">
         {/* ribbon (R94: hidden when showRibbon is off) */}
         {ribbonVisible && (
         <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
-          <div className="ribbon-top-spacer" aria-hidden="true" />
+          <div className="ribbon-top-spacer" aria-hidden="true" data-tauri-drag-region />
           <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />
           <RibbonButton
             icon="command"
@@ -1279,7 +1279,7 @@ export function App() {
             style={{ width: ws.leftWidth }}
             data-testid="left-sidebar"
           >
-            <div className="sidebar-primary-tabs" role="tablist" aria-label={t("app.leftPanelAria")}>
+            <div className="sidebar-primary-tabs" role="tablist" aria-label={t("app.leftPanelAria")} data-tauri-drag-region>
               <button
                 role="tab"
                 aria-selected={effectiveLeft === "explorer"}
@@ -1351,7 +1351,9 @@ export function App() {
         )}
 
         {/* main area: recursive pane tree */}
-        <main className="main workspace-split mod-vertical mod-root">
+        <main className={`main workspace-split mod-vertical mod-root${
+          ws.leftSidebarOpen ? "" : " is-left-sidebar-collapsed"
+        }${ws.rightSidebarOpen ? "" : " is-right-sidebar-collapsed"}`}>
           <TabDragContext.Provider value={tabDrag}>
             <PaneTree node={ws.root} />
           </TabDragContext.Provider>
@@ -1365,7 +1367,7 @@ export function App() {
             data-testid="right-sidebar"
           >
             <SidebarResizer side="right" />
-            <div className="right-tabs" role="tablist" aria-label={t("app.rightPanelAria")}>
+            <div className="right-tabs" role="tablist" aria-label={t("app.rightPanelAria")} data-tauri-drag-region>
               <button
                 role="tab"
                 aria-selected={effectiveRight === "backlinks"}
@@ -1374,7 +1376,7 @@ export function App() {
                 data-testid="right-tab-backlinks"
                 onClick={() => app.workspace.setRightPanel("backlinks")}
               >
-                <Icon name="link" size={15} />
+                <Icon name="link" size={18} />
               </button>
               <button
                 role="tab"
@@ -1384,7 +1386,7 @@ export function App() {
                 data-testid="right-tab-outgoinglinks"
                 onClick={() => app.workspace.setRightPanel("outgoinglinks")}
               >
-                <Icon name="external-link" size={15} />
+                <Icon name="external-link" size={18} />
               </button>
               <button
                 role="tab"
@@ -1394,7 +1396,7 @@ export function App() {
                 data-testid="right-tab-footnotes"
                 onClick={() => app.workspace.setRightPanel("footnotes")}
               >
-                <Icon name="footnote" size={15} />
+                <Icon name="footnote" size={18} />
               </button>
               <button
                 role="tab"
@@ -1404,7 +1406,7 @@ export function App() {
                 data-testid="right-tab-outline"
                 onClick={() => app.workspace.setRightPanel("outline")}
               >
-                <Icon name="list" size={15} />
+                <Icon name="list" size={18} />
               </button>
               <button
                 role="tab"
@@ -1414,7 +1416,7 @@ export function App() {
                 data-testid="right-tab-allproperties"
                 onClick={() => app.workspace.setRightPanel("allproperties")}
               >
-                <Icon name="book-open" size={15} />
+                <Icon name="book-open" size={18} />
               </button>
               <button
                 role="tab"
@@ -1424,7 +1426,7 @@ export function App() {
                 data-testid="right-tab-fileproperties"
                 onClick={() => app.workspace.setRightPanel("fileproperties")}
               >
-                <Icon name="file-text" size={15} />
+                <Icon name="file-text" size={18} />
               </button>
               <button
                 role="tab"
@@ -1434,7 +1436,7 @@ export function App() {
                 data-testid="right-tab-tags"
                 onClick={() => app.workspace.setRightPanel("tags")}
               >
-                <Icon name="hash" size={15} />
+                <Icon name="hash" size={18} />
               </button>
               <button
                 role="tab"
@@ -1444,7 +1446,7 @@ export function App() {
                 data-testid="right-tab-calendar"
                 onClick={() => app.workspace.setRightPanel("calendar")}
               >
-                <Icon name="calendar" size={15} />
+                <Icon name="calendar" size={18} />
               </button>
               {/* plugin-contributed sidebar panels (compat registerView): one tab each */}
               {rightPanels.map((p) => (
@@ -1468,7 +1470,7 @@ export function App() {
                 data-testid="sidebar-toggle-right"
                 onClick={() => app.workspace.toggleRightSidebar()}
               >
-                <Icon name="panel-right" size={17} />
+                <Icon name="panel-right" size={18} />
               </button>
             </div>
             <div className="right-panel-body">
@@ -1849,10 +1851,10 @@ function RibbonButton(props: { icon: string; title: string; active?: boolean; on
 }
 
 /**
- * C5: dedicated collapse/expand affordance for a sidebar. Always rendered (an
- * overlay anchored to `.app-body`); `offset` is the live pixel distance of the
- * sidebar↔main border from the matching edge, so it tracks resize + collapse.
- * Chevron points inward to collapse when open, outward to expand when closed.
+ * Reopen affordance for a collapsed sidebar, anchored to `.app-body`.
+ * `offset` is the live pixel distance of the sidebar↔main border so it tracks
+ * resize. Hidden when the sidebar is open — the open-state control lives in the
+ * matching sidebar top bar. Uses Obsidian-style panel-left/panel-right icons.
  */
 function SidebarToggle(props: {
   side: "left" | "right";
@@ -1864,8 +1866,6 @@ function SidebarToggle(props: {
   // The open-state control lives in the matching sidebar top bar. Keep this
   // edge affordance only for reopening a collapsed sidebar.
   if (props.open) return null;
-  const inward = props.side === "left" ? "chevron-left" : "chevron-right";
-  const outward = props.side === "left" ? "chevron-right" : "chevron-left";
   return (
     <button
       className={`sidebar-toggle sidebar-toggle-${props.side}`}
@@ -1875,7 +1875,7 @@ function SidebarToggle(props: {
       data-testid={`sidebar-toggle-${props.side}`}
       onClick={props.onToggle}
     >
-      <Icon name={props.open ? inward : outward} size={14} />
+      <Icon name={props.side === "left" ? "panel-left" : "panel-right"} size={18} />
     </button>
   );
 }
@@ -2159,6 +2159,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
       className="tab-bar"
       role="tablist"
       data-testid={`tab-bar-${leaf.id}`}
+      data-tauri-drag-region
       onDragOver={(e) => {
         if (!isTabDrag(e)) return;
         e.preventDefault();
@@ -2237,7 +2238,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
               app.workspace.closeTab(tab.id);
             }}
           >
-            <Icon name="x" size={13} />
+            <Icon name="x" size={16} />
           </button>
         </div>
         );
@@ -2248,7 +2249,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         aria-label={t("app.newNote")}
         onClick={() => app.commands.execute("app:new-note")}
       >
-        <Icon name="plus" size={16} />
+        <Icon name="plus" size={18} />
       </button>
       <button
         className="tab-list-toggle"

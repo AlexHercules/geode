@@ -44,11 +44,19 @@ const metrics = await page.evaluate(() => {
   };
   return {
     ribbon: read(".ribbon"),
+    ribbonDivider: (() => {
+      const ribbon = document.querySelector(".ribbon");
+      if (!ribbon) return null;
+      const css = getComputedStyle(ribbon, "::after");
+      return { top: css.top, bottom: css.bottom, width: css.width };
+    })(),
     ribbonSpacer: read(".ribbon-top-spacer"),
     leftTop: read(".sidebar-primary-tabs"),
     leftActive: read(".sidebar-primary-tab.is-active"),
     leftHeader: read(".sidebar-left .panel-header"),
     tabBar: read(".tab-bar"),
+    activeTab: read(".tab.is-active"),
+    editorPane: read(".editor-pane"),
     viewHeader: read(".editor-header"),
     rightTop: read(".right-tabs"),
     rightActive: read(".right-tab.is-active"),
@@ -69,9 +77,13 @@ const metrics = await page.evaluate(() => {
 });
 
 console.log("— aligned workspace chrome —");
-const rows = [metrics.ribbonSpacer, metrics.leftTop, metrics.leftHeader, metrics.tabBar, metrics.viewHeader, metrics.rightTop];
-ok("all workspace chrome rows are exactly 42px", rows.every((row) => row?.height === 42), JSON.stringify(rows));
-ok("every chrome row uses the same 1px divider", rows.every((row) => row?.borderBottomWidth === "1px" && row.borderBottomColor === rows[0]?.borderBottomColor), JSON.stringify(rows));
+const topRows = [metrics.ribbonSpacer, metrics.leftTop, metrics.tabBar, metrics.rightTop];
+const secondaryRows = [metrics.leftHeader, metrics.viewHeader];
+ok("the single top workspace row is exactly 42px", topRows.every((row) => row?.height === 42), JSON.stringify(topRows));
+ok("only the top workspace row keeps the continuous 1px divider", topRows.every((row) => row?.borderBottomWidth === "1px" && row.borderBottomColor === topRows[0]?.borderBottomColor), JSON.stringify(topRows));
+ok("the ribbon divider starts below the unified top row", metrics.ribbonDivider?.top === "42px" && metrics.ribbonDivider?.bottom === "0px" && metrics.ribbonDivider?.width === "1px", JSON.stringify(metrics));
+ok("editor path and sidebar action rows have no lower divider", secondaryRows.every((row) => row?.borderBottomWidth === "0px"), JSON.stringify(secondaryRows));
+ok("the active tab opens into the editor canvas", metrics.activeTab?.background === metrics.editorPane?.background && metrics.activeTab?.borderBottomColor === metrics.activeTab?.background, JSON.stringify(metrics));
 ok("left horizontal toolbar exposes explorer/search/bookmarks/collapse", metrics.leftTabCount === 4, JSON.stringify(metrics));
 ok("open sidebars no longer show floating middle-edge pills", metrics.openPills === 0, JSON.stringify(metrics));
 

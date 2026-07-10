@@ -1366,7 +1366,7 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
               aria-pressed={tab.mode === "preview"}
               onClick={() => setMode(tab.mode === "preview" ? "live" : "preview")}
             >
-              <Icon name="book-open" size={19} />
+              <Icon name={tab.mode === "preview" ? "pencil" : "book-open"} size={18} />
             </button>
           )}
           <button
@@ -1381,7 +1381,7 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
               setHeaderMenu((current) => current ? null : { x: rect.right, y: rect.bottom });
             }}
           >
-            <Icon name="more-horizontal" size={19} />
+            <Icon name="more-horizontal" size={18} />
           </button>
         </div>
       </div>

@@ -185,14 +185,29 @@ html {
 }
 
 .ribbon {
+  position: relative;
   width: 44px;
   background: var(--bg-app);
-  border-right: 1px solid var(--border);
+  border-right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   padding: 0 0 8px;
+}
+
+/* The ribbon divider belongs to the workspace body, not the unified window
+   toolbar. Starting it below the 42px top row prevents the line from slicing
+   through the macOS traffic lights. */
+.ribbon::after {
+  content: "";
+  position: absolute;
+  top: var(--workspace-topbar-height);
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
 }
 
 .ribbon-top-spacer {
@@ -201,6 +216,12 @@ html {
   border-bottom: 1px solid var(--border);
   flex: 0 0 var(--workspace-topbar-height);
   margin-bottom: 4px;
+}
+
+/* macOS overlay title bar: native traffic lights and workspace controls share
+   this same row instead of creating a separate titled strip. */
+.app.is-native-window .sidebar-primary-tabs {
+  padding-left: 28px;
 }
 
 .ribbon-btn {
@@ -272,41 +293,40 @@ html {
   background: var(--accent-muted);
 }
 
-/* C5: always-visible collapse/expand toggles pinned to the inner edge of the
-   main area at each sidebar↔main border, mid-height — clears the tab bar (top)
-   and status bar (below .app-body), auto-repositions from the live widths */
+/* A collapsed sidebar keeps its Obsidian panel icon in the single top row so
+   it always has an obvious, clickable way to reopen. */
 .sidebar-toggle {
   position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 4px;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  color: var(--text-faint);
-  opacity: 0.55;
-  z-index: 11;
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 1;
+  z-index: 15;
   cursor: pointer;
-  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+  transition: color 0.12s ease, background 0.12s ease;
 }
 
 .sidebar-toggle:hover {
-  opacity: 1;
   color: var(--text-normal);
   background: var(--bg-hover);
 }
 
-/* inset a touch from the border so the pill clears the editor's edge
-   scrollbar/click target (M1) while still reading as an edge affordance */
 .sidebar-toggle-left {
-  margin-left: 12px;
+  margin-left: 8px;
 }
 
 .sidebar-toggle-right {
-  margin-right: 12px;
+  margin-right: 8px;
+}
+
+.app.is-native-window .sidebar-toggle-left {
+  margin-left: 28px;
 }
 
 /* right sidebar panel tabs */
@@ -326,6 +346,13 @@ html {
   padding-inline: 6px;
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+.right-tabs .sidebar-collapse-tab {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--bg-app);
 }
 
 .right-tabs::-webkit-scrollbar {
@@ -422,6 +449,20 @@ html {
   flex-direction: column;
   min-width: 0;
   background: var(--bg-app);
+}
+
+/* The persistent reopen icons occupy the top row when their sidebars are
+   collapsed; reserve only that row, never a separate blank strip. */
+.main.is-left-sidebar-collapsed .tab-bar {
+  padding-left: 52px;
+}
+
+.app.is-native-window .main.is-left-sidebar-collapsed .tab-bar {
+  padding-left: 70px;
+}
+
+.main.is-right-sidebar-collapsed .tab-bar {
+  padding-right: 44px;
 }
 
 /* ============ split panes ============ */
@@ -648,7 +689,7 @@ html {
   gap: 0;
   height: var(--workspace-topbar-height);
   padding: 0;
-  background: var(--bg-panel);
+  background: var(--bg-app);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   flex-shrink: 0;
@@ -699,6 +740,7 @@ html {
 
 .tab.is-active {
   margin-bottom: -1px;
+  z-index: 1;
   background: var(--bg-panel);
   border-color: var(--border);
   border-bottom-color: var(--bg-panel);
@@ -1479,7 +1521,7 @@ html {
   gap: 6px;
   height: var(--workspace-topbar-height);
   padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 0;
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;

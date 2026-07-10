@@ -5,7 +5,7 @@
  *
  * A = editor breadcrumbs exists for nested file path.
  * B = breadcrumbs segments match path parts (folder, nested, r282-test).
- * C = separator › exists.
+ * C = separator / exists (Obsidian-style path slash).
  */
 import { chromium } from "playwright";
 
@@ -63,13 +63,13 @@ if (segments.length >= 3) {
   ok('segment 2 is "r282-test"', segments[2] === "r282-test", segments[2]);
 }
 
-console.log("C. separator › exists");
+console.log("C. separator / exists");
 const hasSeparator = await page.evaluate(() => {
   const breadcrumbs = document.querySelector(".editor-breadcrumbs");
   if (!breadcrumbs) return false;
-  return breadcrumbs.textContent?.includes("›") || false;
+  return breadcrumbs.textContent?.includes("/") || false;
 });
-ok("separator › present", hasSeparator);
+ok("separator / present", hasSeparator);
 
 // clean up
 await app(() => {

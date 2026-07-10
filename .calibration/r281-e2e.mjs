@@ -4,7 +4,7 @@
  * Contract: docs/ARCHITECTURE.md "Round 281 additions".
  *
  * A = nested list preview has ::before guide line (1px width, border color).
- * B = explorer item height ≤ 24px.
+ * B = explorer item height ≤ 26px (Obsidian-style density).
  */
 import { chromium } from "playwright";
 
@@ -86,7 +86,7 @@ const explorerItemStyle = await page.evaluate(() => {
 ok(".explorer-item exists", explorerItemStyle !== null);
 if (explorerItemStyle) {
   const height = parseInt(explorerItemStyle.height, 10);
-  ok(`explorer item height ≤ 24px (${height}px)`, !isNaN(height) && height <= 24, explorerItemStyle.height);
+  ok(`explorer item height ≤ 26px (${height}px)`, !isNaN(height) && height <= 26, explorerItemStyle.height);
 }
 
 // clean up

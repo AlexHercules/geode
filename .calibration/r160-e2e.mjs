@@ -37,15 +37,13 @@ await page.evaluate(() => window.geode.registerPlugin({ id: "r160", name: "r160"
 await page.waitForFunction(() => !!window.__app, null, { timeout: 5000 });
 
 const present = (sel) => page.$(sel).then((h) => !!h);
-const chevronD = (testid) => page.getAttribute(`[data-testid=${testid}] svg path`, "d");
 const iconPaths = (testid) => page.$$eval(`[data-testid=${testid}] svg path`, (paths) => paths.map((path) => path.getAttribute("d")));
 const centerX = (testid) => page.$eval(`[data-testid=${testid}]`, (el) => {
   const r = el.getBoundingClientRect();
   return r.left + r.width / 2;
 });
+const topY = (testid) => page.$eval(`[data-testid=${testid}]`, (el) => el.getBoundingClientRect().top);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const CHEVRON_LEFT = "M15 18l-6-6 6-6";
-const CHEVRON_RIGHT = "M9 18l6-6-6-6";
 const PANEL_LEFT_RULE = "M9 3v18";
 const PANEL_RIGHT_RULE = "M15 3v18";
 
@@ -69,7 +67,8 @@ console.log("— left toggle collapses then expands the left sidebar —");
 await page.click("[data-testid=sidebar-toggle-left]");
 await wait(60);
 ok("left sidebar removed after collapse", !(await present("[data-testid=left-sidebar]")));
-ok("left toggle = chevron-right (outward) when collapsed", (await chevronD("sidebar-toggle-left")) === CHEVRON_RIGHT);
+ok("collapsed left toggle keeps the Obsidian panel-left icon", (await iconPaths("sidebar-toggle-left")).includes(PANEL_LEFT_RULE));
+ok("collapsed left toggle stays in the top workspace row", (await topY("sidebar-toggle-left")) < 10);
 const leftXclosed = await centerX("sidebar-toggle-left");
 ok("left toggle moved toward ribbon when collapsed (<100px)", leftXclosed < 100, `got ${Math.round(leftXclosed)}`);
 await page.click("[data-testid=sidebar-toggle-left]");
@@ -81,7 +80,8 @@ console.log("— right toggle collapses then expands the right sidebar —");
 await page.click("[data-testid=sidebar-toggle-right]");
 await wait(60);
 ok("right sidebar removed after collapse", !(await present("[data-testid=right-sidebar]")));
-ok("right toggle = chevron-left (outward) when collapsed", (await chevronD("sidebar-toggle-right")) === CHEVRON_LEFT);
+ok("collapsed right toggle keeps the Obsidian panel-right icon", (await iconPaths("sidebar-toggle-right")).includes(PANEL_RIGHT_RULE));
+ok("collapsed right toggle stays in the top workspace row", (await topY("sidebar-toggle-right")) < 10);
 await page.click("[data-testid=sidebar-toggle-right]");
 await wait(60);
 ok("right sidebar restored after expand", await present("[data-testid=right-sidebar]"));
@@ -96,7 +96,7 @@ await page.waitForFunction(() => !!window.geode && !!window.app, null, { timeout
 await page.evaluate(() => window.geode.registerPlugin({ id: "r160b", name: "r160b", onload(app) { window.__app = app; } }));
 await page.waitForFunction(() => !!window.__app, null, { timeout: 5000 });
 ok("left sidebar still collapsed after reload", !(await present("[data-testid=left-sidebar]")));
-ok("left toggle still shows expand icon after reload", (await chevronD("sidebar-toggle-left")) === CHEVRON_RIGHT);
+ok("left toggle still shows the panel-left icon after reload", (await iconPaths("sidebar-toggle-left")).includes(PANEL_LEFT_RULE));
 // restore for cleanliness
 await page.click("[data-testid=sidebar-toggle-left]");
 await wait(60);
