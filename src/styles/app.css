@@ -586,10 +586,13 @@ html {
 /* ============ tab bar ============ */
 
 .tab-bar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 8px 0;
+  gap: 0;
+  height: 48px;
+  padding: 0;
+  background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   flex-shrink: 0;
@@ -599,11 +602,15 @@ html {
   position: relative; /* anchors the drop-insert indicator */
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px 6px 12px;
-  border-radius: 6px 6px 0 0;
+  gap: 8px;
+  height: 48px;
+  width: 240px;
+  min-width: 140px;
+  padding: 0 14px 0 20px;
+  border: 1px solid transparent;
+  border-radius: 12px 12px 0 0;
   color: var(--text-muted);
-  max-width: 200px;
+  max-width: 280px;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -635,9 +642,12 @@ html {
 }
 
 .tab.is-active {
+  margin-bottom: -1px;
   background: var(--bg-panel);
+  border-color: var(--border);
+  border-bottom-color: var(--bg-panel);
   color: var(--text-normal);
-  box-shadow: inset 0 -2px 0 var(--accent);
+  box-shadow: none;
 }
 
 .tab-title {
@@ -666,8 +676,8 @@ html {
 .tab-close {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 4px;
   color: var(--text-faint);
   flex-shrink: 0;
@@ -681,11 +691,56 @@ html {
 .tab-new {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   color: var(--text-muted);
   flex-shrink: 0;
+}
+
+.tab-list-toggle {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 44px;
+  margin-left: auto;
+  border-radius: 7px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tab-list-toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.tab-list-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tab-context-menu.tab-list-menu {
+  min-width: 220px;
+  background: color-mix(in srgb, var(--bg-panel-alt) 96%, var(--text-normal));
+  backdrop-filter: blur(18px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.tab-list-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tab-list-menu button.is-selected {
+  background: var(--bg-active);
+}
+
+.tab-list-check {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  flex: 0 0 16px;
 }
 
 .tab-new:hover {
@@ -702,7 +757,7 @@ html {
   border-radius: 6px;
   color: var(--text-muted);
   flex-shrink: 0;
-  margin-left: auto; /* push to the far right (Obsidian view-actions area) */
+  margin-left: 2px;
 }
 .tab-more-options:hover:not(:disabled) {
   background: var(--bg-hover);

@@ -43,6 +43,7 @@ const PATHS: Record<string, string[]> = {
   moon: ["M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"],
   folder: ["M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"],
   bookmark: ["M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"],
+  star: ["m12 2.5 2.9 6.2 6.6.8-4.9 4.6 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"],
   key: [
     "M13 15.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z",
     "M21 2l-9.6 9.6",
@@ -123,6 +124,11 @@ const PATHS: Record<string, string[]> = {
     "M12 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
     "M12 20a1 1 0 1 0 0-2 1 1 0 0 0 0 2z",
   ],
+  "more-horizontal": [
+    "M13 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0z",
+    "M6 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0z",
+    "M20 12a1 1 0 1 0-2 0 1 1 0 0 0 2 0z",
+  ],
   "corner-up-left": ["M9 14L4 9l5-5", "M20 20v-7a4 4 0 0 0-4-4H4"],
   puzzle: [
     "M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02z",
@@ -153,5 +159,40 @@ export function Icon({ name, size = 18, ...rest }: IconProps) {
         <path key={i} d={d} />
       ))}
     </svg>
+  );
+}
+
+/** Accept only one standalone SVG root before developer-provided icon markup is injected. */
+export function isSingleSvgMarkup(markup: string): boolean {
+  try {
+    const body = new DOMParser().parseFromString(markup, "text/html").body;
+    const nodes = Array.from(body.childNodes).filter(
+      (node) => !(node.nodeType === Node.TEXT_NODE && !(node.textContent ?? "").trim()),
+    );
+    const root = nodes[0];
+    return nodes.length === 1 && root instanceof Element && root.tagName.toLowerCase() === "svg";
+  } catch {
+    return false;
+  }
+}
+
+/** Shared renderer for trusted plugin/developer SVG contributions. */
+export function IconMarkup({
+  markup,
+  size = 18,
+  className,
+}: {
+  markup: string;
+  size?: number;
+  className?: string;
+}) {
+  if (!isSingleSvgMarkup(markup)) return null;
+  return (
+    <span
+      className={className}
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: markup }}
+    />
   );
 }

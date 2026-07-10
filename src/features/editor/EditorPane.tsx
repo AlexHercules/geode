@@ -27,14 +27,15 @@ import { loadFoldInfo, foldRangesFromInfo } from "@core/foldStore";
 import { getCssClasses } from "@core/metadata";
 import type { PropertyEdit } from "@core/properties";
 import type { TabState, ViewMode } from "@core/types";
+import type { ViewHeaderActionContribution } from "@core/plugins";
+import { getCommandName } from "@core/commands";
 import { useI18n } from "@core/i18n";
 import { useStore } from "@core/store";
-import { bookmarks } from "@core/bookmarks";
 import { renameWithLinkUpdate } from "@core/linkRewrite";
 import { findFolder } from "@core/explorerMove";
 import { parentPath, basename } from "@core/vault";
 import { useApp } from "@app/AppContext";
-import { Icon } from "@app/icons";
+import { Icon, IconMarkup, isSingleSvgMarkup } from "@app/icons";
 import {
   buildEditorExtensions,
   clearRevealFlash,
@@ -152,6 +153,13 @@ function showLinkUpdateNotice(message: string): void {
   el.setAttribute("data-testid", "link-update-notice");
   document.body.appendChild(el);
   window.setTimeout(() => el.remove(), 4000);
+}
+
+function ViewHeaderActionIcon({ action }: { action: ViewHeaderActionContribution }) {
+  if (action.iconSvg && isSingleSvgMarkup(action.iconSvg)) {
+    return <IconMarkup markup={action.iconSvg} size={18} className="view-header-action-icon" />;
+  }
+  return <Icon name={action.icon ?? "puzzle"} size={18} />;
 }
 
 /**
@@ -336,9 +344,7 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
   const inlineTitleOn = useStore(showInlineTitle);
   // R154: gate the reading-view linked-mentions section (Obsidian "Backlink in document")
   const backlinksInDoc = useStore(showBacklinksInDocument);
-  // R162: subscribe so the header bookmark star reflects bookmark changes live
-  useStore(bookmarks.items);
-  const bookmarked = tab.filePath !== null && bookmarks.isFileBookmarked(tab.filePath);
+  const viewHeaderActions = useStore(app.plugins.viewHeaderActions);
   /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
   const compatExtRev = useStore(editorExtensionsRevision);
   const cbProcRev = useStore(codeBlockProcessorsRevision);
@@ -348,6 +354,9 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
   const [loadError, setLoadError] = useState<string | null>(null);
   /** bumped when the handle's text changes while we are in reading view */
   const [previewBump, setPreviewBump] = useState(0);
+  const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
+  const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const headerMenuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -1136,6 +1145,50 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
     [app, tab.id],
   );
 
+  useEffect(() => {
+    if (!headerMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        headerMenuRef.current &&
+        !headerMenuRef.current.contains(target) &&
+        !headerMenuTriggerRef.current?.contains(target)
+      ) {
+        setHeaderMenu(null);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHeaderMenu(null);
+    };
+    window.addEventListener("mousedown", onPointerDown, true);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown, true);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [headerMenu]);
+
+  const runHeaderMenu = (callback: () => void) => {
+    setHeaderMenu(null);
+    callback();
+  };
+
+  const headerCommandItem = (id: string, testid: string, danger = false) => {
+    const command = app.commands.list().find((item) => item.id === id);
+    if (!command || command.available?.() === false) return null;
+    return (
+      <button
+        key={id}
+        role="menuitem"
+        data-testid={testid}
+        className={danger ? "is-danger" : undefined}
+        onClick={() => runHeaderMenu(() => void app.commands.execute(id))}
+      >
+        {getCommandName(command)}
+      </button>
+    );
+  };
+
   // R94: Obsidian "Show inline title" — the note's filename (no extension) as an H1
   // at the top of the content. R164: click to rename (→ renameWithLinkUpdate). It
   // renders inside the live/source + reading bodies (below), never on empty/error/loading.
@@ -1240,7 +1293,25 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
       data-testid="editor-pane"
       data-leaf-path={tab.filePath ?? undefined}
     >
-      <div className="editor-header">
+      <div className="editor-header view-header">
+        <div className="editor-nav-actions">
+          <button
+            className="editor-header-action"
+            aria-label={t("app.navigateBack")}
+            disabled={!app.workspace.canTabNavigateBack(tab.id)}
+            onClick={() => app.workspace.navigateBack()}
+          >
+            <Icon name="arrow-left" size={18} />
+          </button>
+          <button
+            className="editor-header-action"
+            aria-label={t("app.navigateForward")}
+            disabled={!app.workspace.canTabNavigateForward(tab.id)}
+            onClick={() => app.workspace.navigateForward()}
+          >
+            <Icon name="arrow-right" size={18} />
+          </button>
+        </div>
         {tab.filePath && (() => {
           const segments = tab.filePath.split("/");
           const lastIndex = segments.length - 1;
@@ -1249,7 +1320,7 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
             <div className="editor-breadcrumbs" data-testid="editor-breadcrumbs">
               {segments.map((seg, i) => (
                 <React.Fragment key={i}>
-                  {i > 0 && <span className="sep">›</span>}
+                  {i > 0 && <span className="sep">/</span>}
                   <span
                     className={i === lastIndex ? "tail" : ""}
                     data-testid="editor-breadcrumb-segment"
@@ -1261,77 +1332,111 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
             </div>
           );
         })()}
-        <div className="editor-title" title={tab.filePath ?? undefined}>
-          {tab.title}
-        </div>
-        <div className="editor-header-spacer" />
-        {tab.filePath !== null && (
+        <div className="editor-header-actions view-actions">
+          {viewHeaderActions.map((action) => (
+            <button
+              key={action.id}
+              className="editor-header-action view-action"
+              data-testid={`view-header-action-${action.id}`}
+              title={action.title}
+              aria-label={action.title}
+              onClick={(event) => {
+                try {
+                  void Promise.resolve(action.onClick(event.nativeEvent)).catch((error) =>
+                    console.error(`[plugins] view-header action ${action.id} rejected`, error),
+                  );
+                } catch (error) {
+                  console.error(`[plugins] view-header action ${action.id} threw`, error);
+                }
+              }}
+            >
+              <ViewHeaderActionIcon action={action} />
+            </button>
+          ))}
+          {viewModeToggleVisible && (
+            <button
+              className={"editor-header-action" + (tab.mode === "preview" ? " is-active" : "")}
+              data-testid="mode-reading-toggle"
+              title={t(tab.mode === "preview" ? "editor.livePreview" : "editor.readingView")}
+              aria-label={t(tab.mode === "preview" ? "editor.livePreview" : "editor.readingView")}
+              aria-pressed={tab.mode === "preview"}
+              onClick={() => setMode(tab.mode === "preview" ? "live" : "preview")}
+            >
+              <Icon name="book-open" size={19} />
+            </button>
+          )}
           <button
-            className={"editor-mode-btn" + (bookmarked ? " is-active" : "")}
-            data-testid="bookmark-toggle"
-            title={t(bookmarked ? "cmd.unbookmarkFile" : "cmd.bookmarkFile")}
-            aria-label={t(bookmarked ? "cmd.unbookmarkFile" : "cmd.bookmarkFile")}
-            aria-pressed={bookmarked}
-            onClick={() => {
-              if (tab.filePath) void bookmarks.toggleFile(tab.filePath);
+            ref={headerMenuTriggerRef}
+            className="editor-header-action editor-more-options"
+            data-testid="editor-more-options"
+            title={t("app.moreOptions")}
+            aria-label={t("app.moreOptions")}
+            aria-expanded={headerMenu !== null}
+            onClick={(event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              setHeaderMenu((current) => current ? null : { x: rect.right, y: rect.bottom });
             }}
           >
-            <Icon name="bookmark" size={15} {...(bookmarked ? { fill: "currentColor" } : {})} />
+            <Icon name="more-horizontal" size={19} />
           </button>
-        )}
-        {viewModeToggleVisible && (
-          <div
-            className="editor-mode-group"
-            role="group"
-            aria-label={t("editor.viewModeAria")}
-            data-testid="mode-group"
-          >
-          <button
-            className={"editor-mode-btn" + (tab.mode === "live" ? " is-active" : "")}
-            data-testid="mode-live"
-            title={`${t("editor.livePreview")} (Ctrl+E)`}
-            aria-label={t("editor.livePreview")}
-            aria-pressed={tab.mode === "live"}
-            onClick={() => setMode("live")}
-          >
-            <Icon name="pencil" size={15} />
-          </button>
-          <button
-            className={"editor-mode-btn" + (tab.mode === "source" ? " is-active" : "")}
-            data-testid="mode-source"
-            title={`${t("editor.sourceMode")} (Ctrl+Shift+E)`}
-            aria-label={t("editor.sourceMode")}
-            aria-pressed={tab.mode === "source"}
-            onClick={() => setMode("source")}
-          >
-            <svg
-              width={15}
-              height={15}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M16 18l6-6-6-6" />
-              <path d="M8 6l-6 6 6 6" />
-            </svg>
-          </button>
-          <button
-            className={"editor-mode-btn" + (tab.mode === "preview" ? " is-active" : "")}
-            data-testid="mode-preview"
-            title={`${t("editor.readingView")} (Ctrl+E)`}
-            aria-label={t("editor.readingView")}
-            aria-pressed={tab.mode === "preview"}
-            onClick={() => setMode("preview")}
-          >
-            <Icon name="book-open" size={15} />
-          </button>
-          </div>
-        )}
+        </div>
       </div>
+      {headerMenu && createPortal(
+        <div
+          ref={headerMenuRef}
+          className="tab-context-menu editor-view-options-menu"
+          data-testid="editor-view-options-menu"
+          role="menu"
+          style={{
+            left: Math.max(8, Math.min(headerMenu.x - 250, window.innerWidth - 258)),
+            top: Math.max(8, Math.min(headerMenu.y, window.innerHeight - 620)),
+          }}
+        >
+          {headerCommandItem("backlink:toggle-backlinks-in-document", "editor-menu-backlinks")}
+          <button
+            role="menuitem"
+            className={tab.mode === "preview" ? "is-selected" : undefined}
+            data-testid="editor-menu-reading"
+            onClick={() => runHeaderMenu(() => setMode("preview"))}
+          >
+            {t("editor.readingView")}
+          </button>
+          <button
+            role="menuitem"
+            className={tab.mode === "source" ? "is-selected" : undefined}
+            data-testid="editor-menu-source"
+            onClick={() => runHeaderMenu(() => setMode("source"))}
+          >
+            {t("editor.sourceMode")}
+          </button>
+          <div className="tab-context-sep" />
+          <button role="menuitem" onClick={() => runHeaderMenu(() => void app.workspace.splitActivePane("row"))}>
+            {t("app.tabSplitRight")}
+          </button>
+          <button role="menuitem" onClick={() => runHeaderMenu(() => void app.workspace.splitActivePane("column"))}>
+            {t("app.tabSplitDown")}
+          </button>
+          <div className="tab-context-sep" />
+          {headerCommandItem("bookmarks:bookmark-file", "editor-menu-bookmark")}
+          {headerCommandItem("file-explorer:move-file", "editor-menu-move")}
+          {headerCommandItem("editor:merge-file", "editor-menu-merge")}
+          {headerCommandItem("editor:add-property", "editor-menu-add-property")}
+          {headerCommandItem("app:export-pdf", "editor-menu-export-pdf")}
+          <div className="tab-context-sep" />
+          {headerCommandItem("editor:search", "editor-menu-search")}
+          {headerCommandItem("editor:replace", "editor-menu-replace")}
+          <div className="tab-context-sep" />
+          {headerCommandItem("file-explorer:copy-path", "editor-menu-copy-path")}
+          {headerCommandItem("workspace:copy-url", "editor-menu-copy-url")}
+          {headerCommandItem("file-explorer:reveal-active-file", "editor-menu-reveal-nav")}
+          {headerCommandItem("file-explorer:reveal-in-system", "editor-menu-reveal-system")}
+          {headerCommandItem("file-explorer:open-in-default-app", "editor-menu-open-default")}
+          <div className="tab-context-sep" />
+          {headerCommandItem("workspace:edit-file-title", "editor-menu-rename")}
+          {headerCommandItem("app:delete-file", "editor-menu-delete", true)}
+        </div>,
+        document.body,
+      )}
       {body}
     </div>
   );

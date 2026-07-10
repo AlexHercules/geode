@@ -27,7 +27,7 @@ const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
 const TOGGLE = '[data-testid="settings-uri-links-enabled"]';
-const MODE_PREVIEW = '[data-testid="mode-preview"]';
+const MODE_PREVIEW = '[data-testid="mode-reading-toggle"]';
 const INLINE_TITLE = '[data-testid="inline-title"] .inline-title-text';
 
 async function openFilesAndLinks() {
@@ -64,6 +64,13 @@ async function setUriLinksEnabled(enabled) {
 const storedUriLinks = () => page.evaluate(() => localStorage.getItem("geode.uriLinksEnabled"));
 const toggleOn = () => page.evaluate((sel) => document.querySelector(sel)?.getAttribute("aria-checked") === "true", TOGGLE);
 const activeTitle = () => page.evaluate((sel) => document.querySelector(sel)?.textContent?.trim(), INLINE_TITLE);
+async function enterReadingView() {
+  await page.waitForSelector(MODE_PREVIEW, { timeout: 5000 });
+  if (!(await page.$('a[href^="obsidian://"]'))) {
+    await page.click(MODE_PREVIEW);
+    await page.waitForSelector('a[href^="obsidian://"]', { timeout: 5000 });
+  }
+}
 
 // =========== Part A: toggle presence + default ON + persistence ===========
 console.log("— Part A: Files & Links → Advanced toggle, default ON, persists —");
@@ -104,9 +111,7 @@ console.log("— Part B: reading-view obsidian:// click navigation gated —");
   await page.waitForTimeout(200);
 
   // Switch to reading view and click the obsidian:// link while ON.
-  await page.waitForSelector(MODE_PREVIEW, { timeout: 5000 });
-  await page.click(MODE_PREVIEW);
-  await page.waitForTimeout(200);
+  await enterReadingView();
   await page.click('a[href^="obsidian://"]');
   await page.waitForTimeout(200);
   ok("ON: click navigates to r275-target", (await activeTitle()) === "r275-target", await activeTitle());
@@ -115,9 +120,7 @@ console.log("— Part B: reading-view obsidian:// click navigation gated —");
   await setUriLinksEnabled(false);
   await page.evaluate(() => window.__geodeUri.handle("obsidian://open?file=r275-source"));
   await page.waitForTimeout(200);
-  await page.waitForSelector(MODE_PREVIEW, { timeout: 5000 });
-  await page.click(MODE_PREVIEW);
-  await page.waitForTimeout(200);
+  await enterReadingView();
   await page.click('a[href^="obsidian://"]');
   await page.waitForTimeout(200);
   ok("OFF: click does NOT navigate (stays on r275-source)", (await activeTitle()) === "r275-source", await activeTitle());

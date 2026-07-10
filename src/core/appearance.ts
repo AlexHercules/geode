@@ -425,9 +425,9 @@ export function setShowTabTitleBar(on: boolean): void {
 }
 
 /** R229 (G8): Obsidian "Show view mode toggle" — show the edit/read view-mode toggle button
- *  group on each tab's header. Default ON = current behaviour + Obsidian default. OFF hides it
+ *  on each tab's header. Default ON = current behaviour + Obsidian default. OFF hides it
  *  (the mode is still switchable via the Ctrl+E / Ctrl+Shift+E commands). Consumed reactively by
- *  EditorPane (gates the .editor-mode-group render). */
+ *  EditorPane (gates the mode-reading-toggle render). */
 const VIEW_MODE_TOGGLE_KEY = "geode.showViewModeToggle";
 export const showViewModeToggle = new Store<boolean>(readBool(VIEW_MODE_TOGGLE_KEY, true));
 

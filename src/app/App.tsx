@@ -19,7 +19,7 @@ import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from
 import { getCommandName } from "@core/commands";
 import type { PaneLeaf, PaneNode, PaneSplit, TabState } from "@core/types";
 import type { SidebarPanelContribution } from "@core/plugins";
-import { Icon } from "./icons";
+import { Icon, IconMarkup, isSingleSvgMarkup } from "./icons";
 import { Explorer } from "@features/explorer/Explorer";
 import { SearchPanel } from "@features/search/SearchPanel";
 import { EditorPane } from "@features/editor/EditorPane";
@@ -1678,32 +1678,14 @@ function SidebarPanelHost({ panel }: { panel: SidebarPanelContribution }) {
   );
 }
 
-/**
- * True when the markup parses to exactly one root element and that element is
- * an <svg> (no siblings). Anything else falls back to the letter icon instead
- * of being injected via dangerouslySetInnerHTML.
- */
-function isSingleSvgMarkup(markup: string): boolean {
-  try {
-    const body = new DOMParser().parseFromString(markup, "text/html").body;
-    const nodes = Array.from(body.childNodes).filter(
-      (n) => !(n.nodeType === Node.TEXT_NODE && !(n.textContent ?? "").trim()),
-    );
-    const root = nodes[0];
-    return nodes.length === 1 && root instanceof Element && root.tagName.toLowerCase() === "svg";
-  } catch {
-    return false;
-  }
-}
-
 /** Selector icon for a plugin sidebar panel: raw svg markup, or the title's first letter. */
 function SidebarPanelIcon({ panel }: { panel: SidebarPanelContribution }) {
   if (panel.iconSvg && isSingleSvgMarkup(panel.iconSvg)) {
     return (
-      <span
+      <IconMarkup
+        markup={panel.iconSvg}
+        size={18}
         className="sidebar-panel-icon"
-        aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: panel.iconSvg }}
       />
     );
   }
@@ -1970,11 +1952,17 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
   // R81: tab right-click context menu (TagsPanel inline pattern). R256: `kind`
   // discriminates the tab right-click menu ("tab") from the view-header "…"
   // more-options menu ("viewopts"), which share the dismiss/runMenu machinery.
-  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string; kind: "tab" | "viewopts" } | null>(null);
+  const [menu, setMenu] = useState<{
+    x: number;
+    y: number;
+    tabId: string;
+    kind: "tab" | "viewopts" | "tablist";
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!menu) return;
     const onDown = (e: MouseEvent) => {
+      if ((e.target as Element | null)?.closest?.(".tab-list-toggle, .tab-more-options")) return;
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenu(null);
     };
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
@@ -1985,6 +1973,7 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
       window.removeEventListener("keydown", onKey);
     };
   }, [menu]);
+  const activeTab = leaf.tabs.find((tab) => tab.id === leaf.activeTabId) ?? null;
   const menuTab = menu ? leaf.tabs.find((tb) => tb.id === menu.tabId) ?? null : null;
   const runMenu = (fn: () => void) => {
     fn();
@@ -2050,24 +2039,6 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         if (tabId) app.workspace.moveTab(tabId, leaf.id, idx);
       }}
     >
-      <div className="tab-nav">
-        <button
-          className="tab-nav-btn"
-          aria-label={t("app.navigateBack")}
-          disabled={!leaf.activeTabId || !app.workspace.canTabNavigateBack(leaf.activeTabId)}
-          onClick={() => app.workspace.navigateBack()}
-        >
-          <Icon name="arrow-left" size={16} />
-        </button>
-        <button
-          className="tab-nav-btn"
-          aria-label={t("app.navigateForward")}
-          disabled={!leaf.activeTabId || !app.workspace.canTabNavigateForward(leaf.activeTabId)}
-          onClick={() => app.workspace.navigateForward()}
-        >
-          <Icon name="arrow-right" size={16} />
-        </button>
-      </div>
       {leaf.tabs.map((tab, i) => {
         /* the graph tab's stored title is persisted in workspace state —
            ignore it at render time so the label follows the UI locale;
@@ -2137,11 +2108,28 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
       >
         <Icon name="plus" size={16} />
       </button>
+      <button
+        className="tab-list-toggle"
+        data-testid={`tab-list-toggle-${leaf.id}`}
+        title={t("app.openTabs")}
+        aria-label={t("app.openTabs")}
+        disabled={!leaf.activeTabId}
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          if (leaf.activeTabId) {
+            setMenu((current) => current?.kind === "tablist"
+              ? null
+              : { x: rect.right, y: rect.bottom, tabId: leaf.activeTabId!, kind: "tablist" });
+          }
+        }}
+      >
+        <Icon name="chevron-down" size={18} />
+      </button>
       {/* R256: view-header "…" more-options menu (Obsidian native·tab/view 顶部「更多选项」)
           — opens an aggregate menu of view-mode + file actions + tab/pane ops for the
           active tab. The "…" button activates its own pane via the pane's mousedown
           capture, so the wired commands target this leaf's active file. */}
-      <button
+      {activeTab?.viewType !== "markdown" && <button
         className="tab-more-options"
         data-testid={`view-header-more-${leaf.id}`}
         title={t("app.moreOptions")}
@@ -2149,11 +2137,15 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
         disabled={!leaf.activeTabId}
         onClick={(e) => {
           const r = e.currentTarget.getBoundingClientRect();
-          if (leaf.activeTabId) setMenu({ x: r.left, y: r.bottom, tabId: leaf.activeTabId, kind: "viewopts" });
+          if (leaf.activeTabId) {
+            setMenu((current) => current?.kind === "viewopts"
+              ? null
+              : { x: r.left, y: r.bottom, tabId: leaf.activeTabId!, kind: "viewopts" });
+          }
         }}
       >
         <Icon name="more-vertical" size={16} />
-      </button>
+      </button>}
       {menu && menuTab && menu.kind === "tab" && (
         <div
           ref={menuRef}
@@ -2202,6 +2194,33 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
           <button role="menuitem" data-testid="tabctx-toggle-stacked" onClick={() => runMenu(() => app.workspace.toggleStacked(leaf.id))}>
             {t(leaf.stacked ? "app.tabUnstack" : "app.tabStack")}
           </button>
+        </div>
+      )}
+      {menu && menuTab && menu.kind === "tablist" && (
+        <div
+          ref={menuRef}
+          className="tab-context-menu tab-list-menu"
+          data-testid="tab-list-menu"
+          role="menu"
+          style={{
+            right: Math.max(8, window.innerWidth - menu.x),
+            top: Math.max(0, Math.min(menu.y, window.innerHeight - 280)),
+          }}
+        >
+          {leaf.tabs.map((tab) => (
+            <button
+              key={tab.id}
+              role="menuitem"
+              className={tab.id === leaf.activeTabId ? "is-selected" : undefined}
+              data-testid={`tab-list-item-${tab.id}`}
+              onClick={() => runMenu(() => app.workspace.setActiveTab(tab.id))}
+            >
+              <span className="tab-list-check" aria-hidden="true">
+                {tab.id === leaf.activeTabId && <Icon name="check" size={14} />}
+              </span>
+              <span>{tab.title}</span>
+            </button>
+          ))}
         </div>
       )}
       {menu && menuTab && menu.kind === "viewopts" && (

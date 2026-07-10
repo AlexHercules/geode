@@ -4,8 +4,8 @@
  * Contract: docs/ARCHITECTURE.md "Round 229 additions".
  *
  * Obsidian's "Show view mode toggle" (Editor, default ON) shows the per-tab edit/read toggle button.
- * Geode gates the .editor-mode-group render on a persisted Store (mirrors showRibbon/showTabTitleBar).
- * OFF hides the button group but the mode is still switchable (setTabMode / Ctrl+E command).
+ * Geode gates the Obsidian-style edit/read button on a persisted Store.
+ * OFF hides the button but the mode is still switchable (setTabMode / Ctrl+E command).
  */
 import { chromium } from "playwright";
 
@@ -31,7 +31,7 @@ await page.waitForFunction(() => !!window.__app, null, { timeout: 5000 });
 
 const app = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const hasGroup = () => app(() => !!document.querySelector('[data-testid="mode-group"]'));
+const hasToggle = () => app(() => !!document.querySelector('[data-testid="mode-reading-toggle"]'));
 const activeMode = () => app(() => window.__app.workspace.getActiveTab()?.mode ?? null);
 const openEditor = async () => {
   await app(async () => {
@@ -56,8 +56,8 @@ const toggleViewMode = async () => {
 
 await openEditor();
 
-console.log("— default ON: the view-mode toggle button group is shown —");
-ok("default ON: .editor-mode-group (mode-group) is present", await hasGroup());
+console.log("— default ON: the view-mode toggle button is shown —");
+ok("default ON: mode-reading-toggle is present", await hasToggle());
 ok("settings toggle reflects default ON", await app(async () => {
   window.__app.workspace.openModal("settings");
   await new Promise((r) => setTimeout(r, 80));
@@ -70,14 +70,14 @@ ok("settings toggle reflects default ON", await app(async () => {
 await page.click(".cm-content").catch(() => {});
 await wait(40);
 
-console.log("— toggle OFF: the button group is hidden, but the mode is still switchable —");
+console.log("— toggle OFF: the button is hidden, but the mode is still switchable —");
 await toggleViewMode();
-ok("OFF: mode-group is hidden", !(await hasGroup()));
+ok("OFF: mode-reading-toggle is hidden", !(await hasToggle()));
 // mode still switchable via the underlying mechanism (Ctrl+E command / setTabMode) despite no button
 await app(() => { const t = window.__app.workspace.getActiveTab(); window.__app.workspace.setTabMode(t.id, "source"); });
 await wait(100);
 ok("OFF: the mode still switches to 'source' (logic not gated, only the button)", (await activeMode()) === "source");
-ok("OFF: mode-group still hidden after a mode switch", !(await hasGroup()));
+ok("OFF: mode-reading-toggle still hidden after a mode switch", !(await hasToggle()));
 ok("pref persisted to localStorage as 'false'", (await app(() => localStorage.getItem("geode.showViewModeToggle"))) === "false");
 
 console.log("— OFF persists across reload —");
@@ -86,11 +86,11 @@ await page.waitForFunction(() => !!window.geode, null, { timeout: 15000 });
 await page.evaluate(() => window.geode.registerPlugin({ id: "r229b", name: "r229b", onload(app) { window.__app = app; } }));
 await page.waitForFunction(() => !!window.__app, null, { timeout: 5000 });
 await openEditor();
-ok("after reload, OFF restored → mode-group still hidden", !(await hasGroup()));
+ok("after reload, OFF restored → mode-reading-toggle still hidden", !(await hasToggle()));
 
-console.log("— toggle back ON: button group returns —");
+console.log("— toggle back ON: button returns —");
 await toggleViewMode();
-ok("back ON: mode-group is shown again", await hasGroup());
+ok("back ON: mode-reading-toggle is shown again", await hasToggle());
 
 ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
 

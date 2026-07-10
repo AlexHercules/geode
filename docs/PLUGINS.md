@@ -42,10 +42,31 @@ The plugin immediately appears under **Settings → Plugins** with an enable/dis
 | `app.workspace` | `openFile`, `openGraph`, `getActiveFile`, theme & layout controls |
 | `app.commands` | `register({ id, name, hotkey?, callback })` → shows up in the palette |
 | `app.events` | `on("file:modified" \| "active-file:changed" \| ...)` typed event bus |
-| `app.ui` | `setStatusBarItem(id, text)` / `removeStatusBarItem(id)` |
+| `app.ui` | Status-bar items plus `addViewHeaderAction(id, action)` for editor-header icons |
 
 Everything registered through the handle is tracked and torn down on disable —
 plugins cannot leak handlers.
+
+### Editor view-header actions
+
+Plugins can add an Obsidian-style icon beside the reading-view and more-actions
+buttons. Contributions are data-based and rendered once per Markdown pane, so
+the same action remains visible in every split without moving a shared DOM node.
+
+```js
+onload(app) {
+  app.ui.addViewHeaderAction("spark", {
+    title: "Run my note action",
+    // Use a Geode icon id...
+    icon: "star",
+    // ...or one trusted standalone SVG root for a custom registered icon:
+    // iconSvg: '<svg viewBox="0 0 24 24">...</svg>',
+    onClick: () => console.log(app.workspace.getActiveFile()),
+  });
+}
+```
+
+The action is automatically removed when the plugin is disabled or reloaded.
 
 ## Built-in plugins (source = examples)
 

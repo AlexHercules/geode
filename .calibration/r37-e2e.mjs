@@ -9,7 +9,7 @@
  *  B. a new navigation clears the forward stack.
  *  C. command layer (app:navigate-back / app:navigate-forward).
  *  D. a fresh tab (newTab) has empty history.
- *  E. store → UI binding: .tab-nav-btn disabled reflects canTabNavigate* (proves
+ *  E. store → UI binding: editor-header nav disabled reflects canTabNavigate* (proves
  *     no extra Store needed — every history change rides a workspace.state change).
  *  F. hotkey grammar (__geodeHotkey.match): Mod+Alt+Arrow both platforms.
  *  G. real keyboard: Mod+Alt+Left/Right step history (CDP delivers; Alt+← is a
@@ -112,15 +112,15 @@ ok("new tab active = e", (await activePath()) === "r37/e.md");
 ok("new tab has no back history", (await canBack(tidE)) === false);
 ok("new tab has no forward history", (await canFwd(tidE)) === false);
 
-// ── E. store → UI binding (.tab-nav-btn disabled reflects canTabNavigate*) ───
+// ── E. store → UI binding (view-header nav reflects canTabNavigate*) ─────
 console.log("E. store → UI binding (nav buttons disabled state)");
 await navSetup(); // c, back enabled, fwd disabled
 await wait(120);
-const btns1 = await app(() => [...document.querySelectorAll(".pane.is-active .tab-nav .tab-nav-btn")].map((b) => b.disabled));
+const btns1 = await app(() => [...document.querySelectorAll(".pane.is-active .editor-nav-actions .editor-header-action")].map((b) => b.disabled));
 ok("UI: [back enabled, forward disabled] after a→b→c", btns1.length === 2 && btns1[0] === false && btns1[1] === true, JSON.stringify(btns1));
 await app(() => window.__app.workspace.navigateBack());
 await wait(120);
-const btns2 = await app(() => [...document.querySelectorAll(".pane.is-active .tab-nav .tab-nav-btn")].map((b) => b.disabled));
+const btns2 = await app(() => [...document.querySelectorAll(".pane.is-active .editor-nav-actions .editor-header-action")].map((b) => b.disabled));
 ok("UI: [back enabled, forward enabled] at mid-history", btns2[0] === false && btns2[1] === false, JSON.stringify(btns2));
 
 // ── F. hotkey grammar (both platforms) ───────────────────────────────────────

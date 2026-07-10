@@ -29,6 +29,16 @@ export interface AppHandle {
     /** set (or update) a status bar item; returns a disposer */
     setStatusBarItem(id: string, text: string): void;
     removeStatusBarItem(id: string): void;
+    /**
+     * Add an icon action to every Markdown editor view header. The contribution
+     * is cloned by React per pane, so split views never fight over one DOM node.
+     * `icon` resolves through Geode's built-in icon set; `iconSvg` accepts one
+     * trusted standalone <svg> root for developer-registered artwork.
+     */
+    addViewHeaderAction(
+      id: string,
+      action: Omit<ViewHeaderActionContribution, "id">,
+    ): () => void;
   };
 }
 
@@ -85,6 +95,18 @@ export interface SidebarPanelContribution {
   iconSvg?: string;
   /** panel body, owned by the contributor */
   el: HTMLElement;
+}
+
+/** A developer/plugin action rendered in each Markdown view header. */
+export interface ViewHeaderActionContribution {
+  /** manager-scoped id (`plugin-id:local-id`) */
+  id: string;
+  title: string;
+  /** Geode built-in icon id; used when iconSvg is absent/invalid. */
+  icon?: string;
+  /** Trusted standalone SVG markup, validated by the shell before rendering. */
+  iconSvg?: string;
+  onClick: (event: MouseEvent) => unknown;
 }
 
 /** A plugin settings UI section (compat PluginSettingTab); SettingsModal hosts it. */
@@ -186,6 +208,8 @@ export class PluginManager {
   readonly settingsSections = new Store<ReadonlyArray<PluginSettingsSection>>([]);
   /** sidebar panels (compat registerView custom views) hosted by the App shell */
   readonly sidebarPanels = new Store<ReadonlyArray<SidebarPanelContribution>>([]);
+  /** Markdown view-header actions; rendered once per pane from plain data. */
+  readonly viewHeaderActions = new Store<ReadonlyArray<ViewHeaderActionContribution>>([]);
   /** R130: the single compat file-menu provider (set per loader run, cleared on reload). Not a
    *  Store — collection is a synchronous call when a context menu opens, not a reactive render. */
   private fileMenuProvider: ((ctx: FileMenuContext) => MenuContribution[]) | null = null;
@@ -237,6 +261,13 @@ export class PluginManager {
           if (isNew) record.disposers.push(() => this.removeItem(scoped));
         },
         removeStatusBarItem: (id) => this.removeItem(`${record.plugin.id}:${id}`),
+        addViewHeaderAction: (id, action) =>
+          track(
+            this.addViewHeaderAction({
+              ...action,
+              id: `${record.plugin.id}:${id}`,
+            }),
+          ),
       },
     };
   }
@@ -491,6 +522,15 @@ export class PluginManager {
     // dispose by object identity, so a later same-id registration is not torn
     // down by a stale disposer
     return () => this.sidebarPanels.update((arr) => arr.filter((x) => x !== panel));
+  }
+
+  addViewHeaderAction(action: ViewHeaderActionContribution): () => void {
+    this.viewHeaderActions.update((items) => [
+      ...items.filter((item) => item.id !== action.id),
+      action,
+    ]);
+    return () =>
+      this.viewHeaderActions.update((items) => items.filter((item) => item !== action));
   }
 
   /** R130: register the compat file-menu provider (one per loader run). The disposer clears it
