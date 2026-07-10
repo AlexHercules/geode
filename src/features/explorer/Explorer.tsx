@@ -1193,6 +1193,46 @@ export function Explorer() {
                       <Icon name="folder" size={14} />
                       {t("explorer.setAttachmentFolder")}
                     </button>
+                    {/* R292 (G4-b): folder-menu parity with file branch - copy path
+                        + [desktop] reveal in system / open with default app. The
+                        handlers are VaultNode-generic (no file guard), so this is
+                        pure menu wiring; file-only items (open-new-tab / open-right
+                        / make-copy / copy-obsidian-url) stay file-only (folders have
+                        no tab / no obsidian:// URL; makeCopy is file-guarded). */}
+                    <button
+                      data-testid="explorerctx-copy-path"
+                      onClick={() => {
+                        setMenu(null);
+                        void copyVaultPath(node);
+                      }}
+                    >
+                      <Icon name="copy" size={14} />
+                      {t("explorer.copyPath")}
+                    </button>
+                    {isTauri() && (
+                      <>
+                        <button
+                          data-testid="explorerctx-reveal-in-system"
+                          onClick={() => {
+                            setMenu(null);
+                            void revealNodeInSystem(node);
+                          }}
+                        >
+                          <Icon name="folder" size={14} />
+                          {t("explorer.revealInSystem")}
+                        </button>
+                        <button
+                          data-testid="explorerctx-open-in-default-app"
+                          onClick={() => {
+                            setMenu(null);
+                            void openNodeInDefaultApp(node);
+                          }}
+                        >
+                          <Icon name="external-link" size={14} />
+                          {t("explorer.openInDefaultApp")}
+                        </button>
+                      </>
+                    )}
                     <div className="explorer-menu-sep" />
                   </>
                 )}

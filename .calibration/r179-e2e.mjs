@@ -100,13 +100,17 @@ ok("obsidian://open URL with correct vault + .md-stripped file", urlCheck.ok, JS
 ok("URL encodes the path separator as %2F", await app(() =>
   window.__clip[window.__clip.length - 1].includes("file=r179-dir%2Fr179-note")));
 
-console.log("— faithful scope: file-only (folder menu has neither) —");
+console.log("— faithful scope: folder menu: Copy path (R292 parity) yes / Copy Obsidian URL no —");
 await closeMenu();
 await wait(60);
 await rightClick(rowSel("r179-dir"));
 await wait(60);
-ok("folder menu does NOT have Copy path (file-only v1)", !(await has("explorerctx-copy-path")));
-ok("folder menu does NOT have Copy Obsidian URL (file-only v1)", !(await has("explorerctx-copy-obsidian-url")));
+ok("folder menu HAS Copy path (R292 parity - was file-only v1)", await has("explorerctx-copy-path"));
+ok("folder menu does NOT have Copy Obsidian URL (file-only - folders have no obsidian:// URL)", !(await has("explorerctx-copy-obsidian-url")));
+// R292: folder Copy path writes the folder's vault-relative path (no extension)
+await page.click('[data-testid="explorerctx-copy-path"]');
+await wait(120);
+ok("folder Copy path -> vault-relative folder path on clipboard", (await lastClip()) === "r179-dir", JSON.stringify(await lastClip()));
 await closeMenu();
 
 ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));
