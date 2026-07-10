@@ -293,6 +293,17 @@ export function App() {
           workspace.openGraph();
         },
       }),
+      // R291: open Geode help / release notes in the system browser.
+      commands.register({
+        id: "app:open-help",
+        name: () => t("cmd.openHelp"),
+        callback: () => window.open("https://github.com/AlexHercules/geode#readme", "_blank", "noopener"),
+      }),
+      commands.register({
+        id: "app:open-release-notes",
+        name: () => t("cmd.openReleaseNotes"),
+        callback: () => window.open("https://github.com/AlexHercules/geode/releases", "_blank", "noopener"),
+      }),
       commands.register({
         id: "app:toggle-theme",
         name: () => t("cmd.toggleTheme"),
