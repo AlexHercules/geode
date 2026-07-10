@@ -47,6 +47,42 @@ ok("statistics are a standalone floating badge", await app(() => {
   return css.position === "absolute" && bar.getBoundingClientRect().width < window.innerWidth / 2;
 }));
 
+console.log("— right-click opens the vault path context menu —");
+await page.click('[data-testid="status-vault"]', { button: "right" });
+await wait(80);
+ok("vault context menu is present", await app(() => !!document.querySelector('[data-testid="vault-context-menu"]')));
+ok("context menu contains reveal", await app(() => !!document.querySelector('[data-testid="vault-context-reveal"]')));
+ok("context menu contains copy path", await app(() => !!document.querySelector('[data-testid="vault-context-copy-path"]')));
+ok("browser demo disables filesystem-only actions", await app(() => {
+  const reveal = document.querySelector('[data-testid="vault-context-reveal"]');
+  const copy = document.querySelector('[data-testid="vault-context-copy-path"]');
+  return reveal?.hasAttribute("disabled") && copy?.hasAttribute("disabled");
+}));
+await page.keyboard.press("Escape");
+await wait(40);
+ok("Escape closes the vault context menu", await app(() => !document.querySelector('[data-testid="vault-context-menu"]')));
+
+console.log("— click outside dismisses the vault context menu —");
+await page.click('[data-testid="status-vault"]', { button: "right" });
+await wait(80);
+ok("context menu is open again", await app(() => !!document.querySelector('[data-testid="vault-context-menu"]')));
+await page.click('[data-testid="left-sidebar"]');
+await wait(80);
+ok("click outside closes the context menu", await app(() => !document.querySelector('[data-testid="vault-context-menu"]')));
+
+console.log("— context menu and dropdown are mutually exclusive —");
+await page.click('[data-testid="status-vault"]');
+await wait(80);
+ok("dropdown is open", await app(() => !!document.querySelector('[data-testid="vault-switcher-menu"]')));
+await page.click('[data-testid="status-vault"]', { button: "right" });
+await wait(80);
+ok("right-click closes dropdown and opens context menu", await app(() =>
+  !document.querySelector('[data-testid="vault-switcher-menu"]') &&
+  !!document.querySelector('[data-testid="vault-context-menu"]')
+));
+await page.keyboard.press("Escape");
+await wait(40);
+
 console.log("— the relocated settings button remains functional —");
 await page.click('[data-testid="sidebar-footer-settings"]');
 await wait(120);

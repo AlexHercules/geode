@@ -1,4 +1,4 @@
-import { Fragment, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useApp } from "./AppContext";
 import { useStore } from "@core/store";
@@ -1557,29 +1557,74 @@ function VaultSwitcherControl() {
   const app = useApp();
   const t = useI18n();
   const rootRef = useRef<HTMLDivElement>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [contextOpen, setContextOpen] = useState(false);
   const [vaults, setVaults] = useState<RecentVaultRecord[]>([]);
   const currentPath = app.vault.getVaultPath();
   const recentVaults = vaults.filter((record) => record.path !== currentPath);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !contextOpen) return;
     const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setContextOpen(false);
+      }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setContextOpen(false);
+      }
     };
-    window.addEventListener("pointerdown", onPointerDown);
+    // Capture phase so the menu closes even when an inner component stops
+    // propagation (e.g. Explorer row context menus).
+    window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, contextOpen]);
+
+  /* Position the vault context menu inside the viewport and focus the first
+     enabled item when it opens. */
+  useLayoutEffect(() => {
+    const element = contextMenuRef.current;
+    if (!contextOpen || !element) return;
+    const placeInsideViewport = () => {
+      const gutter = 8;
+      const rect = element.getBoundingClientRect();
+      const parent = element.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+      const absLeft = rect.left - parent.left;
+      const absTop = rect.top - parent.top;
+      const maxLeft = Math.max(gutter, window.innerWidth - rect.width - gutter - parent.left);
+      const maxTop = Math.max(gutter, window.innerHeight - rect.height - gutter - parent.top);
+      element.style.left = `${Math.max(gutter - parent.left, Math.min(absLeft, maxLeft))}px`;
+      element.style.top = `${Math.max(gutter - parent.top, Math.min(absTop, maxTop))}px`;
+      element.style.bottom = "auto";
+    };
+    placeInsideViewport();
+    const firstButton = element.querySelector<HTMLButtonElement>("button:not(:disabled)");
+    firstButton?.focus();
+    window.addEventListener("resize", placeInsideViewport);
+    return () => window.removeEventListener("resize", placeInsideViewport);
+  }, [contextOpen]);
+
+  const focusContextItem = (delta: number) => {
+    const menu = contextMenuRef.current;
+    if (!menu) return;
+    const items = Array.from(menu.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+    if (!items.length) return;
+    const index = items.findIndex((item) => item === document.activeElement);
+    const nextIndex = index < 0 ? 0 : Math.max(0, Math.min(items.length - 1, index + delta));
+    items[nextIndex]?.focus();
+  };
 
   const toggle = () => {
     setVaults(loadRecentVaultRecords());
+    setContextOpen(false);
     setOpen((value) => !value);
   };
   const selectVault = (path: string | null) => {
@@ -1594,6 +1639,20 @@ function VaultSwitcherControl() {
     setOpen(false);
     app.workspace.openModal("vaultmanager");
   };
+  const revealVault = () => {
+    setContextOpen(false);
+    if (!currentPath) return;
+    void revealInSystem(currentPath, "").catch((err) =>
+      console.error("[vault] reveal root failed", err),
+    );
+  };
+  const copyVaultPath = () => {
+    setContextOpen(false);
+    if (!currentPath) return;
+    void navigator.clipboard.writeText(currentPath)
+      .then(() => showCommandNotice(t("vaultContext.pathCopied")))
+      .catch((err) => console.error("[vault] copy path failed", err));
+  };
 
   return (
     <div className="vault-switcher-control" ref={rootRef}>
@@ -1604,8 +1663,13 @@ function VaultSwitcherControl() {
         title={t("cmd.switchVault")}
         aria-label={t("cmd.switchVault")}
         aria-haspopup="menu"
-        aria-expanded={open}
+        aria-expanded={open || contextOpen}
         onClick={toggle}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setOpen(false);
+          setContextOpen(true);
+        }}
       >
         <Icon name="chevrons-up-down" size={16} />
         <span>{app.vault.vaultName}</span>
@@ -1646,6 +1710,51 @@ function VaultSwitcherControl() {
           >
             <span className="vault-switcher-menu-check" />
             <span className="vault-switcher-menu-label">{t("vaultManager.manage")}</span>
+          </button>
+        </div>
+      )}
+      {contextOpen && (
+        <div
+          ref={contextMenuRef}
+          className="vault-context-menu"
+          role="menu"
+          data-testid="vault-context-menu"
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+              event.preventDefault();
+              focusContextItem(1);
+            } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+              event.preventDefault();
+              focusContextItem(-1);
+            } else if (event.key === "Home") {
+              event.preventDefault();
+              focusContextItem(Number.NEGATIVE_INFINITY);
+            } else if (event.key === "End") {
+              event.preventDefault();
+              focusContextItem(Number.POSITIVE_INFINITY);
+            } else if (event.key === "Tab") {
+              event.preventDefault();
+              focusContextItem(event.shiftKey ? -1 : 1);
+            }
+          }}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="vault-context-reveal"
+            disabled={!currentPath}
+            onClick={revealVault}
+          >
+            {t("vaultContext.reveal")}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            data-testid="vault-context-copy-path"
+            disabled={!currentPath}
+            onClick={copyVaultPath}
+          >
+            {t("vaultContext.copyPath")}
           </button>
         </div>
       )}
