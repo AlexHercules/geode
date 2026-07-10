@@ -142,6 +142,33 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（标准命令注册 + i18n 键，无新控制流/无数据安全面）·**简化门：机械档跳过**·**评审：scoped review clean**。
 
+## Round 292 additions - 文件夹右键菜单补齐·机械档·零新依赖
+
+> **状态：As-built（已交付·v0.284）。** 文件树**文件夹**右键菜单补齐 3 项文件操作：复制库内路径 / 在系统访达中显示 / 使用默认应用打开（原先仅 file 分支有，folder 分支缺）。零新依赖、零数据安全面、零 Rust 改动。
+
+**背景（verify-first · 纠 R250 误判）**：R250（docs-only 盘点）曾称「folder 右键实质已完成（勿重做）」，但 R291 START HERE 重新标记「文件夹右键补齐」为候选。实查源码确认缺口真实：`reference/08-右键菜单.md` 文件树右键基础项（复制路径 / 默认应用 / 系统访达 / 移动 / 重命名 / 删除）对文件与文件夹均适用，line 29「文件夹对象的菜单通常**另含**：新建笔记/新建文件夹/设为附件文件夹」= 文件夹 = 基础项 + 3 新建项；Geode `Explorer.tsx` 把 copy-path/reveal/open-default 误 gate 成 `node.kind === "file"` only。R250 的「已完成」漏看此 gate。3 项均为 Obsidian 原生文件树核心操作（非社区/非幻影），handler 已 VaultNode 通用。
+
+**UI/行为契约**：
+1. `src/features/explorer/Explorer.tsx`（folder 分支 :1163-1198）：在 folder 分支既有 `<div className="explorer-menu-sep" />`（:1196）**之前**插入 3 个按钮（顺序/结构与 file 分支一致）：
+   - `explorerctx-copy-path` -> `copyVaultPath(node)`（既有 handler :559，写 `node.path` 到剪贴板）。
+   - `{isTauri() && (<>` `explorerctx-reveal-in-system` -> `revealNodeInSystem(node)`（:583）+ `explorerctx-open-in-default-app` -> `openNodeInDefaultApp(node)`（:592）`</>)}`（桌面-only，与 file 分支 :1252 同 gate）。
+   - reuse 既有 testid / i18n 键（`explorer.copyPath` / `explorer.revealInSystem` / `explorer.openInDefaultApp`）/ 图标 / handler；**零新 i18n、零新 handler、零新 testid**。
+   - file-only 项（open-new-tab / open-right / make-copy / copy-obsidian-url）**保持 file-only**（文件夹不适用：无 tab 概念 / makeCopy file-guarded / 文件夹无 obsidian:// URL）。
+2. 文件夹菜单最终结构：新建笔记(here) / 新建文件夹(here) / 设为附件文件夹 / **复制库内路径** / [桌面]在系统访达中显示 / [桌面]使用默认应用打开 / ─ / 移动到 / 重命名 / 删除。
+
+**数据安全契约**：3 个 handler 均为只读/剪贴板/宿主 OS 操作（无 vault 写）：`copyVaultPath`=clipboard、`reveal_in_system`/`open_in_default_app`=Rust `safe_join`+`opener`（路径型，目录安全，无 vault IO）。复用 R179/R218 既有 vetted 路径。
+
+**验证契约**：
+1. 更新 `.calibration/r179-e2e.mjs:108`：folder 菜单**有** Copy path（R292 parity，从 file-only 改 shared）；:109 保留 folder 无 Copy Obsidian URL（file-only）。
+2. 新增 `.calibration/r292-e2e.mjs`：folder 右键有 copy-path + 剪贴板=`"<folder>"`（判别性）+ 无 file-only 项（open-new-tab/open-right/make-copy/copy-obsidian-url）+ 有 shared 项（move-to/rename/delete）+ 有 folder-only 项（new-note-here/new-folder-here/set-attachment-folder）+ reveal/open 浏览器隐藏（isTauri gate）+ file 菜单回归。
+3. 回归：r93 / r218 / r179（更新后）/ r230 不回退。
+4. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+5. 桌面 probe：folder 右键见 reveal-in-system + open-in-default-app（isTauri true）+ 命令对文件夹路径执行无错。
+
+**文件范围**：`src/features/explorer/Explorer.tsx` · `.calibration/r179-e2e.mjs`（更新 :108）· `.calibration/r292-e2e.mjs`（新增）。
+
+**分档：机械档**（menu IA 接线·复用既有 handler/testid/i18n·无新控制流/无数据安全面/无 Rust 改动）·**简化门：机械档跳过**·**评审：scoped review**。
+
 ## Round 288 additions — 全工作区 Obsidian chrome 校准·机械档·零新依赖
 
 > **状态：As-built（已交付·v0.281）。** 本轮把 2026-07-04 截图对比剩余的 shell 差距一次性收拢到「全工作区 chrome」：统一顶栏高度/分隔线、去浮岛侧边收起按钮、功能栏图标单色调中性化、文件树嵌套引导线、active 行去 accent 边、macOS overlay title bar 与 traffic lights 对齐。全部为零新依赖的 CSS/UI 调整；`tauri.conf.json` 仅改 macOS 窗口装饰配置。

@@ -20,14 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-10 R291 后）
+## 下一轮候选（2026-07-10 R292 后）
 
-### R292 候选 — 表面复刻收尾或设置/核心插件补深
+### R293 候选 - 设置页视觉 / G3 命令填充 / 余下 bounded
 
-R291 已完成帮助与更新日志命令。R292 核查 `random-note` 等候选已真实存在后，按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 其他零星高频命令。每轮只取 1-2 个能闭环的子项，零新依赖。
+R292 已完成文件夹右键菜单补齐（folder 分支 +copy-path/reveal/open-default·纠 R250 误判）。命令矩阵已枯竭（高频命令全已注册·R250），folder 右键已收口。R293 取：设置页 G2-b 视觉剩余 / G3 命令填充（70 missing+41 partial 大型马拉松·取 bounded 子集·逐命令补真 handler+默认键）/ 余下零依赖 bounded 项。回收站 UI+删除确认 = data-safety 重轮·单独谨慎排。每轮只取 1-2 个能闭环的子项，零新依赖。
 
 ## 已完成
 
+### R292 - v0.284（2026-07-10）文件夹右键菜单补齐
+
+Explorer 文件树**文件夹**右键菜单补 3 项原 file-only 文件操作：复制库内路径 / [桌面]在系统访达中显示 / [桌面]使用默认应用打开。reuse 既有 handler（copyVaultPath/revealNodeInSystem/openNodeInDefaultApp·VaultNode 通用）+ 既有 testid/i18n/图标，纯菜单接线·零 vault 写·零 Rust 改。verify-first 纠 R250 误判：R250 docs-only 盘点曾称「folder 右键已完成·勿重做」，实查 Explorer.tsx 把 copy-path/reveal/open-default 误 gate 成 `node.kind==="file"` only；reference/08 文件树右键基础项对文件+文件夹均适用（line 29「文件夹另含新建项」=基础项+新建项）。file-only 项（open-new-tab/open-right/make-copy/copy-obsidian-url）保持 file-only。
+
+机械档、零新依赖、未碰数据安全面（handler 均只读/剪贴板/宿主 OS·无 vault 写）。简化门：机械档跳过。scoped review 8 点全 CONFIRMED clean。验证：`r292-e2e 25/25`（folder 有 copy-path+剪贴板判别·无 file-only 项·有 shared/folder-only 项·reveal/open 浏览器隐藏·file 回归）；更新 `r179 11/11`；回归 `r218 15/15` / `r93 22/22` / `r230 8/8`；typecheck 0、`npm run build`✓、`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过、release build 成功、`r292-probe 6/6`（桌面 folder 路径 reveal/open 成功·`..` 穿越仍拒）。
 ### R291 — v0.283（2026-07-10）帮助与更新日志命令
 
 补两个零星高频命令到命令面板：`app:open-help` 打开 Geode README、`app:open-release-notes` 打开 GitHub Releases；均通过 `window.open` 在系统浏览器打开，零 vault/editor/markdown 写路径。

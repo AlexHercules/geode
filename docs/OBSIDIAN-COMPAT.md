@@ -251,6 +251,16 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R292 套件回归（2026-07-10，文件夹右键菜单补齐 = 表面复刻 tail·机械档·零新依赖·零 compat 改动 · 简化门机械档跳过 · scoped review 8 点 clean · desktop probe 6/6）
+
+R292 = Explorer 文件树 folder 右键菜单补 3 项原 file-only 文件操作（复制库内路径 / [桌面]在系统访达中显示 / [桌面]使用默认应用打开）。纯 features/explorer 菜单接线·reuse 既有 handler/testid/i18n/图标·零 vault 写·零 Rust 改·零 compat 改动（compat/obsidian/editorMenu.ts 未动）。
+
+**套件矩阵（R292·不回退）**：
+- **r292-e2e 25/25 全绿（新增）** = folder 右键有 copy-path + 剪贴板=`"<folder>"`（判别）· 无 file-only 项（open-new-tab/open-right/make-copy/copy-obsidian-url）· 有 shared（move-to/rename/delete）+ folder-only（new-note-here/new-folder-here/set-attachment-folder）· reveal/open 浏览器隐藏（isTauri gate）· file 菜单回归。
+- **r292-probe 6/6 全绿（新增 desktop WKWebView）** = release binary + 真 fs vault + probe；folder 路径 reveal/open 成功解析（opener 处理目录路径）· `..` 穿越仍被 safe_join 拒·无错。
+- **回归不退**：更新 r179 11/11（folder copy-path 从 file-only 改 shared）· r218 15/15（file 菜单 browser-gating）· r93 22/22（explorer 菜单）· r230 8/8（set-attachment folder）· typecheck 0 · vite build ✓ · cargo check 通过 · release build 成功。
+
+**教训**：docs-only 盘点断言（R250「folder 右键已完成·勿重做」）不可信--须实查源码 gate（`node.kind==="file"` only）才发现 copy-path/reveal/open-default 误 gate 成 file-only；reference/08 截图规范（文件夹=基础项+新建项）才是验收标准。防误判纪律再验：建前先实查已建 + 对照 reference 截图。
 ### R275 套件回归（2026-07-04，Files & Links「启用 URI 链接」toggle = 表面复刻 tail·逻辑档·非数据安全·零新依赖 · 简化门 clean · 多维 reviewer 0 confirmed · desktop probe 6/6）
 
 R275 = 表面复刻 fresh scout 后从 reference `02-文件与链接.md` advanced 组取最小行为可闭环项。Geode 自 R46 起恒开 in-app `obsidian://` 路由，现补设置开关；**默认 ON 保留 Geode 既有行为**（Obsidian 默认 OFF，显式 deviation 记档）。实现 = `core/obsidianUri.ts` 持久化 `uriLinksEnabled` Store + `SettingsModal` Files & Links advanced 组 toggle + `EditorPane` 阅读视图 `obsidian://` 路由 gate（OFF 时 preventDefault no-op）。未碰 compat/obsidian 层，`__geodeUri.handle` 探测保持未 gate。详见 ARCHITECTURE「Round 275 additions」。
