@@ -71,6 +71,49 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 290 additions — 上下文菜单改进·逻辑档·零新依赖
+
+> **状态：As-built（已交付·v0.282）。** 本轮补上下文菜单体验：① Explorer 右键菜单在窗口边缘调用时自动翻转并限制在视口内，超长插件贡献菜单可内部滚动；② 底栏 vault 名右键增加「在访达中显示 / 复制路径」上下文菜单。零新依赖。
+
+**UI/行为契约**：
+1. `src/features/explorer/Explorer.tsx`：
+   - 新增 `useLayoutEffect`，在菜单渲染后测量其真实尺寸，按 `window.innerWidth/Height` 与 8px gutter 计算 `left/top`，确保菜单完全在视口内；底边调用时自动向上翻转。
+   - 初始 `visibility: hidden`，定位完成后再设为可见，避免闪烁。
+   - 监听 `window.resize` 重新定位；卸载时移除监听器。
+2. `src/features/explorer/explorer.css`：
+   - `.explorer-menu` 增加 `max-width: calc(100vw - 16px)`、`max-height: calc(100vh - 16px)`、`overflow-y: auto`、`overscroll-behavior: contain`。
+3. `src/app/App.tsx` `VaultSwitcherControl`：
+   - 新增 `contextOpen` 状态与右键处理器；右键仓库名时关闭下拉菜单、打开上下文菜单。
+   - 上下文菜单 capture-phase `pointerdown` 监听，确保点击 Explorer 行（其 `stopPropagation()`）也能关闭本菜单。
+   - `Escape` 同时关闭下拉菜单和上下文菜单。
+   - 上下文菜单打开时 `useLayoutEffect` 测量并视口裁剪、聚焦第一个可用 `menuitem`、支持 `ArrowDown/ArrowRight/ArrowUp/ArrowLeft/Home/End/Tab/Shift+Tab` 循环导航。
+   - `revealVault` 调用 `revealInSystem(currentPath, "")` 在桌面端打开系统文件管理器；`copyVaultPath` 写入剪贴板并显示通知。浏览器 demo 中 `currentPath` 为 `null`，两项 disabled。
+4. `src/core/i18n/dict.app.ts`：
+   - 新增 `vaultContext.reveal` / `vaultContext.copyPath` / `vaultContext.pathCopied` 中英键。
+5. `src/styles/app.css`：
+   - 新增 `.vault-context-menu` 样式：绝对定位、`z-index: 1001`、圆角阴影、悬停背景、disabled 态透明度。
+
+**数据安全契约**：
+- `revealVault` / `copyVaultPath` 均为只读/剪贴板操作，不读取或写入任何 `.md` / editor / vault 文件内容；不调用 vault 写接口。
+
+**验证契约**：
+1. `.calibration/r290-e2e.mjs`：5/5 断言——右下角调用可见、水平 8px gutter、按渲染高度向上翻转、超长菜单内部滚动、无 page error。
+2. `.calibration/r237-e2e.mjs`：25/25 断言（新增 4 条）——右键打开上下文菜单、项存在、浏览器 demo 禁用、Escape 关闭、点外部关闭、与下拉菜单互斥。
+3. 回归：`r160 26/26` / `r280 13/13` / `r288 17/17` / `r50 16/16` / `r24 12/12` 不回退。
+4. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过；Tauri release build 成功。
+5. 桌面按 by-equivalence + release 二进制 smoke run。
+
+**文件范围**：
+- `src/features/explorer/Explorer.tsx`
+- `src/features/explorer/explorer.css`
+- `src/app/App.tsx`
+- `src/core/i18n/dict.app.ts`
+- `src/styles/app.css`
+- `.calibration/r290-e2e.mjs`
+- `.calibration/r237-e2e.mjs`
+
+**分档：逻辑档**（新增 React 状态、DOM 测量/定位 effect、键盘导航、事件捕获处理）·**简化门：clean**（无 ≥8 行重复 / 无死代码 / 无脚手架）·**评审：5 处 confirmed（a11y 焦点/键盘、capture 关闭、视口裁剪、测试覆盖缺口）已修复，0 阻断**。
+
 ## Round 288 additions — 全工作区 Obsidian chrome 校准·机械档·零新依赖
 
 > **状态：As-built（已交付·v0.281）。** 本轮把 2026-07-04 截图对比剩余的 shell 差距一次性收拢到「全工作区 chrome」：统一顶栏高度/分隔线、去浮岛侧边收起按钮、功能栏图标单色调中性化、文件树嵌套引导线、active 行去 accent 边、macOS overlay title bar 与 traffic lights 对齐。全部为零新依赖的 CSS/UI 调整；`tauri.conf.json` 仅改 macOS 窗口装饰配置。

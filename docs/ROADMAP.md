@@ -20,13 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-10 R288 后）
+## 下一轮候选（2026-07-10 R290 后）
 
-### R289 候选 — 表面复刻收尾或设置/核心插件补深
+### R291 候选 — 表面复刻收尾或设置/核心插件补深
 
-R288 已把 2026-07-04 截图对比的剩余 shell 差距（工作区 chrome、文件树引导线、macOS title bar 等）收拢完毕。R289 按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 复制路径 + 打开历史 / 随机笔记 / 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 零星高频命令（editor:focus / graph:open-local / bookmark-search / release-notes / help）。每轮只取 1-2 个能闭环的子项，零新依赖。
+R290 已完成上下文菜单改进（Explorer 视口翻转 + vault 右键动作）。R291 按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 复制路径 + 打开历史余项 / 随机笔记 / 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 零星高频命令（editor:focus / graph:open-local / bookmark-search / release-notes / help）。每轮只取 1-2 个能闭环的子项，零新依赖。
 
 ## 已完成
+
+### R290 — v0.282（2026-07-10）上下文菜单改进
+
+① Explorer 右键菜单视口边界处理：在窗口底边/右边溢出时自动翻转并限制在 8px 留白内，超长插件贡献菜单内部滚动（`useLayoutEffect` 实测尺寸 + resize 监听 + `max-height/overflow-y`）。② Vault 切换器右键上下文菜单：底栏仓库名右键显示「在访达中显示 / 复制路径」，capture-phase 点外部关闭，与下拉菜单互斥，打开时焦点落第一项并支持方向键/Tab 循环导航。
+
+逻辑档、零新依赖、未碰 .md/editor/vault/文件 IO 写路径（reveal/copy 为只读/剪贴板操作）。简化门 clean。对抗评审 5 处 confirmed（a11y 焦点/键盘、capture 关闭、视口裁剪、测试覆盖缺口）已修复。验证：`r290-e2e 5/5` · `r237-e2e 25/25`；回归 `r160 26/26` / `r280 13/13` / `r288 17/17` / `r50 16/16` / `r24 12/12`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过、Tauri release build 成功。桌面按 by-equivalence + release 二进制 smoke run。
 
 ### R288 — v0.281（2026-07-10）全工作区 Obsidian chrome 校准
 
