@@ -1,0 +1,7 @@
+{
+  "analyze": {
+    "defaultBranch": "opus",
+    "indexOnly": true,
+    "workerTimeout": 60
+  }
+}
