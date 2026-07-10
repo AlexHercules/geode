@@ -751,6 +751,8 @@ function EditorSection() {
     <section>
       <h2 className="settings-heading">{t("settings.editorHeading")}</h2>
 
+      <div className="settings-card">
+
       {/* R233: always focus new tabs — switch to a file opened in a new tab (Obsidian "Always focus new tabs", default ON) */}
       <div className="setting-item">
         <div className="setting-info">
@@ -831,7 +833,11 @@ function EditorSection() {
         </button>
       </div>
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-display">{t("settings.subheaderDisplay")}</h3>
+
+      <div className="settings-card">
 
       {/* R50: readable line length — caps the body column width (default ON) */}
       <div className="setting-item">
@@ -981,7 +987,11 @@ function EditorSection() {
         </button>
       </div>
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-behavior">{t("settings.subheaderBehavior")}</h3>
+
+      <div className="settings-card">
 
       {/* R50: editor spellcheck (browser squiggles on the CM contentDOM, default ON) */}
       <div className="setting-item">
@@ -1097,7 +1107,11 @@ function EditorSection() {
         </div>
       </div>
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-editor-advanced">{t("settings.subheaderAdvanced")}</h3>
+
+      <div className="settings-card">
 
       {/* R253: Vim key bindings — @replit/codemirror-vim in the editor (Obsidian "Vim 模式", Editor › Advanced per reference/01-编辑器.md, default OFF) */}
       <div className="setting-item">
@@ -1115,6 +1129,7 @@ function EditorSection() {
         >
           <span className="settings-toggle-thumb" />
         </button>
+      </div>
       </div>
     </section>
   );
@@ -1153,6 +1168,8 @@ function FilesAndLinksSection() {
   return (
     <section>
       <h2 className="settings-heading">{t("settings.filesAndLinks")}</h2>
+
+      <div className="settings-card">
 
       {/* R89: default location for new notes (root / current folder / specified) */}
       <div className="setting-item">
@@ -1232,7 +1249,11 @@ function FilesAndLinksSection() {
         </div>
       )}
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-links">{t("settings.subheaderLinks")}</h3>
+
+      <div className="settings-card">
 
       <div className="setting-item">
         <div className="setting-info">
@@ -1310,7 +1331,11 @@ function FilesAndLinksSection() {
         </button>
       </div>
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-trash">{t("settings.subheaderTrash")}</h3>
+
+      <div className="settings-card">
 
       {/* R242: confirm before deleting a file (Obsidian "Confirm file deletion", Trash group).
           Default ON for safety; OFF = Obsidian-faithful no-confirm (delete still → recoverable .trash). */}
@@ -1351,7 +1376,11 @@ function FilesAndLinksSection() {
         </select>
       </div>
 
+      </div>
+
       <h3 className="settings-subheader" data-testid="settings-subheader-advanced">{t("settings.subheaderAdvanced")}</h3>
+
+      <div className="settings-card">
 
       {/* R96: excluded files — patterns hidden from search/graph + dimmed in the tree */}
       <div className="setting-item setting-item-stacked">
@@ -1402,6 +1431,7 @@ function FilesAndLinksSection() {
         >
           {t("settings.rebuildCacheButton")}
         </button>
+      </div>
       </div>
     </section>
   );
@@ -1967,19 +1997,19 @@ function CorePluginsSection({ setSection }: { setSection: (section: string) => v
   return (
     <section>
       <h2 className="settings-heading">{t("settings.section.corePlugins")}</h2>
-      <div className="core-plugins-search">
-        <Icon name="search" size={15} />
-        <input
-          type="text"
-          value={query}
-          placeholder={t("settings.corePluginsSearch")}
-          spellCheck={false}
-          aria-label={t("settings.corePluginsSearch")}
-          data-testid="settings-core-plugins-search"
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
       <div className="settings-card core-plugin-list" data-testid="settings-core-plugin-list">
+        <div className="core-plugins-search">
+          <Icon name="search" size={15} />
+          <input
+            type="text"
+            value={query}
+            placeholder={t("settings.corePluginsSearch")}
+            spellCheck={false}
+            aria-label={t("settings.corePluginsSearch")}
+            data-testid="settings-core-plugins-search"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
         {rows.map((row) => {
           const entry = row.pluginId ? entryById.get(row.pluginId) : undefined;
           const enabled = entry ? entry.enabled : row.defaultEnabled;

@@ -1,5 +1,6 @@
 /**
- * R270 — 表面复刻：设置页 settings-card 圆角卡 → 扁平行（Obsidian 设置是扁平整宽行 + 细分隔线·无卡）。
+ * R270 — historical settings-card regression, updated by R286 after direct pixel sampling proved
+ * the 2940×1912 references use #fafafa rounded group cards rather than transparent flat rows.
  * 偏差：Appearance(4) / Core plugins(1) / Hotkeys(1) 把行装进 `.settings-card`（`--bg-input` 背景 +
  * 12px 圆角 + 20px 内缩）·而 Obsidian 与 Geode 自己的 Editor/Files 页是裸 `.setting-item` 行 → 内部不一致。
  * 修（纯 CSS·机械档）：`.settings-card` 去背景/圆角/内缩（透明 passthrough）·`.core-plugin-list`/
@@ -60,7 +61,7 @@ console.log("— anti-vacuous: the old card bg var is non-transparent —");
 }
 
 // ---------- Part A: Appearance — 4 pure cards flat + rows keep dividers + subheader aligned ----------
-console.log("— Part A: Appearance page — cards flat, rows keep dividers, subheader aligned —");
+console.log("— Part A: Appearance page — screenshot-calibrated grouped cards —");
 await goNav("外观|Appearance");
 {
   const res = await page.evaluate(() => {
@@ -81,15 +82,15 @@ await goNav("外观|Appearance");
     };
   });
   ok("Appearance has the 4 pure settings-card wrappers", res.cardCount === 4, `got ${res.cardCount}`);
-  ok("every card background is transparent (no --bg-input box)", res.cards.every((c) => c.bg === "rgba(0, 0, 0, 0)"), JSON.stringify(res.cards.map((c) => c.bg)));
-  ok("every card border-radius is 0 (no rounded box)", res.cards.every((c) => c.radius === "0px"), JSON.stringify(res.cards.map((c) => c.radius)));
-  ok("every card padding-left is 0 (rows flush, not inset)", res.cards.every((c) => c.padL === "0px"), JSON.stringify(res.cards.map((c) => c.padL)));
+  ok("every card uses the non-transparent grouped surface", res.cards.every((c) => c.bg !== "rgba(0, 0, 0, 0)"), JSON.stringify(res.cards.map((c) => c.bg)));
+  ok("every card has 12px rounded corners", res.cards.every((c) => c.radius === "12px"), JSON.stringify(res.cards.map((c) => c.radius)));
+  ok("every card has a 20px content inset", res.cards.every((c) => c.padL === "20px"), JSON.stringify(res.cards.map((c) => c.padL)));
   ok("setting rows STILL have a bottom divider (flat ≠ borderless)", res.rowBorder === "1px");
   ok("subheader left-aligns with row name (same inset)", res.subLeft !== null && Math.abs(res.subLeft - res.rowNameLeft) < 2, `sub ${res.subLeft} vs row ${res.rowNameLeft}`);
 }
 
 // ---------- Part B: Core plugins — .core-plugin-list flat ----------
-console.log("— Part B: Core plugins — list flat —");
+console.log("— Part B: Core plugins — grouped list card —");
 await goNav("核心插件|Core plugins");
 {
   const cs = await page.evaluate(() => {
@@ -99,11 +100,11 @@ await goNav("核心插件|Core plugins");
     return { bg: s.backgroundColor, radius: s.borderTopLeftRadius, padL: s.paddingLeft };
   });
   ok(".core-plugin-list found", cs !== null);
-  ok(".core-plugin-list flat (transparent bg, 0 radius, 0 inset)", cs && cs.bg === "rgba(0, 0, 0, 0)" && cs.radius === "0px" && cs.padL === "0px", JSON.stringify(cs));
+  ok(".core-plugin-list grouped (surface, 12px radius, 20px inset)", cs && cs.bg !== "rgba(0, 0, 0, 0)" && cs.radius === "12px" && cs.padL === "20px", JSON.stringify(cs));
 }
 
 // ---------- Part C: Hotkeys — .hotkeys-search-card flat ----------
-console.log("— Part C: Hotkeys — search header flat —");
+console.log("— Part C: Hotkeys — joined grouped card —");
 await goNav("快捷键|Hotkeys");
 {
   const res = await page.evaluate(() => {
@@ -124,8 +125,8 @@ await goNav("快捷键|Hotkeys");
       rowLeft: rowName ? Math.round(rowName.getBoundingClientRect().left) : null,
     };
   });
-  ok(".hotkeys-search-card found + flat (transparent bg, 0 radius, 0 inset)", res.searchCard && res.searchCard.bg === "rgba(0, 0, 0, 0)" && res.searchCard.radius === "0px" && res.searchCard.padL === "0px", JSON.stringify(res.searchCard));
-  ok(".hotkey-list (paired command list) ALSO flat (no --bg-modal box, 0 inset)", res.hotkeyList && res.hotkeyList.bg === "rgba(0, 0, 0, 0)" && res.hotkeyList.radius === "0px" && res.hotkeyList.padL === "0px", JSON.stringify(res.hotkeyList));
+  ok(".hotkeys-search-card has grouped surface + 12px top corners + 20px inset", res.searchCard && res.searchCard.bg !== "rgba(0, 0, 0, 0)" && res.searchCard.radius === "12px" && res.searchCard.padL === "20px", JSON.stringify(res.searchCard));
+  ok(".hotkey-list continues the grouped surface with 20px inset", res.hotkeyList && res.hotkeyList.bg !== "rgba(0, 0, 0, 0)" && res.hotkeyList.radius === "0px" && res.hotkeyList.padL === "20px", JSON.stringify(res.hotkeyList));
   ok("search header title left-aligns with command-row name (no 20px split)", res.headerLeft !== null && res.rowLeft !== null && Math.abs(res.headerLeft - res.rowLeft) < 2, `header ${res.headerLeft} vs row ${res.rowLeft}`);
 }
 

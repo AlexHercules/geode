@@ -96,9 +96,9 @@ ok("reopened dropdown shows persisted theme=dark", await ev(() =>
 console.log("— (3) visual calibration: wider modal / nav / heading divider —");
 ok("settings panel widened (>800, was 760)", await ev(() =>
   document.querySelector('[data-testid="settings-modal"]').offsetWidth > 800));
-ok("settings panel near 900px target", await ev(() => {
+ok("settings panel near the R286 screenshot-calibrated 1004px target", await ev(() => {
   const w = document.querySelector('[data-testid="settings-modal"]').offsetWidth;
-  return w >= 880 && w <= 904;
+  return w >= 1000 && w <= 1008;
 }));
 ok("left nav widened toward 232 (was 170 → 200 → 232)", await ev(() => {
   const nav = document.querySelector(".settings-nav");
