@@ -20,11 +20,20 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-05 R283 后）
+## 下一轮候选（2026-07-10 R288 后）
 
-### R286 候选 — 继续补齐 Obsidian shell 差距（截图对比剩余 bounded 子项）
+### R289 候选 — 表面复刻收尾或设置/核心插件补深
 
-R285 已完成滚动条、inline-title 字号对齐。R286 从 2026-07-04 截图对比的剩余 shell 差距中继续取 bounded 子项：ribbon 文字占位 L/O/R、主编辑区其他细节（如空态/滚动条内边距/inline-title 行高等）。仍遵守「不一口吞大重构」原则：每轮只取 1-2 个能被截图/计算样式断言闭环的子项，零新依赖。
+R288 已把 2026-07-04 截图对比的剩余 shell 差距（工作区 chrome、文件树引导线、macOS title bar 等）收拢完毕。R289 按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 复制路径 + 打开历史 / 随机笔记 / 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 零星高频命令（editor:focus / graph:open-local / bookmark-search / release-notes / help）。每轮只取 1-2 个能闭环的子项，零新依赖。
+
+## 已完成
+
+### R288 — v0.281（2026-07-10）全工作区 Obsidian chrome 校准
+
+统一工作区顶栏高度（42px）、分隔线（仅顶栏一行保留）、ribbon/侧栏中性背景、功能栏图标单色 15–18px；文件树加 Obsidian-style 1px 嵌套引导线、active 行去 accent 边改中性灰；折叠侧栏的 reopen 按钮从浮岛改为顶栏内 Obsidian panel 图标；EditorPane view header 图标统一 18px 并随模式切换 pencil/book-open；macOS 启用 Overlay titleBar + trafficLightPosition 让交通灯与顶栏同排。
+
+机械档、零新依赖、未碰 .md/editor/vault/文件 IO 写路径。简化门：机械档跳过。scoped review 1 处 stale JSDoc 已修，0 逻辑缺陷。验证：`r288-e2e 17/17`、回归 `r160 26/26` / `r50 16/16` / `r94 14/14` / `r100 15/15` / `r185 19/19` / `r213 13/13` / `r281 6/6` / `r282 7/7` / `r283 7/7` / `r284 8/8` / `r285 11/11`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过、Tauri release build 成功。桌面按 by-equivalence + release 二进制 smoke run。
+
 
 ## 已完成
 

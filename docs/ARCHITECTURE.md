@@ -71,6 +71,55 @@ To navigate: `app.workspace.openFile(path)`. To create-from-unresolved-link:
 
 Escape key closing is handled globally by the shell; modals must ALSO close on overlay click.
 
+## Round 288 additions — 全工作区 Obsidian chrome 校准·机械档·零新依赖
+
+> **状态：As-built（已交付·v0.281）。** 本轮把 2026-07-04 截图对比剩余的 shell 差距一次性收拢到「全工作区 chrome」：统一顶栏高度/分隔线、去浮岛侧边收起按钮、功能栏图标单色调中性化、文件树嵌套引导线、active 行去 accent 边、macOS overlay title bar 与 traffic lights 对齐。全部为零新依赖的 CSS/UI 调整；`tauri.conf.json` 仅改 macOS 窗口装饰配置。
+
+**UI/行为契约**：
+1. `src-tauri/tauri.conf.json`：
+   - macOS 启用 `titleBarStyle: "Overlay"` + `hiddenTitle: true` + `trafficLightPosition: {x:16, y:14}`，让原生交通灯与 workspace 顶栏同排，消除额外标题带。
+   - `decorations: true` 保留，配合 `.app.is-native-window` 在 CSS 里给左侧顶栏补 28px 左内边距避让 traffic lights。
+2. `src/app/App.tsx`：
+   - 根 `.app` 在 Tauri 桌面端追加 `is-native-window` class；主编辑区 `.main` 根据左右侧栏开关状态追加 `is-left-sidebar-collapsed` / `is-right-sidebar-collapsed`，让折叠后 reopen 图标只占用顶栏一行空间。
+   - ribbon spacer、左右侧栏顶栏、tab bar 加 `data-tauri-drag-region`，仅这些非交互容器可拖动窗口；子按钮保持 clickable。
+   - 左侧 collapse tab 放进 `.sidebar-primary-tabs`，右侧 collapse tab 设 `.sidebar-collapse-tab` 并 `position: sticky` 始终可见。
+   - 侧栏 tab、tab bar 操作图标统一 16–18px；折叠状态 reopen 按钮改用 `panel-left` / `panel-right`（原 chevron 弃用）。
+3. `src/features/editor/EditorPane.tsx` + `src/features/editor/editor.css`：
+   - view header 图标统一 18px；reading toggle 在 preview 态显示 `pencil`，live/source 态显示 `book-open`。
+   - `.editor-header` 移除下边框，让 view header 与 editor canvas 同背景融为一片。
+4. `src/styles/app.css`：
+   - 统一顶栏高度 `--workspace-topbar-height: 42px`；只有顶栏一行保留 `border-bottom: 1px solid var(--border)`，二级 path/action 行（`.panel-header` / `.editor-header`）去下边框。
+   - ribbon 右侧分隔线改为伪元素 `::after`，从 42px 顶栏下方开始，避免穿过 macOS traffic lights。
+   - ribbon / 侧栏顶栏背景统一为 `var(--bg-app)` 中性色；active tool 背景 `rgba(0,0,0,0.09)` + `var(--text-normal)`，不用 accent。
+   - 功能栏图标统一 `grayscale(1)` 单色化。
+   - `.sidebar-toggle` 由浮岛改为顶栏内 34×34px 透明按钮，仅 collapsed 时显示；为 native window 补左内边距避让 traffic lights。
+   - 文件树 `.explorer-item::before` 增加 repeating-linear-gradient 1px 嵌套引导线；active 行改为中性灰底、无左侧 accent 竖线。
+   - `.tab.is-active` 加 `z-index: 1` 避免底边被相邻 tab 覆盖，背景与 editor pane 一致形成「tab 融入 canvas」效果。
+
+**数据安全契约**：
+- 纯 CSS/UI 调整，未新增任何 .md / editor / vault / 文件 IO 写路径；未改保存、重命名、监听、外部修改处理逻辑。
+
+**验证契约**：
+1. 新增/更新 `.calibration/r288-e2e.mjs`：17/17 断言——顶栏 42px、只有顶栏有 1px 分隔线、ribbon 分隔线起止位置、功能栏中性背景/单色图标/15–18px 尺寸、侧栏无浮岛 pill、文件树嵌套引导线、active 文件中性灰行。
+2. 回归更新：`r160-e2e`（折叠按钮图标/位置断言）、`r282-e2e`（面包屑分隔符由 `›` 改为 `/`）、`r283-e2e`（status-bar gap/padding 随新设计更新）、`r281-e2e`（explorer item height ≤26px）。
+3. 回归验证：`r50 16/16` / `r94 14/14` / `r100 15/15` / `r160 26/26` / `r185 19/19` / `r213 13/13` / `r281 6/6` / `r282 7/7` / `r283 7/7` / `r284 8/8` / `r285 11/11` 均不回退。
+4. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过；Tauri release build 成功。
+5. 桌面按 by-equivalence + 构建成功 + release 二进制 smoke run（macOS overlay title bar 配置生效）；无新增 Rust/FS 写路径。
+
+**文件范围**：
+- `src-tauri/tauri.conf.json`
+- `src/app/App.tsx`
+- `src/features/editor/EditorPane.tsx`
+- `src/features/editor/editor.css`
+- `src/styles/app.css`
+- `.calibration/r288-e2e.mjs`
+- `.calibration/r160-e2e.mjs`（折叠图标断言更新）
+- `.calibration/r282-e2e.mjs`（分隔符断言更新）
+- `.calibration/r283-e2e.mjs`（status-bar 密度断言更新）
+- `.calibration/r281-e2e.mjs`（explorer height 断言更新）
+
+**分档：机械档**（纯 UI/CSS/IA 调整 + macOS 窗口装饰配置，未新增控制流/未碰数据安全面）·**简化门：机械档跳过**·**评审：1 处 stale JSDoc 已修（SidebarToggle 注释），0 逻辑缺陷**。
+
 ## Round 283 additions — Markdown 阅读视图链接样式 + 拼写检查默认 ON + 状态栏信息密度·CSS/默认翻转·零新依赖
 
 > **状态：As-built（已交付·v0.276）。** R283 继续补齐 2026-07-04 截图对比的 shell 差距，取 2 个 bounded 子项：① Markdown 阅读视图链接样式成熟度（internal/external/unresolved 区分，Obsidian 风格）；② 拼写检查默认 ON（匹配 Obsidian Editor 默认，让红毛线默认出场）；③ 状态栏工作态信息密度（更紧凑的间距）。全部为零新依赖的表面/默认调整。
