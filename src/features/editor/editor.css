@@ -13,7 +13,8 @@
   display: grid;
   grid-template-columns: minmax(84px, 1fr) auto minmax(84px, 1fr);
   align-items: center;
-  min-height: 52px;
+  min-height: var(--workspace-topbar-height);
+  height: var(--workspace-topbar-height);
   padding: 0 16px;
   flex-shrink: 0;
   background: var(--bg-app);
@@ -68,8 +69,8 @@
 }
 
 .editor-header-action {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: grid;
   place-items: center;
   border-radius: 8px;

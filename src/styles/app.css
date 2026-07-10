@@ -170,6 +170,7 @@ html {
 /* ============ app layout ============ */
 
 .app {
+  --workspace-topbar-height: 42px;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -590,7 +591,7 @@ html {
   display: flex;
   align-items: center;
   gap: 0;
-  height: 48px;
+  height: var(--workspace-topbar-height);
   padding: 0;
   background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
@@ -603,7 +604,7 @@ html {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 48px;
+  height: var(--workspace-topbar-height);
   width: 240px;
   min-width: 140px;
   padding: 0 14px 0 20px;
@@ -691,8 +692,8 @@ html {
 .tab-new {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 38px;
   border-radius: 6px;
   color: var(--text-muted);
   flex-shrink: 0;
@@ -701,8 +702,8 @@ html {
 .tab-list-toggle {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 44px;
+  width: 42px;
+  height: 38px;
   margin-left: auto;
   border-radius: 7px;
   color: var(--text-muted);

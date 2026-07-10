@@ -62,8 +62,8 @@ const chrome = await page.evaluate(() => {
     tabListToggle: document.querySelectorAll('[data-testid^="tab-list-toggle-"]').length,
   };
 });
-ok("tab bar is 48px high", chrome.tabBar?.height === 48, JSON.stringify(chrome.tabBar));
-ok("editor view header is 52px high", chrome.header?.height === 52, JSON.stringify(chrome.header));
+ok("tab bar matches the 42px sidebar top bar", chrome.tabBar?.height === 42, JSON.stringify(chrome.tabBar));
+ok("editor view header matches the 42px sidebar top bar", chrome.header?.height === 42, JSON.stringify(chrome.header));
 ok("active tab uses raised 12px top corners", chrome.activeTab?.radius === "12px 12px 0px 0px", JSON.stringify(chrome.activeTab));
 ok("history navigation moved from tabs into the view header", chrome.navInTabs === 0 && chrome.navInHeader === 2, JSON.stringify(chrome));
 ok("header has one breadcrumb trail and no duplicate file title", chrome.breadcrumbs.length > 0 && chrome.duplicateTitle === 0, JSON.stringify(chrome));
