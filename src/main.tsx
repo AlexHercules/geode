@@ -1,7 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App, LAST_VAULT_KEY } from "@app/App";
-import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
+import {
+  loadRecentVaults,
+  loadRecentVaultRecords,
+  pushRecentVault,
+  removeRecentVault,
+  renameRecentVaultRecord,
+  relocateRecentVaultRecord,
+} from "@core/recentVaults";
 import { renameHeadingAt, type HeadingChange } from "@core/renameHeading";
 import { AppContext, GeodeApp } from "@app/AppContext";
 import { loadObsidianPlugins, obsidianLoadReport } from "@compat/obsidian/loader";
@@ -1076,12 +1083,25 @@ async function bootstrap() {
   };
   linkHost.__geodeLinkAtCursor = (line, lineStart, cursor) => linkAtCursor(line, lineStart, cursor);
 
-  // R203: recent-vaults store probe — lets E2E assert the localStorage CRUD (load/push/remove,
-  // dedupe, cap, defensive parse) deterministically.
+  // R203/R289: recent vault path compatibility + rich manager records.
   const recentHost = globalThis as typeof globalThis & {
-    __geodeRecentVaults?: { load: () => string[]; push: (p: string) => void; remove: (p: string) => void };
+    __geodeRecentVaults?: {
+      load: () => string[];
+      records: typeof loadRecentVaultRecords;
+      push: (p: string) => void;
+      remove: (p: string) => void;
+      rename: typeof renameRecentVaultRecord;
+      relocate: typeof relocateRecentVaultRecord;
+    };
   };
-  recentHost.__geodeRecentVaults = { load: loadRecentVaults, push: pushRecentVault, remove: removeRecentVault };
+  recentHost.__geodeRecentVaults = {
+    load: loadRecentVaults,
+    records: loadRecentVaultRecords,
+    push: pushRecentVault,
+    remove: removeRecentVault,
+    rename: renameRecentVaultRecord,
+    relocate: relocateRecentVaultRecord,
+  };
 
   // R204: rename-heading probe — exposes the pure edit computation so E2E can assert the heading +
   // self-anchor byte changes deterministically (the live editor:rename-heading command is also E2E'd).

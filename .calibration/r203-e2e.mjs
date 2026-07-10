@@ -71,7 +71,7 @@ await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000
 let items = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
 ok("modal lists recents by basename, most-recent first ([Beta, Alpha])", JSON.stringify(items) === JSON.stringify(["Beta", "Alpha"]), JSON.stringify(items));
 const paths = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-path', (els) => els.map((e) => e.textContent));
-ok("modal shows full paths too", paths.includes("/Users/me/Beta") && paths.includes("/Users/me/Alpha"), JSON.stringify(paths));
+ok("modal shows each vault's parent path", paths.every((path) => path === "/Users/me"), JSON.stringify(paths));
 ok("'Open another vault' button present", (await page.$('[data-testid="vaultmanager-open-other"]')) !== null);
 await app(() => window.__app.workspace.closeModal());
 await wait(80);
@@ -91,7 +91,9 @@ await clearRecents();
 await app(() => { window.__geodeRecentVaults.push("/Users/me/Alpha"); window.__geodeRecentVaults.push("/Users/me/Beta"); });
 await app(() => window.__app.commands.execute("app:switch-vault"));
 await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
-await page.click('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-remove"]'); // removes the first (Beta)
+await page.click('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-record-more"]');
+await page.waitForSelector('[data-testid="vaultmanager-record-menu"]');
+await page.click('[data-testid="vaultmanager-remove"]'); // removes the first (Beta)
 await wait(120);
 items = await page.$$eval('[data-testid="vaultmanager-item"] .vaultswitcher-name', (els) => els.map((e) => e.textContent));
 ok("remove button drops the row (only Alpha remains)", JSON.stringify(items) === JSON.stringify(["Alpha"]), JSON.stringify(items));

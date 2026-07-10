@@ -55,9 +55,16 @@ import { registerComposerCommands } from "@features/editor/noteComposerCommands"
 import { registerEditorMotionCommands } from "@features/editor/editorMotionCommands";
 import { registerEditorEditCommands } from "@features/editor/editorEditCommands";
 import { registerSearchCommands } from "@features/editor/searchCommands";
-import { isTauri, basename, toAbsolutePath } from "@core/vault";
+import { isTauri, basename, parentPath, toAbsolutePath } from "@core/vault";
 import { revealInSystem, openInDefaultApp } from "@core/reveal";
-import { loadRecentVaults, pushRecentVault, removeRecentVault } from "@core/recentVaults";
+import {
+  loadRecentVaultRecords,
+  pushRecentVault,
+  relocateRecentVaultRecord,
+  removeRecentVault,
+  renameRecentVaultRecord,
+  type RecentVaultRecord,
+} from "@core/recentVaults";
 import { buildClearProperties, parseProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
 import { confirmAction } from "@core/confirm";
@@ -65,10 +72,11 @@ import { expandTemplate, templatePickerMode } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { mergeTargetMode } from "@core/noteMerge";
 import { bookmarks } from "@core/bookmarks";
-import { t, useI18n, locale } from "@core/i18n";
+import { t, useI18n, locale, setLocale } from "@core/i18n";
 import { loadObsidianPlugins } from "@compat/obsidian/loader";
 
 const LAST_VAULT_KEY = "geode.lastVaultPath";
+const GEODE_LOGO_URL = new URL("../../src-tauri/icons/128x128@2x.png", import.meta.url).href;
 
 /** R183 (G3): brief bottom toast for app-level command feedback (e.g. "copied").
  *  Mirrors the per-module local-notice convention (Explorer's showLinkUpdateNotice,
@@ -1257,12 +1265,6 @@ export function App() {
             testid="plugin-ribbon-items"
           />
           <div className="ribbon-spacer" />
-          <RibbonButton
-            icon={ws.theme === "dark" ? "sun" : "moon"}
-            title={t("app.ribbonTheme")}
-            onClick={() => app.workspace.toggleTheme()}
-          />
-          <RibbonButton icon="settings" title={t("app.ribbonSettings")} onClick={() => app.workspace.openModal("settings")} />
         </nav>
         )}
 
@@ -1327,6 +1329,19 @@ export function App() {
             ) : (
               <Explorer />
             )}
+            <div className="sidebar-vault-footer" data-testid="sidebar-vault-footer">
+              <VaultSwitcherControl />
+              <button
+                type="button"
+                className="sidebar-footer-settings"
+                data-testid="sidebar-footer-settings"
+                title={t("app.ribbonSettings")}
+                aria-label={t("app.ribbonSettings")}
+                onClick={() => app.workspace.openModal("settings")}
+              >
+                <Icon name="settings" size={20} />
+              </button>
+            </div>
             <SidebarResizer side="left" />
           </aside>
         )}
@@ -1497,17 +1512,6 @@ export function App() {
       {/* status bar (R100: hidden when showStatusBar is off) */}
       {statusBarVisible && (
       <footer className="status-bar" data-testid="status-bar">
-        {/* R237: the vault name is a persistent entry to the vault switcher (app:switch-vault) */}
-        <button
-          type="button"
-          className="status-item status-vault"
-          data-testid="status-vault"
-          title={t("cmd.switchVault")}
-          onClick={() => app.commands.execute("app:switch-vault")}
-        >
-          {app.vault.vaultName}
-        </button>
-        <span className="status-spacer" />
         {[...statusItems.entries()].map(([id, text]) => (
           <span key={id} className="status-item">
             {text}
@@ -1534,6 +1538,111 @@ export function App() {
 
       {/* hover preview card (R25) — mounts the document-level hover controller */}
       <HoverPreview />
+    </div>
+  );
+}
+
+/**
+ * The Obsidian-style vault control that lives in the left dock footer. Its
+ * first layer is deliberately a small menu (current + recent vaults), while
+ * the existing full manager remains available from the final menu item.
+ */
+function VaultSwitcherControl() {
+  const app = useApp();
+  const t = useI18n();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [vaults, setVaults] = useState<RecentVaultRecord[]>([]);
+  const currentPath = app.vault.getVaultPath();
+  const recentVaults = vaults.filter((record) => record.path !== currentPath);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const toggle = () => {
+    setVaults(loadRecentVaultRecords());
+    setOpen((value) => !value);
+  };
+  const selectVault = (path: string | null) => {
+    setOpen(false);
+    if (!path || path === currentPath) return;
+    void switchToVault(app, path).catch((err) => {
+      console.error("[vault] switch failed; forgetting", path, err);
+      removeRecentVault(path);
+    });
+  };
+  const manageVaults = () => {
+    setOpen(false);
+    app.workspace.openModal("vaultmanager");
+  };
+
+  return (
+    <div className="vault-switcher-control" ref={rootRef}>
+      <button
+        type="button"
+        className={`status-vault${open ? " is-open" : ""}`}
+        data-testid="status-vault"
+        title={t("cmd.switchVault")}
+        aria-label={t("cmd.switchVault")}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={toggle}
+      >
+        <Icon name="chevrons-up-down" size={16} />
+        <span>{app.vault.vaultName}</span>
+      </button>
+      {open && (
+        <div className="vault-switcher-menu" role="menu" data-testid="vault-switcher-menu">
+          <button
+            type="button"
+            className="vault-switcher-menu-item is-current"
+            role="menuitemradio"
+            aria-checked="true"
+            onClick={() => selectVault(currentPath)}
+          >
+            <span className="vault-switcher-menu-check"><Icon name="check" size={16} /></span>
+            <span className="vault-switcher-menu-label">{app.vault.vaultName}</span>
+          </button>
+          {recentVaults.map((record) => (
+            <button
+              key={record.id}
+              type="button"
+              className="vault-switcher-menu-item"
+              role="menuitemradio"
+              aria-checked="false"
+              title={record.path}
+              onClick={() => selectVault(record.path)}
+            >
+              <span className="vault-switcher-menu-check" />
+              <span className="vault-switcher-menu-label">{record.name ?? vaultPathName(record.path)}</span>
+            </button>
+          ))}
+          <div className="vault-switcher-menu-separator" role="separator" />
+          <button
+            type="button"
+            className="vault-switcher-menu-item"
+            role="menuitem"
+            data-testid="vault-switcher-manage"
+            onClick={manageVaults}
+          >
+            <span className="vault-switcher-menu-check" />
+            <span className="vault-switcher-menu-label">{t("vaultManager.manage")}</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2345,21 +2454,43 @@ function VaultPicker() {
   );
 }
 
-/**
- * R280 (G C1): the vault manager modal — lists recently-opened vaults; click to open one,
- * open another folder, or create a new vault (desktop only). Local `useState` reflects
- * the recents list (it has no reactive store); removing a row, or a failed switch (a recent
- * path that no longer exists), prunes it from the list. Mirrors the shared modal shell
- * (overlay-click close); Escape→closeModal is global.
- */
+function vaultPathName(path: string): string {
+  return path.split(/[/\\]/).filter(Boolean).pop() ?? path;
+}
+
+function vaultParentPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return parentPath(normalized) || normalized;
+}
+
+type VaultRecordEdit = {
+  kind: "rename" | "relocate";
+  path: string;
+  value: string;
+};
+
+/** Obsidian-style full vault manager: recent records on the left, actions on the right. */
 function VaultManagerModal() {
   const app = useApp();
   const t = useI18n();
-  const [vaults, setVaults] = useState<string[]>(() => loadRecentVaults());
+  const activeLocale = useStore(locale);
+  const currentPath = app.vault.getVaultPath();
+  const [vaults, setVaults] = useState<RecentVaultRecord[]>(() => {
+    // Opening the manager counts as a management touch for the active desktop vault.
+    if (currentPath) pushRecentVault(currentPath);
+    return loadRecentVaultRecords();
+  });
+  const [selectedPath, setSelectedPath] = useState<string | null>(
+    currentPath ?? vaults[0]?.path ?? null,
+  );
+  const [recordMenu, setRecordMenu] = useState<{ path: string; x: number; y: number } | null>(null);
+  const [edit, setEdit] = useState<VaultRecordEdit | null>(null);
+  const recordMenuRef = useRef<HTMLDivElement | null>(null);
   const close = () => app.workspace.closeModal();
   const onOverlayMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) close();
   };
+  const refresh = () => setVaults(loadRecentVaultRecords());
   const open = (path: string) => {
     close();
     void switchToVault(app, path).catch((err) => {
@@ -2369,56 +2500,168 @@ function VaultManagerModal() {
   };
   const forget = (path: string) => {
     removeRecentVault(path);
-    setVaults(loadRecentVaults());
+    refresh();
+    setRecordMenu(null);
+    setSelectedPath((selected) => selected === path ? null : selected);
   };
   const isDesktop = app.vault.adapter.kind !== "memory";
+
+  useEffect(() => {
+    if (!recordMenu) return;
+    const dismiss = (event: MouseEvent) => {
+      if (!recordMenuRef.current?.contains(event.target as Node)) setRecordMenu(null);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRecordMenu(null);
+    };
+    window.addEventListener("mousedown", dismiss, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", dismiss, true);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [recordMenu]);
+
+  const menuRecord = recordMenu
+    ? vaults.find((record) => record.path === recordMenu.path) ?? null
+    : null;
+  const runRecordMenu = (callback: () => void) => {
+    setRecordMenu(null);
+    callback();
+  };
+  const beginEdit = (kind: VaultRecordEdit["kind"], record: RecentVaultRecord) => {
+    setRecordMenu(null);
+    setEdit({
+      kind,
+      path: record.path,
+      value: kind === "rename" ? (record.name ?? vaultPathName(record.path)) : record.path,
+    });
+  };
+  const saveEdit = () => {
+    if (!edit?.value.trim()) return;
+    if (edit.kind === "rename") {
+      renameRecentVaultRecord(edit.path, edit.value);
+    } else {
+      relocateRecentVaultRecord(edit.path, edit.value);
+      setSelectedPath(edit.value.trim());
+    }
+    setEdit(null);
+    refresh();
+  };
+
   return (
-    <div className="modal-overlay" onMouseDown={onOverlayMouseDown} data-testid="vaultmanager-modal-overlay">
-      <div className="modal-panel" role="dialog" aria-label={t("vaultManager.title")} data-testid="vaultmanager-modal">
-        <div className="vaultswitcher-header" data-testid="vaultmanager-title">{t("vaultManager.title")}</div>
-        {vaults.length === 0 ? (
-          <p className="vaultswitcher-empty" data-testid="vaultmanager-empty">
-            {t("vaultManager.empty")}
-          </p>
-        ) : (
-          <ul className="vaultswitcher-list">
-            {vaults.map((path) => (
-              <li key={path} className="vaultswitcher-item" data-testid="vaultmanager-item">
-                <button className="vaultswitcher-open" onClick={() => open(path)} title={path}>
-                  <span className="vaultswitcher-name">{basename(path)}</span>
-                  <span className="vaultswitcher-path">{path}</span>
-                </button>
-                <button
-                  className="vaultmanager-open"
-                  data-testid="vaultmanager-open"
-                  aria-label={t("vaultManager.open")}
-                  onClick={() => open(path)}
+    <div className="modal-overlay vaultmanager-overlay" onMouseDown={onOverlayMouseDown} data-testid="vaultmanager-modal-overlay">
+      <div className="modal-panel vaultmanager-shell" role="dialog" aria-label={t("vaultManager.title")} data-testid="vaultmanager-modal">
+        <aside className="vaultmanager-sidebar">
+          <div className="vaultmanager-window-dots" aria-hidden="true"><span /><span /><span /></div>
+          <div className="vaultswitcher-header" data-testid="vaultmanager-title">{t("vaultManager.title")}</div>
+          {vaults.length === 0 ? (
+            <p className="vaultswitcher-empty" data-testid="vaultmanager-empty">{t("vaultManager.empty")}</p>
+          ) : (
+            <ul className="vaultswitcher-list">
+              {vaults.map((record) => (
+                <li
+                  key={record.id}
+                  className={`vaultswitcher-item${selectedPath === record.path ? " is-selected" : ""}`}
+                  data-testid="vaultmanager-item"
+                  data-vault-id={record.id}
                 >
-                  {t("vaultManager.open")}
-                </button>
-                <button
-                  className="vaultswitcher-remove"
-                  data-testid="vaultmanager-remove"
-                  aria-label={t("vaultManager.remove")}
-                  onClick={() => forget(path)}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="vaultmanager-footer">
-          <button className="vaultmanager-open-other" data-testid="vaultmanager-open-other" onClick={() => { close(); void openVaultFlow(app); }}>
-            {t("vaultManager.openOther")}
-          </button>
-          {isDesktop && (
-            <button className="btn-accent vaultmanager-create-new" data-testid="vaultmanager-create-new" onClick={() => { close(); void app.commands.execute("app:create-new-vault"); }}>
-              {t("vaultManager.createNew")}
-            </button>
+                  <button className="vaultswitcher-open" onClick={() => open(record.path)} title={record.path}>
+                    <span className="vaultswitcher-name">{record.name ?? vaultPathName(record.path)}</span>
+                    <span className="vaultswitcher-path">{vaultParentPath(record.path)}</span>
+                  </button>
+                  <button
+                    className="vaultmanager-record-more"
+                    data-testid="vaultmanager-record-more"
+                    aria-label={t("app.moreOptions")}
+                    aria-expanded={recordMenu?.path === record.path}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      const rect = event.currentTarget.getBoundingClientRect();
+                      setSelectedPath(record.path);
+                      setRecordMenu({ path: record.path, x: rect.right, y: rect.bottom });
+                    }}
+                  >
+                    <Icon name="more-horizontal" size={18} />
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
+        </aside>
+
+        <section className="vaultmanager-main">
+          <button className="vaultmanager-close" aria-label={t("app.close")} onClick={close}>
+            <Icon name="x" size={20} />
+          </button>
+          <div className="vaultmanager-brand">
+            <img src={GEODE_LOGO_URL} alt="" />
+            <h1>Geode</h1>
+            <p>{t("vaultManager.version", { version: APP_VERSION })}</p>
+          </div>
+          <div className="vaultmanager-actions-card">
+            {isDesktop && (
+              <div className="vaultmanager-action-row">
+                <div><strong>{t("vaultManager.createTitle")}</strong><span>{t("vaultManager.createDescription")}</span></div>
+                <button className="btn-accent vaultmanager-create-new" data-testid="vaultmanager-create-new" onClick={() => { close(); void app.commands.execute("app:create-new-vault"); }}>
+                  {t("vaultManager.create")}
+                </button>
+              </div>
+            )}
+            <div className="vaultmanager-action-row">
+              <div><strong>{t("vaultManager.openTitle")}</strong><span>{t("vaultManager.openDescription")}</span></div>
+              <button className="vaultmanager-open-other" data-testid="vaultmanager-open-other" onClick={() => { close(); void openVaultFlow(app); }}>
+                {t("vaultManager.open")}
+              </button>
+            </div>
+            <div className="vaultmanager-action-row vaultmanager-language-row">
+              <div><strong>{t("vaultManager.language")}</strong><span>{t("vaultManager.languageDescription")}</span></div>
+              <select value={activeLocale} onChange={(event) => setLocale(event.target.value === "zh" ? "zh" : "en")}>
+                <option value="zh">简体中文</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+        </section>
       </div>
+
+      {menuRecord && recordMenu && (
+        <div
+          ref={recordMenuRef}
+          className="vault-record-menu"
+          role="menu"
+          data-testid="vaultmanager-record-menu"
+          style={{ left: Math.min(recordMenu.x - 16, window.innerWidth - 290), top: Math.min(recordMenu.y - 4, window.innerHeight - 290) }}
+        >
+          <button role="menuitem" data-testid="vaultmanager-copy-id" onClick={() => runRecordMenu(() => {
+            void navigator.clipboard.writeText(menuRecord.id).catch(() => {});
+            showCommandNotice(t("vaultManager.idCopied"));
+          })}><Icon name="copy" size={18} />{t("vaultManager.copyId")}</button>
+          <div className="vault-record-menu-separator" />
+          <button role="menuitem" data-testid="vaultmanager-rename" onClick={() => beginEdit("rename", menuRecord)}><Icon name="pencil" size={18} />{t("vaultManager.rename")}</button>
+          <button role="menuitem" data-testid="vaultmanager-relocate" onClick={() => beginEdit("relocate", menuRecord)}><Icon name="arrow-right" size={18} />{t("vaultManager.relocate")}</button>
+          <div className="vault-record-menu-separator" />
+          <button role="menuitem" data-testid="vaultmanager-reveal" onClick={() => runRecordMenu(() => {
+            if (isDesktop) void revealInSystem(menuRecord.path, "").catch((error) => console.error("[vault] reveal failed", error));
+          })}><Icon name="folder" size={18} />{t("vaultManager.reveal")}</button>
+          <div className="vault-record-menu-separator" />
+          <button role="menuitem" className="is-danger" data-testid="vaultmanager-remove" onClick={() => forget(menuRecord.path)}><Icon name="x" size={18} />{t("vaultManager.remove")}</button>
+        </div>
+      )}
+
+      {edit && (
+        <div className="vault-record-dialog-backdrop" data-testid="vaultmanager-record-dialog">
+          <form className="vault-record-dialog" onSubmit={(event) => { event.preventDefault(); saveEdit(); }}>
+            <h2>{t(edit.kind === "rename" ? "vaultManager.rename" : "vaultManager.relocate")}</h2>
+            <p>{t(edit.kind === "rename" ? "vaultManager.renameHint" : "vaultManager.relocateHint")}</p>
+            <input autoFocus value={edit.value} onChange={(event) => setEdit({ ...edit, value: event.target.value })} />
+            <div className="vault-record-dialog-actions">
+              <button type="button" onClick={() => setEdit(null)}>{t("app.cancel")}</button>
+              <button type="submit" className="btn-accent">{t("app.save")}</button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

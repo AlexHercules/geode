@@ -3,9 +3,8 @@
  * Run: node .calibration/r237-e2e.mjs   (dev server must be up)
  * Contract: docs/ARCHITECTURE.md "Round 237 additions".
  *
- * Obsidian's vault name is a persistent click target that opens the vault switcher. Geode's
- * status-bar vault name was a static <span>; R237 makes it a <button> that executes the
- * (R203) app:switch-vault command → opens the vault switcher modal.
+ * Obsidian's vault name is a persistent click target in the left dock footer. It opens a
+ * compact current/recent-vault menu; the full R203 manager remains the final menu entry.
  */
 import { chromium } from "playwright";
 
@@ -33,26 +32,42 @@ const app = (fn, arg) => page.evaluate(fn, arg);
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const modal = () => app(() => window.__app.workspace.state.get().modal);
 
-console.log("— the status-bar vault name is a clickable button —");
+console.log("— the left-sidebar vault name is a clickable button —");
 await page.waitForSelector('[data-testid="status-vault"]', { timeout: 4000 });
 ok("status-vault is a <button>", (await app(() => document.querySelector('[data-testid="status-vault"]')?.tagName)) === "BUTTON");
 ok("status-vault shows the vault name", (await app(() => document.querySelector('[data-testid="status-vault"]')?.textContent?.trim()))?.length > 0);
 ok("status-vault has a switch-vault tooltip", (await app(() => document.querySelector('[data-testid="status-vault"]')?.getAttribute("title")))?.toLowerCase().includes("vault"));
+ok("vault switcher is inside the left sidebar footer", await app(() => !!document.querySelector('.sidebar-left [data-testid="sidebar-vault-footer"] [data-testid="status-vault"]')));
+ok("theme toggle is removed from the vertical ribbon", await app(() => !document.querySelector('.ribbon [title*="theme" i]')));
+ok("settings is beside the vault switcher", await app(() => !!document.querySelector('[data-testid="sidebar-vault-footer"] [data-testid="sidebar-footer-settings"]')));
+ok("statistics are a standalone floating badge", await app(() => {
+  const bar = document.querySelector('[data-testid="status-bar"]');
+  if (!bar) return false;
+  const css = getComputedStyle(bar);
+  return css.position === "absolute" && bar.getBoundingClientRect().width < window.innerWidth / 2;
+}));
 
-console.log("— clicking it opens the vault switcher modal —");
+console.log("— the relocated settings button remains functional —");
+await page.click('[data-testid="sidebar-footer-settings"]');
+await wait(120);
+ok("footer settings opens the settings modal", (await modal()) === "settings");
+await app(() => window.__app.workspace.closeModal());
+await wait(80);
+
+console.log("— clicking it opens the Obsidian-style compact menu —");
 ok("no modal open initially", (await modal()) === null);
 await page.click('[data-testid="status-vault"]');
 await wait(120);
-ok("clicking the vault name opens the vault switcher", (await modal()) === "vaultmanager");
-ok("the vault switcher modal is in the DOM", await app(() => !!document.querySelector('[data-testid="vaultmanager-modal"]')));
+ok("clicking the vault name does not jump straight to a modal", (await modal()) === null);
+ok("the compact vault menu is in the DOM", await app(() => !!document.querySelector('[data-testid="vault-switcher-menu"]')));
+ok("the current vault is checked", await app(() => document.querySelector('[data-testid="vault-switcher-menu"] [role="menuitemradio"]')?.getAttribute("aria-checked") === "true"));
+ok("the full manager remains available", await app(() => !!document.querySelector('[data-testid="vault-switcher-manage"]')));
 
-console.log("— the modal closes (and the entry still works a second time) —");
-await app(() => window.__app.workspace.closeModal());
-await wait(80);
-ok("modal closed", (await modal()) === null);
-await page.click('[data-testid="status-vault"]');
+console.log("— Manage vaults… opens the existing full manager —");
+await page.click('[data-testid="vault-switcher-manage"]');
 await wait(120);
-ok("the vault name re-opens the switcher (idempotent entry)", (await modal()) === "vaultmanager");
+ok("the manage entry opens the vault manager", (await modal()) === "vaultmanager");
+ok("the vault manager modal is in the DOM", await app(() => !!document.querySelector('[data-testid="vaultmanager-modal"]')));
 await app(() => window.__app.workspace.closeModal());
 
 ok("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));

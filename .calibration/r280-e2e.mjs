@@ -44,8 +44,8 @@ ok("vault manager modal present", (await page.$('[data-testid="vaultmanager-moda
 ok("modal title present", (await page.$('[data-testid="vaultmanager-title"]')) !== null);
 const itemCount = (await page.$$('[data-testid="vaultmanager-item"]')).length;
 ok("recent items present (2)", itemCount === 2, String(itemCount));
-const removeBtns = await page.$$('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-remove"]');
-ok("remove buttons present on items", removeBtns.length === 2, String(removeBtns.length));
+const menuBtns = await page.$$('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-record-more"]');
+ok("each item has an Obsidian-style record menu", menuBtns.length === 2, String(menuBtns.length));
 ok("'Open another vault' button present", (await page.$('[data-testid="vaultmanager-open-other"]')) !== null);
 ok("'Create new vault' button NOT present (browser mode)", (await page.$('[data-testid="vaultmanager-create-new"]')) === null);
 await app(() => window.__app.workspace.closeModal());
@@ -56,7 +56,9 @@ await clearRecents();
 await setRecents(["/Users/me/Alpha", "/Users/me/Beta"]);
 await app(() => window.__app.commands.execute("app:switch-vault"));
 await page.waitForSelector('[data-testid="vaultmanager-modal"]', { timeout: 3000 });
-await page.click('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-remove"]'); // removes first (Alpha)
+await page.click('[data-testid="vaultmanager-item"] [data-testid="vaultmanager-record-more"]');
+await page.waitForSelector('[data-testid="vaultmanager-record-menu"]');
+await page.click('[data-testid="vaultmanager-remove"]'); // removes first (Alpha)
 await wait(120);
 const itemsAfter = await page.$$('[data-testid="vaultmanager-item"]');
 ok("only 1 item remains after remove", itemsAfter.length === 1, String(itemsAfter.length));
