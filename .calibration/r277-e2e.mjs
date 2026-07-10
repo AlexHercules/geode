@@ -6,7 +6,7 @@
  *  1. Toggle switch dimensions match Obsidian's 42×24 pill with 18px thumb.
  *  2. Theme "Manage" button renders as a primary filled accent button.
  *  3. Accent color picker is a circular swatch.
- *  4. Settings modal width stays at the later screenshot-calibrated 1004px target (R286 supersedes the earlier 900px estimate).
+ *  4. Settings modal width stays at the 900px Obsidian-proportioned target.
  */
 import { chromium } from "playwright";
 
@@ -111,10 +111,10 @@ console.log("— (3) accent color picker is a circular swatch —");
   ok("swatch is circular (border-radius 50%)", res?.radius === "50%", `got ${res?.radius}`);
 }
 
-console.log("— (4) settings modal keeps screenshot-calibrated 1004px width —");
+console.log("— (4) settings modal keeps Obsidian-proportioned 900px width —");
 {
   const w = await ev(() => document.querySelector('[data-testid="settings-modal"]')?.offsetWidth);
-  ok("modal width near 1004px target", w >= 1000 && w <= 1008, `got ${w}`);
+  ok("modal width near 900px target", w >= 880 && w <= 904, `got ${w}`);
 }
 
 ok("no page errors", pageErrors.length === 0, pageErrors.join(" | "));

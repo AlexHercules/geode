@@ -148,13 +148,12 @@
 .explorer-menu {
   position: fixed;
   z-index: 200;
-  min-width: 164px;
+  min-width: 170px;
   padding: 4px;
-  background: color-mix(in srgb, var(--bg-panel-alt) 96%, var(--text-normal));
-  backdrop-filter: blur(18px);
+  background: var(--bg-modal);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
 }
@@ -162,9 +161,9 @@
 .explorer-menu button {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   text-align: left;
-  padding: 6px 8px;
+  padding: 6px 10px;
   border-radius: 5px;
   font-size: 13px;
   color: var(--text-normal);

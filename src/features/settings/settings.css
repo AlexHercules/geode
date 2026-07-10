@@ -1,18 +1,17 @@
 /* ============ Settings modal ============ */
 
 .modal-panel.settings-panel {
-  /* The 2940×1912 Retina references resolve to a ~1000×720 CSS-pixel dialog
-     at a 1470×956 viewport. Keep those proportions while still shrinking on
-     smaller windows. */
-  width: min(1004px, 94vw);
-  height: min(720px, calc(100vh - 72px));
-  max-height: calc(100vh - 72px);
+  /* G2: Obsidian's settings window is markedly wider than a regular modal —
+     bumped 760→900 to match its content density (audit: "弹窗整体更窄").
+     R277: keep 900px target; the in-tree 1000px restoration deviated from
+     Obsidian's actual proportions and broke the R178 computed-style lock. */
+  width: min(900px, 94vw);
+  height: min(760px, 78vh);
+  max-height: 78vh;
   flex-direction: row;
   position: relative;
   border-radius: 12px;
-  margin-top: -12px;
-  transform: translateX(-4px);
-  font-family: var(--font-interface, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  margin-top: -18px;
 }
 
 .settings-close {
@@ -38,13 +37,13 @@
 .settings-nav {
   /* G2: 170→200 so longer entries (e.g. "文件与链接") read without ellipsis,
      matching Obsidian's roomier left rail. */
-  width: 228px;
+  width: 232px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 22px 14px 14px;
-  background: var(--bg-modal);
+  background: var(--bg-panel-alt);
   border-right: 1px solid var(--border);
   overflow-y: auto;
 }
@@ -67,13 +66,6 @@
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
-}
-
-/* The first visible group is the top label, not a separated subsection. */
-.settings-nav > div:first-of-type > .settings-nav-subtitle {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
 }
 
 .settings-nav-item {
@@ -103,18 +95,13 @@
   color: var(--text-normal);
 }
 
-.settings-nav-item:focus,
-.settings-nav-item:focus-visible {
-  outline: none;
-}
-
 /* ---------- right content ---------- */
 
 .settings-content {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  padding: 28px 44px 36px;
+  padding: 32px 46px 36px;
 }
 
 .settings-content > section {
@@ -143,7 +130,7 @@
   /* R270: 0 horizontal inset (was 20px, aligning with the old cards) so subheaders line up flush
      with the now-flush rows on EVERY page — also fixes the pre-existing Editor/Files misalignment
      (those bare-row pages had 0-inset rows under 20px-inset subheaders). */
-  margin: 24px 20px 12px;
+  margin: 24px 0 12px;
   font-size: 15px;
   font-weight: 700;
   color: var(--text-normal);
@@ -179,8 +166,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  min-height: 67px;
-  padding: 12px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -194,23 +180,24 @@
 
 .setting-name {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-normal);
 }
 
 .setting-desc {
-  margin-top: 3px;
-  font-size: 13px;
-  line-height: 1.35;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--text-muted);
 }
 
 .settings-card {
+  /* R270: flattened — Obsidian settings are flat full-width rows + thin dividers, NOT cards
+     (reference 00 §四 + the app's OWN Editor/Files pages are already bare rows). The old
+     rounded `--bg-input` box (12px radius + 20px inset) is removed so every settings page reads
+     the same flat way; rows now sit flush with the bare-row pages. The 2 special cards
+     (.core-plugin-list / .hotkeys-search-card) keep their own padding/flex (rules below). */
   margin-bottom: 0;
-  padding: 0 20px;
-  background: var(--bg-input);
-  border-radius: 12px;
-  overflow: hidden;
 }
 
 .settings-card > .setting-item:last-child,
@@ -218,25 +205,6 @@
 .settings-card > .hotkey-row:last-child,
 .settings-card > .core-plugin-row:last-child {
   border-bottom: none;
-}
-
-/* Core-plugin setting pages are intentionally simple JSX rows. Give those
-   direct rows the same grouped surface as the explicitly wrapped pages. */
-.settings-content > section > .setting-item {
-  padding-right: 20px;
-  padding-left: 20px;
-  background: var(--bg-input);
-}
-
-.settings-content > section > .setting-item:first-of-type,
-.settings-content > section > .settings-subheader + .setting-item {
-  border-radius: 12px 12px 0 0;
-}
-
-.settings-content > section > .setting-item:last-child,
-.settings-content > section > .setting-item:has(+ .settings-subheader) {
-  border-bottom: 0;
-  border-radius: 0 0 12px 12px;
 }
 
 .settings-control-group {
@@ -429,7 +397,7 @@
   align-items: center;
   gap: 8px;
   height: 36px;
-  margin-bottom: 8px;
+  margin-bottom: 18px;
   padding: 0 10px;
   color: var(--text-muted);
   background: var(--bg-input);
@@ -452,7 +420,8 @@
 }
 
 .core-plugin-list {
-  padding: 16px 20px 0;
+  /* R270: 0 inset (was 0 20px) so core-plugin rows align flush with every other settings row */
+  padding: 0;
 }
 
 .core-plugin-row {
@@ -460,8 +429,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 64px;
-  padding: 12px 0;
+  padding: 13px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -553,7 +521,6 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 64px;
   padding: 12px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -596,7 +563,6 @@
 
 .plugin-name {
   font-size: 14px;
-  font-weight: 500;
   color: var(--text-normal);
   white-space: nowrap;
   overflow: hidden;
@@ -610,9 +576,9 @@
 }
 
 .plugin-desc {
-  margin-top: 3px;
-  font-size: 13px;
-  line-height: 1.35;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--text-muted);
 }
 
@@ -739,10 +705,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 12px 20px;
-  margin-bottom: 0;
-  border-radius: 12px 12px 0 0;
-  border-bottom: 1px solid var(--border);
+  /* R270: 0 horizontal inset (was 18px 20px) so the flat search header aligns with the rows below */
+  padding: 18px 0;
+  margin-bottom: 4px;
 }
 
 .hotkeys-search-meta {
@@ -755,15 +720,15 @@
   gap: 8px;
   flex: 1;
   justify-content: flex-end;
-  min-width: 220px;
+  min-width: 280px;
 }
 
 .hotkeys-search-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 0 176px;
-  min-width: 176px;
+  flex: 0 1 260px;
+  min-width: 210px;
   height: 34px;
   padding: 0 10px;
   border: 1px solid var(--border-strong);
@@ -797,11 +762,11 @@
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 28px;
+  width: 34px;
   height: 34px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 7px;
-  background: transparent;
+  background: var(--bg-modal);
   color: var(--text-muted);
 }
 
@@ -819,10 +784,8 @@
 .hotkey-list {
   display: flex;
   flex-direction: column;
-  padding: 0 20px;
-  background: var(--bg-input);
-  border-radius: 0 0 12px 12px;
-  overflow: hidden;
+  /* R270: flattened to match the now-flat search header above + every other settings list —
+     the rounded `--bg-modal` box + 20px inset are removed so the command rows sit flush. */
 }
 
 .hotkey-row {
@@ -830,8 +793,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  min-height: 54px;
-  padding: 9px 0;
+  padding: 13px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -845,7 +807,6 @@
 
 .hotkey-name {
   font-size: 14px;
-  font-weight: 500;
   color: var(--text-normal);
   white-space: nowrap;
   overflow: hidden;
@@ -867,11 +828,8 @@
 }
 
 .hotkey-unset {
-  padding: 2px 7px;
-  border-radius: 5px;
-  background: var(--bg-active);
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-faint);
   user-select: none;
 }
 
@@ -880,11 +838,11 @@
   align-items: center;
   gap: 4px;
   padding: 2px 4px 2px 8px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 5px;
-  background: var(--bg-active);
-  font-family: inherit;
-  font-size: 12px;
+  background: var(--bg-input);
+  font-family: var(--font-monospace, ui-monospace, "Cascadia Code", Consolas, "SF Mono", Menlo, monospace);
+  font-size: 11px;
   color: var(--text-muted);
   white-space: nowrap;
   user-select: none;
@@ -929,12 +887,12 @@
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
-  background: transparent;
+  background: var(--bg-input);
   color: var(--text-muted);
 }
 

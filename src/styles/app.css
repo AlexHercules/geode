@@ -888,12 +888,6 @@ html {
   z-index: 100;
 }
 
-/* Obsidian keeps the workspace legible behind Settings; its reference captures
-   dim the app by only ~7% (white workspace pixels resolve near rgb(238)). */
-.modal-overlay:has(.settings-panel) {
-  background: rgba(0, 0, 0, 0.07);
-}
-
 .modal-panel {
   background: var(--bg-modal);
   border: 1px solid var(--border-strong);
@@ -1023,11 +1017,10 @@ html {
   z-index: 200;
   min-width: 180px;
   padding: 4px;
-  background: color-mix(in srgb, var(--bg-panel-alt) 96%, var(--text-normal));
-  backdrop-filter: blur(18px);
+  background: var(--bg-modal);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
 }

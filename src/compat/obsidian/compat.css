@@ -109,11 +109,10 @@
   min-width: 160px;
   max-width: 320px;
   padding: 4px;
-  background: color-mix(in srgb, var(--bg-panel-alt) 96%, var(--text-normal));
-  backdrop-filter: blur(18px);
+  background: var(--bg-modal);
   border: 1px solid var(--border);
   border-radius: 7px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-modal);
 }
 
 .geode-compat-menu .menu-item {
