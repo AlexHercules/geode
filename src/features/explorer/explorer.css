@@ -166,6 +166,8 @@
   position: fixed;
   z-index: 200;
   min-width: 170px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
   padding: 4px;
   background: var(--bg-modal);
   border: 1px solid var(--border-strong);
@@ -173,6 +175,8 @@
   box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .explorer-menu button {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { MenuContribution } from "@core/plugins";
 import type { FolderNode, VaultNode } from "@core/types";
@@ -374,6 +374,27 @@ export function Explorer() {
       window.removeEventListener("mousedown", onMouseDown, true);
       window.removeEventListener("keydown", onKeyDown, true);
     };
+  }, [menu]);
+
+  /* Position from the menu's measured size, not a fixed height estimate. File
+     menus grow on desktop and when plugins register actions, so a bottom-row
+     invocation must flip upward by its real height. The CSS max-height keeps
+     an exceptionally tall contributed menu scrollable inside the viewport. */
+  useLayoutEffect(() => {
+    const element = menuRef.current;
+    if (!menu || !element) return;
+    const placeInsideViewport = () => {
+      const gutter = 8;
+      const rect = element.getBoundingClientRect();
+      const maxLeft = Math.max(gutter, window.innerWidth - rect.width - gutter);
+      const maxTop = Math.max(gutter, window.innerHeight - rect.height - gutter);
+      element.style.left = `${Math.max(gutter, Math.min(menu.x, maxLeft))}px`;
+      element.style.top = `${Math.max(gutter, Math.min(menu.y, maxTop))}px`;
+      element.style.visibility = "visible";
+    };
+    placeInsideViewport();
+    window.addEventListener("resize", placeInsideViewport);
+    return () => window.removeEventListener("resize", placeInsideViewport);
   }, [menu]);
 
   /* ---------------- actions ---------------- */
@@ -1077,9 +1098,11 @@ export function Explorer() {
           className="explorer-menu"
           data-testid="explorer-menu"
           style={{
-            // R81 two-axis clamp — keep the menu fully on-screen
-            left: Math.max(0, Math.min(menu.x, window.innerWidth - 200)),
-            top: Math.max(0, Math.min(menu.y, window.innerHeight - 240)),
+            // useLayoutEffect replaces these anchor coordinates with a clamp
+            // based on the rendered menu's real dimensions before paint.
+            left: menu.x,
+            top: menu.y,
+            visibility: "hidden",
           }}
         >
           {menu.files ? (
