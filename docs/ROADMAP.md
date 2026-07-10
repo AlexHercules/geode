@@ -20,13 +20,19 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-10 R290 后）
+## 下一轮候选（2026-07-10 R291 后）
 
-### R291 候选 — 表面复刻收尾或设置/核心插件补深
+### R292 候选 — 表面复刻收尾或设置/核心插件补深
 
-R290 已完成上下文菜单改进（Explorer 视口翻转 + vault 右键动作）。R291 按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 复制路径 + 打开历史余项 / 随机笔记 / 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 零星高频命令（editor:focus / graph:open-local / bookmark-search / release-notes / help）。每轮只取 1-2 个能闭环的子项，零新依赖。
+R291 已完成帮助与更新日志命令。R292 核查 `random-note` 等候选已真实存在后，按 HANDOFF 取用顺序转入：回收站 UI + 删除确认（data-safety 重轮·单独排）/ 热键页结构 / 设置页视觉 / 文件夹右键补齐 / 其他零星高频命令。每轮只取 1-2 个能闭环的子项，零新依赖。
 
 ## 已完成
+
+### R291 — v0.283（2026-07-10）帮助与更新日志命令
+
+补两个零星高频命令到命令面板：`app:open-help` 打开 Geode README、`app:open-release-notes` 打开 GitHub Releases；均通过 `window.open` 在系统浏览器打开，零 vault/editor/markdown 写路径。
+
+机械档、零新依赖、未碰数据安全面。简化门：机械档跳过。scoped review clean。验证：`r291-e2e 7/7`；回归 `r185 19/19` / `r288 17/17` / `r24 12/12`；typecheck 0、`npm run build`✓、`PATH=$HOME/.cargo/bin:$PATH cargo check --manifest-path src-tauri/Cargo.toml` 通过、Tauri release build 成功。桌面按 by-equivalence + release 二进制 smoke run。
 
 ### R290 — v0.282（2026-07-10）上下文菜单改进
 

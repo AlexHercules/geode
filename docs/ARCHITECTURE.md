@@ -114,6 +114,34 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：逻辑档**（新增 React 状态、DOM 测量/定位 effect、键盘导航、事件捕获处理）·**简化门：clean**（无 ≥8 行重复 / 无死代码 / 无脚手架）·**评审：5 处 confirmed（a11y 焦点/键盘、capture 关闭、视口裁剪、测试覆盖缺口）已修复，0 阻断**。
 
+## Round 291 additions — 帮助与更新日志命令·机械档·零新依赖
+
+> **状态：As-built（已交付·v0.283）。** 补两个零星高频命令到命令面板：`app:open-help` 打开 Geode README、`app:open-release-notes` 打开 GitHub Releases。零新依赖、零数据安全面。
+
+**UI/行为契约**：
+1. `src/app/App.tsx`：
+   - 注册 `app:open-help` 命令：`callback: () => window.open("https://github.com/AlexHercules/geode#readme", "_blank", "noopener")`。
+   - 注册 `app:open-release-notes` 命令：`callback: () => window.open("https://github.com/AlexHercules/geode/releases", "_blank", "noopener")`。
+   - 两个命令均无热键、无 `available` 限制，始终可在命令面板中调用。
+2. `src/core/i18n/dict.app.ts`：
+   - 新增 `cmd.openHelp` / `cmd.openReleaseNotes` 中英键。
+
+**数据安全契约**：
+- 命令回调仅调用 `window.open`，不读取或写入任何 `.md` / editor / vault / 文件 IO。
+
+**验证契约**：
+1. 新增 `.calibration/r291-e2e.mjs`：7/7 断言——命令已注册、名称已本地化（非原始键）、执行回调打开预期 URL。
+2. 回归：`r185 19/19` / `r288 17/17` / `r24 12/12` 不回退。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过；Tauri release build 成功。
+4. 桌面按 by-equivalence + release 二进制 smoke run。
+
+**文件范围**：
+- `src/app/App.tsx`
+- `src/core/i18n/dict.app.ts`
+- `.calibration/r291-e2e.mjs`
+
+**分档：机械档**（标准命令注册 + i18n 键，无新控制流/无数据安全面）·**简化门：机械档跳过**·**评审：scoped review clean**。
+
 ## Round 288 additions — 全工作区 Obsidian chrome 校准·机械档·零新依赖
 
 > **状态：As-built（已交付·v0.281）。** 本轮把 2026-07-04 截图对比剩余的 shell 差距一次性收拢到「全工作区 chrome」：统一顶栏高度/分隔线、去浮岛侧边收起按钮、功能栏图标单色调中性化、文件树嵌套引导线、active 行去 accent 边、macOS overlay title bar 与 traffic lights 对齐。全部为零新依赖的 CSS/UI 调整；`tauri.conf.json` 仅改 macOS 窗口装饰配置。

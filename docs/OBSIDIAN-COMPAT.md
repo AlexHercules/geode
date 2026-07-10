@@ -2412,6 +2412,12 @@ OBSIDIAN badge + 开关 + 设置区块齐全；disable/enable 往返实测
 - **与原生 `.geode/plugins` 双轨** → 保留双轨：原生 API 是干净长期面，shim 是迁移面；
   文档明说新插件建议写原生。
 
+## R291 帮助与更新日志命令 · 套件矩阵（2026-07-10）
+
+本轮为零新依赖的 UI/命令注册改进，未改动 compat/shim 代码，未新增运行时依赖。compat 调用面与 Tier 表均保持不变。
+
+**套件矩阵不回退**：`r291-e2e 7/7` · `r185 19/19` · `r288 17/17` · `r24 12/12`。`npm run typecheck` 0 错误；`npm run build`✓；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过；Tauri release build 成功。桌面按 by-equivalence + release 二进制 smoke run。
+
 ## R290 上下文菜单改进 · 套件矩阵（2026-07-10）
 
 本轮为零新依赖的 UI/交互改进（Explorer 右键菜单视口翻转 + vault 右键上下文菜单），未改动 compat/shim 代码，未新增运行时依赖。compat 调用面与 Tier 表均保持不变。
