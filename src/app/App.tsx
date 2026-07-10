@@ -15,6 +15,7 @@ import {
 } from "@core/appearance";
 import type { NewTabMode } from "@core/appearance";
 import { resolveAttachmentDeletion } from "@core/attachmentDeletion";
+import { isMarkdownPath } from "@core/attachments";
 import { MIN_PANE_FRACTION, allTabs, findTabLeaf, isFilelessSingletonView } from "@core/workspace";
 import { getCommandName } from "@core/commands";
 import type { PaneLeaf, PaneNode, PaneSplit, TabState } from "@core/types";
@@ -782,6 +783,7 @@ export function App() {
         id: "editor:add-property",
         name: () => t("cmd.addProperty"),
         hotkey: "Mod+;",
+        available: () => isMarkdownPath(workspace.getActiveTab()?.filePath ?? ""),
         callback: () => {
           // no file in the active tab → no-op (contract)
           const tab = workspace.getActiveTab();
@@ -806,6 +808,7 @@ export function App() {
         // its value. Mirrors add-property's flip-to-editable flow, passing the property key.
         id: "editor:add-alias",
         name: () => t("cmd.addAlias"),
+        available: () => isMarkdownPath(workspace.getActiveTab()?.filePath ?? ""),
         callback: () => {
           const tab = workspace.getActiveTab();
           if (!tab || !tab.filePath) return;
@@ -818,6 +821,7 @@ export function App() {
         // R196: Obsidian editor:add-tag — add (or focus) a "tags" property and focus its value.
         id: "editor:add-tag",
         name: () => t("cmd.addTag"),
+        available: () => isMarkdownPath(workspace.getActiveTab()?.filePath ?? ""),
         callback: () => {
           const tab = workspace.getActiveTab();
           if (!tab || !tab.filePath) return;

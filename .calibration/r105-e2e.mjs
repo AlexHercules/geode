@@ -37,6 +37,7 @@ const route = async (exts) => {
 };
 const open = (p) => app(([path]) => { window.__app.workspace.openFile(path); }, [p]);
 const activeViewType = () => app(() => window.__app.workspace.getActiveTab()?.viewType ?? null);
+const activeMode = () => app(() => window.__app.workspace.getActiveTab()?.mode ?? null);
 
 // ── SAFETY: every old binary/media extension is STILL read-only (no corruption regression) ──
 console.log("— safety: no binary/media flips to editable —");
@@ -67,13 +68,30 @@ ok(".ipynb/.srt (text) → editable", rEdge("ipynb") === false && rEdge("srt") =
 console.log("— end-to-end routing —");
 await app(async () => {
   try { await window.__app.vault.create("notes.txt", "plain text"); } catch { /* exists */ }
+  try { await window.__app.vault.create("note.md", "# rendered note"); } catch { /* exists */ }
   try { await window.__app.vault.create("mystery.xyz", "unknown bytes"); } catch { /* exists */ }
   try { await window.__app.vault.create("Dockerfile", "FROM scratch"); } catch { /* exists */ }
   await new Promise((r) => setTimeout(r, 60));
 });
 await open("notes.txt");
 await wait(150);
-ok(".txt opens in the editable markdown editor (viewType markdown)", (await activeViewType()) === "markdown");
+ok(".txt opens in the editable text editor (file-backed editor view)", (await activeViewType()) === "markdown");
+ok(".txt is pinned to raw source mode", (await activeMode()) === "source");
+ok(".txt has no reading-view toggle", await app(() => !document.querySelector('[data-testid="mode-reading-toggle"]')));
+await app(() => {
+  const tab = window.__app.workspace.getActiveTab();
+  if (tab) window.__app.workspace.setTabMode(tab.id, "preview");
+});
+await wait(100);
+ok("programmatic preview request cannot render .txt", (await activeMode()) === "source" && await app(() => !document.querySelector(".preview-content")));
+await open("note.md");
+await wait(100);
+await app(() => {
+  const tab = window.__app.workspace.getActiveTab();
+  if (tab) window.__app.workspace.setTabMode(tab.id, "preview");
+});
+await wait(100);
+ok(".md still supports reading view", (await activeMode()) === "preview" && await app(() => !!document.querySelector(".preview-content h1")));
 await open("mystery.xyz");
 await wait(150);
 ok("unknown .xyz opens in the read-only attachment viewer (viewType attachment)", (await activeViewType()) === "attachment");

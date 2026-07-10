@@ -59,6 +59,7 @@ import { BacklinksInDocument } from "./BacklinksInDocument";
 import { openWikilink } from "./wikilinks";
 import { handleObsidianUri } from "./obsidianUriHandler";
 import { uriLinksEnabled } from "@core/obsidianUri";
+import { isMarkdownPath } from "@core/attachments";
 import "./editor.css";
 
 /**
@@ -348,6 +349,9 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
   /* R115: plugin-contributed CM6 extensions — reconfigure the compat compartment reactively */
   const compatExtRev = useStore(editorExtensionsRevision);
   const cbProcRev = useStore(codeBlockProcessorsRevision);
+  /** Rendering is a note-only capability. Other editable text/code files stay
+   *  in raw source mode even though they share the file-backed editor view. */
+  const supportsMarkdownRendering = tab.filePath !== null && isMarkdownPath(tab.filePath);
 
   /** the shared document handle for tab.filePath (null while loading) */
   const [handle, setHandleState] = useState<DocumentHandle | null>(null);
@@ -1353,7 +1357,7 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
               <ViewHeaderActionIcon action={action} />
             </button>
           ))}
-          {viewModeToggleVisible && (
+          {supportsMarkdownRendering && viewModeToggleVisible && (
             <button
               className={"editor-header-action" + (tab.mode === "preview" ? " is-active" : "")}
               data-testid="mode-reading-toggle"
@@ -1393,14 +1397,16 @@ export function EditorPane({ tab, autoFocus = true }: { tab: TabState; autoFocus
           }}
         >
           {headerCommandItem("backlink:toggle-backlinks-in-document", "editor-menu-backlinks")}
-          <button
-            role="menuitem"
-            className={tab.mode === "preview" ? "is-selected" : undefined}
-            data-testid="editor-menu-reading"
-            onClick={() => runHeaderMenu(() => setMode("preview"))}
-          >
-            {t("editor.readingView")}
-          </button>
+          {supportsMarkdownRendering && (
+            <button
+              role="menuitem"
+              className={tab.mode === "preview" ? "is-selected" : undefined}
+              data-testid="editor-menu-reading"
+              onClick={() => runHeaderMenu(() => setMode("preview"))}
+            >
+              {t("editor.readingView")}
+            </button>
+          )}
           <button
             role="menuitem"
             className={tab.mode === "source" ? "is-selected" : undefined}

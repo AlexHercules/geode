@@ -278,6 +278,12 @@ export function fileExtension(path: string): string {
   return dot <= 0 ? "" : base.slice(dot + 1).toLowerCase();
 }
 
+/** True only for native Geode notes. Other editable text formats stay in the
+ *  raw source editor and never enter Markdown live-preview / reading mode. */
+export function isMarkdownPath(path: string): boolean {
+  return fileExtension(path) === "md";
+}
+
 /** R104: which inline preview the attachment view renders — image (<img>), audio
  *  (<audio>), video (<video>), pdf (<embed>), or "other" (read-only placeholder). */
 export type MediaKind = "image" | "audio" | "video" | "pdf" | "other";

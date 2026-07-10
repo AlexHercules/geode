@@ -15,7 +15,7 @@ import { EventBus } from "./events";
 import { Store } from "./store";
 import { defaultNewTabMode, focusNewTab } from "./appearance";
 import { basename, stripExtension } from "./vault";
-import { isAttachmentPath } from "./attachments";
+import { isAttachmentPath, isMarkdownPath } from "./attachments";
 
 const PERSIST_KEY = "geode.workspace.v1";
 const RECENTLY_CLOSED_MAX = 20;
@@ -245,18 +245,30 @@ function mapAllLeaves(node: PaneNode, fn: (leaf: PaneLeaf) => PaneLeaf): PaneNod
   return changed ? { ...node, children } : node;
 }
 
-/** R102: the file-backed viewType for a path — non-md attachments open the read-only
- *  viewer, everything else the editable markdown editor. Derived from the path at EVERY
+/** R102: the file-backed viewType for a path — attachments open the read-only
+ *  viewer, known text formats the editable file-backed editor. Derived from the path at EVERY
  *  point a file-backed tab is created/retargeted (openFile / sanitizeTab / rename), so a
  *  binary can never reach the editable/autosave path through a stale or persisted type. */
 function fileViewType(path: string): "markdown" | "attachment" {
   return isAttachmentPath(path) ? "attachment" : "markdown";
 }
 
+/** Only .md notes may use Markdown live-preview / reading mode. Known editable
+ *  text/code formats still use the editor, but are pinned to raw source mode. */
+function fileViewMode(path: string, requested: ViewMode): ViewMode {
+  return isMarkdownPath(path) ? requested : "source";
+}
+
 /** R102: retarget a file-backed tab to a new path, RE-deriving viewType (a cross-type
  *  rename must flip editable↔read-only) and title. */
 function retargetFileTab(t: TabState, newPath: string): TabState {
-  return { ...t, viewType: fileViewType(newPath), filePath: newPath, title: stripExtension(basename(newPath)) };
+  return {
+    ...t,
+    viewType: fileViewType(newPath),
+    filePath: newPath,
+    mode: fileViewMode(newPath, t.mode),
+    title: stripExtension(basename(newPath)),
+  };
 }
 
 /**
@@ -441,7 +453,9 @@ export class Workspace {
         root = mapLeaf(root, target.id, (l) => ({
           ...l,
           tabs: l.tabs.map((t) =>
-            t.id === active.id ? { ...t, filePath: path, title: stripExtension(basename(path)) } : t,
+            t.id === active.id
+              ? { ...t, filePath: path, mode: fileViewMode(path, t.mode), title: stripExtension(basename(path)) }
+              : t,
           ),
         }));
         return { ...s, root, activePaneId: target.id, modal: null };
@@ -452,7 +466,7 @@ export class Workspace {
         filePath: path,
         // R88: new tabs open in the user's default mode (Obsidian's "Default view
         // for new tabs" + "Default editing mode"); default "live" = prior behaviour
-        mode: defaultNewTabMode.get(),
+        mode: fileViewMode(path, defaultNewTabMode.get()),
         title: stripExtension(basename(path)),
       };
       if (opts.focus ?? focusNewTab.get()) {
@@ -666,7 +680,11 @@ export class Workspace {
       if (!holder) return s;
       const root = mapLeaf(s.root, holder.id, (l) => ({
         ...l,
-        tabs: l.tabs.map((t) => (t.id === id ? { ...t, mode } : t)),
+        tabs: l.tabs.map((t) =>
+          t.id === id
+            ? { ...t, mode: t.filePath === null ? mode : fileViewMode(t.filePath, mode) }
+            : t,
+        ),
       }));
       return { ...s, root };
     });
@@ -675,7 +693,7 @@ export class Workspace {
   /** Ctrl+E: toggle between editing (live) and reading view. */
   toggleActiveTabMode() {
     const tab = this.getActiveTab();
-    if (tab?.viewType === "markdown") {
+    if (tab?.viewType === "markdown" && tab.filePath !== null && isMarkdownPath(tab.filePath)) {
       this.setTabMode(tab.id, tab.mode === "preview" ? "live" : "preview");
     }
   }
@@ -683,7 +701,7 @@ export class Workspace {
   /** Toggle the active markdown tab between live preview and raw source. */
   toggleActiveSourceMode() {
     const tab = this.getActiveTab();
-    if (tab?.viewType === "markdown") {
+    if (tab?.viewType === "markdown" && tab.filePath !== null && isMarkdownPath(tab.filePath)) {
       this.setTabMode(tab.id, tab.mode === "source" ? "live" : "source");
     }
   }
@@ -972,7 +990,9 @@ export class Workspace {
       const root = mapLeaf(s.root, holder.id, (l) => ({
         ...l,
         tabs: l.tabs.map((t) =>
-          t.id === tabId ? { ...t, filePath, title: stripExtension(basename(filePath)), mode } : t,
+          t.id === tabId
+            ? { ...t, filePath, title: stripExtension(basename(filePath)), mode: fileViewMode(filePath, mode) }
+            : t,
         ),
         activeTabId: tabId,
       }));
@@ -1434,7 +1454,13 @@ function sanitizeTab(raw: unknown): TabState | null {
     : filePath !== null
       ? fileViewType(filePath)
       : "markdown";
-  const tab: TabState = { id: t.id, viewType, filePath, mode, title: t.title };
+  const tab: TabState = {
+    id: t.id,
+    viewType,
+    filePath,
+    mode: filePath === null ? mode : fileViewMode(filePath, mode),
+    title: t.title,
+  };
   if (t.pinned === true) tab.pinned = true; // R39: persist pin state (omit when false)
   return tab;
 }
