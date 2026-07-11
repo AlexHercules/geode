@@ -169,6 +169,52 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（menu IA 接线·复用既有 handler/testid/i18n·无新控制流/无数据安全面/无 Rust 改动）·**简化门：机械档跳过**·**评审：scoped review**。
 
+## Round 295 additions - 核心插件化第一波·侧栏知识视图（Backlinks/Outgoing links/Outline/Graph）·逻辑档·零新依赖
+
+> **状态：As-built（已交付·v0.286）。** 按 R294 冻结契约，把 wave-1 四个侧栏知识视图接入真实开关模型（Tags 已 R294）。每项 = 一个 `GeodePlugin` builtin（`src/plugins/<id>.ts`），命令移入 `onload`（auto-dispose），侧栏 tab/render/effectiveRight 读 `isEnabled(id)`，CORE_PLUGIN_ROWS 加 `pluginId`。本轮**定 main-area singleton view disable 行为**（R294 契约遗留项）。
+
+### Singleton-view disable 行为（R294 遗留·本轮冻结）
+
+四个 fileless singleton view（`graph`/`backlinks`/`outgoinglinks`/`outline`，见 `isFilelessSingletonView`）的 viewType 与 plugin id 同名。disable 时：
+
+- **render-time placeholder gating**（安全·非 mutate）：App.tsx `renderTab` 对这四个 viewType 检查 `isEnabled(viewType)`；disabled 时渲染 inert 占位 `<div className="main-view-disabled" />` 而非 panel。**不 auto-close**（不从 onunload 改 workspace state，避免 recentlyClosed/reopen 竞态）；用户可自行关 tab，开新 tab 的命令已 auto-dispose 故无法新增。re-enable 后 panel 恢复渲染。
+- 理由：placeholder 是 HANDOFF 明确允许的选项；render-time gating 覆盖「disable 时已开 / recentlyClosed reopen / 竞态」全部分支，零 workspace 写。auto-close-on-disable 留作未来忠实度细化。
+
+### 四项实现（逐项镜像 R294 Tags 模式）
+
+| plugin id | 命令（移入 onload·auto-dispose） | 侧栏 tab | singleton renderTab gate | 备注 |
+|---|---|---|---|---|
+| `outline` | `app:show-outline`（setRightPanel）· `outline:open-outline`（openOutline） | right-tab-outline ✓ | viewType "outline" ✓ | |
+| `outgoing-links` | `app:show-outgoing-links` · `outgoing-links:open-outgoing-links` | right-tab-outgoinglinks ✓ | "outgoinglinks" ✓ | |
+| `backlinks` | `app:show-backlinks` · `backlink:open-backlinks` | right-tab-backlinks ✓ | "backlinks" ✓ | **默认回退**：backlinks 是 effectiveRight/render 的 else 兜底；disabled 时回退 `calendar`（always-on·非 pluginified·恒可用） |
+| `graph` | `app:open-graph`（Mod+G·openGraph）· `graph:open-local`（R240 one-shot `openLocalGraphRequest`+openGraph） | 无侧栏 tab（main-area only） | "graph" ✓ | **ribbon 入口**（App.tsx:1252）+ empty-state 按钮（:2560）也 gate on isEnabled("graph") |
+
+### 入口 gate（复用 R294 契约·零改 core/plugins.ts）
+
+- App 根 `useStore(app.plugins.revision)`（R294 已加）+ 新增 `outlineEnabled`/`outgoingLinksEnabled`/`backlinksEnabled`/`graphEnabled` 局部（`app.plugins.isEnabled(id)`）。
+- 侧栏 tab 按钮：`{<id>Enabled && (<button.../>)}`。
+- render switch：`ws.rightPanel === "<id>" && <id>Enabled ? <Panel/> : ...`。
+- effectiveRight：同 `&& <id>Enabled`；backlinks else 兜底 `(backlinksEnabled ? "backlinks" : "calendar")`。
+- graph ribbon/empty-state：`{graphEnabled && <RibbonButton.../>}` / empty-state 按钮 `{graphEnabled && <button.../>}`。
+- graph 书签入口（R295 评审 F1 修复）：BookmarksPanel `case "graph"` activate 也 gate on `isEnabled("graph")`（disabled 时 no-op，不绕过已 dispose 的命令 spawn 占位 tab）。
+- 命令：移入 plugin onload，disable 时 auto-dispose。
+- CORE_PLUGIN_ROWS：outline/outgoing-links/backlinks/graph 四行加 `pluginId`（toggle 从 disabled 变可操作）。
+
+### 数据安全契约
+
+零 .md / vault / editor 写路径。四 plugin onload 仅注册 UI 导航命令（setRightPanel / openSingletonView / openGraph + R240 one-shot Store.set）；gating 纯 React 渲染；持久化走既有 `geode.plugins.enabled.v1` localStorage。singleton-view placeholder 不 mutate workspace state。无数据安全红线（未碰 `core/markdown.ts`/`core/vault*`/`core/documents*`/editor 管线）。backlinks 默认回退不 mutate `ws.rightPanel`（复用 R294 stale-id 回退模式）。
+
+### 验证契约
+
+1. 新 `.calibration/r295-e2e.mjs`：四项各--默认 on（tab/命令/ribbon[graph] 在）/ disable（tab 隐 + render 回退 + 命令从 palette 消失 + singleton 占位 + ribbon[graph] 隐）/ re-enable 恢复 / 重启持久化；backlinks 特例（disabled 时 rightPanel="backlinks" 回退 calendar 显 CalendarPanel）；目录（4 行 pluginId·toggle 可操作）。
+2. 回归 `r294`（tags 不退）· `r240`（graph:open-local one-shot）· `r211`/`r212`（backlinks/outgoing/outline open-as-tab）· `r185`（commands）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面 probe N/A（纯 Store+UI+localStorage，无 FS/Rust delta）。
+
+**文件范围**：`src/plugins/outline.ts`·`outgoing-links.ts`·`backlinks.ts`·`graph.ts`（新）· `src/plugins/index.ts` · `src/app/App.tsx` · `src/features/settings/SettingsModal.tsx` · `.calibration/r295-e2e.mjs`（新）。
+
+**分档：逻辑档**（4 新 plugin + 新控制流[App.tsx gating 多处 + singleton renderTab gate]+ store 驱动；未碰数据安全红线）·**简化门：跑**·**评审：多维对抗**。
+
 ## Round 294 additions - 核心插件真实开关契约 + 总表校准 + Tags 纵切·逻辑档·零新依赖
 
 > **状态：As-built（已交付·v0.285）。** R293 GAP_AUDIT 确认最大结构性缺口：`CORE_PLUGIN_ROWS` 21 行仅 4 行绑定真实 `pluginId`（random-note/daily-note/unique-note/word-count），其余 17 行 toggle disabled（always-on 功能无真实开关）。R294 冻结核心插件 manifest/lifecycle/入口 gate 契约，补齐 1.9.10 目录，并以 **Tags 纵切**证明契约。R295–R297 按本契约把 wave-1/2/3 逐项接入同一开关模型。
