@@ -55,7 +55,7 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 | 导航与工作区 | `partial` | tabs、splits、stacked tabs、历史、侧栏折叠、工作区保存恢复已完成 | pop-out/多窗口、跨窗 leaf 生命周期与插件事件 | R307+ |
 | 设置与视觉 | `partial` | 三段式 IA、主要设置页和控件已有，多轮 screenshot 校准 | 无 8–12 张固定整屏 baseline/diff；Keychain 空页；核心插件总表行为不诚实 | R294–R299 / R302 |
 | 命令与热键 | `partial` | 高频编辑/导航/文件/面板命令主干已注册；绑定 UI 与筛选可用 | 余项主要从 Canvas/Bases/多窗口/Audio/CLI 等未建能力派生；默认键与来源仍需随功能闭环复核 | 随各大件 |
-| 核心插件 | `partial` | 多数中小能力存在 | 只有 4/21 行可真实启停；目录项也未完全覆盖 1.9.10；Canvas/Bases/Audio/Converter 缺 | R294–R297 / R305+ |
+| 核心插件 | `partial` | 多数中小能力存在 | R294 冻结开关契约+目录补齐至 29 行(1.9.10)+Tags 纵切(5/29 真实启停)；剩 24 行 always-on 待 R295–R297 逐项接入；Canvas/Bases/Audio/Converter 缺 | R295–R297 / R305+ |
 | 社区插件产品 | `partial` | `.obsidian/plugins` 扫描、manifest、启停、设置页、卸载、失败原因、多个真插件已证明 | Restricted mode、浏览/安装/升级、兼容分级、代表矩阵缺 | R303 |
 | Obsidian API 兼容 | `partial` | Vault/Workspace/Metadata/Editor/UI/CM6 大量 API 与真插件路径已跑通 | asset URI、extensions、protocol、lastEvent、SecretStorage、stat/appendBinary 等 | R300–R302 / D3 |
 | 本体大件 | `missing` | PDF 只有原生 iframe；无 Canvas/Bases/多窗口/Audio 源文件 | PDF.js、JSON Canvas、Bases query/view、Tauri 多窗口、MediaRecorder | R304–R315 |
@@ -67,8 +67,8 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 
 ### 当前证据
 
-- `SettingsModal.tsx` 的 `CORE_PLUGIN_ROWS` 有 21 行。
-- 只有 4 行配置 `pluginId`：`random-note`、`daily-note`、`unique-note`、`word-count`。
+- `SettingsModal.tsx` 的 `CORE_PLUGIN_ROWS` 有 29 行（R294 补齐 1.9.10 目录：+search/bookmarks/properties-view/footnotes-view/bases/web-clipper/markdown-converter/sync）。
+- 5 行配置真实 `pluginId`：`random-note` / `daily-note` / `unique-note` / `word-count` + **`tags`（R294 Tags 纵切）**；其余 24 行为 always-on / not-yet-pluginified（disabled toggle，R295–R297 按 R294 冻结契约逐项接入）。
 - UI 代码明确写着：没有注册插件支撑的行只显示 disabled toggle，功能仍是 always-on / not-yet-pluginified。
 - `src/plugins/index.ts` 实际注册 5 个内建插件；`backlink-count` 没有对应核心插件总表开关。
 
@@ -84,8 +84,8 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 
 | 状态 | 项目 |
 |---|---|
-| `done`（可真实启停） | Random note、Daily notes、Unique notes、Word count |
-| `partial`（能力在但非真插件） | Note composer、Tags、Outgoing links、Outline、Backlinks、Workspaces、Graph、Slides、Quick switcher、Command palette、Templates、File recovery、File explorer、Page preview，以及未统一进总表的 Search、Bookmarks、Properties |
+| `done`（可真实启停） | Random note、Daily notes、Unique notes、Word count、**Tags（R294）** |
+| `partial`（能力在但非真插件，已入总表待 R295–R297 接入） | Note composer、Outgoing links、Outline、Backlinks、Workspaces、Graph、Slides、Quick switcher、Command palette、Templates、File recovery、File explorer、Page preview、Search、Bookmarks、Properties view、Footnotes view |
 | `missing` | Canvas、Bases、Audio recorder、Markdown converter |
 | `excluded` | Publish、Sync（仅商业服务；本地文件兼容与相关设置仍须优雅展示） |
 

@@ -42,8 +42,8 @@ shim 建立其上。
 
 | 顺序 | 下一轮目标 | 当前状态 | 本轮闭环 / 验收信号 |
 |---:|---|---|---|
-| 1 | **R294 · 核心插件真实开关契约 + 总表校准** | `partial`：设置中 21 行仅 4 行绑定真实 `pluginId`；Bases/Search/Bookmarks/Properties 等目录项还未统一 | 冻结 core-plugin manifest/lifecycle/入口 gate 契约；补齐 1.9.10 插件目录；至少选一个 always-on feature 完成「设置开关→命令/面板/ribbon/设置 Tab 一致消失与恢复→重启持久化」纵切 |
-| 2 | **R295 · 核心插件化第一波：侧栏知识视图** | `partial` | Backlinks / Outgoing links / Outline / Tags / Graph 逐项接入同一开关模型；禁用后面板、命令、右键入口、状态恢复均与 Obsidian 等价；每项独立 E2E |
+| 1 | ✅ **R294 · 核心插件真实开关契约 + 总表校准**（v0.285·done） | `done`：契约冻结于 ARCHITECTURE「Round 294 additions」；CORE_PLUGIN_ROWS 21->29 行（补 search/bookmarks/properties-view/footnotes-view/bases/web-clipper/markdown-converter/sync 对齐 1.9.10）；**Tags 纵切证明**（设置 toggle->tab/render/命令一致消失+回退 backlinks+不 mutate state+重启持久化）；5/29 行真实 `pluginId`（+Tags） | 逻辑档·简化门 clean·多维对抗评审；r294-e2e 35/35·回归 r222/r150/r151/r185/r238 不退；typecheck 0·build✓·cargo check 通过 |
+| 2 | **R295 · 核心插件化第一波：侧栏知识视图** | `partial`（按 R294 冻结契约执行） | Backlinks / Outgoing links / Outline / Graph 逐项接入 R294 开关模型（Tags 已 R294 完成）；禁用后面板、命令、右键入口、状态恢复均与 Obsidian 等价；**main-area singleton view（graph/backlinks/outgoinglinks/outline）disable 时已开 tab 的处理**本轮须定（placeholder 或 close）；每项独立 E2E |
 | 3 | **R296 · 核心插件化第二波：工作区与发现入口** | `partial` | File explorer / Search / Quick switcher / Command palette / Workspaces 接入真实开关；关闭最后一个可达入口时有可恢复路径，不能把用户锁死 |
 | 4 | **R297 · 核心插件化第三波：内容服务** | `partial` | Templates / Page preview / Note composer / File recovery / Properties / Bookmarks 接入真实开关与各自设置 Tab；完成后核心插件页不得再用 disabled toggle 表示“已有但关不掉” |
 | 5 | **R298 · Files & Links 收口：默认打开文件 + 删除去向** | `partial`：删除确认、孤儿附件 Ask/Always/Never、本地 `.trash` 已 done；默认启动文件、系统回收站/本地回收站/永久删除三档仍缺 | 默认文件启动行为；删除去向设置；`trashSystem` 桥；所有删除路径继续 flush-first，系统能力失败时不静默永久删，浏览器与桌面数据安全回归齐全 |

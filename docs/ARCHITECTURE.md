@@ -169,6 +169,62 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（menu IA 接线·复用既有 handler/testid/i18n·无新控制流/无数据安全面/无 Rust 改动）·**简化门：机械档跳过**·**评审：scoped review**。
 
+## Round 294 additions - 核心插件真实开关契约 + 总表校准 + Tags 纵切·逻辑档·零新依赖
+
+> **状态：As-built（已交付·v0.285）。** R293 GAP_AUDIT 确认最大结构性缺口：`CORE_PLUGIN_ROWS` 21 行仅 4 行绑定真实 `pluginId`（random-note/daily-note/unique-note/word-count），其余 17 行 toggle disabled（always-on 功能无真实开关）。R294 冻结核心插件 manifest/lifecycle/入口 gate 契约，补齐 1.9.10 目录，并以 **Tags 纵切**证明契约。R295–R297 按本契约把 wave-1/2/3 逐项接入同一开关模型。
+
+### 契约：核心插件 manifest / lifecycle / 入口 gate（R295–R297 遵循）
+
+1. **Manifest**：每个核心插件 = 一个 `GeodePlugin` builtin（`src/plugins/<id>.ts`），`id` 对齐 `CORE_PLUGIN_ROWS.id`，经 `BUILTIN_PLUGINS`（`src/plugins/index.ts`）在 `main.tsx` boot 循环（:1543）注册。`name`/`description` 走 i18n thunk（复用 `settings.corePlugin.<id>` 键）。`CORE_PLUGIN_ROWS` 对应行加 `pluginId: "<id>"` 让设置 toggle 绑定。
+2. **Lifecycle**（复用 R4 `PluginManager`，零改 core/plugins.ts）：`register` 按 `geode.plugins.enabled.v1` localStorage 决定初始 enabled（`loadEnabledSet()[id] !== false`）。`enable(id,{userAction})` -> `onload`（经 handle 注册命令/贡献，disposer 自动 track via makeHandle Proxy）；`disable(id)` -> `onunload`（auto-dispose tracked disposers，命令从 registry 移除）。设置 toggle 调 `app.plugins.enable/disable`。**重启持久化免费**（localStorage）。
+3. **入口 gate**：原生 UI 入口读 `app.plugins.isEnabled(id)`：
+   - 侧栏 panel tab 按钮：`{isEnabled(id) && <button.../>}`（隐藏 = 不可选）。
+   - render switch：`ws.rightPanel === "<id>" && isEnabled(id) ? <Panel/> : <fallback>`。
+   - `effectiveRight/Left` 回退：disabled 时不匹配该 id，落回默认 panel（**不 mutate workspace state**，复用既有 stale-id 回退模式 line 148–178；re-enable 后原 id 仍生效）。
+   - 命令：移入 plugin `onload`，disable 时 auto-dispose（palette `available` 过滤 + hotkey lookup 不命中）。
+   - settings Tab：native section 由 `CORE_PLUGIN_ROWS.settingsSection` 映射；`enabledPluginIds` filter 已存在（SettingsModal:236–239），R295/R297 把 native section 接入同模型（本轮 Tags 无 settingsSection，不触）。
+   - main-area singleton view（graph/backlinks/outgoinglinks/outline）：disable 时**已开 tab** 的处理（placeholder 或 close）= **R295 wave-1 范围**（Tags 无 singleton，本轮不触）。
+4. **App.tsx 订阅**：App 根加 `useStore(app.plugins.revision)`（已在 line 234 SettingsModal 同款），使 enable/disable 后 tab/render 即时重算。
+
+### Tags 纵切（证明契约）
+
+1. 新 `src/plugins/tags.ts`：`tagsPlugin = { id:"tags", name:()=>t("settings.corePlugin.tags"), description:()=>t("settings.corePlugin.tagsDesc"), onload(app){ app.commands.register({ id:"app:show-tags", name:()=>t("cmd.showTags"), callback:()=>app.workspace.setRightPanel("tags") }) } }`（镜像 `random-note.ts` 模板；命令经 handle 注册 -> auto-dispose）。
+2. `src/plugins/index.ts`：`BUILTIN_PLUGINS` 加 `tagsPlugin`。
+3. `src/app/App.tsx`：删 `app:show-tags` 命令注册（移入 plugin onload）；加 `useStore(app.plugins.revision)`；gate tags tab 按钮 / render switch / `effectiveRight` 于 `app.plugins.isEnabled("tags")`。
+4. `src/features/settings/SettingsModal.tsx` `CORE_PLUGIN_ROWS`：tags 行加 `pluginId: "tags"`（toggle 从 disabled 变可操作）。
+
+### 目录校准（补齐 1.9.10 插件目录）
+
+`CORE_PLUGIN_ROWS` 补 8 行缺失（对齐 `reference/05` + 1.9 native Footnotes view[ref/05 漏]），每行 `defaultEnabled` 对齐 Obsidian 1.9.10，无 `pluginId` 者保持 disabled toggle（honest always-on / not-yet-pluginified 状态，复用既有 line 1986–1990 注释机制）：
+
+| id | defaultEnabled | 状态 | 说明 |
+|---|---|---|---|
+| `search` | true | always-on（R296 wave） | Search panel（R21），左栏 |
+| `bookmarks` | true | always-on | Bookmarks panel（R158），左栏 |
+| `properties-view` | false | always-on | allproperties panel（R30/R86） |
+| `footnotes-view` | true | always-on | footnotes panel（R65/R223，1.9 native） |
+| `bases` | false | 缺 | 大件（远期） |
+| `web-clipper` | false | 缺 | |
+| `markdown-converter` | false | 缺 | |
+| `sync` | true | excluded | 商用 Obsidian Sync（同 publish，不在范围） |
+
+i18n +16 键×中英（`settings.corePlugin.<id>` + `<id>Desc`）。
+
+### 数据安全契约
+
+零 .md / vault / editor 写路径。tags plugin `onload` 仅注册 UI 导航命令（`setRightPanel`，纯 workspace 状态读改非文件 IO）；gating 纯 React 渲染；持久化走既有 `geode.plugins.enabled.v1` localStorage。无数据安全红线（未碰 `core/markdown.ts`/`core/vault*`/`core/documents*`/editor 管线）。`ws.rightPanel==="tags"` 持久态在 disabled 时回退 backlinks，不 mutate state（无丢失）。
+
+### 验证契约
+
+1. 新 `.calibration/r294-e2e.mjs`：tags toggle 纵切--默认 on（tab 显 + `app:show-tags` 在 palette）/ disable（tab 隐 + render 回退 backlinks + 命令从 palette 消失 + `ws.rightPanel` 不 mutate）/ re-enable（恢复）/ 重启持久化（localStorage set/unset）；目录校准（8 新行 testid 存在 + search/bookmarks/properties-view/footnotes-view 行 disabled toggle）。
+2. 回归 `r222`（tags panel 嵌套/排序/Ctrl-click 功能不退）/ `r150`/`r151`。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面 probe N/A（纯 Store+UI 导航+localStorage，跨端同码，无 FS/Rust delta）。
+
+**文件范围**：`src/plugins/tags.ts`（新）· `src/plugins/index.ts` · `src/app/App.tsx` · `src/features/settings/SettingsModal.tsx` · `src/core/i18n/dict.views.ts` · `.calibration/r294-e2e.mjs`（新）。
+
+**分档：逻辑档**（新 plugin + 新控制流[App.tsx gating]+ store 驱动；未碰数据安全红线[零 .md/vault/editor 写]）·**简化门：跑**·**评审：多维对抗**。
+
 ## Round 288 additions — 全工作区 Obsidian chrome 校准·机械档·零新依赖
 
 > **状态：As-built（已交付·v0.281）。** 本轮把 2026-07-04 截图对比剩余的 shell 差距一次性收拢到「全工作区 chrome」：统一顶栏高度/分隔线、去浮岛侧边收起按钮、功能栏图标单色调中性化、文件树嵌套引导线、active 行去 accent 边、macOS overlay title bar 与 traffic lights 对齐。全部为零新依赖的 CSS/UI 调整；`tauri.conf.json` 仅改 macOS 窗口装饰配置。
