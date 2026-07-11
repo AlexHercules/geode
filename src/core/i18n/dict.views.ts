@@ -273,6 +273,23 @@ export const en = {
   "settings.corePlugin.fileRecoveryDesc": "Browse and restore snapshots of edited files.",
   "settings.corePlugin.fileExplorer": "File explorer",
   "settings.corePlugin.fileExplorerDesc": "Show and manage files in the left sidebar.",
+  // R294: 1.9.10 catalog completion
+  "settings.corePlugin.search": "Search",
+  "settings.corePlugin.searchDesc": "Search for notes by content.",
+  "settings.corePlugin.bookmarks": "Bookmarks",
+  "settings.corePlugin.bookmarksDesc": "Bookmark notes, searches, graphs, and headings.",
+  "settings.corePlugin.propertiesView": "Properties view",
+  "settings.corePlugin.propertiesViewDesc": "List all properties across the vault.",
+  "settings.corePlugin.footnotesView": "Footnotes view",
+  "settings.corePlugin.footnotesViewDesc": "List all footnotes and edit their text.",
+  "settings.corePlugin.bases": "Bases",
+  "settings.corePlugin.basesDesc": "Organize notes into structured databases.",
+  "settings.corePlugin.webClipper": "Web clipper",
+  "settings.corePlugin.webClipperDesc": "Clip content from the web into your vault.",
+  "settings.corePlugin.markdownConverter": "Markdown converter",
+  "settings.corePlugin.markdownConverterDesc": "Import HTML and other formats, converting them to Markdown.",
+  "settings.corePlugin.sync": "Sync",
+  "settings.corePlugin.syncDesc": "Sync your vault across devices (Obsidian Sync service).",
 
   // ---- settings: hotkeys ----
   // instruction note split around inline <em>/<code> elements:
@@ -707,6 +724,23 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.corePlugin.fileRecoveryDesc": "浏览并恢复编辑中文件的快照。",
   "settings.corePlugin.fileExplorer": "文件列表",
   "settings.corePlugin.fileExplorerDesc": "在左侧边栏显示和管理文件。",
+  // R294: 1.9.10 目录补齐
+  "settings.corePlugin.search": "搜索",
+  "settings.corePlugin.searchDesc": "按内容搜索笔记。",
+  "settings.corePlugin.bookmarks": "书签",
+  "settings.corePlugin.bookmarksDesc": "收藏笔记、搜索、图谱和标题。",
+  "settings.corePlugin.propertiesView": "属性列表",
+  "settings.corePlugin.propertiesViewDesc": "列出整个库中的所有属性。",
+  "settings.corePlugin.footnotesView": "脚注列表",
+  "settings.corePlugin.footnotesViewDesc": "列出所有脚注并编辑其文本。",
+  "settings.corePlugin.bases": "数据库",
+  "settings.corePlugin.basesDesc": "将笔记组织为结构化数据库。",
+  "settings.corePlugin.webClipper": "网页剪藏",
+  "settings.corePlugin.webClipperDesc": "从网页剪藏内容到你的库中。",
+  "settings.corePlugin.markdownConverter": "Markdown 格式转换器",
+  "settings.corePlugin.markdownConverterDesc": "导入 HTML 等格式并转换为 Markdown。",
+  "settings.corePlugin.sync": "同步",
+  "settings.corePlugin.syncDesc": "在设备间同步你的库（Obsidian 同步服务）。",
 
   // ---- settings: hotkeys ----
   "settings.hotkeysNote1": "点击 ",

@@ -136,6 +136,10 @@ export function App() {
   const statusBarElements = useStore(app.plugins.statusBarElements);
   const ribbonItems = useStore(app.plugins.ribbonItems);
   const sidebarPanels = useStore(app.plugins.sidebarPanels);
+  /* R294: core-plugin enable/disable bumps plugins.revision; subscribe so the
+     tags panel tab + render recompute when the Tags core plugin is toggled. */
+  useStore(app.plugins.revision);
+  const tagsEnabled = app.plugins.isEnabled("tags");
   /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
      via Ctrl+, / the command palette) */
   const ribbonVisible = useStore(showRibbon);
@@ -171,7 +175,7 @@ export function App() {
           ? "allproperties"
           : ws.rightPanel === "fileproperties"
             ? "fileproperties"
-          : ws.rightPanel === "tags"
+          : ws.rightPanel === "tags" && tagsEnabled
             ? "tags"
             : ws.rightPanel === "calendar"
               ? "calendar"
@@ -468,11 +472,6 @@ export function App() {
         id: "app:show-outline",
         name: () => t("cmd.showOutline"),
         callback: () => workspace.setRightPanel("outline"),
-      }),
-      commands.register({
-        id: "app:show-tags",
-        name: () => t("cmd.showTags"),
-        callback: () => workspace.setRightPanel("tags"),
       }),
       commands.register({
         id: "app:show-all-properties",
@@ -1439,16 +1438,18 @@ export function App() {
               >
                 <Icon name="file-text" size={18} />
               </button>
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "tags"}
-                className={`right-tab${effectiveRight === "tags" ? " is-active" : ""}`}
-                title={t("app.tabTags")}
-                data-testid="right-tab-tags"
-                onClick={() => app.workspace.setRightPanel("tags")}
-              >
-                <Icon name="hash" size={18} />
-              </button>
+              {tagsEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "tags"}
+                  className={`right-tab${effectiveRight === "tags" ? " is-active" : ""}`}
+                  title={t("app.tabTags")}
+                  data-testid="right-tab-tags"
+                  onClick={() => app.workspace.setRightPanel("tags")}
+                >
+                  <Icon name="hash" size={18} />
+                </button>
+              )}
               <button
                 role="tab"
                 aria-selected={effectiveRight === "calendar"}
@@ -1497,7 +1498,7 @@ export function App() {
                 <AllPropertiesPanel />
               ) : ws.rightPanel === "fileproperties" ? (
                 <FilePropertiesPanel />
-              ) : ws.rightPanel === "tags" ? (
+              ) : ws.rightPanel === "tags" && tagsEnabled ? (
                 <TagsPanel />
               ) : ws.rightPanel === "calendar" ? (
                 <CalendarPanel />

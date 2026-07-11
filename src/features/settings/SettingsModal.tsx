@@ -153,7 +153,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.284.0";
+export const APP_VERSION = "0.285.0";
 
 type SectionId =
   | "about"
@@ -1827,6 +1827,7 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     nameKey: "settings.corePlugin.tags",
     descKey: "settings.corePlugin.tagsDesc",
     defaultEnabled: true,
+    pluginId: "tags",
   },
   {
     id: "outgoing-links",
@@ -1945,6 +1946,58 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     descKey: "settings.pagePreviewDesc",
     defaultEnabled: true,
     settingsSection: "page-preview",
+  },
+  // R294: complete the 1.9.10 core-plugin catalog. These map to existing always-on
+  // features (search/bookmarks/properties-view/footnotes-view) or not-yet-built /
+  // excluded plugins (bases/web-clipper/markdown-converter/sync). No pluginId yet =
+  // honest disabled toggle (not-yet-pluginified), per the line 1986 comment.
+  {
+    id: "search",
+    nameKey: "settings.corePlugin.search",
+    descKey: "settings.corePlugin.searchDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "bookmarks",
+    nameKey: "settings.corePlugin.bookmarks",
+    descKey: "settings.corePlugin.bookmarksDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "properties-view",
+    nameKey: "settings.corePlugin.propertiesView",
+    descKey: "settings.corePlugin.propertiesViewDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "footnotes-view",
+    nameKey: "settings.corePlugin.footnotesView",
+    descKey: "settings.corePlugin.footnotesViewDesc",
+    defaultEnabled: true,
+  },
+  {
+    id: "bases",
+    nameKey: "settings.corePlugin.bases",
+    descKey: "settings.corePlugin.basesDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "web-clipper",
+    nameKey: "settings.corePlugin.webClipper",
+    descKey: "settings.corePlugin.webClipperDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "markdown-converter",
+    nameKey: "settings.corePlugin.markdownConverter",
+    descKey: "settings.corePlugin.markdownConverterDesc",
+    defaultEnabled: false,
+  },
+  {
+    id: "sync",
+    nameKey: "settings.corePlugin.sync",
+    descKey: "settings.corePlugin.syncDesc",
+    defaultEnabled: true,
   },
 ];
 
