@@ -1,276 +1,249 @@
 # Obsidian 完整复刻差距审计（常驻活文档）
 
-> **定位**：辅助开发的单一差距来源。整合自三份历史文档——
-> `OBSIDIAN_REPLICA_GAP_AUDIT_2026-06-23.md`（页面/视觉/设置 IA/右键菜单）、
-> `OBSIDIAN_FUNCTIONAL_GAP_SUPPLEMENT_2026-06-23.md`（功能契约/命令/核心插件/桌面宿主/兼容 API）、
-> `geode-设计讨论/11-复刻完成度盘点.md`（R22 早期盘点，已退化为指向本文的占位）。
-> 本文取代上述三份；排期前以本文 + `ROADMAP.md` G/F 系列最新段落 + 当前代码为准。
+> **定位**：Geode 复刻差距的单一事实源。状态只允许 `done / partial / missing / excluded`，
+> 每项必须附当前代码、测试或 Obsidian 官方证据。历史 ROADMAP 只作 round 证据，不直接推断现状。
 >
-> **最近审计**：2026-06-23 · 基线 Geode v0.173.0（开发服 `http://127.0.0.1:1420/`），代码线已至 R178（v0.175）。
-> **对照基准**：Obsidian 1.9.10 简中截图（`reference/_截图/` 42 张，`2940×1912`）+ `reference/00–08`（注：`reference/` 当前位于工作区根、不在 `geode/` 仓库内，G 系列「逐像素验收」暂据审计文字 + Obsidian 实测，真·像素级须先补截图资产）。
-> **维护约定**：活文档——每轮若改动复刻表面/功能闭环，顺手更新对应行的状态标注；勿再新建带日期的快照审计。
+> **最近重审**：2026-07-10 · Geode v0.284.0 / commit `ec29233` / R292 后工作树。
+> **冻结验收基线**：Obsidian Desktop 1.9.10 简中 + `reference/` 42 张截图。
+> **版本漂移**：当前 Public = Desktop 1.12.7（2026-03-23）；1.13.1 仍为 Catalyst，
+> 只观察、不抬高 1.9.10 当期终点。
+> **排除边界**：1.9.10 阶段排除 Obsidian Sync、Publish、账户/许可商业服务和移动端；
+> Canvas、Bases、PDF.js、多窗口、Audio recorder 等本地桌面能力不得因工程量大而排除。
 
 ---
 
-## 结论摘要
+## 结论
 
-Geode 底层能力与兼容层推进充分，但「像 Obsidian 一样呈现」的信息架构、设置页、热键清单、视觉细节仍明显不足。当前状态是「**Obsidian 风格知识库 + 大量核心能力**」，尚非「**完整复刻 Obsidian 桌面端**」。
+Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown/live preview、链接与嵌入、
+搜索、图谱、文件树、工作区、主题和一批真实 Obsidian 插件均可使用。普通本地 Markdown
+用户的高频主路径大体接近替代线。
 
-最大风险不是单个控件能否工作，而是**许多日常行为入口未成闭环**：命令没注册、设置页没真实功能、核心插件只有部分等价、桌面宿主与 Node/Electron 仍有硬边界。
+但距离“完美复刻”仍有五个结构性缺口：
 
-| 维度 | 当前判断 | 复刻风险 |
-|---|---|---|
-| 知识库基础能力 | Markdown、wikilink、反链、图谱、搜索、属性、模板、日记、文件恢复、页面预览、块引用等已大量落地 | 基础足够强，但还不是完整桌面端体验 |
-| 设置与命令 | 设置主导航历史为 5 项（G1/R177 已重构为三段式 IA）；热键 90 条 vs Obsidian 280 条 | 用户明显感知「不像 Obsidian」，且很多功能没有命令入口 |
-| 核心插件 | 多数中小型核心插件已有或部分有；Canvas、Bases、录音、Web clipper、格式转换器仍缺 | Canvas / Bases 是完整复刻的硬大件 |
-| 桌面宿主能力 | 单窗口 Tauri 宿主；pop-out、多窗口、系统 shell、Node/Electron 运行时未等价 | 影响右键菜单、第三方插件、桌面工作流 |
-| 插件兼容 API | 高频 API 覆盖多；bounded 项基本清空，剩余为新依赖或跨层大集成 | 要兼容更多真实插件须补 getResourcePath、Lucide、YAML、protocol、StateField 等 |
+1. **核心插件开关不真实**：设置总表 21 行中只有 Random note、Daily notes、Unique notes、
+   Word count 4 行绑定真实 `pluginId`；其余大量已有功能仍是 always-on，禁用开关只能显示为 disabled。
+2. **插件生态是工程证明，不是产品承诺**：加载、设置、启停、卸载和失败报告已有，但资源 URI、
+   扩展名、协议、用户事件、SecretStorage 仍有明确 warn-stub/null；市场、更新和兼容级别未闭环。
+3. **Obsidian 本体大件缺失**：PDF 仍用原生 iframe；Canvas、Bases、Audio recorder、多窗口没有实现文件。
+4. **桌面分发证明不足**：本地校准资产很多，但 CI 只执行 r23/r24；Rust、最新回归、真插件与桌面 smoke
+   未形成持续闸门，版本号仍有 package/Tauri `0.284.0` vs Cargo `0.22.0` 漂移。
+5. **复刻基线会漂移**：1.12 已新增 CLI、拖拽图片缩放、自动附件清理与 API 变化。必须用“冻结基线收口 →
+   Public 漂移晋级”的节奏追赶，不能一边做 1.9.10 一边无限改终点。
 
-**取向（✅ 2026-06-23 用户已拍板「完整复刻」优先）**：先以 `reference/` 为验收标准做表面复刻，**暂不先做差异化 E 系列**。后续不应只看「有没有页面」，而须对每个功能维护一张复刻矩阵（见末节）。
+若只作方向判断，当前整体仍约在 **70% 左右**；该数字不作为验收。真正验收是本文矩阵不再有本地桌面
+核心能力的 `partial/missing`，并且每个 `done` 都有用户入口、持久化、禁用态和回归证明。
 
----
+## 本轮删除的过时结论
 
-## 关键量化结论
-
-| 项 | Obsidian 参考 | Geode 当前 |
-|---|---:|---:|
-| 设置左侧主导航 | 8 项（关于·编辑器·文件与链接·外观·快捷键·钥匙串·核心插件·第三方插件）+ 核心/第三方插件子项 | 审计时扁平 5 项；**G1/R177 已重构为三段式 IA**（选项 / 核心插件 / 第三方插件） |
-| 快捷键命令数 | 截图显示 280 条 | 90 条 |
-| 删除当前文件命令 | 存在，默认无键 | ✅ 已有 |
-| 左右侧栏折叠命令 | 存在，默认无键 | ✅ 已有（R160） |
-| 管理仓库命令 | 存在 | ◐ partial：R203/R237 已有快速切换器与底栏入口；完整管理仓库仍缺 |
-
-校准测试基线（审计时运行，无运行时红灯）：`npm run typecheck` 0 错；`.calibration/` 套件 r176/r166/r160/r145/r139/r100/r94 全数通过。
-
----
-
-## 一、视觉与页面差距（表面忠实度 = 最大迁移感知缺口）
-
-### 1. 设置弹窗 IA
-
-Obsidian 左栏三段：**选项**（关于·编辑器·文件与链接·外观·快捷键·钥匙串·核心插件·第三方插件）/ **核心插件**（白板·笔记重组·反向链接·快速切换·命令面板·模板·日记·同步·文件恢复·页面预览…）/ **第三方插件**（每个已启用插件一个设置入口）。
-
-现状：审计时仅外观·插件·快捷键·命令面板·关于 5 项，许多设置（严格换行、行号、自动补全括号、新建位置、附件路径、模板、日记、页面预览）被塞进「外观」页。**G1（R177）已重构为三段式 IA 并把控件迁回 Obsidian 同名页**，保 store 绑定、reopen 回显零丢值；剩视觉像素级（G2）与核心插件总览/开关页（defer）。
-
-### 2. 设置行样式（接近但未达像素级）
-
-已有：左名称/描述 + 右控件的 setting row；Toggle、输入框、滑块、分隔线、右对齐控件。
-差距：弹窗整体偏窄、内容密度不同；浅色图有多余的整窗蓝色 focus ring（Obsidian 无此态）；分组 section/card 感弱（多为连续行）；控件偏 Web 表单风（下拉·管理按钮·图标按钮·取色器·开关的尺寸/阴影不及原生桌面）；字体应为「管理」弹窗（现为文本输入框）、主题应为下拉+管理（现为 segmented control）。→ G2。
-
-### 3. 热键页
-
-Obsidian：280 条；顶部搜索+过滤；按来源分组（白板·表格·笔记重组·日记·书签·属性·数据库·同步·文件列表·反链·图谱·大纲·模板·编辑格式·视图外观·库应用…）；右侧键位 chip + 圆形加号/删除控件。
-现状：审计时 90 行；搜索 + 「只显示已设置」筛选可用；右侧曾为「自定义」按钮（R278 已改 chip + 圆形加号/删除）；无按来源分组的完整清单；`管理仓库` 仅有快速切换器首片，默认键位未逐项校准。→ G3（须配真 handler，见功能闭环）。
-
-### 4. 第三方插件页
-
-Obsidian：安全模式 / 社区市场浏览 / 安装检查·更新 / 自动检查更新 / 已安装列表（名·版本·作者·描述·设置·启停·删除）。
-现状：内置·外部·Obsidian 三组；内置有开关；社区插件卸载入口 R166 过测；**R279 已补已安装插件列表的齿轮设置入口**；仍缺安全模式/市场/更新结构；核心与第三方未拆成 Obsidian 同名顶级页。→ G10。
-
-### 5. 文件树 / 编辑器右键菜单
-
-Obsidian 文件菜单：在新标签页/右侧标签页/新窗口中打开 · 创建副本 · 移动到其他文件夹 · 复制库内路径 / 复制 Obsidian 链接 · 打开历史 · 使用默认应用打开 · 在系统访达中显示 · 重命名 · 删除。
-现状：文件夹菜单 5 项（在此新建笔记/文件夹·移动到·重命名·删除）；文件菜单含 新标签/右侧/副本/移动/重命名/删除。
-仍缺：新窗口打开、复制库内路径、复制 Obsidian 链接、打开历史/版本历史、默认应用打开、访达显示；菜单分组·宽度·阴影·浅色样式未对齐。→ G4（多为桌面行为，见功能闭环）。
-
-### 6. 侧栏折叠（功能已修，视觉待对齐）
-
-R160 起左右侧栏可折叠 + 持久化 + 命令路径全过回归。**「无法收起」已非事实。** 仅 affordance 位置不同：Geode 用侧栏/主区边界中部的悬浮 chevron，Obsidian 更贴标题栏/侧栏头部、与 workspace chrome 融合。→ G5。
+- “设置仍只有 5 项”“热键只有 90 条”“右键缺复制路径/默认应用/访达”“侧栏无法折叠”均已过时。
+- Vault manager 已在 R280 补新建/打开/移除等主路径；Stacked tabs 已 R255 完成；Tags 与 Footnotes 早已有
+  独立面板并多轮补深，不再作为从零候选。
+- Files & Links 的删除确认、孤儿附件 Ask/Delete/Keep 和本地 `.trash` 已在 R242/R244/R42 完成，
+  不得再以“删除功能缺失”重复入队；真实余项是**默认打开文件 + 删除去向三档 + 系统回收站桥**。
+- G3 的 bounded 高频命令池已重审枯竭。Obsidian 截图里的 280 条包含已启用插件命令，不能用
+  “280 - Geode 命令数”制造假任务；剩余命令跟随大件或宿主能力交付。
+- Apache-2.0 许可证已经落地；“仓库无 LICENSE”是历史状态。
 
 ---
 
-## 二、设置功能覆盖差距（按 Obsidian 同名页）
+## 总体矩阵
 
-### 编辑器
-已有/部分：固定行宽、严格换行、行号、折叠标题、自动补全括号、制表符/缩进宽度、默认新标签视图、拼写检查开关。
-差距：无独立「编辑器」页（控件曾错放外观，G1 已迁）；拼写检查语言、自动补全英文标点、自动转换 HTML、Vim 模式、RTL、隐藏参考标记未完整呈现。→ G8。
-
-### 文件与链接
-已有/部分：自动更新内部链接、Wiki/Markdown 链接设置、链接路径格式、新笔记默认位置、附件路径、忽略文件、本地 `.trash`、`obsidian://` 内部处理。
-差距：无独立「文件与链接」页（G1 已迁）；删除确认、删除附件策略、系统回收站/本地回收站/永久删除 UI、设置文件夹切换、URI 链接开关、重建缓存、默认打开文件未完整复刻。→ G7。
-
-### 外观
-已有/部分：深色/浅色/跟随系统、强调色、界面/正文/等宽字体、字号、可读行宽、inline title、ribbon 显隐、tab title bar / status bar 显隐。
-差距：主题市场/已安装主题管理 UI 不完整；字体「管理」弹窗未复刻（现文本框）；快速调整字号、缩放比例、原生菜单、窗口边框样式、自定义应用图标、半透明、硬件加速等未按 Obsidian UI 呈现。→ G2/G9。
-
-### 关于 / 账户 / 钥匙串 / CLI
-Obsidian：安装版本·检查更新·自动更新·语言·帮助·账户·Catalyst·商用许可·高级启动通知·命令行界面·钥匙串密钥列表。
-现状：「关于」更像产品说明页；账户/许可体系、钥匙串独立页、CLI 设置、帮助/翻译入口缺失。→ G9（多项须用户拍板：账户=E11、钥匙串=compat SecretStorage、CLI 形态、更新走 Tauri updater）。
-
-### 核心插件
-已实现但需 IA 对齐：反向链接/出链、关系图谱、快速切换、命令面板、模板、日记、文件恢复、书签、Properties、页面预览。
-后续重点不是「有没有」，而是：设置 tab 是否按 Obsidian 同名出现、命令是否完整进 280 清单、右键/面板入口是否完整、插件 instance 是否接近、关闭核心插件后 UI/命令/面板是否一致消失。
-
----
-
-## 三、功能域矩阵（差距等级 + 建议）
-
-| 功能域 | Obsidian 期望 | Geode 当前 | 差距 | 建议 |
+| 域 | 状态 | 当前事实 | 阻止 `done` 的缺口 | ROADMAP |
 |---|---|---|---|---|
-| Vault 管理 | 管理仓库、打开/切换/最近 vault、库级设置入口 | R203/R237 已有 `app:switch-vault`、最近仓库列表、底栏库名入口；完整管理仓库（新建/打开/管理列表/启动选择或默认库等）仍缺 | P0 | R280 候选：切换仓库保持 done，管理仓库按 partial 补 full manager |
-| 命令/热键 | 280 条，分组可逐项绑定 | ~90 条；搜索/筛选可用，总表不完整 | P0 | 先建命令矩阵再补真实命令，不只补 UI 行（G3） |
-| 文件树操作 | 新标签/右侧/新窗口、复制路径/Obsidian 链接、历史、默认应用、访达、移动/重命名/删除 | 常用新建/移动/重命名/删除/副本已有；系统级与历史类缺 | P0 | 分纯前端项与宿主项推进，避免只画菜单（G4） |
-| 编辑器工作流 | 查找替换、格式/表格命令、Vim、RTL、拼写语言、HTML 转换、隐藏参考标记 | 部分编辑设置已具备；多项未完整或缺命令 | P0/P1 | 从 280 清单反推编辑器命令与设置（G8） |
-| 核心插件 | Canvas、Bases、Backlinks、Graph、Daily、Templates、File recovery、Page preview… | 多数已做或部分做；Canvas/Bases/Audio/Web clipper/格式转换器缺 | P0/P1/P2 | Canvas/Bases 单独立项；小插件先补零依赖项 |
-| 设置页真实功能 | 各页有真实设置 | 部分已迁；About/Keychain/CLI/插件市场缺真实功能 | P0/P1 | G1/G2 之后跟 G6–G10 真实行为闭环 |
-| 桌面宿主 | 多窗口、pop-out、系统打开、剪贴板、协议注册、外部程序、部分 Node/Electron | 单窗口宿主；`require()` 白名单很窄 | P1/P2 | 先定 Tauri 安全边界，再选 shell/clipboard/fs 子集（F1） |
-| 插件生态 | 常见插件可加载、显图标、访问资源、读写 YAML、注册 URI/扩展名 | 高频 API 覆盖多；剩余高价值项需依赖或跨层接线 | P1 | 优先 getResourcePath、Lucide、parseYaml、protocol、StateField |
+| Vault 与数据安全 | `partial` | 本地 vault、watch、原子写、共享 DocumentHandle、flush-first trash、恢复、rename 引用改写已建立 | 系统回收站、删除去向三档、默认启动文件、20 条真实迁移任务 | R298 / R316 |
+| Markdown 编辑与阅读 | `partial` | live/source/reading、常见 Markdown、wikilink、标题/块引用、嵌入、Properties、表格、数学、Mermaid 等已覆盖 | 固定视觉回归；PDF 独立视图；1.12 拖拽图片缩放进入漂移池 | R299 / R304+ / D2 |
+| 导航与工作区 | `partial` | tabs、splits、stacked tabs、历史、侧栏折叠、工作区保存恢复已完成 | pop-out/多窗口、跨窗 leaf 生命周期与插件事件 | R307+ |
+| 设置与视觉 | `partial` | 三段式 IA、主要设置页和控件已有，多轮 screenshot 校准 | 无 8–12 张固定整屏 baseline/diff；Keychain 空页；核心插件总表行为不诚实 | R294–R299 / R302 |
+| 命令与热键 | `partial` | 高频编辑/导航/文件/面板命令主干已注册；绑定 UI 与筛选可用 | 余项主要从 Canvas/Bases/多窗口/Audio/CLI 等未建能力派生；默认键与来源仍需随功能闭环复核 | 随各大件 |
+| 核心插件 | `partial` | 多数中小能力存在 | 只有 4/21 行可真实启停；目录项也未完全覆盖 1.9.10；Canvas/Bases/Audio/Converter 缺 | R294–R297 / R305+ |
+| 社区插件产品 | `partial` | `.obsidian/plugins` 扫描、manifest、启停、设置页、卸载、失败原因、多个真插件已证明 | Restricted mode、浏览/安装/升级、兼容分级、代表矩阵缺 | R303 |
+| Obsidian API 兼容 | `partial` | Vault/Workspace/Metadata/Editor/UI/CM6 大量 API 与真插件路径已跑通 | asset URI、extensions、protocol、lastEvent、SecretStorage、stat/appendBinary 等 | R300–R302 / D3 |
+| 本体大件 | `missing` | PDF 只有原生 iframe；无 Canvas/Bases/多窗口/Audio 源文件 | PDF.js、JSON Canvas、Bases query/view、Tauri 多窗口、MediaRecorder | R304–R315 |
+| CI 与分发 | `partial` | typecheck/build/cargo/local probes/updater/NSIS 文档均有 | CI 只跑早期 r23/r24；版本漂移；Windows install/update/rollback 未持续验证 | R299 / R317 |
 
 ---
 
-## 四、优先级（与 ROADMAP G/F 系列一一对应）
+## 一、核心插件：最大结构性缺口
 
-> 本文 = 差距来源；`ROADMAP.md`「表面复刻差距（G 系列）」「功能复刻补充」「兼容深化（F 系列）」= 执行队列与出队记录。条目编号与 ROADMAP 保持同步。
+### 当前证据
 
-### P0 · 先修「看起来不像」的面（迁移感知第一）
-- **G1 设置三段式 IA 重构** — ✅ DONE（R177）：扁平 5 段 → 三组 IA，控件迁回 Obsidian 同名页，零丢值。
-- **G2 设置页视觉像素级** — **G2-a 已 R178 完成**（修浅色整窗蓝 focus ring、主题 segmented→原生下拉、弹窗 760→900/左栏 170→200/段标题分隔线，颜色走 CSS 变量）；**G2-b 余项**＝字体改「管理」弹窗（需系统字体枚举=功能）+ 下拉/图标按钮/取色器/开关原生阴影尺寸细抛光 + setting row 行高/主题「+管理」入口。与 G3 同为当前下一项。
-- **G3 热键 90→280 总表** — 按来源分组 + 加号/删除控件 + 默认键位校准 + 补 `管理仓库` 等；每行须配真 handler。
-- **G4 右键菜单补齐** — 新窗口/复制库内路径/复制 Obsidian 链接/打开历史/默认应用/访达；分组·样式对齐。
-- **G5 侧栏折叠 affordance** — 行为已完成，仅移动 chevron 位置、与 chrome 融合（纯 CSS/布局）。
+- `SettingsModal.tsx` 的 `CORE_PLUGIN_ROWS` 有 21 行。
+- 只有 4 行配置 `pluginId`：`random-note`、`daily-note`、`unique-note`、`word-count`。
+- UI 代码明确写着：没有注册插件支撑的行只显示 disabled toggle，功能仍是 always-on / not-yet-pluginified。
+- `src/plugins/index.ts` 实际注册 5 个内建插件；`backlink-count` 没有对应核心插件总表开关。
 
-### P1 · 补设置页背后的真实功能
-- **G6 Vault 管理/切换器 + `管理仓库` 命令** — R203/R237 已完成快速切换首片；2026-07-04 截图复查后纠偏为 partial，R280 补 Obsidian-style full manager。
-- **G7 文件与链接页真实功能** — 删除确认/附件删除策略/三档回收站 UI/设置文件夹切换/URI 开关/重建缓存/默认打开文件（触 vault 删除路径 = data-safety 重轮）。
-- **G8 编辑器页真实功能** — Vim/RTL/拼写语言/自动英文标点/自动转 HTML/隐藏参考标记。
-- **G9 关于/账户/钥匙串/CLI 页** — 多项须用户拍板。
-- **G10 第三方插件页结构** — 安全模式/市场/更新检查/已安装列表（须定网络源策略）。
+因此“功能存在”不能标为核心插件 `done`。单项必须同时满足：
 
-### P2 · 大件 + 兼容层（多数已在 ROADMAP 候选池 A 节 / 第八梯队 D 系列 / E 系列登记，审计 = 优先级提升信号，不重复入队）
-- Canvas / Bases / Stacked tabs / Pop-out 多窗口 / Vault 管理 → 候选池补充 A 节。
-- Web clipper / Audio recorder / Markdown 格式转换器 → E8 + 第五梯队小众核心。
-- getResourcePath / Lucide / adapter.stat / App.lastEvent / protocol 派发 / registerExtensions → 第八梯队 D 系列 + F1。
-- parseYaml / stringifyYaml / Bases·Value 声明式 Settings / SecretStorage·Keychain / Popout 多窗口 API → T3 越界表（须拍板）。
+1. 总表真实启停并持久化；
+2. 关闭后命令、面板、ribbon、状态栏、右键、设置 Tab 一致消失；
+3. 开启后恢复原工作区状态或给出 Obsidian 等价默认；
+4. compat `internalPlugins` / 插件实例行为按承诺暴露；
+5. 有 cold start + reopen + 禁用态 E2E。
 
----
+### 状态分组
 
-## 五、核心插件差距
-
-### 已有或部分有（勿当从零项重做）
-Backlinks、Graph / local graph、Quick switcher、Command palette、Templates、Daily notes、Zettelkasten 唯一笔记、Word count、Properties view、Search、File recovery、File explorer、Slash commands、Page preview、Note composer、Bookmarks（数据 + 部分内部 API）、PDF/音视频只读预览。
-→ 重点：设置 tab 同名、命令进 280 清单、右键/面板入口、插件 instance 接近、禁用后一致消失。
-
-### 仍缺或未成闭环
-| 项 | 判断 | 重要性 | 优先级 |
-|---|---|---|---|
-| Canvas `.canvas` | 缺（ROADMAP A 节大工程） | 核心插件 + 用户点名项 | P0 大件 |
-| Bases | 缺（依赖数据库/查询引擎） | 2025 新核心，与 Properties 强相关 | P1/P2 大件 |
-| Stacked tabs / linked view | pinned tabs 已有，堆叠/linked view 不完整 | 长文多 pane 工作流高频 | P1 |
-| 独立 tag pane | 搜索面板有标签浏览，独立侧栏面板未做 | 侧栏核心工作流 | P1 |
-| Audio recorder | 缺，需新能力 | 核心但人群窄 | P2 |
-| Web clipper | 缺（E8 已登记 defuddle 方向） | 迁移/收集工作流 | P1/P2 |
-| Markdown 格式转换器 | 缺（适合零依赖先做） | 导入/整理老 Markdown | P1 |
-| Slides / Footnotes view | 缺 | 人群窄 / 写作场景 | P2 |
-| Pop-out 多窗口 | 显式未做（单窗口宿主约束） | 桌面行为 + 插件 API 都涉及 | P2/需拍板 |
-
-**Canvas** 是独立项目级工程，非普通 UI 轮：无限画布（缩放/平移/框选/拖拽/对齐）+ 节点类型（文本/笔记嵌入/媒体/网页卡）+ 连线（箭头/标签/颜色）+ 分组框 + `.canvas` JSON 读写（与 `.md` 同级纳入 vault）+ 设置页与命令。建议先定「复用 Excalidraw 交互 / 自建轻量画布」方向。
-
-**Bases** 是 Properties 之后的第二层数据系统，非表格组件：属性字段模型 + 查询/过滤/排序 + 多视图 + 与 frontmatter/Properties 同步 + 命令与设置页 + Bases/Value/query 族插件 API。建议先写数据模型与查询语义，再做 UI。
-
----
-
-## 六、插件兼容层差距（高价值缺口 + 推进顺序）
-
-`OBSIDIAN-COMPAT.md` 结论：高频核心 API 覆盖不错，bounded 项基本清空；剩余高价值缺口多需新依赖、Rust/Tauri host、CM6 跨层或 app-shell 接线。
-
-| 缺口 | 当前影响 | 需要的决策/工程 |
-|---|---|---|
-| `getResourcePath`（Vault/DataAdapter） | Excalidraw、图片/PDF/媒体插件生成 `<img>/<embed>` URI 失败 | Tauri asset protocol / `convertFileSrc` 接线 |
-| Lucide `setIcon` 覆盖 | 很多插件 ribbon/命令图标为空（「加载了但看起来坏」） | 是否引入 lucide 依赖或维护图标子集 |
-| `parseYaml` / `stringifyYaml` | Dataview、Templater、QuickAdd、Tasks、MetaEdit 读写 frontmatter 依赖 | 引入 YAML 运行时或自研最小子集（须拍板依赖） |
-| CM6 `editorInfoField` 等 StateField / `Editor.getDoc` | CM6 插件无法可靠取得 active file/editor view | editor feature 层喂值，跨层集成 |
-| `adapter.stat` | 插件无法读文件大小/时间元数据 | Rust `fs::metadata` + VaultAdapter 扩展 |
-| `registerObsidianProtocolHandler` 派发 | Advanced URI、QuickAdd capture 等插件 URI 不生效 | host URI 管线给插件注册 action |
-| `registerExtensions` | Excalidraw、PDF、图片查看器不能声明自定义扩展视图 | 文件类型→view 的注册与打开路径 |
-| `App.lastEvent` | Mod/Shift 点击语义与 Keymap 判断不完整 | app-shell 全局事件捕获 |
-| `SecretStorage` / `App.secretStorage` | AI、同步、API key 插件无法安全存密钥 | keychain 策略与 Tauri 能力 |
-
-**推进顺序**：`getResourcePath`（媒体/Canvas/PDF 显示，最直接）→ Lucide（感知面）→ `parseYaml/stringifyYaml`（生态高价值，先拍板依赖）→ protocol 派发 + `registerExtensions`（高级插件入口）→ CM6 StateField（编辑器增强类）→ `SecretStorage`（与账户/AI/同步一起定）。对应第八梯队 D 系列 + T3 + F 系列。
-
----
-
-## 七、Node/Electron 桌面宿主差距
-
-Tauri 无 Node/Electron 运行时，但很多 Obsidian 插件按桌面 Electron 环境写。当前插件 `require()` 白名单（`loader.ts` `HOST_MODULES`）= `obsidian` + `path`(posix 字串垫片) + `@codemirror/*`×6 + `@lezer/highlight`，其余抛 `module not available`；Node 原生模块与 Electron 全家桶无 require 入口，用到即加载期报错。
-
-| 能力 | 典型插件/场景 | 建议 |
-|---|---|---|
-| `shell.openExternal` / `showItemInFolder` | 默认应用打开、访达显示、外链插件 | 优先垫，ROI 高 |
-| `clipboard` 富剪贴板 | 剪藏、复制富文本、图片插件 | 可桥 Tauri clipboard |
-| `os.homedir/tmpdir` | 插件临时文件、路径配置 | 低风险垫片 |
-| `fs` vault 外访问 | Obsidian Git、Pandoc、导入导出类 | 需明确安全边界 |
-| `child_process` | Shell commands、Pandoc、Templater user script | 风险高，**必须用户拍板** |
-| 原生 `.node` 模块 | 少数重型桌面插件 | Tauri 下基本不可承诺 |
-| Electron `remote/ipcRenderer/dialog/Menu` | 深度 Electron 插件 | 不建议承诺完全兼容 |
-
-**桌面兼容等级（先做分级说明，避免「支持 Obsidian 插件」被误读成「支持所有 Electron 插件」）**：
-- **L0**：只支持官方 Obsidian API（移动端口径，最稳）。
-- **L1**：+ 安全 `shell.openExternal/showItemInFolder` · `clipboard` · `os.homedir/tmpdir` · `path` 子集（ROI 高，多可桥 Tauri 现成插件）。
-- **L2**：+ 受权限控制的 `fs`（vault 外）· 外部程序 `child_process`（须明确安全边界，`child_process` 须用户拍板）。
-- **L3**：**不承诺** Electron 私有 API 与原生 `.node` 模块。
-
-→ ROADMAP F1（垫片补全，先评估 `isDesktopOnly:true` 插件真实依赖再按 ROI 选垫）。
-
----
-
-## 八、桌面端完整行为
-
-**多窗口 / pop-out**：tab 移到新窗口、pop-out leaf、多窗口事件、窗口迁移。当前明确列为单窗口宿主天然不做或远期。影响：标签页命令与右键菜单、`WorkspaceWindow/WorkspaceFloating/moveLeafToPopout` API、文件树「在新窗口打开」、插件多窗口生命周期。若目标为完整复刻须重新拍板：继续不做，还是单独启动 Tauri 多窗口架构项目。
-
-**系统集成**（应作为 host capabilities 单独矩阵管理，勿混进设置页 UI 轮）：系统默认应用打开、访达显示、打开外部 URI、注册 `obsidian://` 或 Geode 自有协议、CLI handler、应用更新、系统剪贴板、Keychain。
-
----
-
-## 九、功能复刻验收矩阵（贯穿基建）
-
-> 后续每个 Obsidian 功能一行，避免只看「有没有页面」。建议在本文或单表维护。
-
-| 字段 | 含义 |
+| 状态 | 项目 |
 |---|---|
-| Obsidian 功能名 / 所属页·插件 | 截图/官方名称；如编辑器·文件与链接·Canvas·Bookmarks |
-| Geode 入口 | 设置 / 命令 / 热键 / 菜单 / 侧栏 / API |
-| 行为状态 | `done` / `partial` / `ui-only` / `stub` / `missing` / `out-of-scope` |
-| 数据安全 | 是否写 vault、是否需 byte-level 回归 |
-| 宿主依赖 | 是否需 Tauri/Rust/系统权限 |
-| 插件 API 依赖 | 是否涉 `obsidian.d.ts` / Electron·Node shim |
-| 验收方式 | screenshot / e2e / probe / typecheck / byte-regression |
+| `done`（可真实启停） | Random note、Daily notes、Unique notes、Word count |
+| `partial`（能力在但非真插件） | Note composer、Tags、Outgoing links、Outline、Backlinks、Workspaces、Graph、Slides、Quick switcher、Command palette、Templates、File recovery、File explorer、Page preview，以及未统一进总表的 Search、Bookmarks、Properties |
+| `missing` | Canvas、Bases、Audio recorder、Markdown converter |
+| `excluded` | Publish、Sync（仅商业服务；本地文件兼容与相关设置仍须优雅展示） |
 
-**最低验收线**：
-- 设置项 = 控件存在 + 值持久化 + 重启生效 + 测试覆盖。
-- 命令 = 面板可搜 + 热键可绑 + 真实行为 + 禁用相关插件后状态正确。
-- 菜单 = 项存在 + 禁用态正确 + 点击等价 + 与命令/热键共享同一 handler。
-- 插件 = 官方签名接近 + 运行不崩 + 真实加载矩阵验证。
-- 桌面 = 跨平台路径、权限失败、取消操作、不可用宿主能力都有明确降级。
+执行顺序固定为：R294 契约/目录/一个纵切 → R295 侧栏知识视图 → R296 工作区入口 →
+R297 内容服务。不得一次把所有 feature 粗暴包成一个巨大布尔值。
 
 ---
 
-## 十、建议推进顺序
+## 二、Files & Links 与真实迁移
 
-1. 建立**功能复刻矩阵**（280 命令 + 核心插件 + 设置页 + 右键 + compat API 同一张状态表）。
-2. G1/G2 设置 IA + 视觉，每个迁移控件标注是否已有真实功能（G1 已 R177 完成）。
-3. G3 热键总表**同步补 handler，不做空行**。
-4. G4/G6/G7 文件树·Vault 管理·文件与链接（迁移日常工作流）。
-5. G8 查找替换/格式/表格命令 + Vim·RTL·HTML·隐藏参考标记。
-6. **Canvas / Bases 单独拍板立项**（非 polish，是两座大工程）。
-7. 同步排 F1/F2 + 高价值 compat（getResourcePath/Lucide/YAML/protocol/registerExtensions/CM6 StateField）。
-8. 最后才进 E 系列差异化（除非某延伸能直接服务复刻闭环）。
+### 已完成，禁止重复入队
+
+- 新笔记位置三档、附件位置四档、链接格式与自动更新、忽略规则、URI 开关、重建缓存。
+- 删除确认（默认安全开启）。
+- 孤儿附件 Ask/Delete/Keep；正文和 frontmatter 引用纳入判断。
+- 本地 `.trash`、恢复、删除前 flush、批量删除与附件 best-effort 路径。
+
+### 真实余项
+
+| 项 | 状态 | 验收 |
+|---|---|---|
+| 默认打开文件 | `missing` | 启动/切库后按设置打开指定文件；缺失/改名/无扩展名安全降级 |
+| 删除去向：系统/本地/永久 | `partial` | 设置持久化；所有入口共用策略；永久删除有明确二次边界；浏览器无系统能力时不可伪成功 |
+| `DataAdapter.trashSystem` / `Vault.trash(system)` | `missing` | Tauri OS trash 成功/取消/权限失败可诊断，不再静默回落后声称 system trash |
+| 20 条真实迁移任务 | `missing` | 用未经改造的 Obsidian vault 验证一周级日常工作流和字节不变量 |
+
+---
+
+## 三、社区插件与兼容 API
+
+### 已站稳
+
+- `.geode/plugins` 与 `.obsidian/plugins` 扫描；manifest/minAppVersion；启停与 unload；每插件设置 Tab；
+  community plugin 卸载；失败/跳过原因可见。
+- 多个真插件路径已证明：Dataview、Templater、Tasks、Calendar 2.0，以及编辑/字数/日期等小插件。
+- `parseYaml/stringifyYaml`、CM6 StateFields、TFile stat 等早期大缺口已完成；旧审计不得再列 missing。
+
+### 仍是明确 gap 的 API
+
+| API / 能力 | 状态 | 当前代码事实 | 目标 |
+|---|---|---|---|
+| `Vault/DataAdapter.getResourcePath` | `missing` | 返回 vault-relative path 并 `reportGap` | Tauri asset URI + browser fallback + 路径安全 |
+| `Plugin.registerExtensions` | `missing` | warn-stub | 扩展名→view registry→打开/恢复完整链 |
+| `registerObsidianProtocolHandler` | `missing` | warn-stub | URI action 注册、派发、卸载与确认/allow-list |
+| `App.lastEvent` | `missing` | 永远 `null` | shell 级用户事件追踪，支持 Mod/Shift 点击语义 |
+| `App.secretStorage` / `SecretStorage` | `missing` | 无实现；Keychain 仅空态 | OS keychain + secret name 引用 + 插件 smoke |
+| `DataAdapter.stat` | `partial` | adapter 仍返回 `null`；TFile stat 是另一条已完成路径 | 对齐官方 adapter 返回与失败语义 |
+| `DataAdapter.appendBinary` | `missing` | 明确抛错 | 随 1.12 API 漂移补原子 append/错误行为 |
+| `App.plugins` / `internalPlugins` | `partial` | `App.plugins` 仍 stub；internalPlugins 只真实暴露少量实例 | 随核心插件化补可预测实例与 enable/disable 状态 |
+
+### 产品页余项
+
+- Restricted mode / safe mode。
+- 浏览、安装、检查更新、升级失败回滚、自动检查更新。
+- 安装前 Tier A/B/C 兼容级别、桌面权限和已知降级。
+- 10–15 个代表插件常驻矩阵；每个记录加载、设置、命令、核心行为、写文件安全和跨版本结果。
 
 ---
 
-## 十一、防误判（排期前必复核 · 防假完成/重复劳动）
+## 四、本体大件
 
-- 「侧栏无法收起」**已非事实**（R160 可收起 + 持久化，仅 affordance 视觉位置不同）。
-- 早期 `geode-设计讨论/11-复刻完成度盘点.md`（R22）的缺口**多已被后续 R 轮完成/部分完成**（悬停预览、PDF/音视频预览、折叠等）；以当前代码 + 本文 + ROADMAP 最新段落为准（呼应「grep 现状门」纪律）。
-- **核心插件「已有」≠「Obsidian 等价」**：须查设置 tab / 命令 / 面板 / 禁用态 / 持久化 / 插件 instance，别当从零项重做。
-- **热键 280 非静态列表**：无真实 handler 的命令 = 假完成；`ui-only/stub` 严禁在热键页伪装可用。
-- **高频 API 已覆盖 ≠ Electron 插件可跑**：Node/Electron shim 是另一条能力线（F1）。
-- **Canvas/Bases 不能当普通设置页/菜单补丁**：须单独设计 + 验收。
+| 大件 | 状态 | 当前起点 | 最小正确拆法 |
+|---|---|---|---|
+| PDF.js | `missing` | `core/embeds.ts` 和 live preview 以原生 iframe 显示 PDF | view/asset → canvas+text layer → 搜索/选中/缩放/大纲/页码 → 嵌入 |
+| Canvas | `missing` | 无 `.canvas` 文件/view；图谱 canvas 不是 Canvas 功能 | JSON Canvas 往返 → 画布交互 → 节点 → 连线 → 分组/嵌入/API |
+| Bases | `missing` | Properties/frontmatter 基础可复用；无 `.base` parser/query/view | 语法/查询 → filter/sort/formula → table → list/cards → embed/API |
+| 多窗口/pop-out | `missing` | Tauri config 仅一个 window；compat 有 single-window warn-stub | 共享 vault/文档 → leaf 跨窗 → 生命周期/API → 恢复/崩溃安全 |
+| Audio recorder | `missing` | 音频附件播放已有；无录音 | 权限/MediaRecorder → 原子附件落盘 → active note embed → 中断恢复 |
+| Markdown converter | `missing` | `htmlToMarkdown` 仍退化为 plain text | clean-room 转换规则、备份/预览、批处理与字节安全 |
+
+大件到队首时自动做 docs-only 规划，不再以“工程大”为理由等待是否启动。
 
 ---
+
+## 五、视觉、测试与分发
+
+### 视觉
+
+设置 IA、控件、shell chrome、文件树密度、阅读视图、图谱等已多轮对齐，但当前主要靠分散的
+computed-style 断言和人工 round 记忆。`done` 还需要：
+
+- 固定 OS、窗口尺寸、DPR、缩放、主题、字体和 demo vault；
+- 8–12 张覆盖空库/编辑/阅读/设置/插件/图谱/文件操作的整屏基线；
+- 有阈值与人工复核入口的 pixel diff；
+- 视觉任务必须携带截图编号和差异位置，禁止无基线 CSS 微调。
+
+### CI / 版本
+
+- `.calibration/` 当前约有 262 个 E2E 与 127 个 probe 文件，但 GitHub Actions 只运行 r23/r24。
+- CI 没跑 `cargo check`、最新 round、数据安全 smoke、核心迁移任务或 compat 真插件。
+- `package.json` / `tauri.conf.json` = 0.284.0，`Cargo.toml` = 0.22.0。
+- updater/NSIS 链路有本地文档，但 Windows 安装、正式 endpoint、签名、更新失败回滚不是持续验证。
+
+R299 先建最小常驻闸门和版本单一真源；R317 再关闭真实 Windows 分发闭环。
+
+---
+
+## 六、版本漂移
+
+官方 Changelog 显示 1.12.7 是当前 Public；1.12 主增量中与本地桌面复刻直接相关的有：
+
+- Obsidian CLI；
+- Live Preview 拖拽调整图片尺寸；
+- 删除笔记时自动清理附件；
+- `appendBinary` 等插件 API 漂移。
+
+其中自动附件清理在 Geode 已有近似实现，晋级时做语义复核；其余进入 ROADMAP D1–D3。
+1.13.1 是 Catalyst，设置独立窗口/全局搜索/键盘导航等只做观察。Public 发布后再新增基线快照，
+不能拿 Catalyst 变化打断 1.9.10 收口。
+
+官方证据：
+
+- Changelog：https://obsidian.md/changelog/
+- Canvas：https://obsidian.md/help/plugins/canvas
+- Bases：https://obsidian.md/help/bases
+- Audio recorder：https://obsidian.md/help/plugins/audio-recorder
+- SecretStorage：https://docs.obsidian.md/plugins/guides/secret-storage
+
+---
+
+## 七、完成定义
+
+### 单项 `done`
+
+- 设置：控件存在、默认值/持久化/重启生效、不可用态诚实、视觉基线通过。
+- 命令：命令面板可搜、热键可绑、真 handler、相关插件关闭时一致消失。
+- 菜单/面板：入口与命令共用核心 handler，权限/空态/错误态完整。
+- 核心插件：真实启停、所有入口和设置 Tab 一致、compat instance 按承诺可见。
+- 社区插件：真插件加载并完成核心行为；gap report 不是完成证明。
+- 写 vault：实时 DocumentHandle、flush/竞态/范围外字节不变量和桌面真实 FS probe 全过。
+- 桌面：成功、取消、权限失败、能力不存在四条路径都有明确行为。
+
+### 1.9.10 阶段结束
+
+- 未经改造的 1.9.10 vault 直接打开，Markdown/附件无损。
+- 20 条迁移任务全过。
+- 核心插件真实启停；本地桌面核心能力没有整块 `missing`。
+- 代表插件矩阵达到预定成功率，宿主边界用户可读。
+- 固定视觉基线通过。
+- CI 覆盖 TS、Rust、数据安全、迁移主路径、最新 round 与 compat smoke。
+- Windows 安装/首次启动/更新/失败回滚可验证。
+- Sync/Publish/账户/移动端明确 `excluded`；Canvas/Bases/PDF.js/多窗口不能 `excluded`。
+
+完成 1.9.10 后，把当前 Public 漂移池整体晋级为下一验收基线；仍不自动转 Chain、AI、云端、
+多 root 或 Git 同步。
 
 ## 相关文档
 
-- `ROADMAP.md` — G 系列「表面复刻差距」、功能复刻补充、F 系列「兼容深化」的执行队列与出队记录。
-- `OBSIDIAN-COMPAT.md` — 插件兼容层 Tier 表、校准机制、验收套件、越界表。
-- `reference/00–08` + `reference/_截图/` — 像素级验收基准。
-- `ARCHITECTURE.md` — R16 改写引擎 / R17 折叠摄入等显式口径与技术债根因。
+- `docs/ROADMAP.md`：顶部单一执行队列与 round 证据。
+- `docs/G3-命令复刻矩阵.md`：命令逐项对照；不再用裸数量差生成任务。
+- `docs/OBSIDIAN-COMPAT.md`：插件 API、真插件套件与历轮证据。
+- `reference/00–08` + `reference/_截图/`：1.9.10 视觉与设置事实标准。
+- `geode-设计讨论/16-第一阶段-Obsidian复刻差距与规划.md`：产品阶段与复刻优先原则。
+
+---
+
+### R293 据实纠误 + 差距重审确认（2026-07-10·docs-only）
+
+- **G3 命令矩阵据实纠误**：3 stale missing->done（`app:show-release-notes` R291 / `help:open` R291 / `workspace:toggle-stacked-tabs` R255）+ 6 多窗口命令 missing->oos（单窗口宿主显式不做）+ 2 推断列 missing->语义待定（`graph:animate` / `app:open-trash`·reference/ 无·WebSearch 失效·phantom 疑似·defer）。G3 bounded 命令池确认枯竭。
+- **差距重审**（永久续接规则 Step 0.1 branch 3·清池后唯一 1 轮）：8 域并行 Workflow 因 API 配额 429 全失败 -> 主循环聚焦重审，确认 5 结构性缺口仍成立（核心插件 toggle 不真实 / 插件 API stub / 大件缺失 / 分发 CI+版本漂移 / 基线漂移）。
+- **队首**：R294 = 核心插件 enable/disable 真实绑定（实现轮·logic-tier·零依赖）--见 ROADMAP「单一执行队列」。R294 Step 0 先验 plugin loader 是否 respect `enabledPluginIds`。

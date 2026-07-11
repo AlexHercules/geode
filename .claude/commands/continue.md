@@ -9,13 +9,42 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
 自主完成**一整轮** Geode 开发，全程**不向用户索取决策**（仅 CLAUDE.md §自主开发契约的 5 条硬边界例外）。
 `$ARGUMENTS` 若指定了具体项或「连做 N 项 / 做到候选池清空」则照它；否则取候选池下一项。
 
+**唯一产品目标：完美复刻 Obsidian。** `/continue` 不会因 bounded 候选池枯竭而停机，也不会自动转入 Chain / AI / 云端 / 多 root / Git 等差异化路线。
+
 ## Step 0 · 定位
-- 确保已读 `CLAUDE.md`、`docs/ROADMAP.md` 末「候选池/执行队列」、`docs/HANDOFF.md`「三句话背景」。
-- 选定本轮项 = `$ARGUMENTS` 指定项，或候选池既定顺序的**下一项**。**不要问用户做哪一项。**
-- 该项契约已冻结在 `ARCHITECTURE.md`「Round XX additions」（如 R25 悬停预览）→ 直接照契约执行。
+- 确保已读 `CLAUDE.md`、`docs/ROADMAP.md` 顶部「下一轮候选/执行队列」、`docs/HANDOFF.md` 顶部 `START HERE`。
+- 运行 `gitnexus status`；索引缺失或 stale 时先 `gitnexus analyze`。用 `gitnexus query "本轮概念"` 找执行流程，关键符号再用 `gitnexus context <symbol>` 收窄；GitNexus 只辅助定位，事实仍以源码为准。
+- 选定本轮项 = `$ARGUMENTS` 指定的 Obsidian 复刻项，或按下方「自动续池状态机」决定。**不要问用户做哪一项。**
+- 实现项若已在 `ARCHITECTURE.md`「Round XX additions」冻结契约 → 直接照契约执行；若未冻结且属大项 → 走 Step 0.1 「大项规划轮」，不越过规划直接写代码。
+
+### Step 0.1 · 自动续池状态机（永不因 backlog 枯竭停机）
+
+按以下顺序且只选一种轮次类型：
+
+1. **实现轮**：ROADMAP 顶部存在经源码复核后仍为 `partial / missing` 的可执行 Obsidian 复刻项 → 按队列取下一项。已 `done / excluded`、重复、幻影功能或只有过时文档支撑的条目不算可执行池子。
+2. **大项规划轮**：下一个高优先复刻缺口是 Canvas / Bases / PDF.js / 多窗口 / Stacked tabs 等大项，且尚无已冻结契约 → **不停下问方向，本轮自动做 docs-only 规划**：核实 Obsidian 行为、当前代码起点、范围/非目标、数据契约、分轮切片、依赖/硬边界、风险与验收矩阵，把**第一个可实现切片**冻结进 `ARCHITECTURE.md`，并写回 ROADMAP/HANDOFF。下次 `/continue` 直接实现该切片。
+3. **Obsidian 差距重审轮**：没有可执行项，也没有一个已明确排在队首的未规划大项 → **本轮自动做 docs-only 全面研究与对比**，不等用户再次发出「盘点」指令。必须：
+   - 对照第一阶段冻结基线 + Obsidian 官方当前 Public 版本的基线漂移，以官方 help/changelog/`obsidian.d.ts` 和 `reference/` 为准；
+   - 逐域核验 shell、设置、命令、菜单、核心插件、文件语义、桌面宿主、插件兼容、分发；
+   - 每项只允许 `done / partial / missing / excluded`，附代码/测试/官方证据；
+   - 删掉已完成、重复和过时候选，重写 ROADMAP 顶部**单一可执行队列**；
+   - 若新队首是未规划大项，同轮补全其规划，或在 HANDOFF 把下一轮明确设为「大项规划轮」。
+
+**禁止的第四分支**：因复刻池子空了就转做差异化功能。除非用户之后显式改变核心目标，E 系列不得被 `/continue` 自主取用。
+
+> 「做到候选池清空」的连续模式：清完实现队列后最多再自动跑 **1 轮**差距重审/大项规划并补回池子，然后停下报告，避免「重审补池 → 继续清池」的无限循环。
+
+### Step 0.2 · docs-only 重审/规划轮的执行口径
+
+- 重审/规划轮仍是完整 round：必须有证据、自检、ROADMAP 出/入队、HANDOFF 续接和提交，不能只在对话里给结论。
+- 不改产品源码，不跑与文档无关的全量 E2E/桌面 probe，不升产品版本；但要运行文档链接/Markdown 结构/相互状态的针对性自检。
+- 调研事实必须追回当前代码/测试或 Obsidian 官方一手资料；不从历史 ROADMAP 反抄「似乎还没做」。
+- 当轮至少更新 `docs/ROADMAP.md` + `docs/HANDOFF.md`；全面差距轮同步更新 `docs/OBSIDIAN_REPLICA_GAP_AUDIT.md`，大项规划轮同步冻结 `docs/ARCHITECTURE.md`。
+- docs-only 轮完成上述调研/规划和针对性自检后，**跳过 Step 1–5 的代码实现、分档、E2E 与桌面 probe，直接进 Step 6 收尾**。不得为了让 docs-only 轮套用实现流程而制造占位代码。
 
 ## Step 1 · 契约扩展（构建常绿）
 - 跨模块接口（types/events/adapter 签名 + 外壳 stub）先写进 `ARCHITECTURE.md`「Round XX additions」节并落 stub，`tsc` 保持 0 错误。
+- 改公共符号、跨层接口、移动/重命名或重构前，运行 `gitnexus impact <symbol> --direction upstream --depth 3`，把受影响调用方、流程和对应回归纳入契约；同名符号用 `--file` / `--uid` 消歧。
 - 列**文件所有权表**：每个并行 agent 独占哪些文件/目录，冻结跨区签名。
 - 现状不清就先派 `explorer` subagent 只读摸清、压缩回报，再定契约。
 
@@ -52,6 +81,7 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
 - 幸存（简化后）形态**原样流入 Step 4 对抗评审**。
 
 ## Step 4 · 评审（替代人审 = 自主模式质量关 · 力度随 Step 3.4 分档）
+- 评审前运行 `gitnexus detect-changes --scope all`，把 affected processes / risk level 交给 reviewer；它是遗漏扫描，不替代 diff、测试或 data-safety。
 - **逻辑档 → 多维对抗评审（满跑）**：派 `reviewer` subagent 做**多维对抗性**评审；逐条 finding 标 确认/证伪，**只修确认缺陷**，去重到根因。审的是 Step 3.5 简化后的终态形。
 - **机械档 → scoped review（窄域）**：派 `reviewer` 只审本轮 diff 的**残留风险面** = automated 套件覆盖不到、却正是搬迁高发的盲区：① 迁移控件的 `data-testid`/绑定/默认值逐一保留（对照 Step 1 控件清单）；② 新增 nav·控件的图标**已注册**（非 fallback 到 `file-text`）；③ 新引用的 i18n 键在 `dict.*` **真实存在**（非键名直显）；④ 搬迁后无重复/遗漏 `testid`。**不做全维对抗扫描**（纯 IA 重排无新逻辑面值得对抗）；逐条确认/证伪，只修确认缺陷。
 - 本轮改了 editor/vault/markdown → 已被 Step 3.4 强制为逻辑档 → **data-safety skill** 自动触发，跑数据安全竞态清单 + 历轮根因 checklist。
@@ -67,10 +97,12 @@ allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, WebFetch
   - `docs/ROADMAP.md`：完成记录 + 候选池出队。
   - `docs/ARCHITECTURE.md`：本轮 As-built（根因修复记录）。
   - `docs/OBSIDIAN-COMPAT.md`：套件矩阵不回退。
-- 版本号**三处对齐**（package.json / tauri.conf.json / SettingsModal `APP_VERSION`）。
-- 提交：`feat(rXX):` 代码 + `docs(rXX):` 文档（具体文件，不用 `git add .`）→ `git push`。
-- 报告用户：本轮做了什么、**本轮分档（机械/逻辑 + 一句判定依据）**、修了几个根因、套件状态、**简化门结果（clean / 删了 N 处死代码+冗余 / 机械档跳过——「不简化」也留痕、可审计是否被滥用成 churn）**、**下一项是什么**。
-- `$ARGUMENTS` 要求连做 → 回 Step 0；否则停下等用户下次「阅读 handoff，继续开发」。
+- **实现轮**：版本号三处对齐（package.json / tauri.conf.json / SettingsModal `APP_VERSION`）；提交 `feat(rXX):` 代码 + `docs(rXX):` 文档。
+- **docs-only 差距重审/大项规划轮**：不升产品版本，提交 `docs(rXX): audit ...` 或 `docs(rXX): plan ...`。
+- 两类都只 `git add` 具体文件（不用 `git add .`）→ `git push`。
+- 提交完成后运行 `gitnexus analyze` 增量刷新索引，再用 `gitnexus status` 确认下一轮不会读取 stale graph（`.gitnexus/` 已忽略，不进提交）。
+- 报告用户：本轮做了什么、**下一项是什么**。实现轮同时报分档、根因、套件状态和简化门；docs-only 轮改报为**轮次类型（差距重审/大项规划）+证据范围+清理/新增了哪些候选+文档自检结果**，不伪造机械/逻辑分档或 E2E 结果。
+- `$ARGUMENTS` 要求连做 → 回 Step 0（但遵守 Step 0.1 「清池后最多一轮重审/规划」的无限循环保护）；否则停下等用户下次「阅读 handoff，继续开发」。
 
 ## 🛑 何时必须停下问用户
 仅限 CLAUDE.md 的 5 条硬边界（发布/签名/私钥 · 毁真实 vault · `push --force`/改历史 · 新运行时依赖），或契约冲突无法自裁。**其余一律自主决定、继续往前。**

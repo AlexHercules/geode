@@ -2,8 +2,10 @@
 
 ## 核心使命（不变项）
 
-> 复刻 Obsidian 的核心用户体验，做成一个**完整、可拓展、可商业交付**的 Windows 桌面知识库应用。
+> **唯一核心目标：完美复刻 Obsidian。** 做成一个完整、可拓展、可商业交付的 Windows 桌面知识库应用。
 > 本地优先（笔记是用户磁盘上的纯 .md 文件）、键盘优先、插件可拓展。
+
+除非用户之后显式改变核心目标，候选池清空不代表可转入差异化路线；`/continue` 必须自动重审 Obsidian 差距并补回复刻池子。
 
 每一轮迭代都必须守住四条底线：
 
@@ -20,14 +22,78 @@ API 的分 Tier 兼容，开发中用 WebFetch 对照 `docs.obsidian.md` 与官�
 **`docs/OBSIDIAN-COMPAT.md`**（后续轮次的头号输入）。Geode 原生插件 API 保持第一公民，
 shim 建立其上。
 
-## 下一轮候选（2026-07-10 R292 后）
+### 候选池枯竭的永久续接规则
 
-### R293 候选 - 设置页视觉 / G3 命令填充 / 余下 bounded
+1. 顶部执行队列有经代码复核的 `partial / missing` 项：按顺序继续实现。
+2. 队首是尚未冻结契约的 Obsidian 大项：下一轮自动做 docs-only 大项规划，冻结第一个可实现切片。
+3. 队列已清空、全为过时/重复/已完成，或无法从现有文档得出可信下一项：下一轮自动做 Obsidian 全面差距研究与对比，更新差距矩阵并重建顶部执行队列。
+4. 任何分支都只服务于 Obsidian 复刻；Chain / AI / 云端 / 多 root / Git 等 E 系列不得被 `/continue` 自主取用。
 
-R292 已完成文件夹右键菜单补齐（folder 分支 +copy-path/reveal/open-default·纠 R250 误判）。命令矩阵已枯竭（高频命令全已注册·R250），folder 右键已收口。R293 取：设置页 G2-b 视觉剩余 / G3 命令填充（70 missing+41 partial 大型马拉松·取 bounded 子集·逐命令补真 handler+默认键）/ 余下零依赖 bounded 项。回收站 UI+删除确认 = data-safety 重轮·单独谨慎排。每轮只取 1-2 个能闭环的子项，零新依赖。
+详细判定、调研交付物和 docs-only 收尾口径见 `.claude/commands/continue.md` Step 0.1–0.2。本节优先级高于历史候选池的「枯竭则停/等待拍板」表述。
+
+## 单一执行队列（2026-07-10 R293 复刻基线重审后）
+
+> 基线：第一收口目标固定为 **Obsidian Desktop 1.9.10 本地 vault**；当前公开版
+> **1.12.7** 的新增能力进入下方「版本漂移池」，不在 1.9.10 尚未收口时持续抬高终点。
+> 状态与证据的单一来源是 `docs/OBSIDIAN_REPLICA_GAP_AUDIT.md`。历史候选池只作
+> round 证据，不再直接驱动 `/continue`。
+
+### 立即执行（M0–M2：先关结构性缺口）
+
+| 顺序 | 下一轮目标 | 当前状态 | 本轮闭环 / 验收信号 |
+|---:|---|---|---|
+| 1 | **R294 · 核心插件真实开关契约 + 总表校准** | `partial`：设置中 21 行仅 4 行绑定真实 `pluginId`；Bases/Search/Bookmarks/Properties 等目录项还未统一 | 冻结 core-plugin manifest/lifecycle/入口 gate 契约；补齐 1.9.10 插件目录；至少选一个 always-on feature 完成「设置开关→命令/面板/ribbon/设置 Tab 一致消失与恢复→重启持久化」纵切 |
+| 2 | **R295 · 核心插件化第一波：侧栏知识视图** | `partial` | Backlinks / Outgoing links / Outline / Tags / Graph 逐项接入同一开关模型；禁用后面板、命令、右键入口、状态恢复均与 Obsidian 等价；每项独立 E2E |
+| 3 | **R296 · 核心插件化第二波：工作区与发现入口** | `partial` | File explorer / Search / Quick switcher / Command palette / Workspaces 接入真实开关；关闭最后一个可达入口时有可恢复路径，不能把用户锁死 |
+| 4 | **R297 · 核心插件化第三波：内容服务** | `partial` | Templates / Page preview / Note composer / File recovery / Properties / Bookmarks 接入真实开关与各自设置 Tab；完成后核心插件页不得再用 disabled toggle 表示“已有但关不掉” |
+| 5 | **R298 · Files & Links 收口：默认打开文件 + 删除去向** | `partial`：删除确认、孤儿附件 Ask/Always/Never、本地 `.trash` 已 done；默认启动文件、系统回收站/本地回收站/永久删除三档仍缺 | 默认文件启动行为；删除去向设置；`trashSystem` 桥；所有删除路径继续 flush-first，系统能力失败时不静默永久删，浏览器与桌面数据安全回归齐全 |
+| 6 | **R299 · 复刻证明与构建闸门** | `partial`：本地有 262 个 E2E、127 个 probe，但 CI 只跑 r23/r24；Cargo 版本仍 0.22.0 | CI 纳入 typecheck/build/cargo check/数据安全 smoke/最新 round/核心迁移/compat 真插件；建立 8–12 张固定整屏视觉基线；package/Tauri/Cargo/About 单一版本源 |
+| 7 | **R300 · `getResourcePath` / asset protocol 桥** | `missing`：当前只回传 vault 相对路径并记 gap | Tauri 安全 asset URI + browser fallback；Vault/DataAdapter 两入口等价；图片/PDF/插件资源真加载；路径穿越与未授权 vault 外访问被拒 |
+| 8 | **R301 · 插件宿主桥第二批** | `partial/missing` | `registerExtensions`、Obsidian protocol handler、`App.lastEvent`、`DataAdapter.stat/appendBinary` 依价值分片；至少以 2 个受阻真实插件证明，不以类型或 warn-stub 计完成 |
+| 9 | **R302 · SecretStorage + Keychain** | `missing`：Keychain 页为空态，`App.secretStorage` 不存在 | OS keychain-backed secret store；列表/新增/删除/引用 UI；插件只持有 secret 名称；真 API-key 插件 smoke；日志与 vault 文件不得泄露密钥 |
+| 10 | **R303 · 社区插件产品闭环** | `partial`：扫描、加载、启停、设置、卸载、失败原因已有；Restricted mode、浏览/安装/升级、兼容级别仍缺 | Restricted mode；安装/升级/卸载事务与回滚；Tier A/B/C 兼容徽标；10–15 个代表插件常驻矩阵；市场数据源/许可证若触新外部承诺先做 docs-only 契约轮 |
+
+### 本体大件（M3：队首到达即自动先做 docs-only 规划轮）
+
+| 顺序 | 大件 | 必须冻结的切片 | 完成信号 |
+|---:|---|---|---|
+| 11 | **R304–R305 · PDF.js 阅读器** | P1 文件类型/view 注册 + asset 桥；P2 canvas/text layer；P3 搜索/选中/缩放/大纲/页码；P4 嵌入与外链 | 不再依赖原生 iframe 黑盒；Obsidian PDF 的打开、搜索、选择、页码链接与嵌入主路径通过 |
+| 12 | **R306–R309 · Canvas** | C1 `.canvas`/JSON Canvas 存储与 view；C2 平移缩放/选择/拖拽；C3 文本/文件/媒体/网页节点；C4 连线/标签/颜色；C5 分组/嵌入/设置/插件 API | 官方 Canvas 核心工作流与开放文件格式可往返，无未知字段丢失 |
+| 13 | **R310–R312 · Bases** | B1 `.base` 语法与属性查询；B2 filter/sort/formula；B3 table；B4 list/cards；B5 embed/命令/插件 API | 本地 Markdown/frontmatter 仍是真相；表/列表/卡片主路径与 `.base` 往返通过 |
+| 14 | **R313–R314 · 多窗口 / pop-out** | W1 Tauri 窗口生命周期与共享 vault；W2 leaf 跨窗迁移；W3事件/焦点/`WorkspaceWindow`；W4 恢复与崩溃安全 | 新窗口、移入/移出、关闭/恢复、插件事件、未保存编辑跨窗不丢失 |
+| 15 | **R315 · 剩余核心插件收口** | Audio recorder、Markdown converter、Slides 逐项独立纵切 | 1.9.10 本地桌面核心插件不再有整块 `missing`；商业服务明确 `excluded` |
+
+### 分发与真实迁移（M4）
+
+| 顺序 | 目标 | 完成信号 |
+|---:|---|---|
+| 16 | **R316 · 20 条真实 vault 迁移任务** | 未经改造的 Obsidian vault 连续完成打开/切库/新建/编辑/链接/附件/搜索/图谱/重命名/移动/删除/恢复/分屏/工作区/热键/主题/插件启停，Markdown 与附件字节无损 |
+| 17 | **R317 · Windows 安装、更新、失败回滚** | NSIS CI 构建、正式签名/endpoint、首次启动、更新失败恢复、坏配置安全模式、诊断日志与回滚均可实测；签名/私钥动作仍遵守硬边界 |
+
+### 公开版漂移池（Obsidian 1.12.7；1.9.10 收口后晋级主队列）
+
+- **D1 · Obsidian CLI**：当前 Geode 只支持启动参数打开 vault，不等价于官方 CLI/TUI；需命令发现、读写/搜索/日记/属性/命令执行与跨进程协议。
+- **D2 · Live Preview 拖拽调整图片大小**：当前只支持 Markdown 尺寸语法，不支持拖角/双击重置。
+- **D3 · `appendBinary` 与 1.12 API 漂移**：当前 compat 明确抛错；随 API 基线升级一起补。
+- **D4 · 1.12 自动清理附件**：Geode R244 已有 Ask/Delete/Keep 与安全删除路径，晋级时只做官方语义/文案/边界复核，不重复实现。
+- **D5 · 新设置体系漂移**：1.13.1 仍是 Catalyst（非公开基线），只观察“设置独立窗口、全局搜索、键盘导航、新 Setting API”，待进入 Public 后再定验收快照。
+
+### 队列纪律
+
+- 每个实现轮必须在 `OBSIDIAN_REPLICA_GAP_AUDIT.md` 把至少一项从 `partial/missing` 推进到 `done`，并给出代码 + 测试证据。
+- 大件不允许用一个笼统候选长期占位：规划轮必须拆出第一个可在单轮验收的切片，下一轮直接实现。
+- 视觉 polish 只从固定截图 diff 产生；没有基线截图与差异坐标的“再调一点 CSS”不进入队列。
+- Chain / AI / 云端 / 多 root / Git 同步继续保留在设计文档，但在上述复刻队列与公开版漂移池清空前不自动取用。
 
 ## 已完成
 
+### R293 - v0.284（2026-07-10）G3 命令矩阵据实纠误 + Obsidian 差距重审（docs-only·audit·零代码·零版本 bump）
+
+G3 命令复刻矩阵据实纠误：3 行 stale missing->done（显示版本日志 app:open-release-notes R291 / 查看帮助 app:open-help R291 / 堆叠标签页 workspace:toggle-stacked-tabs R255）+ 6 多窗口命令 missing->oos（新窗口/关闭/移动至新窗口/在新窗口打开/置顶/在新窗口打开链接·单窗口宿主显式不做）+ 2 推断列命令 missing->语义待定（graph:animate / app:open-trash·reference/ 无·WebSearch 失效·phantom 疑似·defer 防 phantom）+ §0 汇总 + §1/§4/§9/§15 小结刷新。**bounded-autonomous 命令池确认枯竭**（thorough scout + 防误判：所列高频命令均已 done）。
+
+Obsidian 差距重审（永久续接规则 Step 0.1 branch 3·清池后唯一 1 轮重审）：8 域并行 Workflow 因 API 配额 429 全失败 -> 主循环聚焦重审，确认 GAP_AUDIT 5 结构性缺口：①核心插件 toggle 不真实（CORE_PLUGIN_ROWS 21 行多无 pluginId·toggle 不控制加载）②插件 API stub（resource URI/extensions/protocol/events/SecretStorage）③大件缺失（PDF iframe/Canvas/Bases/Audio/多窗口）④分发 CI 闸门 + 版本漂移（Cargo 0.22 vs package/Tauri 0.284）⑤基线漂移（1.12 CLI/drag-resize/auto-cleanup）。重写 ROADMAP 顶部单一可执行队列：队首 = R294 核心插件 enable/disable 真实绑定（实现轮）。
+
+docs-only 轮（Step 0.2）：零代码·零版本 bump·跳过 Step 1-5 代码/分档/E2E/probe。文档自检：G3 矩阵行/小结/§0 一致；ROADMAP 队列单一；HANDOFF START HERE 刷新。typecheck 0（未碰代码）·cargo check 通过。
 ### R292 - v0.284（2026-07-10）文件夹右键菜单补齐
 
 Explorer 文件树**文件夹**右键菜单补 3 项原 file-only 文件操作：复制库内路径 / [桌面]在系统访达中显示 / [桌面]使用默认应用打开。reuse 既有 handler（copyVaultPath/revealNodeInSystem/openNodeInDefaultApp·VaultNode 通用）+ 既有 testid/i18n/图标，纯菜单接线·零 vault 写·零 Rust 改。verify-first 纠 R250 误判：R250 docs-only 盘点曾称「folder 右键已完成·勿重做」，实查 Explorer.tsx 把 copy-path/reveal/open-default 误 gate 成 `node.kind==="file"` only；reference/08 文件树右键基础项对文件+文件夹均适用（line 29「文件夹另含新建项」=基础项+新建项）。file-only 项（open-new-tab/open-right/make-copy/copy-obsidian-url）保持 file-only。

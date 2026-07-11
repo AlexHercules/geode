@@ -3,7 +3,7 @@
 Geode = Obsidian 复刻的本地优先 Markdown 知识库。
 **Tauri 2 (Rust 壳) + React 18 + TypeScript(strict) + Vite + CodeMirror 6**。
 当前 v0.88.0 · 开发机 macOS（本仓库路径即开发路径）· 远端 `github AlexHercules/geode`（私有, 分支 `opus` → `origin/opus`）。
-核心使命：复刻 Obsidian 核心体验，本地优先 / 键盘优先 / 插件可拓展；商业主轴 = **Obsidian 插件生态一键迁移**（兼容层 shim 分 Tier）。详见 `docs/ROADMAP.md`「核心使命」。
+**唯一核心目标：完美复刻 Obsidian。** 本地优先 / 键盘优先 / 插件可拓展；商业主轴 = **Obsidian 插件生态一键迁移**（兼容层 shim 分 Tier）。未经用户新的明确指令，不自动转入 Chain / AI / 云端 / 多 root / Git 等差异化目标。详见 `docs/ROADMAP.md`「核心使命」。
 
 ---
 
@@ -11,7 +11,7 @@ Geode = Obsidian 复刻的本地优先 Markdown 知识库。
 
 用户的唯一输入是 **「继续开发」**（或 `/continue`）。收到它就**自主跑完一整轮**，全程**不要反问做哪一项、要不要这样、方案 A 还是 B**——目标清晰（复刻 Obsidian），由你全权决策。
 
-- **自主范围**：选下一项（按 ROADMAP 候选池既定顺序）、技术方案与取舍、契约设计、缺陷修复、文档更新、对照 Obsidian 官方校准（`docs.obsidian.md` / `obsidian.d.ts`，自己 WebFetch，不需用户参与）。
+- **自主范围**：选下一项（按 ROADMAP 候选池既定顺序）、技术方案与取舍、契约设计、缺陷修复、文档更新、对照 Obsidian 官方校准（`docs.obsidian.md` / `obsidian.d.ts`，自己 WebFetch，不需用户参与）。**候选池清空或只剩过时项时，自动进入 Obsidian 差距重审轮；队首是未规划大项时，自动先做 docs-only 规划轮。**
 - **遇到不确定**：默认「选最贴近 Obsidian 行为的方案，做下去，并在收尾报告里记一句」，而不是停下来问。
 - **🛑 唯一必须停下来征得用户同意的硬边界**（不可逆 / 外向 / 毁数据）：
   1. 发布、渠道、证书、**Authenticode / minisign 签名**，或任何向**已装机用户**推送更新的动作；
@@ -27,7 +27,7 @@ Geode = Obsidian 复刻的本地优先 Markdown 知识库。
 
 ## 开场（用户的标准指令 =「阅读 handoff，继续开发」）
 
-1. 读 `docs/HANDOFF.md` 顶部 **▶ START HERE** 区 = **单一续接入口**（当前状态 + 下一项 + 契约位置）。再扫本文件铁律、`docs/ROADMAP.md` 末候选池；其余按下方「文档地图」**只读相关章节**。
+1. 读 `docs/HANDOFF.md` 顶部 **▶ START HERE** 区 = **单一续接入口**（当前状态 + 下一项 + 契约位置）。再扫本文件铁律、`docs/ROADMAP.md` 顶部执行队列；其余按下方「文档地图」**只读相关章节**。若队列已清空/失真，不停机，直接走 `/continue` Step 0.1 差距重审/大项规划分支。
 2. 直接执行 `/continue` 自主整轮，**不要问用户做哪一项**（仅 §自主开发契约 5 条硬边界才停下）。
 3. **每轮收尾必须撰写文档** = 循环闭合的强制环节：刷新 HANDOFF 的 START HERE 状态 + 追加根因教训、ROADMAP 出队、ARCHITECTURE As-built、OBSIDIAN-COMPAT 矩阵，再提交 push。**漏写会被 Stop hook 拦下、本轮结束不了**（这样下次「阅读 handoff」才不会续到过时状态）。详见 `/continue` Step 6。
 
@@ -85,6 +85,7 @@ typecheck → 浏览器 E2E → 桌面 probe → cargo check / build
 | 本轮契约（R25 悬停预览已冻结） | `docs/ARCHITECTURE.md`「Round 25 additions」节 |
 | 改某历轮模块前 | `docs/ARCHITECTURE.md` 对应「Round XX additions」节 |
 | 每轮节奏 / 数据安全清单 / 环境细则 | `docs/DEVELOPMENT.md` + data-safety skill |
+| GitNexus 索引 / 查询 / 影响分析 / loop 接入 | `docs/GITNEXUS.md` |
 | Obsidian 兼容 Tier 表 / 套件矩阵 / 缺口 | `docs/OBSIDIAN-COMPAT.md` |
 | 复刻 Obsidian UI（**像素级界面** + 选项/菜单/快捷键） | `reference/`：`00-界面复刻规范.md`（配色取主题变量/布局/控件样式/排版，截图=视觉验收标准）+ `01`–`08` 逐页文字结构；标注对接第七梯队条目号 |
 | 发布 / 签名 / 更新链路（仅参考） | `docs/DISTRIBUTION.md` |
