@@ -633,6 +633,15 @@ html {
   padding: 0 8px;
 }
 
+/* R295: inert placeholder rendered for a fileless singleton view whose core
+   plugin is disabled (e.g. a graph tab left open when Graph was toggled off).
+   Fills the pane so the layout doesn't collapse; the open command is gone so no
+   new such tabs can appear. */
+.main-view-disabled {
+  flex: 1;
+  min-height: 0;
+}
+
 /* five-zone drop overlay shown while a tab drag is in flight */
 .pane-drop-overlay {
   position: absolute;

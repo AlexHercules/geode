@@ -140,6 +140,11 @@ export function App() {
      tags panel tab + render recompute when the Tags core plugin is toggled. */
   useStore(app.plugins.revision);
   const tagsEnabled = app.plugins.isEnabled("tags");
+  /* R295: wave-1 sidebar knowledge views - same isEnabled gate as Tags (R294). */
+  const outlineEnabled = app.plugins.isEnabled("outline");
+  const outgoingLinksEnabled = app.plugins.isEnabled("outgoing-links");
+  const backlinksEnabled = app.plugins.isEnabled("backlinks");
+  const graphEnabled = app.plugins.isEnabled("graph");
   /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
      via Ctrl+, / the command palette) */
   const ribbonVisible = useStore(showRibbon);
@@ -165,9 +170,9 @@ export function App() {
         : "explorer";
   const effectiveRight = activeRightPanel
     ? activeRightPanel.id
-    : ws.rightPanel === "outline"
+    : ws.rightPanel === "outline" && outlineEnabled
       ? "outline"
-      : ws.rightPanel === "outgoinglinks"
+      : ws.rightPanel === "outgoinglinks" && outgoingLinksEnabled
         ? "outgoinglinks"
         : ws.rightPanel === "footnotes"
           ? "footnotes"
@@ -179,7 +184,7 @@ export function App() {
             ? "tags"
             : ws.rightPanel === "calendar"
               ? "calendar"
-              : "backlinks";
+              : backlinksEnabled ? "backlinks" : "calendar";
 
   /* tab drag state shared by every TabBar / pane drop overlay */
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
@@ -280,22 +285,6 @@ export function App() {
             await app.plugins.loadExternal(vault);
             await loadObsidianPlugins(app, vault);
           })(),
-      }),
-      commands.register({
-        id: "app:open-graph",
-        name: () => t("cmd.openGraph"),
-        hotkey: "Mod+G",
-        callback: () => workspace.openGraph(),
-      }),
-      commands.register({
-        // R240: open the graph anchored to the active note (Obsidian "Open local graph").
-        // GraphView already supports local mode (R103/R110); this opens it + flips to local.
-        id: "graph:open-local",
-        name: () => t("cmd.openLocalGraph"),
-        callback: () => {
-          workspace.openLocalGraphRequest.set(true);
-          workspace.openGraph();
-        },
       }),
       // R291: open Geode help / release notes in the system browser.
       commands.register({
@@ -422,11 +411,6 @@ export function App() {
         callback: () => workspace.toggleRightSidebar(),
       }),
       commands.register({
-        id: "app:show-outgoing-links",
-        name: () => t("cmd.showOutgoingLinks"),
-        callback: () => workspace.setRightPanel("outgoinglinks"),
-      }),
-      commands.register({
         id: "app:show-footnotes",
         name: () => t("cmd.showFootnotes"),
         callback: () => workspace.setRightPanel("footnotes"),
@@ -444,34 +428,6 @@ export function App() {
         name: () => t("cmd.showSearch"),
         hotkey: "Mod+Shift+F", // R185: Obsidian global-search default key (calibration)
         callback: () => workspace.setLeftPanel("search"),
-      }),
-      commands.register({
-        id: "app:show-backlinks",
-        name: () => t("cmd.showBacklinks"),
-        callback: () => workspace.setRightPanel("backlinks"),
-      }),
-      // R211 (G3 §8): open backlinks as a main-area tab (Obsidian "Open backlinks
-      // for the current file") — a singleton view tab, like the graph
-      commands.register({
-        id: "backlink:open-backlinks",
-        name: () => t("cmd.openBacklinks"),
-        callback: () => workspace.openBacklinks(),
-      }),
-      // R212 (G3 §8): open outgoing-links / outline as a main-area tab (reuse the host)
-      commands.register({
-        id: "outgoing-links:open-outgoing-links",
-        name: () => t("cmd.openOutgoingLinks"),
-        callback: () => workspace.openOutgoingLinks(),
-      }),
-      commands.register({
-        id: "outline:open-outline",
-        name: () => t("cmd.openOutline"),
-        callback: () => workspace.openOutline(),
-      }),
-      commands.register({
-        id: "app:show-outline",
-        name: () => t("cmd.showOutline"),
-        callback: () => workspace.setRightPanel("outline"),
       }),
       commands.register({
         id: "app:show-all-properties",
@@ -1249,7 +1205,7 @@ export function App() {
         {ribbonVisible && (
         <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
           <div className="ribbon-top-spacer" aria-hidden="true" data-tauri-drag-region />
-          <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />
+          {graphEnabled && <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />}
           <RibbonButton
             icon="command"
             title={t("app.ribbonPalette")}
@@ -1378,26 +1334,30 @@ export function App() {
           >
             <SidebarResizer side="right" />
             <div className="right-tabs" role="tablist" aria-label={t("app.rightPanelAria")} data-tauri-drag-region>
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "backlinks"}
-                className={`right-tab${effectiveRight === "backlinks" ? " is-active" : ""}`}
-                title={t("app.tabBacklinks")}
-                data-testid="right-tab-backlinks"
-                onClick={() => app.workspace.setRightPanel("backlinks")}
-              >
-                <Icon name="link" size={18} />
-              </button>
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "outgoinglinks"}
-                className={`right-tab${effectiveRight === "outgoinglinks" ? " is-active" : ""}`}
-                title={t("app.tabOutgoingLinks")}
-                data-testid="right-tab-outgoinglinks"
-                onClick={() => app.workspace.setRightPanel("outgoinglinks")}
-              >
-                <Icon name="external-link" size={18} />
-              </button>
+              {backlinksEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "backlinks"}
+                  className={`right-tab${effectiveRight === "backlinks" ? " is-active" : ""}`}
+                  title={t("app.tabBacklinks")}
+                  data-testid="right-tab-backlinks"
+                  onClick={() => app.workspace.setRightPanel("backlinks")}
+                >
+                  <Icon name="link" size={18} />
+                </button>
+              )}
+              {outgoingLinksEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "outgoinglinks"}
+                  className={`right-tab${effectiveRight === "outgoinglinks" ? " is-active" : ""}`}
+                  title={t("app.tabOutgoingLinks")}
+                  data-testid="right-tab-outgoinglinks"
+                  onClick={() => app.workspace.setRightPanel("outgoinglinks")}
+                >
+                  <Icon name="external-link" size={18} />
+                </button>
+              )}
               <button
                 role="tab"
                 aria-selected={effectiveRight === "footnotes"}
@@ -1408,16 +1368,18 @@ export function App() {
               >
                 <Icon name="footnote" size={18} />
               </button>
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "outline"}
-                className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
-                title={t("app.tabOutline")}
-                data-testid="right-tab-outline"
-                onClick={() => app.workspace.setRightPanel("outline")}
-              >
-                <Icon name="list" size={18} />
-              </button>
+              {outlineEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "outline"}
+                  className={`right-tab${effectiveRight === "outline" ? " is-active" : ""}`}
+                  title={t("app.tabOutline")}
+                  data-testid="right-tab-outline"
+                  onClick={() => app.workspace.setRightPanel("outline")}
+                >
+                  <Icon name="list" size={18} />
+                </button>
+              )}
               <button
                 role="tab"
                 aria-selected={effectiveRight === "allproperties"}
@@ -1488,9 +1450,9 @@ export function App() {
             <div className="right-panel-body">
               {activeRightPanel ? (
                 <SidebarPanelHost key={activeRightPanel.id} panel={activeRightPanel} />
-              ) : ws.rightPanel === "outline" ? (
+              ) : ws.rightPanel === "outline" && outlineEnabled ? (
                 <OutlinePanel />
-              ) : ws.rightPanel === "outgoinglinks" ? (
+              ) : ws.rightPanel === "outgoinglinks" && outgoingLinksEnabled ? (
                 <OutgoingLinksPanel />
               ) : ws.rightPanel === "footnotes" ? (
                 <FootnotesPanel />
@@ -1502,8 +1464,10 @@ export function App() {
                 <TagsPanel />
               ) : ws.rightPanel === "calendar" ? (
                 <CalendarPanel />
-              ) : (
+              ) : backlinksEnabled ? (
                 <BacklinksPanel />
+              ) : (
+                <CalendarPanel />
               )}
             </div>
           </aside>
@@ -2092,6 +2056,13 @@ function PaneResizer({
 function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
   const app = useApp();
   const ws = useStore(app.workspace.state);
+  /* R295: re-render on core-plugin toggle so a disabled singleton view's tab
+     switches to the inert placeholder (renderTab gates on these). */
+  useStore(app.plugins.revision);
+  const graphEnabled = app.plugins.isEnabled("graph");
+  const backlinksEnabled = app.plugins.isEnabled("backlinks");
+  const outgoingLinksEnabled = app.plugins.isEnabled("outgoing-links");
+  const outlineEnabled = app.plugins.isEnabled("outline");
   const { draggingTabId, setDraggingTabId } = useContext(TabDragContext);
   const [dropZone, setDropZone] = useState<DropZone | null>(null);
   const isActive = ws.activePaneId === leaf.id;
@@ -2101,15 +2072,25 @@ function PaneLeafView({ leaf }: { leaf: PaneLeaf }) {
   // R254: render one tab's content via the viewType dispatch. `autoFocus` gates
   // EditorPane's mount focus() so a stacked group (all tabs mounted at once)
   // doesn't fight over focus — only the leaf's active tab grabs it.
+  // R295: a fileless singleton view whose core plugin is disabled renders an inert
+  // placeholder (the open command is auto-disposed so no new tabs appear; the user
+  // may close this one). See ARCHITECTURE.md "Round 295 additions".
+  const disabledView = <div className="main-view-disabled" />;
   const renderTab = (tab: TabState, autoFocus: boolean) =>
     tab.viewType === "graph" ? (
-      <GraphView />
+      graphEnabled ? <GraphView /> : disabledView
     ) : tab.viewType === "backlinks" ? (
-      <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
+      backlinksEnabled ? (
+        <div className="main-backlinks-view markdown-reading-view"><BacklinksPanel /></div>
+      ) : disabledView
     ) : tab.viewType === "outgoinglinks" ? (
-      <div className="main-outgoinglinks-view markdown-reading-view"><OutgoingLinksPanel /></div>
+      outgoingLinksEnabled ? (
+        <div className="main-outgoinglinks-view markdown-reading-view"><OutgoingLinksPanel /></div>
+      ) : disabledView
     ) : tab.viewType === "outline" ? (
-      <div className="main-outline-view markdown-reading-view"><OutlinePanel /></div>
+      outlineEnabled ? (
+        <div className="main-outline-view markdown-reading-view"><OutlinePanel /></div>
+      ) : disabledView
     ) : tab.viewType === "attachment" ? (
       <AttachmentView key={tab.id} tab={tab} />
     ) : (
@@ -2550,6 +2531,8 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
 function EmptyState() {
   const app = useApp();
   const t = useI18n();
+  useStore(app.plugins.revision); // R295: hide graph button when Graph core plugin is disabled
+  const graphEnabled = app.plugins.isEnabled("graph");
   return (
     <div className="empty-state" data-testid="empty-state">
       <div className="empty-state-card">
@@ -2557,7 +2540,7 @@ function EmptyState() {
         <div className="empty-actions">
           <button onClick={() => app.commands.execute("app:new-note")}>{t("app.emptyNewNote")}</button>
           <button onClick={() => app.workspace.openModal("switcher")}>{t("app.emptySwitcher")}</button>
-          <button onClick={() => app.workspace.openGraph()}>{t("app.emptyGraph")}</button>
+          {graphEnabled && <button onClick={() => app.workspace.openGraph()}>{t("app.emptyGraph")}</button>}
         </div>
       </div>
     </div>

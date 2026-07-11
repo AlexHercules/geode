@@ -133,7 +133,9 @@ export function BookmarksPanel() {
         app.workspace.setLeftPanel("explorer");
         break;
       case "graph":
-        app.workspace.openGraph();
+        // R295: no-op when the Graph core plugin is disabled - the open command is
+        // auto-disposed, so a bookmark must not bypass it and spawn a placeholder tab.
+        if (app.plugins.isEnabled("graph")) app.workspace.openGraph();
         break;
       case "search":
         // R239: open the search panel seeded with the bookmarked query (requestSearch
