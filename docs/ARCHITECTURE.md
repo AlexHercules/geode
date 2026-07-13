@@ -169,6 +169,54 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（menu IA 接线·复用既有 handler/testid/i18n·无新控制流/无数据安全面/无 Rust 改动）·**简化门：机械档跳过**·**评审：scoped review**。
 
+## Round 296 additions - 核心插件化第二波·工作区与发现入口·逻辑档·零新依赖
+
+> **状态：As-built（已交付·v0.287）。** 按 R294 契约把 wave-2 五项接入真实开关：File explorer / Search / Quick switcher / Command palette / Workspaces。每项 = builtin plugin（`src/plugins/<id>.ts`），「show/open」命令移入 `onload`（auto-dispose），面板/ribbon/empty-state 入口读 `isEnabled(id)`，CORE_PLUGIN_ROWS 加 `pluginId`。
+
+### 🔒 Lock-out 安全（本轮核心约束·ROADMAP「不能把用户锁死」）
+
+Command palette / Quick switcher 是主要发现/执行入口，禁用后**必须**仍能打开设置重新启用。已核实安全：
+- `app:open-settings` 命令（hotkey **Mod+,**）在 App.tsx useEffect **独立注册**（:398），**不属于** command-palette plugin -> 禁用 command-palette 不移除它，Mod+, 恒开设置。
+- ribbon 设置齿轮按钮（:1308）恒可见（不 gate），onClick 直开 settings。
+- 故禁用 command-palette/quick-switcher/file-explorer 任一后，用户仍可 Mod+, 或点齿轮 -> 设置 -> 核心插件 -> 重启。**无锁死**。本轮**不 gate** `app:open-settings` 与设置齿轮。
+
+### 五项实现
+
+| plugin id | 命令（移入 onload·auto-dispose） | 入口 gate | 备注 |
+|---|---|---|---|
+| `file-explorer` | `app:show-file-explorer`（setLeftPanel "explorer"） | left-tab-explorer + left render switch + effectiveLeft | **默认左栏兜底**：explorer 是 effectiveLeft/render 的 else 兜底；disabled 时回退 `search`（若 enabled）-> `bookmarks`（恒可用） |
+| `search` | `app:show-search`（Mod+Shift+F·setLeftPanel "search"） | left-tab-search + left render switch + effectiveLeft | |
+| `quick-switcher` | `app:quick-switcher`（Mod+O·openModal "switcher"） | empty-state switcher 按钮 | 模态：禁用 = 命令 dispose（Mod+O no-op）+ empty-state 按钮隐 |
+| `command-palette` | `app:command-palette`（Mod+P·openModal "palette"） | ribbon palette 按钮 | 模态：禁用 = 命令 dispose（Mod+P no-op）+ ribbon 按钮隐；Mod+, 仍开设置 |
+| `workspaces` | `workspace:manage`（openModal "workspaces"） | （仅命令） | 模态：禁用 = 命令 dispose；其它 workspace:* 命令（toggle-stacked-tabs/copy-url/edit-file-title）是通用 tab/文件操作，**不 gate**（留 App.tsx） |
+
+### 入口 gate（复用 R294/R295 契约·零改 core/plugins.ts）
+
+- App 根 `useStore(app.plugins.revision)`（R294 已加）+ 新增 `explorerEnabled`/`searchEnabled`/`quickSwitcherEnabled`/`commandPaletteEnabled`/`workspacesEnabled` 局部。
+- 左栏 tab 按钮：`{<id>Enabled && (<button.../>)}`（explorer/search；bookmarks 不 gate）。
+- 左栏 render switch：`ws.leftPanel === "search" && searchEnabled ? <SearchPanel/> : ws.leftPanel === "bookmarks" ? <BookmarksPanel/> : (explorerEnabled ? <Explorer/> : <fallback/>)`；fallback = `searchEnabled ? <SearchPanel/> : <BookmarksPanel/>`。
+- `effectiveLeft`：同 `&& <id>Enabled`；explorer else 兜底 `(explorerEnabled ? "explorer" : searchEnabled ? "search" : "bookmarks")`。
+- 模态命令：移入 plugin onload，disable 时 auto-dispose（hotkey lookup 不命中）。
+- command-palette ribbon 按钮 / quick-switcher empty-state 按钮：`{<id>Enabled && ...}`。
+- CORE_PLUGIN_ROWS：file-explorer/search/quick-switcher/command-palette/workspaces 五行加 `pluginId`。
+- 评审修复 F1（MAJOR）：`editor:merge-file`（App.tsx）开 switcher 模态->`available` 加 `isEnabled("quick-switcher")` + callback guard，禁用时命令从 palette 隐（merge 依赖 switcher，禁用即不可用）。
+- 评审修复 F2（MINOR）：BookmarksPanel `case "folder"`/`case "search"` 也 gate on `isEnabled("file-explorer")`/`isEnabled("search")`（镜像 R295 graph 书签 guard），禁用时不 strand `ws.leftPanel` / 不泄漏 `searchRequest` one-shot。
+
+### 数据安全契约
+
+零 .md / vault / editor 写路径。五 plugin onload 仅注册 UI 导航命令（setLeftPanel / openModal）；gating 纯 React 渲染；持久化走既有 `geode.plugins.enabled.v1` localStorage。explorer 默认回退不 mutate `ws.leftPanel`（复用 stale-id 回退模式）。无数据安全红线。
+
+### 验证契约
+
+1. 新 `.calibration/r296-e2e.mjs`：五项各--默认 on（tab/命令/ribbon[palette]/empty-state[switcher] 在）/ disable（入口隐 + 命令从 palette 消失 + explorer 默认回退 search/bookmarks）/ re-enable / 重启持久化；**lock-out 安全**（command-palette disabled 时 Mod+, 仍开设置 + 设置齿轮可见）；目录（5 行 pluginId·toggle 可操作）。
+2. 回归 `r295`（wave-1 不退）· `r185`（commands）· `r38`（quick switcher）· `r23`（settings/explorer）· `r203`/`r237`（vault switcher）。
+3. `npm run typecheck` 0 错误；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check --manifest-path src-tauri/Cargo.toml` 通过。
+4. 桌面 probe N/A（纯 Store+UI+localStorage，无 FS/Rust delta）。
+
+**文件范围**：`src/plugins/file-explorer.ts`·`search.ts`·`quick-switcher.ts`·`command-palette.ts`·`workspaces.ts`（新）· `src/plugins/index.ts` · `src/app/App.tsx` · `src/features/settings/SettingsModal.tsx` · `.calibration/r296-e2e.mjs`（新）。
+
+**分档：逻辑档**（5 新 plugin + 新控制流[左栏 gating + effectiveLeft 兜底 + ribbon/empty-state gate]+ store 驱动；未碰数据安全红线）·**简化门：跑**·**评审：多维对抗**。
+
 ## Round 295 additions - 核心插件化第一波·侧栏知识视图（Backlinks/Outgoing links/Outline/Graph）·逻辑档·零新依赖
 
 > **状态：As-built（已交付·v0.286）。** 按 R294 冻结契约，把 wave-1 四个侧栏知识视图接入真实开关模型（Tags 已 R294）。每项 = 一个 `GeodePlugin` builtin（`src/plugins/<id>.ts`），命令移入 `onload`（auto-dispose），侧栏 tab/render/effectiveRight 读 `isEnabled(id)`，CORE_PLUGIN_ROWS 加 `pluginId`。本轮**定 main-area singleton view disable 行为**（R294 契约遗留项）。
