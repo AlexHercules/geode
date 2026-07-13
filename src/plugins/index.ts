@@ -1,18 +1,23 @@
 import type { GeodePlugin } from "@core/plugins";
 import { backlinkCountPlugin } from "./backlink-count";
 import { backlinksPlugin } from "./backlinks";
+import { commandPalettePlugin } from "./command-palette";
 import { dailyNotePlugin } from "./daily-note";
+import { fileExplorerPlugin } from "./file-explorer";
 import { graphPlugin } from "./graph";
 import { outlinePlugin } from "./outline";
 import { outgoingLinksPlugin } from "./outgoing-links";
+import { quickSwitcherPlugin } from "./quick-switcher";
 import { randomNotePlugin } from "./random-note";
+import { searchPlugin } from "./search";
 import { tagsPlugin } from "./tags";
 import { uniqueNotePlugin } from "./unique-note";
 import { wordCountPlugin } from "./word-count";
+import { workspacesPlugin } from "./workspaces";
 
 /**
  * Built-in plugins, compiled into the app and registered at startup.
- * External scripts can register more at runtime via window.geode.registerPlugin.
+ * External plugins can register more at runtime via window.geode.registerPlugin.
  */
 export const BUILTIN_PLUGINS: GeodePlugin[] = [
   wordCountPlugin,
@@ -26,4 +31,10 @@ export const BUILTIN_PLUGINS: GeodePlugin[] = [
   outgoingLinksPlugin,
   backlinksPlugin,
   graphPlugin,
+  // R296 wave-2 workspace + discovery entries
+  fileExplorerPlugin,
+  searchPlugin,
+  quickSwitcherPlugin,
+  commandPalettePlugin,
+  workspacesPlugin,
 ];

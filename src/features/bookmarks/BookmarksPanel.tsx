@@ -130,7 +130,9 @@ export function BookmarksPanel() {
         break;
       }
       case "folder":
-        app.workspace.setLeftPanel("explorer");
+        // R296: no-op when the File explorer core plugin is disabled (don't strand
+        // ws.leftPanel on a disabled id).
+        if (app.plugins.isEnabled("file-explorer")) app.workspace.setLeftPanel("explorer");
         break;
       case "graph":
         // R295: no-op when the Graph core plugin is disabled - the open command is
@@ -140,7 +142,8 @@ export function BookmarksPanel() {
       case "search":
         // R239: open the search panel seeded with the bookmarked query (requestSearch
         // injects via the searchRequest one-shot that SearchPanel consumes).
-        app.workspace.requestSearch(item.query);
+        // R296: no-op when the Search core plugin is disabled (don't leak the one-shot).
+        if (app.plugins.isEnabled("search")) app.workspace.requestSearch(item.query);
         break;
     }
   };

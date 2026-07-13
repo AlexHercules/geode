@@ -110,8 +110,10 @@ const newRowIds = ["search","bookmarks","properties-view","footnotes-view","base
 for (const id of newRowIds) {
   ok(`catalog row present: ${id}`, await page.$(`[data-testid=core-plugin-${id}]`) !== null);
 }
-// always-on existing-feature rows keep an honest disabled (not-yet-pluginified) toggle
-const alwaysOnIds = ["search","bookmarks","properties-view","footnotes-view"];
+// always-on existing-feature rows keep an honest disabled (not-yet-pluginified) toggle.
+// R296 promoted `search` (and file-explorer/quick-switcher/command-palette/workspaces)
+// to real plugins, so it is no longer in this always-on-disabled set.
+const alwaysOnIds = ["bookmarks","properties-view","footnotes-view"];
 for (const id of alwaysOnIds) {
   ok(`always-on row toggle disabled (not-yet-pluginified): ${id}`, await page.$eval(`[data-testid=core-plugin-toggle-${id}]`, (b) => b.disabled));
 }

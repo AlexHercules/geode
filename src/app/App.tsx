@@ -145,6 +145,12 @@ export function App() {
   const outgoingLinksEnabled = app.plugins.isEnabled("outgoing-links");
   const backlinksEnabled = app.plugins.isEnabled("backlinks");
   const graphEnabled = app.plugins.isEnabled("graph");
+  /* R296: wave-2 workspace + discovery entries. Lock-out safe: app:open-settings
+     (Mod+,) + the ribbon gear are NOT gated by any of these, so Settings stays
+     reachable even with command-palette / quick-switcher disabled. */
+  const fileExplorerEnabled = app.plugins.isEnabled("file-explorer");
+  const searchEnabled = app.plugins.isEnabled("search");
+  const commandPaletteEnabled = app.plugins.isEnabled("command-palette");
   /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
      via Ctrl+, / the command palette) */
   const ribbonVisible = useStore(showRibbon);
@@ -163,11 +169,15 @@ export function App() {
      what is actually rendered, even when the persisted id is stale */
   const effectiveLeft = activeLeftPanel
     ? activeLeftPanel.id
-    : ws.leftPanel === "search"
+    : ws.leftPanel === "search" && searchEnabled
       ? "search"
       : ws.leftPanel === "bookmarks"
         ? "bookmarks"
-        : "explorer";
+        : fileExplorerEnabled
+          ? "explorer"
+          : searchEnabled
+            ? "search"
+            : "bookmarks";
   const effectiveRight = activeRightPanel
     ? activeRightPanel.id
     : ws.rightPanel === "outline" && outlineEnabled
@@ -202,18 +212,6 @@ export function App() {
   useEffect(() => {
     const { workspace, vault, commands } = app;
     const disposers = [
-      commands.register({
-        id: "app:command-palette",
-        name: () => t("cmd.commandPalette"),
-        hotkey: "Mod+P",
-        callback: () => workspace.openModal("palette"),
-      }),
-      commands.register({
-        id: "app:quick-switcher",
-        name: () => t("cmd.quickSwitcher"),
-        hotkey: "Mod+O",
-        callback: () => workspace.openModal("switcher"),
-      }),
       commands.register({
         id: "app:new-note",
         name: () => t("cmd.newNote"),
@@ -418,17 +416,6 @@ export function App() {
       // R181 (G3): per-view "Show X" commands — open/focus an existing sidebar
       // panel (setLeft/RightPanel also opens the sidebar). Real handlers, no empty
       // rows; mirrors Obsidian's "Backlinks: Show backlinks" / "Outline: Show outline" etc.
-      commands.register({
-        id: "app:show-file-explorer",
-        name: () => t("cmd.showFileExplorer"),
-        callback: () => workspace.setLeftPanel("explorer"),
-      }),
-      commands.register({
-        id: "app:show-search",
-        name: () => t("cmd.showSearch"),
-        hotkey: "Mod+Shift+F", // R185: Obsidian global-search default key (calibration)
-        callback: () => workspace.setLeftPanel("search"),
-      }),
       commands.register({
         id: "app:show-all-properties",
         name: () => t("cmd.showAllProperties"),
@@ -864,8 +851,11 @@ export function App() {
         // mergeTargetMode on mount and turns a file pick into a merge (#⑬).
         id: "editor:merge-file",
         name: () => t("cmd.mergeFile"),
-        available: () => workspace.getActiveFile() !== null,
+        available: () => workspace.getActiveFile() !== null && app.plugins.isEnabled("quick-switcher"),
         callback: () => {
+          // R296: the switcher is the Quick switcher core plugin's surface; don't open
+          // it (and leak mergeTargetMode) when that plugin is disabled.
+          if (!app.plugins.isEnabled("quick-switcher")) return;
           const src = workspace.getActiveFile();
           if (!src) return;
           // if the switcher is already open, openModal("switcher") won't remount it
@@ -1080,13 +1070,6 @@ export function App() {
     );
     // R45 workspaces manager (save / load / delete named layout snapshots).
     // No default key — Obsidian's core "Workspaces" plugin assigns none.
-    disposers.push(
-      commands.register({
-        id: "workspace:manage",
-        name: () => t("cmd.manageWorkspaces"),
-        callback: () => workspace.openModal("workspaces"),
-      }),
-    );
     // R49 file recovery — browse / restore version snapshots of the active note.
     // No default key (Obsidian's core "File recovery" plugin assigns none);
     // unavailable when there is no active file (no snapshots to browse).
@@ -1206,11 +1189,13 @@ export function App() {
         <nav className="ribbon workspace-ribbon side-dock-ribbon mod-left" aria-label={t("app.ribbonAria")}>
           <div className="ribbon-top-spacer" aria-hidden="true" data-tauri-drag-region />
           {graphEnabled && <RibbonButton icon="graph" title={t("app.ribbonGraph")} onClick={() => app.workspace.openGraph()} />}
-          <RibbonButton
-            icon="command"
-            title={t("app.ribbonPalette")}
-            onClick={() => app.workspace.openModal("palette")}
-          />
+          {commandPaletteEnabled && (
+            <RibbonButton
+              icon="command"
+              title={t("app.ribbonPalette")}
+              onClick={() => app.workspace.openModal("palette")}
+            />
+          )}
           {/* plugin-contributed sidebar panels (compat registerView): one selector button each */}
           {leftPanels.map((p) => (
             <button
@@ -1246,28 +1231,32 @@ export function App() {
             data-testid="left-sidebar"
           >
             <div className="sidebar-primary-tabs" role="tablist" aria-label={t("app.leftPanelAria")} data-tauri-drag-region>
-              <button
-                role="tab"
-                aria-selected={effectiveLeft === "explorer"}
-                className={`sidebar-primary-tab${effectiveLeft === "explorer" ? " is-active" : ""}`}
-                title={t("app.ribbonExplorer")}
-                aria-label={t("app.ribbonExplorer")}
-                data-testid="left-tab-explorer"
-                onClick={() => app.workspace.setLeftPanel("explorer")}
-              >
-                <Icon name="folder" size={18} />
-              </button>
-              <button
-                role="tab"
-                aria-selected={effectiveLeft === "search"}
-                className={`sidebar-primary-tab${effectiveLeft === "search" ? " is-active" : ""}`}
-                title={t("app.ribbonSearch")}
-                aria-label={t("app.ribbonSearch")}
-                data-testid="left-tab-search"
-                onClick={() => app.workspace.setLeftPanel("search")}
-              >
-                <Icon name="search" size={18} />
-              </button>
+              {fileExplorerEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveLeft === "explorer"}
+                  className={`sidebar-primary-tab${effectiveLeft === "explorer" ? " is-active" : ""}`}
+                  title={t("app.ribbonExplorer")}
+                  aria-label={t("app.ribbonExplorer")}
+                  data-testid="left-tab-explorer"
+                  onClick={() => app.workspace.setLeftPanel("explorer")}
+                >
+                  <Icon name="folder" size={18} />
+                </button>
+              )}
+              {searchEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveLeft === "search"}
+                  className={`sidebar-primary-tab${effectiveLeft === "search" ? " is-active" : ""}`}
+                  title={t("app.ribbonSearch")}
+                  aria-label={t("app.ribbonSearch")}
+                  data-testid="left-tab-search"
+                  onClick={() => app.workspace.setLeftPanel("search")}
+                >
+                  <Icon name="search" size={18} />
+                </button>
+              )}
               <button
                 role="tab"
                 aria-selected={effectiveLeft === "bookmarks"}
@@ -1292,12 +1281,16 @@ export function App() {
             </div>
             {activeLeftPanel ? (
               <SidebarPanelHost key={activeLeftPanel.id} panel={activeLeftPanel} />
-            ) : ws.leftPanel === "search" ? (
+            ) : ws.leftPanel === "search" && searchEnabled ? (
               <SearchPanel />
             ) : ws.leftPanel === "bookmarks" ? (
               <BookmarksPanel />
-            ) : (
+            ) : fileExplorerEnabled ? (
               <Explorer />
+            ) : searchEnabled ? (
+              <SearchPanel />
+            ) : (
+              <BookmarksPanel />
             )}
             <div className="sidebar-vault-footer" data-testid="sidebar-vault-footer">
               <VaultSwitcherControl />
@@ -2531,15 +2524,16 @@ function TabBar({ leaf }: { leaf: PaneLeaf }) {
 function EmptyState() {
   const app = useApp();
   const t = useI18n();
-  useStore(app.plugins.revision); // R295: hide graph button when Graph core plugin is disabled
+  useStore(app.plugins.revision); // R295/R296: hide graph/switcher buttons when their core plugin is disabled
   const graphEnabled = app.plugins.isEnabled("graph");
+  const quickSwitcherEnabled = app.plugins.isEnabled("quick-switcher");
   return (
     <div className="empty-state" data-testid="empty-state">
       <div className="empty-state-card">
         <h2>{t("app.emptyTitle")}</h2>
         <div className="empty-actions">
           <button onClick={() => app.commands.execute("app:new-note")}>{t("app.emptyNewNote")}</button>
-          <button onClick={() => app.workspace.openModal("switcher")}>{t("app.emptySwitcher")}</button>
+          {quickSwitcherEnabled && <button onClick={() => app.workspace.openModal("switcher")}>{t("app.emptySwitcher")}</button>}
           {graphEnabled && <button onClick={() => app.workspace.openGraph()}>{t("app.emptyGraph")}</button>}
         </div>
       </div>
