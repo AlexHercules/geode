@@ -153,7 +153,7 @@ import "./settings.css";
 
 /** Current app version — single source for the About card and the update row. */
 // exported (R217) so app:show-debug-info reuses the same constant — no 4th version hardcode.
-export const APP_VERSION = "0.287.0";
+export const APP_VERSION = "0.288.0";
 
 type SectionId =
   | "about"
@@ -244,10 +244,13 @@ export function SettingsModal() {
     panelRef.current?.focus();
   }, []);
 
-  /* if the open plugin tab's plugin gets disabled/uninstalled, fall back to Plugins */
+  /* if the open plugin tab's plugin gets disabled/uninstalled, fall back to Plugins;
+     R297: likewise, if the open NATIVE section's core plugin is disabled, fall back. */
   useEffect(() => {
     if (section.startsWith("plugin:") && pluginTab === undefined) setSection("plugins");
-  }, [section, pluginTab]);
+    else if (SECTION_PLUGIN.has(section) && !enabledPluginIds.has(SECTION_PLUGIN.get(section)!))
+      setSection("core-plugins");
+  }, [section, pluginTab, enabledPluginIds]);
 
   return (
     <div
@@ -282,7 +285,9 @@ export function SettingsModal() {
               <div className="settings-nav-title settings-nav-subtitle" data-testid={group.testid}>
                 {t(group.titleKey)}
               </div>
-              {group.items.map((s) => (
+              {group.items
+                .filter((s) => !SECTION_PLUGIN.has(s.id) || enabledPluginIds.has(SECTION_PLUGIN.get(s.id)!))
+                .map((s) => (
                 <button
                   key={s.id}
                   className={`settings-nav-item${section === s.id ? " is-active" : ""}`}
@@ -1821,6 +1826,7 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     descKey: "settings.corePlugin.noteComposerDesc",
     defaultEnabled: true,
     settingsSection: "note-composer",
+    pluginId: "note-composer",
   },
   {
     id: "tags",
@@ -1911,6 +1917,7 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     descKey: "settings.corePlugin.templatesDesc",
     defaultEnabled: true,
     settingsSection: "templates",
+    pluginId: "templates",
   },
   {
     id: "daily-notes",
@@ -1940,6 +1947,7 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     nameKey: "settings.corePlugin.fileRecovery",
     descKey: "settings.corePlugin.fileRecoveryDesc",
     defaultEnabled: true,
+    pluginId: "file-recovery",
   },
   {
     id: "file-explorer",
@@ -1954,6 +1962,7 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     descKey: "settings.pagePreviewDesc",
     defaultEnabled: true,
     settingsSection: "page-preview",
+    pluginId: "page-preview",
   },
   // R294: complete the 1.9.10 core-plugin catalog. These map to existing always-on
   // features (search/bookmarks/properties-view/footnotes-view) or not-yet-built /
@@ -1971,18 +1980,21 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     nameKey: "settings.corePlugin.bookmarks",
     descKey: "settings.corePlugin.bookmarksDesc",
     defaultEnabled: true,
+    pluginId: "bookmarks",
   },
   {
     id: "properties-view",
     nameKey: "settings.corePlugin.propertiesView",
     descKey: "settings.corePlugin.propertiesViewDesc",
     defaultEnabled: false,
+    pluginId: "properties-view",
   },
   {
     id: "footnotes-view",
     nameKey: "settings.corePlugin.footnotesView",
     descKey: "settings.corePlugin.footnotesViewDesc",
     defaultEnabled: true,
+    pluginId: "footnotes-view",
   },
   {
     id: "bases",
@@ -2009,6 +2021,18 @@ const CORE_PLUGIN_ROWS: CorePluginRowDef[] = [
     defaultEnabled: true,
   },
 ];
+
+/**
+ * R297: native settings sections whose visibility follows a core plugin's enabled
+ * state. Built from CORE_PLUGIN_ROWS rows that have BOTH settingsSection + pluginId.
+ * A section is hidden from the left nav (and its gear disabled) when its plugin is
+ * disabled - "one plugin, one tab" parity with the compat pluginTabs filter above.
+ */
+const SECTION_PLUGIN: ReadonlyMap<string, string> = new Map(
+  CORE_PLUGIN_ROWS
+    .filter((r) => r.settingsSection !== undefined && r.pluginId !== undefined)
+    .map((r) => [r.settingsSection!, r.pluginId!] as const),
+);
 
 function CorePluginsSection({ setSection }: { setSection: (section: string) => void }) {
   const app = useApp();
@@ -2060,7 +2084,10 @@ function CorePluginsSection({ setSection }: { setSection: (section: string) => v
                 <button
                   className="core-plugin-icon-btn"
                   type="button"
-                  disabled={!row.settingsSection}
+                  disabled={
+                    !row.settingsSection ||
+                    (row.pluginId !== undefined && entry?.enabled !== true)
+                  }
                   aria-label={t("settings.corePluginSettings")}
                   title={t("settings.corePluginSettings")}
                   data-testid={`core-plugin-settings-${row.id}`}

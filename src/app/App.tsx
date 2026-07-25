@@ -69,7 +69,7 @@ import {
 import { buildClearProperties, parseProperties } from "@core/properties";
 import { buildOpenUri } from "@core/obsidianUri";
 import { confirmAction } from "@core/confirm";
-import { expandTemplate, templatePickerMode } from "@core/templates";
+import { expandTemplate } from "@core/templates";
 import { updateSupported } from "@core/update";
 import { mergeTargetMode } from "@core/noteMerge";
 import { bookmarks } from "@core/bookmarks";
@@ -151,6 +151,12 @@ export function App() {
   const fileExplorerEnabled = app.plugins.isEnabled("file-explorer");
   const searchEnabled = app.plugins.isEnabled("search");
   const commandPaletteEnabled = app.plugins.isEnabled("command-palette");
+  /* R297: wave-3 sidebar panels (bookmarks left; properties-view + footnotes-view right).
+     templates/file-recovery/note-composer/page-preview have no App-level panel (modals /
+     hover / actions) - gated at their command/controller/site, not here. */
+  const bookmarksEnabled = app.plugins.isEnabled("bookmarks");
+  const propertiesViewEnabled = app.plugins.isEnabled("properties-view");
+  const footnotesViewEnabled = app.plugins.isEnabled("footnotes-view");
   /* R94: Obsidian "Show ribbon" — hide the left primary nav (settings stay reachable
      via Ctrl+, / the command palette) */
   const ribbonVisible = useStore(showRibbon);
@@ -171,22 +177,24 @@ export function App() {
     ? activeLeftPanel.id
     : ws.leftPanel === "search" && searchEnabled
       ? "search"
-      : ws.leftPanel === "bookmarks"
+      : ws.leftPanel === "bookmarks" && bookmarksEnabled
         ? "bookmarks"
         : fileExplorerEnabled
           ? "explorer"
           : searchEnabled
             ? "search"
-            : "bookmarks";
+            : bookmarksEnabled
+              ? "bookmarks"
+              : "";
   const effectiveRight = activeRightPanel
     ? activeRightPanel.id
     : ws.rightPanel === "outline" && outlineEnabled
       ? "outline"
       : ws.rightPanel === "outgoinglinks" && outgoingLinksEnabled
         ? "outgoinglinks"
-        : ws.rightPanel === "footnotes"
+        : ws.rightPanel === "footnotes" && footnotesViewEnabled
           ? "footnotes"
-        : ws.rightPanel === "allproperties"
+        : ws.rightPanel === "allproperties" && propertiesViewEnabled
           ? "allproperties"
           : ws.rightPanel === "fileproperties"
             ? "fileproperties"
@@ -407,19 +415,6 @@ export function App() {
         id: "app:toggle-right-sidebar",
         name: () => t("cmd.toggleRightSidebar"),
         callback: () => workspace.toggleRightSidebar(),
-      }),
-      commands.register({
-        id: "app:show-footnotes",
-        name: () => t("cmd.showFootnotes"),
-        callback: () => workspace.setRightPanel("footnotes"),
-      }),
-      // R181 (G3): per-view "Show X" commands — open/focus an existing sidebar
-      // panel (setLeft/RightPanel also opens the sidebar). Real handlers, no empty
-      // rows; mirrors Obsidian's "Backlinks: Show backlinks" / "Outline: Show outline" etc.
-      commands.register({
-        id: "app:show-all-properties",
-        name: () => t("cmd.showAllProperties"),
-        callback: () => workspace.setRightPanel("allproperties"),
       }),
       // R214 (G3 §10): reveal the R86 FilePropertiesPanel (current note's properties) —
       // Obsidian's "Show file properties" core command, the twin of "Show all properties".
@@ -800,29 +795,6 @@ export function App() {
         },
       }),
       commands.register({
-        id: "editor:insert-template",
-        name: () => t("cmd.insertTemplate"),
-        available: () => workspace.getActiveTab()?.filePath != null,
-        callback: () => {
-          const tab = workspace.getActiveTab();
-          if (!tab || !tab.filePath) return;
-          // reading view has no cursor — flip to an editable mode first
-          // (add-property precedent, contract)
-          if (tab.mode === "preview") workspace.setTabMode(tab.id, "live");
-          // one-shot mode handoff: set BEFORE opening, the modal reads on mount
-          templatePickerMode.set("insert");
-          workspace.openModal("templates");
-        },
-      }),
-      commands.register({
-        id: "app:new-note-from-template",
-        name: () => t("cmd.newNoteFromTemplate"),
-        callback: () => {
-          templatePickerMode.set("create");
-          workspace.openModal("templates");
-        },
-      }),
-      commands.register({
         id: "editor:insert-date",
         name: () => t("cmd.insertDate"),
         available: () => getActiveFileEditorView(app) !== null,
@@ -851,11 +823,15 @@ export function App() {
         // mergeTargetMode on mount and turns a file pick into a merge (#⑬).
         id: "editor:merge-file",
         name: () => t("cmd.mergeFile"),
-        available: () => workspace.getActiveFile() !== null && app.plugins.isEnabled("quick-switcher"),
+        available: () => workspace.getActiveFile() !== null && app.plugins.isEnabled("quick-switcher") && app.plugins.isEnabled("note-composer"),
         callback: () => {
-          // R296: the switcher is the Quick switcher core plugin's surface; don't open
-          // it (and leak mergeTargetMode) when that plugin is disabled.
-          if (!app.plugins.isEnabled("quick-switcher")) return;
+          // The switcher belongs to Quick switcher and the action belongs to Note
+          // composer; direct command execution must honor both plugin gates because
+          // CommandRegistry.execute() deliberately does not consult available().
+          if (
+            !app.plugins.isEnabled("quick-switcher") ||
+            !app.plugins.isEnabled("note-composer")
+          ) return;
           const src = workspace.getActiveFile();
           if (!src) return;
           // if the switcher is already open, openModal("switcher") won't remount it
@@ -947,11 +923,6 @@ export function App() {
           void bookmarks.add({ type: "search", query, ctime: Date.now() });
           showCommandNotice(t("bookmarks.searchBookmarked"));
         },
-      }),
-      commands.register({
-        id: "bookmarks:show",
-        name: () => t("cmd.showBookmarks"),
-        callback: () => workspace.setLeftPanel("bookmarks"),
       }),
       commands.register({
         id: "app:check-updates",
@@ -1068,18 +1039,7 @@ export function App() {
         },
       }),
     );
-    // R45 workspaces manager (save / load / delete named layout snapshots).
-    // No default key — Obsidian's core "Workspaces" plugin assigns none.
-    // R49 file recovery — browse / restore version snapshots of the active note.
-    // No default key (Obsidian's core "File recovery" plugin assigns none);
-    // unavailable when there is no active file (no snapshots to browse).
     disposers.push(
-      commands.register({
-        id: "editor:file-recovery",
-        name: () => t("cmd.fileRecovery"),
-        available: () => workspace.getActiveFile() !== null,
-        callback: () => workspace.openModal("recovery"),
-      }),
       // R203: vault switcher — NOT isTauri-gated (the recents list + modal are pure frontend;
       // reopening a recent path needs no native dialog). "Open another vault" inside it still
       // routes to openVaultFlow's native picker (desktop).
@@ -1257,17 +1217,19 @@ export function App() {
                   <Icon name="search" size={18} />
                 </button>
               )}
-              <button
-                role="tab"
-                aria-selected={effectiveLeft === "bookmarks"}
-                className={`sidebar-primary-tab${effectiveLeft === "bookmarks" ? " is-active" : ""}`}
-                title={t("app.ribbonBookmarks")}
-                aria-label={t("app.ribbonBookmarks")}
-                data-testid="left-tab-bookmarks"
-                onClick={() => app.workspace.setLeftPanel("bookmarks")}
-              >
-                <Icon name="bookmark" size={18} />
-              </button>
+              {bookmarksEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveLeft === "bookmarks"}
+                  className={`sidebar-primary-tab${effectiveLeft === "bookmarks" ? " is-active" : ""}`}
+                  title={t("app.ribbonBookmarks")}
+                  aria-label={t("app.ribbonBookmarks")}
+                  data-testid="left-tab-bookmarks"
+                  onClick={() => app.workspace.setLeftPanel("bookmarks")}
+                >
+                  <Icon name="bookmark" size={18} />
+                </button>
+              )}
               <span className="sidebar-primary-spacer" />
               <button
                 className="sidebar-primary-tab sidebar-collapse-tab"
@@ -1283,15 +1245,15 @@ export function App() {
               <SidebarPanelHost key={activeLeftPanel.id} panel={activeLeftPanel} />
             ) : ws.leftPanel === "search" && searchEnabled ? (
               <SearchPanel />
-            ) : ws.leftPanel === "bookmarks" ? (
+            ) : ws.leftPanel === "bookmarks" && bookmarksEnabled ? (
               <BookmarksPanel />
             ) : fileExplorerEnabled ? (
               <Explorer />
             ) : searchEnabled ? (
               <SearchPanel />
-            ) : (
+            ) : bookmarksEnabled ? (
               <BookmarksPanel />
-            )}
+            ) : null}
             <div className="sidebar-vault-footer" data-testid="sidebar-vault-footer">
               <VaultSwitcherControl />
               <button
@@ -1351,16 +1313,18 @@ export function App() {
                   <Icon name="external-link" size={18} />
                 </button>
               )}
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "footnotes"}
-                className={`right-tab${effectiveRight === "footnotes" ? " is-active" : ""}`}
-                title={t("app.tabFootnotes")}
-                data-testid="right-tab-footnotes"
-                onClick={() => app.workspace.setRightPanel("footnotes")}
-              >
-                <Icon name="footnote" size={18} />
-              </button>
+              {footnotesViewEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "footnotes"}
+                  className={`right-tab${effectiveRight === "footnotes" ? " is-active" : ""}`}
+                  title={t("app.tabFootnotes")}
+                  data-testid="right-tab-footnotes"
+                  onClick={() => app.workspace.setRightPanel("footnotes")}
+                >
+                  <Icon name="footnote" size={18} />
+                </button>
+              )}
               {outlineEnabled && (
                 <button
                   role="tab"
@@ -1373,16 +1337,18 @@ export function App() {
                   <Icon name="list" size={18} />
                 </button>
               )}
-              <button
-                role="tab"
-                aria-selected={effectiveRight === "allproperties"}
-                className={`right-tab${effectiveRight === "allproperties" ? " is-active" : ""}`}
-                title={t("app.tabAllProperties")}
-                data-testid="right-tab-allproperties"
-                onClick={() => app.workspace.setRightPanel("allproperties")}
-              >
-                <Icon name="book-open" size={18} />
-              </button>
+              {propertiesViewEnabled && (
+                <button
+                  role="tab"
+                  aria-selected={effectiveRight === "allproperties"}
+                  className={`right-tab${effectiveRight === "allproperties" ? " is-active" : ""}`}
+                  title={t("app.tabAllProperties")}
+                  data-testid="right-tab-allproperties"
+                  onClick={() => app.workspace.setRightPanel("allproperties")}
+                >
+                  <Icon name="book-open" size={18} />
+                </button>
+              )}
               <button
                 role="tab"
                 aria-selected={effectiveRight === "fileproperties"}
@@ -1447,9 +1413,9 @@ export function App() {
                 <OutlinePanel />
               ) : ws.rightPanel === "outgoinglinks" && outgoingLinksEnabled ? (
                 <OutgoingLinksPanel />
-              ) : ws.rightPanel === "footnotes" ? (
+              ) : ws.rightPanel === "footnotes" && footnotesViewEnabled ? (
                 <FootnotesPanel />
-              ) : ws.rightPanel === "allproperties" ? (
+              ) : ws.rightPanel === "allproperties" && propertiesViewEnabled ? (
                 <AllPropertiesPanel />
               ) : ws.rightPanel === "fileproperties" ? (
                 <FilePropertiesPanel />

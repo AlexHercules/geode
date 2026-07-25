@@ -157,7 +157,12 @@ export function createHoverController(app: GeodeApp): () => void {
     pending = { anchor, path, subpath };
     showTimer = setTimeout(() => {
       showTimer = null;
-      if (!pending || pending.anchor !== anchor) return;
+      if (
+        !pending ||
+        pending.anchor !== anchor ||
+        !pagePreviewEnabled.get() ||
+        !app.plugins.isEnabled("page-preview")
+      ) return;
       const r = anchor.getBoundingClientRect();
       hoverStore.set({
         path,
@@ -173,6 +178,8 @@ export function createHoverController(app: GeodeApp): () => void {
    */
   const evaluate = (el: Element, modifier: boolean): void => {
     if (!pagePreviewEnabled.get()) return;
+    // R297: also suppress when the Page preview core plugin is disabled.
+    if (!app.plugins.isEnabled("page-preview")) return;
     // SOURCE note = the pane the anchor lives in (data-leaf-path on the editor
     // leaf — same口径 as openWikilink's handle.path), so hovering a link in a
     // non-focused split resolves against THAT pane's note, not the globally-
@@ -269,6 +276,9 @@ export function createHoverController(app: GeodeApp): () => void {
   document.addEventListener("mouseout", onMouseOut, opts);
   document.addEventListener("keydown", onKeyDown, opts);
   document.addEventListener("scroll", onScroll, opts);
+  const unsubscribePlugins = app.plugins.revision.subscribe(() => {
+    if (!app.plugins.isEnabled("page-preview")) hideNow();
+  });
 
   return () => {
     document.removeEventListener("mouseover", onMouseOver, opts);
@@ -276,6 +286,7 @@ export function createHoverController(app: GeodeApp): () => void {
     document.removeEventListener("mouseout", onMouseOut, opts);
     document.removeEventListener("keydown", onKeyDown, opts);
     document.removeEventListener("scroll", onScroll, opts);
+    unsubscribePlugins();
     hideNow();
   };
 }

@@ -110,12 +110,13 @@ const newRowIds = ["search","bookmarks","properties-view","footnotes-view","base
 for (const id of newRowIds) {
   ok(`catalog row present: ${id}`, await page.$(`[data-testid=core-plugin-${id}]`) !== null);
 }
-// always-on existing-feature rows keep an honest disabled (not-yet-pluginified) toggle.
-// R296 promoted `search` (and file-explorer/quick-switcher/command-palette/workspaces)
-// to real plugins, so it is no longer in this always-on-disabled set.
-const alwaysOnIds = ["bookmarks","properties-view","footnotes-view"];
+// not-yet-built feature rows keep an honest disabled toggle (no plugin backs them).
+// R296 promoted search; R297 promoted bookmarks/properties-view/footnotes-view
+// (plus templates/file-recovery/note-composer/page-preview) to real plugins, so the
+// remaining disabled-toggle rows are the 缺 (not-built) features.
+const alwaysOnIds = ["canvas","slides","audio-recorder","bases","web-clipper","markdown-converter"];
 for (const id of alwaysOnIds) {
-  ok(`always-on row toggle disabled (not-yet-pluginified): ${id}`, await page.$eval(`[data-testid=core-plugin-toggle-${id}]`, (b) => b.disabled));
+  ok(`not-built row toggle disabled (no plugin yet): ${id}`, await page.$eval(`[data-testid=core-plugin-toggle-${id}]`, (b) => b.disabled));
 }
 // contrast: the wired tags toggle is operable
 ok("tags toggle operable (contrast with not-yet-pluginified rows)", await page.$eval("[data-testid=core-plugin-toggle-tags]", (b) => !b.disabled));

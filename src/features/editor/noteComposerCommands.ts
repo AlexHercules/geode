@@ -110,9 +110,11 @@ export function registerComposerCommands(
       name: () => t("cmd.extractSelection"),
       available: () => {
         const v = getView();
-        return v !== null && !v.state.selection.main.empty;
+        // R297: hidden when the Note composer core plugin is disabled.
+        return v !== null && !v.state.selection.main.empty && app.plugins.isEnabled("note-composer");
       },
       callback: () => {
+        if (!app.plugins.isEnabled("note-composer")) return;
         const view = getView();
         if (!view) return;
         void extractSelection(app, view);
@@ -123,8 +125,9 @@ export function registerComposerCommands(
     app.commands.register({
       id: "editor:move-heading",
       name: () => t("cmd.moveHeading"),
-      available: () => getView() !== null,
+      available: () => getView() !== null && app.plugins.isEnabled("note-composer"),
       callback: () => {
+        if (!app.plugins.isEnabled("note-composer")) return;
         const view = getView();
         if (!view) return;
         void moveHeading(app, view);
