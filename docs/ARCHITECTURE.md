@@ -169,6 +169,49 @@ Escape key closing is handled globally by the shell; modals must ALSO close on o
 
 **分档：机械档**（menu IA 接线·复用既有 handler/testid/i18n·无新控制流/无数据安全面/无 Rust 改动）·**简化门：机械档跳过**·**评审：scoped review**。
 
+## Round 297 additions - 核心插件化第三波·内容服务 + 设置 Tab gate·逻辑档·零新依赖
+
+> **状态：As-built（已交付·v0.288）。** R294 契约第三波（收官）：把 7 个现存 feature 接入真实开关--note-composer / templates / file-recovery / page-preview / bookmarks / properties-view / footnotes-view。**新增设置 Tab gate 基建**（R294 遗留）：禁用核心插件时其 native settings section 也隐。完成后核心插件页现存 feature 不再有 disabled toggle。对抗评审追加三项 fail-closed：Page preview timer/已显示卡在 disable 时即时清理；声明 pluginId 但 registry 记录缺失时 settings gear 禁用；Note composer 写命令 callback 自身复核 enabled（`CommandRegistry.execute()` 不读取 `available()`）。
+
+### 设置 Tab gate 基建（R294 遗留·本轮冻结）
+
+`SettingsModal.tsx`：
+- 新 `SECTION_PLUGIN: Map<SectionId, string>`：从 `CORE_PLUGIN_ROWS` 同时含 `settingsSection`+`pluginId` 的行构建（templates/note-composer/page-preview/quick-switcher/command-palette/daily-notes/unique-notes）。
+- NAV_GROUPS 渲染（:285）filter：`group.items.filter(s => !SECTION_PLUGIN.has(s.id) || app.plugins.isEnabled(SECTION_PLUGIN.get(s.id)!))`--禁用插件的 settings section 从左栏隐。
+- active-section 回退（镜像 :248 pluginTab fallback）：若当前 open 的 section 属被禁用插件，落回 `"core-plugins"`。
+- core-plugin 行的齿轮按钮（:2004）：`disabled={!row.settingsSection || (row.pluginId && !isEnabled)}`--禁用时不跳到已隐的 section。
+
+### 七项实现
+
+| plugin id | 命令（移入 onload·auto-dispose） | 入口 gate | settings Tab |
+|---|---|---|---|
+| `templates` | `editor:insert-template`·`app:new-note-from-template`（openModal "templates"） | 模态命令 dispose | templates section gate ✓ |
+| `file-recovery` | `editor:file-recovery`（openModal "recovery"） | 模态命令 dispose | （无 section） |
+| `note-composer` | （无入口命令；action 命令见下） | action 命令 `available` gate | note-composer section gate ✓ |
+| `page-preview` | （无命令） | hoverController `evaluate` 加 `isEnabled("page-preview")` gate | page-preview section gate ✓ |
+| `bookmarks` | `bookmarks:show`（setLeftPanel "bookmarks"） | left-tab-bookmarks + render + effectiveLeft | （无 section） |
+| `properties-view` | `app:show-all-properties`（setRightPanel "allproperties"） | right-tab-allproperties + render + effectiveRight | （无 section） |
+| `footnotes-view` | `app:show-footnotes`（setRightPanel "footnotes"） | right-tab-footnotes + render + effectiveRight | （无 section） |
+
+- note-composer action 命令（`editor:extract-selection`/`editor:move-heading` in noteComposerCommands.ts·`editor:merge-file` in App.tsx）加 `available: () => isEnabled("note-composer")`（palette/hotkey 隐；不挪注册因 registerComposerCommands 签名取 GeodeApp+getView），并在 callback 首行重复 gate（`CommandRegistry.execute()` 只按 id 调 callback、故 `available` 不是安全边界）。
+- bookmarks action 命令（bookmark-file 等 6 个）**留 App.tsx 不 gate**（书签动作即使面板隐仍有用；panel + show 命令已 gate）。记 deviation。
+- effectiveLeft 兜底：bookmarks 禁用时链 explorer->search->bookmarks 落空 -> 末尾 `(bookmarksEnabled ? "bookmarks" : searchEnabled ? "search" : fileExplorerEnabled ? "explorer" : "")`；全禁时左栏空（用户可 Mod+, 重启，非锁死）。
+
+### 数据安全契约
+
+零新 .md / vault / editor 写算法。plugin onload 仅注册 UI 导航命令；note-composer action 命令在 `available` 与 callback 两层做早退 gate，extract/move 的 create-before-edit + stale-guard 与 merge 的 flush/read/write 顺序均不变；禁用态直接执行回归锁「零新文件 + 源字节不变 + 不开 switcher」。gating 其余为 React/hover Store 渲染；持久化走既有 localStorage。
+
+### 验证契约
+
+1. 新 `.calibration/r297-e2e.mjs`（88/88）：七项各--默认 on / disable（panel tab+body 隐 + 命令从 registry 消 + 模态不可开 + page-preview 可见卡/待执行 timer 即时清理 + settings section 隐）/ re-enable / 七项重启持久化；**设置 Tab gate**覆盖全部 7 个 native section 映射 + active-section fallback + gear fail-closed；Note composer 直接 `commands.execute` 在 disabled 时零新文件/源字节不变/不打开 switcher；pageerror 计入失败；目录 7 行 pluginId·toggle 可操作。
+2. 回归 `r296`/`r295`/`r294`（wave-1/2 不退）· `r185`（commands）· `r223`（footnotes）· `r228`（rebuild cache·properties）· `r158`（bookmarks）· `r23`/`r24`（settings/editor）· `r44`/`r216`/`r234`（extract/move）· `r47`/`r235`/`r236`（merge/template）。
+3. `npm run typecheck` 0；`npm run build` 成功；`PATH="$HOME/.cargo/bin:$PATH" cargo check` 通过。
+4. 桌面 probe N/A（纯 Store+UI+localStorage，无 FS/Rust delta）。
+
+**文件范围**：`src/plugins/{templates,file-recovery,note-composer,page-preview,bookmarks,properties-view,footnotes-view}.ts`（新）· `src/plugins/index.ts` · `src/app/App.tsx` · `src/features/settings/SettingsModal.tsx` · `src/features/hover/hoverController.ts` · `src/features/editor/noteComposerCommands.ts` · `.calibration/r297-e2e.mjs`（新）。
+
+**分档：逻辑档**（7 新 plugin + 新控制流[设置 Tab gate 基建 + 左/右栏 gating + hover/timer gate + action callback gate]+ store 驱动；写算法未改）·**简化门：clean**（仅删迁移后 stale 注释）·**评审：多维对抗，3 confirmed 全修**。
+
 ## Round 296 additions - 核心插件化第二波·工作区与发现入口·逻辑档·零新依赖
 
 > **状态：As-built（已交付·v0.287）。** 按 R294 契约把 wave-2 五项接入真实开关：File explorer / Search / Quick switcher / Command palette / Workspaces。每项 = builtin plugin（`src/plugins/<id>.ts`），「show/open」命令移入 `onload`（auto-dispose），面板/ribbon/empty-state 入口读 `isEnabled(id)`，CORE_PLUGIN_ROWS 加 `pluginId`。

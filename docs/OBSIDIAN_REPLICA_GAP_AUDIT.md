@@ -53,9 +53,9 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 | Vault 与数据安全 | `partial` | 本地 vault、watch、原子写、共享 DocumentHandle、flush-first trash、恢复、rename 引用改写已建立 | 系统回收站、删除去向三档、默认启动文件、20 条真实迁移任务 | R298 / R316 |
 | Markdown 编辑与阅读 | `partial` | live/source/reading、常见 Markdown、wikilink、标题/块引用、嵌入、Properties、表格、数学、Mermaid 等已覆盖 | 固定视觉回归；PDF 独立视图；1.12 拖拽图片缩放进入漂移池 | R299 / R304+ / D2 |
 | 导航与工作区 | `partial` | tabs、splits、stacked tabs、历史、侧栏折叠、工作区保存恢复已完成 | pop-out/多窗口、跨窗 leaf 生命周期与插件事件 | R307+ |
-| 设置与视觉 | `partial` | 三段式 IA、主要设置页和控件已有，多轮 screenshot 校准 | 无 8–12 张固定整屏 baseline/diff；Keychain 空页；核心插件总表行为不诚实 | R294–R299 / R302 |
+| 设置与视觉 | `partial` | 三段式 IA、主要设置页和控件已有，多轮 screenshot 校准；R297 已让现存核心插件 toggle/设置 Tab 真联动 | 无 8–12 张固定整屏 baseline/diff；Keychain 空页 | R299 / R302 |
 | 命令与热键 | `partial` | 高频编辑/导航/文件/面板命令主干已注册；绑定 UI 与筛选可用 | 余项主要从 Canvas/Bases/多窗口/Audio/CLI 等未建能力派生；默认键与来源仍需随功能闭环复核 | 随各大件 |
-| 核心插件 | `partial` | 多数中小能力存在 | R294 契约+目录 29 行+R295 wave-1+R296 wave-2(File explorer/Search/Quick switcher/Command palette/Workspaces+lock-out 安全=14/29 真实启停)；剩 15 行 always-on 待 R297 接入；Canvas/Bases/Audio/Converter 缺 | R297 / R305+ |
+| 核心插件 | `partial` | R294–R297 已完成 21/29 行真实启停，现存中小能力的 toggle/命令/面板/设置 Tab 已联动 | Slides 仍为能力在但未插件化；Canvas/Bases/Audio/Markdown converter 缺；Publish/Sync 商业服务 excluded | R315 / 大件对应轮 |
 | 社区插件产品 | `partial` | `.obsidian/plugins` 扫描、manifest、启停、设置页、卸载、失败原因、多个真插件已证明 | Restricted mode、浏览/安装/升级、兼容分级、代表矩阵缺 | R303 |
 | Obsidian API 兼容 | `partial` | Vault/Workspace/Metadata/Editor/UI/CM6 大量 API 与真插件路径已跑通 | asset URI、extensions、protocol、lastEvent、SecretStorage、stat/appendBinary 等 | R300–R302 / D3 |
 | 本体大件 | `missing` | PDF 只有原生 iframe；无 Canvas/Bases/多窗口/Audio 源文件 | PDF.js、JSON Canvas、Bases query/view、Tauri 多窗口、MediaRecorder | R304–R315 |
@@ -68,9 +68,9 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 ### 当前证据
 
 - `SettingsModal.tsx` 的 `CORE_PLUGIN_ROWS` 有 29 行（R294 补齐 1.9.10 目录：+search/bookmarks/properties-view/footnotes-view/bases/web-clipper/markdown-converter/sync）。
-- 14 行配置真实 `pluginId`：4 原始 + `tags`（R294）+ `outline`/`outgoing-links`/`backlinks`/`graph`（R295 wave-1）+ `file-explorer`/`search`/`quick-switcher`/`command-palette`/`workspaces`（R296 wave-2）；其余 15 行为 always-on / not-yet-pluginified（disabled toggle，R297 按 R294 冻结契约接入）。
-- UI 代码明确写着：没有注册插件支撑的行只显示 disabled toggle，功能仍是 always-on / not-yet-pluginified。
-- `src/plugins/index.ts` 实际注册 5 个内建插件；`backlink-count` 没有对应核心插件总表开关。
+- 21 行配置真实 `pluginId`：4 原始 + `tags`（R294）+ `outline`/`outgoing-links`/`backlinks`/`graph`（R295 wave-1）+ `file-explorer`/`search`/`quick-switcher`/`command-palette`/`workspaces`（R296 wave-2）+ `templates`/`file-recovery`/`note-composer`/`page-preview`/`bookmarks`/`properties-view`/`footnotes-view`（R297 wave-3）。
+- 没有注册插件支撑的行继续显示 disabled toggle，但现在只对应未建、excluded 或尚待独立纵切的能力，不再把已存在 feature 伪装成不可关闭。
+- `src/plugins/index.ts` 已注册上述内建插件；`backlink-count` 是额外内建能力，仍没有对应 Obsidian 核心插件总表开关。
 
 因此“功能存在”不能标为核心插件 `done`。单项必须同时满足：
 
@@ -84,13 +84,12 @@ Geode 已经跨过“Obsidian 风格编辑器”阶段：本地 vault、Markdown
 
 | 状态 | 项目 |
 |---|---|
-| `done`（可真实启停） | Random note、Daily notes、Unique notes、Word count、Tags（R294）、Outline、Outgoing links、Backlinks、Graph（R295 wave-1）、File explorer、Search、Quick switcher、Command palette、Workspaces（R296 wave-2） |
-| `partial`（能力在但非真插件，已入总表待 R297 接入） | Note composer、Slides、Templates、File recovery、Page preview、Bookmarks、Properties view、Footnotes view |
+| `done`（可真实启停） | Random note、Daily notes、Unique notes、Word count、Tags（R294）、Outline、Outgoing links、Backlinks、Graph（R295 wave-1）、File explorer、Search、Quick switcher、Command palette、Workspaces（R296 wave-2）、Note composer、Templates、File recovery、Page preview、Bookmarks、Properties view、Footnotes view（R297 wave-3） |
+| `partial`（能力在但非真插件） | Slides |
 | `missing` | Canvas、Bases、Audio recorder、Markdown converter |
 | `excluded` | Publish、Sync（仅商业服务；本地文件兼容与相关设置仍须优雅展示） |
 
-执行顺序固定为：R294 契约/目录/一个纵切 → R295 侧栏知识视图 → R296 工作区入口 →
-R297 内容服务。不得一次把所有 feature 粗暴包成一个巨大布尔值。
+R294–R297 三波核心插件化已闭环；剩余核心插件缺口转入 R315 独立纵切（Slides / Audio recorder / Markdown converter）及 Canvas/Bases 大件轮，不回退为一个巨大布尔值。
 
 ---
 

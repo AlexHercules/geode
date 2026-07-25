@@ -251,6 +251,16 @@ editor / live 渲染 / 键盘命令 / feature 表面，WebFetch 官方 help.obsi
 
 > 校准结论：高频核心面已 full/partial 覆盖到位；剩余 missing 以「无当前流行插件依赖的全新 1.10–1.13 族」为主（无害、apiVersion 已正确门控）。下轮入队只取上「NEW 高/中价值」清单，绝不把 T3 全新族当可执行缺口刷数。
 
+### R297 套件回归（2026-07-25，核心插件化第三波·内容服务 + native 设置 Tab gate·逻辑档·零新依赖·简化门 clean·多维评审 3 confirmed 全修·desktop by-equivalence）
+
+R297 按 R294 契约把 Templates / File recovery / Note composer / Page preview / Bookmarks / Properties view / Footnotes view 七项接为真实 builtin plugin，核心插件目录真实 `pluginId` 从 14/29 提升到 21/29。命令随 onload/onunload 自动注册释放；panel tab/body/fallback、hover、Note composer 写命令与 native settings section 均由实时 plugin state 驱动。对 compat `internalPlugins` 的既有投影不改形状，只让这些 id 的 enabled/instance 生命周期与 UI 真一致。
+
+**套件矩阵（R297·不回退）**：
+- **r297-e2e 88/88 全绿（新增）** = 七项默认 on/disable/re-enable/重启持久化；modal 命令 dispose 后真不可开；Bookmarks/Properties/Footnotes tab 与 body 均隐；Page preview 已显示 card 与待触发 timer 在 disable 时均清理；Note composer 直接 `commands.execute` 仍 fail-closed（零新文件、源字节不变、不打开 switcher）；7 个 native settings section 随 plugin 隐/显、active section 回退 core-plugins、gear fail-closed；pageerror 计失败。
+- **核心插件波次不回退**：r296 57/57 · r295 62/62 · r294 37/37；命令/内容/设置：r185 19 · r223 13 · r228 9 · r158 13 · r23 22 · r24 12。
+- **data-safety 写路径不回退**（写算法未改、仅 callback 早退）：r44 25 · r216 17 · r234 14 · r47 11 · r235 14 · r236 16；typecheck 0 · prod build✓ · cargo check✓ · release build✓。
+- **桌面 by-equivalence**：新增行为仅 PluginManager Store、React gate、localStorage 与 document hover timer；无 Rust/FS 新路径，真实写路径由既有桌面验证覆盖。
+
 ### R292 套件回归（2026-07-10，文件夹右键菜单补齐 = 表面复刻 tail·机械档·零新依赖·零 compat 改动 · 简化门机械档跳过 · scoped review 8 点 clean · desktop probe 6/6）
 
 R292 = Explorer 文件树 folder 右键菜单补 3 项原 file-only 文件操作（复制库内路径 / [桌面]在系统访达中显示 / [桌面]使用默认应用打开）。纯 features/explorer 菜单接线·reuse 既有 handler/testid/i18n/图标·零 vault 写·零 Rust 改·零 compat 改动（compat/obsidian/editorMenu.ts 未动）。

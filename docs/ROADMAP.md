@@ -45,7 +45,7 @@ shim 建立其上。
 | 1 | ✅ **R294 · 核心插件真实开关契约 + 总表校准**（v0.285·done） | `done`：契约冻结于 ARCHITECTURE「Round 294 additions」；CORE_PLUGIN_ROWS 21->29 行（补 search/bookmarks/properties-view/footnotes-view/bases/web-clipper/markdown-converter/sync 对齐 1.9.10）；**Tags 纵切证明**（设置 toggle->tab/render/命令一致消失+回退 backlinks+不 mutate state+重启持久化）；5/29 行真实 `pluginId`（+Tags） | 逻辑档·简化门 clean·多维对抗评审；r294-e2e 35/35·回归 r222/r150/r151/r185/r238 不退；typecheck 0·build✓·cargo check 通过 |
 | 2 | ✅ **R295 · 核心插件化第一波：侧栏知识视图**（v0.286·done） | `done`：Backlinks/Outgoing links/Outline/Graph 四项按 R294 契约接入真实开关；singleton-view disable 行为冻结为 render-time placeholder（不 auto-close·零 state mutation）；backlinks 默认回退 calendar；graph ribbon/empty-state/书签入口 gate；9/29 行真实 `pluginId` | 逻辑档·简化门 clean·多维对抗评审 1 minor(F1 书签 graph 入口)已修；r295-e2e 62/62·回归 r294/r240/r211/r212/r185/r158 不退；typecheck 0·build✓·cargo check 通过 |
 | 3 | ✅ **R296 · 核心插件化第二波：工作区与发现入口**（v0.287·done） | `done`：File explorer/Search/Quick switcher/Command palette/Workspaces 五项接入真实开关；**lock-out 安全**（`app:open-settings` Mod+, + 设置齿轮不 gate·禁用 command-palette 仍可开设置）；explorer 默认回退 search->bookmarks；14/29 行真实 `pluginId` | 逻辑档·简化门 clean（删 2 dead locals）·多维对抗评审 2 defect（F1 merge-file bypass + F2 书签 folder/search）已修；r296-e2e 57/57·回归 r295/r294/r185/r38/r23/r158/r47 不退；typecheck 0·build✓·cargo check 通过 |
-| 4 | **R297 · 核心插件化第三波：内容服务** | `partial` | Templates / Page preview / Note composer / File recovery / Properties / Bookmarks 接入真实开关与各自设置 Tab；完成后核心插件页不得再用 disabled toggle 表示“已有但关不掉” |
+| 4 | ✅ **R297 · 核心插件化第三波：内容服务**（v0.288·done） | `done`：Templates / Page preview / Note composer / File recovery / Bookmarks / Properties view / Footnotes view 七项接入真实开关；native 设置 Tab 随插件启停隐藏并在当前 Tab 被禁用时回退核心插件页；21/29 行真实 `pluginId`，现存 feature 不再用 disabled toggle 冒充开关 | 逻辑档·简化门 clean（删 stale 迁移注释）·多维对抗评审 3 defect 已修（hover timer/可见卡竞态、gear 缺记录防御、CommandRegistry.execute 绕过 available）；r297-e2e 88/88·回归 wave-1/2/Tags + extract/move/merge 数据安全全绿；typecheck 0·build✓·cargo check/release build 通过 |
 | 5 | **R298 · Files & Links 收口：默认打开文件 + 删除去向** | `partial`：删除确认、孤儿附件 Ask/Always/Never、本地 `.trash` 已 done；默认启动文件、系统回收站/本地回收站/永久删除三档仍缺 | 默认文件启动行为；删除去向设置；`trashSystem` 桥；所有删除路径继续 flush-first，系统能力失败时不静默永久删，浏览器与桌面数据安全回归齐全 |
 | 6 | **R299 · 复刻证明与构建闸门** | `partial`：本地有 262 个 E2E、127 个 probe，但 CI 只跑 r23/r24；Cargo 版本仍 0.22.0 | CI 纳入 typecheck/build/cargo check/数据安全 smoke/最新 round/核心迁移/compat 真插件；建立 8–12 张固定整屏视觉基线；package/Tauri/Cargo/About 单一版本源 |
 | 7 | **R300 · `getResourcePath` / asset protocol 桥** | `missing`：当前只回传 vault 相对路径并记 gap | Tauri 安全 asset URI + browser fallback；Vault/DataAdapter 两入口等价；图片/PDF/插件资源真加载；路径穿越与未授权 vault 外访问被拒 |
@@ -86,6 +86,12 @@ shim 建立其上。
 - Chain / AI / 云端 / 多 root / Git 同步继续保留在设计文档，但在上述复刻队列与公开版漂移池清空前不自动取用。
 
 ## 已完成
+
+### R297 - v0.288（2026-07-25）核心插件化第三波：内容服务 + 设置 Tab gate
+
+按 R294 冻结契约完成最终一波七项真实插件化：Templates、File recovery、Note composer、Page preview、Bookmarks、Properties view、Footnotes view。命令由 builtin plugin `onload` 注册并随 disable 自动 dispose；左/右栏 tab、panel render 与 fallback、hover controller、Note composer action 命令均读真实插件状态；`SECTION_PLUGIN` 让七个 native 插件设置 Tab 随插件启停隐藏，当前打开的设置页被禁用时回退「核心插件」。核心插件目录真实 `pluginId` 从 14/29 提升到 21/29，已有能力不再显示不可操作的假开关。
+
+逻辑档、零新依赖。简化门删除 App 中迁移后失效的 Workspaces/File recovery 注释。多维对抗评审确认并修复 3 个根因：① Page preview 只在事件入口 gate，已排队 timer/已显示卡可越过 disable -> timer 二次校验 + revision 订阅即时清理；② 声明 `pluginId` 但记录缺失时 gear 仍可点 -> fail-closed；③ `CommandRegistry.execute()` 不读 `available()`，可直调已禁用 Note composer 写命令 -> extract/move/merge callback 级 gate。`r297-e2e` 由 53 扩到 **88/88**，补真实 modal/panel/hover、timer race、全部设置 Tab、active fallback、七项重启持久化、直接执行零新文件/源字节不变与 pageerror fail-fast。回归 r296/r295/r294/r185/r223/r228/r158/r23/r24/r44/r216/r234/r47/r235/r236 全绿；typecheck 0、生产 build、cargo check、release build 通过；桌面按 by-equivalence（纯 Store/UI/localStorage，写算法未变）。
 
 ### R293 - v0.284（2026-07-10）G3 命令矩阵据实纠误 + Obsidian 差距重审（docs-only·audit·零代码·零版本 bump）
 
